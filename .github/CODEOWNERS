@@ -2,7 +2,8 @@
 * @Develata
 
 # Contract-heavy boundaries
+/docs/plan/ @Develata
 /docs/contracts/ @Develata
-/docs/architecture/ @Develata
-/docs/decisions/ @Develata
+/docs/acceptance/ @Develata
+/docs/adr/ @Develata
 /market/ @Develata

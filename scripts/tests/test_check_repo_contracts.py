@@ -173,5 +173,77 @@ class MarketContractTests(unittest.TestCase):
         )
 
 
+class DocsTopologyContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def check_docs_topology(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_docs_topology(issues)
+        return issues
+
+    def test_current_docs_topology_passes(self) -> None:
+        self.assertEqual(self.check_docs_topology(), [])
+
+    def test_retired_operations_directory_is_rejected(self) -> None:
+        (self.root / "docs/operations").mkdir()
+        (self.root / "docs/operations/personal-backup.md").write_text(
+            "personal backup notes\n",
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any("documentation directory topology drift" in issue for issue in self.check_docs_topology())
+        )
+
+    def test_unclassified_root_document_is_rejected(self) -> None:
+        (self.root / "docs/misc.md").write_text("unclassified\n", encoding="utf-8")
+        self.assertTrue(
+            any("documentation root-file topology drift" in issue for issue in self.check_docs_topology())
+        )
+
+    def test_retired_docs_reference_outside_markdown_is_rejected(self) -> None:
+        codeowners = self.root / ".github/CODEOWNERS"
+        codeowners.parent.mkdir()
+        codeowners.write_text("/docs/architecture/ @owner\n", encoding="utf-8")
+        issues: list[str] = []
+        checker.check_no_retired_docs_references(issues)
+        self.assertTrue(any("retired documentation path reference" in issue for issue in issues))
+
+    def test_unknown_acceptance_status_is_rejected(self) -> None:
+        matrix_path = self.root / "docs/acceptance/matrix.tsv"
+        matrix = matrix_path.read_text(encoding="utf-8")
+        matrix_path.write_text(
+            matrix.replace("\tplanned\t", "\tpassed\t", 1),
+            encoding="utf-8",
+        )
+        issues: list[str] = []
+        checker.check_acceptance_matrix(issues)
+        self.assertTrue(any("unknown acceptance status" in issue for issue in issues))
+
+    def test_duplicate_long_horizon_case_id_is_rejected(self) -> None:
+        catalog_path = self.root / "docs/acceptance/platform-baseline.md"
+        with catalog_path.open("a", encoding="utf-8") as catalog:
+            catalog.write("\n| `FP-001` | duplicate | rust-unit | PR |\n")
+        issues: list[str] = []
+        checker.check_acceptance_catalog(issues)
+        self.assertTrue(any("duplicate long-horizon acceptance case IDs" in issue for issue in issues))
+
+    def test_stable_active_case_must_exist_in_catalog(self) -> None:
+        matrix_path = self.root / "docs/acceptance/matrix.tsv"
+        matrix = matrix_path.read_text(encoding="utf-8")
+        matrix_path.write_text(matrix.replace("FP-015", "FP-999", 1), encoding="utf-8")
+        issues: list[str] = []
+        checker.check_acceptance_catalog(issues)
+        self.assertTrue(any("active case missing from long-horizon catalog" in issue for issue in issues))
+
+
 if __name__ == "__main__":
     unittest.main()

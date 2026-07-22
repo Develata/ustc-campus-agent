@@ -1,19 +1,13 @@
 # USTC ChangeRadar
 
 - Package ID: `ustc.change-radar`
-- Current status: planned manifest skeleton; no executable component is claimed
+- Status: planned manifest skeleton; source/revision/diff is the next mainline
 - Product question: What changed, and does it affect me?
 
-ChangeRadar is engineering-first because its source/revision/diff foundation is shared by Affairs Navigator and Opportunity Graph.
+Canonical documentation:
 
-## First implementation contract
+- product behavior: [`docs/features/02-ustc-change-radar.md`](../../../docs/features/02-ustc-change-radar.md)
+- engineering contract: [`docs/plan/06-first-party-plugins.md`](../../../docs/plan/06-first-party-plugins.md)
+- source authority: [`docs/plan/05-campus-trust-kernel.md`](../../../docs/plan/05-campus-trust-kernel.md)
 
-- one individually reviewed public USTC source pair;
-- stable source and revision identities;
-- conditional retrieval and immutable raw/normalized snapshots;
-- deterministic parser fixtures and semantic diff;
-- fail-closed baseline advancement;
-- idempotent repeated processing;
-- no arbitrary URL fetch.
-
-After the shared foundation is stable, board-scoped maintainer Agents may propose change candidates but cannot publish. Administrator-approved semantic changes materialize into per-board RSS/Atom with stable GUID, effective time, affected scope, provenance, and before/after summary. Raw HTML/hash noise, parser failure, and unreviewed inference never enter the feed.
+This directory will carry package-owned implementation/resources after one concrete public source is reviewed. Maintainer work remains candidate-only; approved semantic changes alone enter RSS/Atom.

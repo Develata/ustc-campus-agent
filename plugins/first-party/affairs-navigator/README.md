@@ -1,20 +1,13 @@
 # USTC Affairs Navigator
 
 - Package ID: `ustc.affairs-navigator`
-- Current status: planned manifest skeleton; no executable component is claimed
+- Status: planned manifest skeleton; no executable component claimed
 - Product question: What should I do now?
 
-The first honest journey uses reviewed structured procedures with stable node identities, conditions, ordered steps, deadlines/effective time, official sources, and explicit uncertainty.
+Canonical documentation:
 
-## Initial truth path
+- product behavior: [`docs/features/01-ustc-affairs-navigator.md`](../../../docs/features/01-ustc-affairs-navigator.md)
+- engineering contract: [`docs/plan/06-first-party-plugins.md`](../../../docs/plan/06-first-party-plugins.md)
+- source authority: [`docs/plan/05-campus-trust-kernel.md`](../../../docs/plan/05-campus-trust-kernel.md)
 
-```text
-exact stable ID/path/URL lookup
-→ reviewed tree + PostgreSQL structured search
-→ approved-source targeted refresh and typed ProcedureDraft candidate
-→ bounded retrieval over approved snapshots (later fallback)
-```
-
-Canonical materialization is `approved SourceRevision → reviewed Skill → typed ProcedureDraft → Rust validation → deterministic Markdown → administrator approval/publish`. A hook may normalize formatting only; it cannot invent semantics, citations, or publish authority.
-
-This Plugin shares Source Registry, revisions, temporal/conflict handling, and change evidence with ChangeRadar. It must not create a second crawler authority.
+This directory will carry package-owned implementation/resources only after the typed Market component lifecycle can represent them honestly. It does not own a separate crawler or publication authority.

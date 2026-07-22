@@ -16,10 +16,10 @@ This file governs all work in this repository. Read this file, then `README.md`,
 
 ## Source of truth
 
-- Current plans/contracts live under `docs/plan/`, `docs/architecture/`, `docs/contracts/`, and `docs/acceptance/`.
-- Historical planning material is preserved under `docs/legacy/`; it is **not** canonical when it conflicts with current docs.
+- Documentation roles and reading order are governed by `docs/AGENTS.md` and `docs/coverage-matrix.md`.
+- Current engineering authority lives under `docs/plan/` and `docs/contracts/`; features, acceptance, tasks, guides, overview and ADRs have the distinct roles defined by `docs/AGENTS.md`.
 - `market/` is a logical catalog authority boundary even while it remains in this monorepo.
-- Runtime generated state, credentials, local snapshots, and `.codegraph/` are not source.
+- Raw discovery archives, personal infrastructure/backup procedures, runtime generated state, credentials, local snapshots, and `.codegraph/` are not repository source.
 
 ## Engineering rules
 

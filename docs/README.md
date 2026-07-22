@@ -1,14 +1,30 @@
-# Documentation index
+# Documentation
 
-Current canonical docs:
+USTC Campus Agent uses a proportionate docs-as-code structure: detailed authority and execution planning without mixing blueprint, product behavior, proof and historical rationale.
 
-- [`plan/`](plan/) — product direction and execution roadmap.
-- [`architecture/`](architecture/) — system, Market, the three default first-party Plugins, runtime, and repository topology.
-- [`contracts/`](contracts/) — public routes, CLI, PluginPackage, permissions, data models, and source import.
-- [`acceptance/`](acceptance/) — matrix and gate profiles.
-- [`collaboration/`](collaboration/) — multi-human/multi-agent PR, task, and ownership protocol.
-- [`decisions/`](decisions/) — ADRs.
-- [`public/`](public/) — future public repository and GitHub Pages planning.
-- [`development/`](development/) — local setup, CodeGraph, and validation notes.
-- [`operations/`](operations/) — backup/mirror and operator notes.
-- [`legacy/`](legacy/) — migrated and rejected planning artifacts for provenance only.
+## Start here
+
+1. [`plan/00-engineering-constitution.md`](plan/00-engineering-constitution.md)
+2. [`plan/01-terminology.md`](plan/01-terminology.md)
+3. [`overview/architecture.md`](overview/architecture.md)
+4. [`coverage-matrix.md`](coverage-matrix.md)
+5. the matching plan/feature/contract/acceptance documents
+
+## Structure
+
+| Path | Answers |
+|---|---|
+| [`plan/`](plan/) | How is the system engineered, and who owns authority/failure/recovery? |
+| [`features/`](features/) | What does the user see and what is the honest journey/status? |
+| [`contracts/`](contracts/) | What exact schemas, CLI, interfaces, permissions and data models are exposed? |
+| [`acceptance/`](acceptance/) | What is active now, and which stable long-horizon proof cases must be retained for future scope? |
+| [`overview/`](overview/) | How do the layers fit together? |
+| [`tasks/`](tasks/) | In what dependency order is approved work delivered? |
+| [`guides/`](guides/) | How do contributors develop, review and prepare future publication? |
+| [`adr/`](adr/) | Why were major architecture decisions made? |
+
+[`coverage-matrix.md`](coverage-matrix.md) maps the live layers. [`AGENTS.md`](AGENTS.md) defines documentation authority and editing discipline.
+
+## Deliberate exclusions
+
+This tree does not retain raw discovery workspaces, rejected proposal dumps, personal infrastructure/backup procedures or empty speculative registry/report directories. Useful accepted semantics are carried by the current plans, features, contracts, acceptance rows and ADRs; Git history preserves prior tracked revisions.

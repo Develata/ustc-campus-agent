@@ -1,0 +1,179 @@
+# Three default first-party Plugins
+
+## Metadata
+
+- `Layer`: First-party product contracts
+- `Status`: Identities/manifests accepted; product journeys mostly planned
+- `Version`: `0.2.0`
+- `Last Review`: `2026-07-22`
+- `Authority Owns`: first-party product split, shared semantics, independent lifecycles and implementation order
+- `Authority Defers To`: Campus Trust Kernel for shared authority and typed contracts/manifests for exact fields
+- `Counterpart Features`: `docs/features/01-ustc-affairs-navigator.md`, `docs/features/02-ustc-change-radar.md`, `docs/features/03-campus-opportunity-graph.md`
+- `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/source-import.md`, `docs/contracts/data-models.md`
+- `Counterpart Acceptance`: `FP-*`, `PROC-*`, `RADAR-*`, `COURSE-*`
+- `Primary Code Areas`: `plugins/first-party/`, `market/packages/`, current `crates/course-planning/`
+
+## 1. Product split and shared authority
+
+```text
+USTC Affairs Navigator: What should I do now?
+USTC ChangeRadar: What changed, and does it affect me?
+Campus Opportunity Graph: What fits me, and what should I choose next?
+```
+
+| Plugin | Public projection | First honest user result |
+|---|---|---|
+| Affairs Navigator | reviewed procedure projection | conditions, steps, deadlines, entry points, sources and uncertainty |
+| ChangeRadar | approved semantic-change projection | before/after, effective time, affected scope, provenance and feed item |
+| Opportunity Graph | opportunity facts + consent-aware profile projection | qualification, dependency, conflict, match and next action |
+
+The products share one Campus Trust Kernel:
+
+```text
+approved sources
+→ Source Registry
+→ immutable revisions
+→ normalized facts with time/conflict/provenance
+   ├── reviewed procedure artifacts
+   ├── approved semantic change events
+   └── reviewed opportunity graph facts + tenant-private profile projection
+```
+
+They MUST NOT build three crawler authorities or three incompatible source identities. They remain independent packages with separate versions, installation, enablement and acceptance.
+
+## 2. USTC Affairs Navigator
+
+### 2.1 Lookup ladder
+
+```text
+L0 exact node/procedure ID or normalized URL
+→ L1 reviewed tree + structured local search
+→ L2 approved-source refresh + typed candidate
+→ L3 bounded retrieval over approved snapshots (later)
+```
+
+The last reviewed current procedure wins over unreviewed candidates. Full-corpus RAG is not the initial truth path.
+
+### 2.2 Tree and policy
+
+Stable identity belongs to `node_id`, `procedure_id` and `artifact_id`; filesystem paths and slugs are movable projections. A versioned board policy owns:
+
+- replacement key and authority order;
+- required sections;
+- maximum staleness;
+- conflict/supersession rules;
+- administrator-publication requirement.
+
+Critical coverage and publication rules belong in typed policy/validator code rather than only in prompts.
+
+### 2.3 Procedure artifact
+
+A `ProcedureDraft` candidate contains at least:
+
+```text
+procedure key and title
+applies_to
+prerequisites[]
+ordered steps[]
+deadlines/effective time[]
+entry points[] and contacts[]
+source_revision_ids[]
+conflicts[] and uncertainties[]
+last_verified_at
+```
+
+Lifecycle:
+
+```text
+Discovered → Generated → Validated → Published → Archived
+                       └→ Failed
+```
+
+Canonical materialization is:
+
+```text
+accepted SourceRevision
+→ reviewed Skill produces typed ProcedureDraft
+→ Rust schema/cross-field/policy/citation validation
+→ deterministic Markdown
+→ administrator review
+→ atomic publish + projection refresh
+```
+
+A formatting hook MAY normalize presentation only. It cannot fill missing semantics, invent citations or publish.
+
+### 2.4 Supersession
+
+Only direct typed edges are stored: `Full | Partial | Clarification | Duplicate`. Full replacement requires equal-or-higher authority, preserved audience/scope, explicit field coverage, no unexplained effective-time gap and replayable evidence. Archive is a state transition, not silent deletion.
+
+## 3. USTC ChangeRadar
+
+### 3.1 Foundation
+
+The first engineering slice implements one reviewed public source through:
+
+```text
+stable source/revision identity
+→ conditional retrieval
+→ immutable raw/normalized snapshots
+→ deterministic parser/normalizer
+→ semantic diff candidate
+→ durable evidence
+→ accepted baseline advance
+```
+
+Fetch/parser/evidence failure leaves the last accepted baseline unchanged. Repeated processing is idempotent; arbitrary URL fetch is forbidden.
+
+### 3.2 Maintainer authority
+
+A board-scoped maintainer Agent receives only node/source allowlist, policy version, lease/cursor, bounded budget and candidate-write permission. It has no canonical publication, cross-board mutation, broad profile access or platform credential.
+
+Concurrency uses `(node_id, source_id)` leases, deterministic candidate/event IDs and idempotency keys derived from source revision/digest and policy version.
+
+### 3.3 Semantic change and feed
+
+`ChangeEvent` binds stable event/node IDs, old/new revisions, semantic diff, affected scope and `Proposed | Approved | Published | Rejected` state.
+
+HTML layout noise, duplicate fetch, parser failure and unreviewed inference never become published change. Per-board RSS/Atom includes stable GUID, node, before/after, published/effective time, affected scope, current procedure/diff links and provenance. Subscription binds stable `node_id`, not mutable path.
+
+## 4. Campus Opportunity Graph
+
+Public opportunities are typed nodes/edges with eligibility, dependency, coverage, conflict, temporal window and evidence. Tenant-private profile facts remain a separate consent-aware projection.
+
+Minimum semantics:
+
+- qualification/prerequisite conditions retain scope and source;
+- temporal validity produces deterministic current views;
+- every material graph fact carries provenance;
+- private preferences and derived edges never enter the public graph;
+- user-owned facts are viewable and deletable;
+- matching/explanation exposes uncertainty rather than filling missing facts.
+
+### 4.1 Course Planning bounded spike
+
+Current `crates/course-planning` validates synthetic `course-planning/v0` fixtures, applies source authority and hard constraints, and emits deterministic `course-plan-result/v0` JSON.
+
+It proves only offline typed validation and planning. It does not prove Market installation, grants, enable/disable, Agent discovery, live source ingestion or consent-aware durable profile state. The package therefore claims `development`, not platform completion.
+
+Future research, competition, lecture and scholarship slices reuse the same trust/profile semantics. A materially different ontology requires a new ADR.
+
+## 5. Frozen implementation order
+
+```text
+1. ChangeRadar source/revision/diff foundation
+2. Affairs Navigator structured procedure entry
+3. ChangeRadar per-board feed
+4. Opportunity Graph consent/profile integration
+```
+
+The Course Planning spike was completed out of order and does not alter this sequence.
+
+## 6. Exit gates
+
+- **ChangeRadar foundation**: one approved historical change replays with exact evidence; failure cannot advance baseline.
+- **Affairs entry**: one administrator-maintained board answers a real procedure with conditions, steps, time, sources and uncertainty.
+- **ChangeRadar feed**: one approved semantic change publishes exactly once; crawl noise never enters feed.
+- **Opportunity integration**: existing planner appears behind honest install/grant/discovery and tenant-private profile boundaries.
+- **Three-product demo**: exact packages bootstrap and can be disabled/re-enabled independently; every material answer exposes provenance.
+
+Bindings live in `FP-*`, `SRC-*`, `PROC-*`, `RADAR-*` and `COURSE-*` acceptance rows.

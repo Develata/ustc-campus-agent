@@ -14,6 +14,29 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VALID_GATES = {"pr", "core-demo", "release", "public"}
+VALID_ACCEPTANCE_STATUSES = {"planned", "implemented"}
+STABLE_CATALOG_PREFIXES = {"FP", "PROC", "SRC"}
+MIN_LONG_HORIZON_CASES = 200
+EXPECTED_DOC_DIRECTORIES = {
+    "acceptance",
+    "adr",
+    "contracts",
+    "features",
+    "guides",
+    "overview",
+    "plan",
+    "tasks",
+}
+EXPECTED_DOC_ROOT_FILES = {"AGENTS.md", "README.md", "coverage-matrix.md"}
+RETIRED_DOC_DIRECTORIES = {
+    "architecture",
+    "collaboration",
+    "decisions",
+    "development",
+    "legacy",
+    "operations",
+    "public",
+}
 SECRET_PATTERNS = [
     re.compile(r"(?:PB|SA|SB|SC|BA|BC)\d{8}"),
     re.compile(r"USTC_PASSWORD\s*="),
@@ -25,18 +48,39 @@ SECRET_PATTERNS = [
 KEY_FILES = [
     "README.md",
     "AGENTS.md",
+    "docs/README.md",
+    "docs/AGENTS.md",
+    "docs/coverage-matrix.md",
+    "docs/plan/AGENTS.md",
+    "docs/plan/00-engineering-constitution.md",
+    "docs/plan/01-terminology.md",
+    "docs/plan/02-product-positioning.md",
+    "docs/plan/03-platform-authority.md",
+    "docs/plan/04-market-and-plugin-lifecycle.md",
+    "docs/plan/05-campus-trust-kernel.md",
+    "docs/plan/06-first-party-plugins.md",
+    "docs/plan/07-runtime-and-integration.md",
+    "docs/plan/08-security-and-delivery.md",
+    "docs/features/00-market-browse-install.md",
+    "docs/features/01-ustc-affairs-navigator.md",
+    "docs/features/02-ustc-change-radar.md",
+    "docs/features/03-campus-opportunity-graph.md",
     "docs/acceptance/gates.md",
     "docs/acceptance/matrix.tsv",
-    "docs/architecture/03-three-first-party-plugins.md",
-    "docs/decisions/ADR-0006-three-default-first-party-plugins.md",
-    "docs/collaboration/agent-workflow.md",
-    "docs/collaboration/ownership.md",
-    "docs/collaboration/pr-contract.md",
-    "docs/collaboration/task-slicing.md",
+    "docs/acceptance/platform-baseline.md",
+    "docs/acceptance/public-readiness.md",
+    "docs/adr/0006-three-default-first-party-plugins.md",
+    "docs/overview/architecture.md",
+    "docs/tasks/01-execution-roadmap.md",
+    "docs/guides/contributing.md",
+    "docs/guides/development.md",
+    "docs/guides/github-pages-brief.md",
     "docs/contracts/cli.md",
     "docs/contracts/data-models.md",
     "docs/contracts/interfaces.md",
-    "docs/public/github-pages-brief.md",
+    "docs/contracts/permissions.md",
+    "docs/contracts/plugin-package.md",
+    "docs/contracts/source-import.md",
     "market/review-policy/first-party.md",
     "market/fixtures/course-planning/README.md",
     "market/fixtures/course-planning/minimal-v0.json",
@@ -58,6 +102,45 @@ def check_key_files_present_and_nonempty(issues: list[str]) -> None:
             continue
         if not path.read_text(encoding="utf-8").strip():
             fail(f"key file empty: {rel}", issues)
+
+
+def check_docs_topology(issues: list[str]) -> None:
+    docs_root = ROOT / "docs"
+    if not docs_root.is_dir():
+        fail("docs root missing", issues)
+        return
+
+    actual_directories = {path.name for path in docs_root.iterdir() if path.is_dir()}
+    actual_root_files = {path.name for path in docs_root.iterdir() if path.is_file()}
+    if actual_directories != EXPECTED_DOC_DIRECTORIES:
+        fail(
+            "documentation directory topology drift: "
+            f"expected={sorted(EXPECTED_DOC_DIRECTORIES)} actual={sorted(actual_directories)}",
+            issues,
+        )
+    if actual_root_files != EXPECTED_DOC_ROOT_FILES:
+        fail(
+            "documentation root-file topology drift: "
+            f"expected={sorted(EXPECTED_DOC_ROOT_FILES)} actual={sorted(actual_root_files)}",
+            issues,
+        )
+
+
+def check_no_retired_docs_references(issues: list[str]) -> None:
+    fixture_path = ROOT / "scripts/tests/test_check_repo_contracts.py"
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or path == fixture_path:
+            continue
+        if any(part in {".git", "target", ".codegraph"} for part in path.parts):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for directory in RETIRED_DOC_DIRECTORIES:
+            needle = f"docs/{directory}/"
+            if needle in text:
+                fail(f"retired documentation path reference in {path.relative_to(ROOT)}: {needle}", issues)
 
 
 def check_markdown_links(issues: list[str]) -> None:
@@ -436,18 +519,54 @@ def check_acceptance_matrix(issues: list[str]) -> None:
         for gate in cols[4].split(","):
             if gate not in VALID_GATES:
                 fail(f"unknown gate {gate!r} in {case_id}", issues)
+        status = cols[5]
+        if status not in VALID_ACCEPTANCE_STATUSES:
+            fail(f"unknown acceptance status {status!r} in {case_id}", issues)
     if len(seen) < 10:
         fail("acceptance matrix too small for current contract", issues)
+
+
+def check_acceptance_catalog(issues: list[str]) -> None:
+    catalog_path = ROOT / "docs/acceptance/platform-baseline.md"
+    matrix_path = ROOT / "docs/acceptance/matrix.tsv"
+    catalog_ids = re.findall(
+        r"^\| `([A-Z0-9]+-[0-9]+)` \|",
+        catalog_path.read_text(encoding="utf-8"),
+        flags=re.MULTILINE,
+    )
+    duplicates = sorted(
+        case_id for case_id in set(catalog_ids) if catalog_ids.count(case_id) > 1
+    )
+    if duplicates:
+        fail(f"duplicate long-horizon acceptance case IDs: {duplicates}", issues)
+    if len(catalog_ids) < MIN_LONG_HORIZON_CASES:
+        fail(
+            "long-horizon acceptance catalog unexpectedly shrank: "
+            f"expected>={MIN_LONG_HORIZON_CASES} actual={len(catalog_ids)}",
+            issues,
+        )
+
+    active_rows = matrix_path.read_text(encoding="utf-8").splitlines()[1:]
+    for row in active_rows:
+        if not row.strip():
+            continue
+        case_id = row.split("\t", 1)[0]
+        prefix = case_id.split("-", 1)[0]
+        if prefix in STABLE_CATALOG_PREFIXES and case_id not in catalog_ids:
+            fail(f"active case missing from long-horizon catalog: {case_id}", issues)
 
 
 def main() -> int:
     issues: list[str] = []
     check_key_files_present_and_nonempty(issues)
+    check_docs_topology(issues)
+    check_no_retired_docs_references(issues)
     check_markdown_links(issues)
     check_no_obvious_secrets(issues)
     check_market(issues)
     check_course_fixture(issues)
     check_acceptance_matrix(issues)
+    check_acceptance_catalog(issues)
     if issues:
         print("contract-check: FAIL")
         for issue in issues:

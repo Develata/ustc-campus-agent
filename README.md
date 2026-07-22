@@ -18,7 +18,6 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | Implementation order | ChangeRadar foundation → Affairs Navigator → ChangeRadar feed → Opportunity Graph integration |
 | Course Planning | Retained bounded offline spike inside Opportunity Graph; not Market/runtime completion |
 | Chinese name | TBD；首版使用中文描述“面向科大学生的插件化校园智能体” |
-| Backup | Self-hosted Gitea pull mirror |
 | GitHub organization | Deferred |
 | Market repository | Deferred；当前为 monorepo 内 `market/` logical authority boundary |
 | Future public release | Possible；public-readiness gate required before changing visibility |
@@ -36,14 +35,14 @@ crates/
   course-planning/         # typed fixture validation and deterministic planner core
 market/                   # plugin catalog authority boundary inside this repo
 plugins/                  # three first-party plugin implementation/doc boundaries
-docs/                     # current contracts, ADRs, plans, acceptance matrix, legacy migration archive
+docs/                     # layered plans, features, contracts, acceptance, tasks, guides and ADRs
 scripts/                  # local and CI validation scripts
 .github/                  # CI, PR template, issue templates, CODEOWNERS
 ```
 
 ## Local development
 
-See [`docs/development/local-setup.md`](docs/development/local-setup.md) for the full local workflow, CodeGraph notes, and cleanup guidance.
+See [`docs/guides/development.md`](docs/guides/development.md) for the full local workflow, CodeGraph notes, and cleanup guidance.
 
 Rust builds can consume disk quickly. Check disk first when working locally:
 
@@ -74,14 +73,15 @@ cargo run --locked -p ustc-agentd -- --version
 
 ## Documentation map
 
-- Product and execution plan: [`docs/plan/`](docs/plan/)
-- Architecture contracts: [`docs/architecture/`](docs/architecture/)
-- Three first-party Plugin contract: [`docs/architecture/03-three-first-party-plugins.md`](docs/architecture/03-three-first-party-plugins.md)
-- Public interfaces and package schema: [`docs/contracts/`](docs/contracts/)
+- Documentation entry and authority rules: [`docs/README.md`](docs/README.md)
+- Engineering blueprint: [`docs/plan/`](docs/plan/)
+- User-visible journeys: [`docs/features/`](docs/features/)
+- Typed public/package/data contracts: [`docs/contracts/`](docs/contracts/)
 - Acceptance matrix and gates: [`docs/acceptance/`](docs/acceptance/)
-- Collaboration rules for multi-human/multi-agent work: [`docs/collaboration/`](docs/collaboration/)
-- Future public/GitHub Pages transition: [`docs/public/`](docs/public/)
-- Historical source documents migrated from the planning workspace: [`docs/legacy/`](docs/legacy/)
+- Cross-layer architecture map: [`docs/overview/architecture.md`](docs/overview/architecture.md)
+- Dependency-aware execution roadmap: [`docs/tasks/01-execution-roadmap.md`](docs/tasks/01-execution-roadmap.md)
+- Collaboration, development and publication handoffs: [`docs/guides/`](docs/guides/)
+- Architecture decision history: [`docs/adr/`](docs/adr/)
 
 ## Security and credentials
 
@@ -89,4 +89,4 @@ Do not commit USTC credentials, CAS cookies, API keys, real student data, genera
 
 ## License
 
-This private competition repository currently grants no public open-source license. See [`LICENSE.md`](LICENSE.md) and [`docs/public/public-readiness.md`](docs/public/public-readiness.md) before any public visibility change.
+This private competition repository currently grants no public open-source license. See [`LICENSE.md`](LICENSE.md) and [`docs/acceptance/public-readiness.md`](docs/acceptance/public-readiness.md) before any public visibility change.
