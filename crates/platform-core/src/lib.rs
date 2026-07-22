@@ -14,13 +14,17 @@ pub const OPPORTUNITY_GRAPH_PLUGIN_ID: &str = "ustc.opportunity-graph";
 pub const FIRST_VERTICAL_SLICE: &str = "course-planning";
 
 /// Source authority order for Course Planning facts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
 pub enum SourceAuthority {
     /// Model-only inference. It may explain but cannot establish material facts.
     ModelInference = 0,
     /// Community subjective signal such as iCourse review aggregates.
     CommunitySignal = 1,
     /// Public secondary mirrors such as iCourse program pages.
+    #[serde(rename = "icourse_mirror")]
     ICourseMirror = 2,
     /// Reviewed official USTC/department notice outside the catalog.
     ReviewedOfficialSource = 3,

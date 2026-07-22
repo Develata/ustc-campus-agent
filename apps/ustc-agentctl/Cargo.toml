@@ -9,8 +9,10 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+serde_json.workspace = true
 ustc-campus-agent-adapters = { path = "../../crates/adapters" }
 ustc-campus-agent-core = { path = "../../crates/platform-core" }
+ustc-campus-agent-course-planning = { path = "../../crates/course-planning" }
 
 [lints]
 workspace = true

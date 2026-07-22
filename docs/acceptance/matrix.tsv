@@ -3,12 +3,12 @@ MARKET-001	market	anonymous users can browse package metadata without installing
 MARKET-002	market	installation pins exact package id version components schema and grants	future integration test	core-demo	planned	backend
 MARKET-003	market	disable blocks Agent discovery and invocation immediately	future integration test	core-demo	planned	backend
 MARKET-004	market	permission expansion is never automatic during upgrade	future unit/integration test	release	planned	security
-COURSE-001	course	official catalog facts outrank iCourse mirror and community signals	Rust unit test + fixture	core-demo	planned	backend
-COURSE-002	course	course-code alias conflicts are unresolved rather than guessed	future fixture test	core-demo	planned	product
-COURSE-003	course	planner hard-constraint violation count is zero on curated fixtures	future Rust test	core-demo	planned	backend
-COURSE-004	course	material facts include source revision and time metadata	future fixture test	core-demo	planned	backend
-COURSE-005	course	stale missing or conflicting offering data triggers uncertainty or refusal	future integration test	core-demo	planned	product
-COURSE-006	course	community review signals cannot override official requirements	future Rust test	core-demo	planned	backend
+COURSE-001	course	official catalog facts outrank iCourse mirrors and community sources cannot author hard facts	course_planning::tests::official_source_wins_over_lower_authority_duplicate + course_planning::tests::community_source_cannot_author_course_facts	core-demo	implemented	backend
+COURSE-002	course	course-code alias conflicts are unresolved rather than guessed	course_planning::tests::unresolved_alias_is_excluded_instead_of_guessed	core-demo	implemented	product
+COURSE-003	course	planner hard-constraint violation count is zero on the canonical curated fixture	course_planning::tests::minimal_fixture_produces_multiple_zero_violation_candidates	core-demo	implemented	backend
+COURSE-004	course	material facts include source revision effective time retrieval time and conflict status	course_planning::tests::material_output_contains_course_requirement_and_community_provenance	core-demo	implemented	backend
+COURSE-005	course	stale missing or conflicting offering data triggers uncertainty or refusal	course_planning::tests::stale_missing_or_conflicting_offerings_fail_closed	core-demo	implemented	product
+COURSE-006	course	community review signals cannot override official requirements	course_planning::tests::community_source_cannot_author_requirements	core-demo	implemented	backend
 COURSE-007	course	user academic snapshot is tenant-isolated and deletable	future integration/security test	release	planned	security
 COURSE-008	course	deleting academic snapshot removes recoverable payload from logs and caches	future security test	release	planned	security
 COURSE-009	course	source revision changes mark prior candidates stale	future integration test	core-demo	planned	backend

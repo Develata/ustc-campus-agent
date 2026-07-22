@@ -1,5 +1,5 @@
 [package]
-name = "ustc-campus-agent-core"
+name = "ustc-campus-agent-course-planning"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,9 @@ homepage.workspace = true
 
 [dependencies]
 serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+ustc-campus-agent-core = { path = "../platform-core" }
 
 [lib]
 path = "src/lib.rs"
