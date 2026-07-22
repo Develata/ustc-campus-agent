@@ -1,4 +1,10 @@
-# USTC Campus Agent Platform：完整初始规划 v2
+# Rejected proposal: USTC Campus Agent single-flagship plan v2
+
+> **Status:** Rejected as current product authority on 2026-07-22. This document is preserved only as decision history.
+> **Why rejected:** it collapsed three formally confirmed default first-party Plugins into a single flagship narrative and changed their frozen implementation order without Develata's approval.
+> **Current authority:** [`../plan/00-product-direction.md`](../plan/00-product-direction.md), [`../plan/01-execution-roadmap.md`](../plan/01-execution-roadmap.md), and [`../decisions/ADR-0006-three-default-first-party-plugins.md`](../decisions/ADR-0006-three-default-first-party-plugins.md).
+
+## Original rejected proposal
 
 > **用途：** 知行逐光队“一〇七杯”智能体赛道的产品、架构与执行基线
 > **状态：** Develata 已确认本项目作为智能体赛道方向；本文是优化建议，团队 owner/capacity 与具体实现仍待闭合

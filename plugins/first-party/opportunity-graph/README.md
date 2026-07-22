@@ -2,9 +2,9 @@
 
 The Campus Opportunity Graph plugin represents campus opportunities as typed nodes and edges with eligibility, dependency, temporal windows, evidence, and user-profile facts.
 
-## First vertical slice
+## Course Planning bounded spike
 
-Course Planning is the first slice:
+Course Planning is currently the first implemented slice inside this Plugin:
 
 - `OpportunityNode`: course offering;
 - `RequirementNode`: curriculum requirement or elective group;
@@ -19,4 +19,4 @@ The development-time authority core is `crates/course-planning`. It validates th
 
 This core is intentionally offline and read-only. The CLI smoke does **not** establish Market installation, enable/disable, grant, or Agent-discovery semantics. The crate is therefore not declared as an installable `NativeRustComponent` until the typed Market read/install path can enforce those lifecycle boundaries. Real catalog/iCourse adapters remain separate risk-first source spikes and must not weaken the source authority contract.
 
-Future research/competition/lecture/scholarship packs must reuse the same core semantics. If they require a different ontology, they need a new ADR before entering the flagship plugin.
+Future research/competition/lecture/scholarship packs must reuse the same core semantics. If they require a different ontology, they need a new ADR before entering this plugin. Opportunity Graph remains one of the three default first-party Plugins; Course Planning does not change the frozen cross-plugin implementation order.

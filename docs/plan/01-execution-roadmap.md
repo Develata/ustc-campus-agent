@@ -1,73 +1,79 @@
 # Execution roadmap
 
-This roadmap is the implementation projection of the planning brief in `docs/plan/initial-plan-v2-2026-07-22.md`.
+This roadmap projects [`00-product-direction.md`](00-product-direction.md) and [`ADR-0006`](../decisions/ADR-0006-three-default-first-party-plugins.md). It preserves the confirmed three-Plugin topology and implementation order.
 
-## P0 — repository and source gates
+## Completed foundation
 
-- initialize Rust monorepo, market boundary, CI, contracts, and acceptance matrix;
-- assign Product/Source, Backend/Runtime/Security, Frontend/Demo, Evaluation/Release owners;
-- complete read-only catalog structure probing through approved MFA/manual path;
-- contact iCourse maintainers for data/API/AI-use permission;
-- freeze one Course Planning fixture path and fallback.
+- Rust monorepo, Market boundary, CI, contracts, and initial acceptance matrix;
+- GitHub collaboration baseline and protected `main`;
+- three default first-party package identities and manifest skeleton contract;
+- bounded Course Planning spike: typed synthetic fixture, deterministic planner, CLI smoke, provenance, and fail-closed tests.
 
-Gate: if only user-import offering data is available, the MVP and demo must explicitly state “user-imported opening list + plan-aware planning”, not real-time official integration.
+The Course Planning spike was completed out of order. It remains reusable evidence inside Opportunity Graph but does not advance the mainline past ChangeRadar or Affairs.
 
-## P1 — risk-first spikes
+## P0 — Market read/install skeleton
 
-- Rig provider/adapter spike;
-- LangGraph/PydanticAI durable baseline spike under the same contract;
-- catalog snapshot/import parser spike;
-- deterministic Course Planning hard-constraint planner for 20–30 candidate courses.
+- parse and validate all three first-party manifests;
+- exact package/version/component/capability identities;
+- default installation policy and independent enable/disable state;
+- development identity, grant, audit, and tool-discovery boundaries;
+- anonymous Market browse/detail shell.
 
-Gate: choose one execution path for MVP and prove hard-constraint violation count is zero on curated fixture.
+Gate: all three package identities bootstrap at exact versions, while planned manifests make no executable/runtime claim.
 
-## P2 — Market read path + Course contracts
+## P1 — ChangeRadar source/revision/diff foundation
 
-- PluginPackage schema and capability registry;
-- `ustc.opportunity-graph` manifest;
-- minimal typed Opportunity Graph ontology;
-- Course domain model, source contract, and tool schema;
-- market browse/detail UI shell;
-- Web/PWA + SSE minimal connectivity.
+- reviewed Source Registry entry for one approved public USTC source pair;
+- stable source and revision identities;
+- conditional retrieval contract and immutable raw/normalized snapshots;
+- parser fixture, normalization, and deterministic semantic diff;
+- baseline advances only after snapshot, parse, normalize, diff, and durable candidate evidence succeed;
+- repeated processing is idempotent; unauthorized URL fetch fails closed.
 
-Gate: pinned repository revision can deterministically validate the catalog; malformed or secret-bearing manifest fails.
+Gate: one real historical source change is replayable with exact evidence, and parser/fetch failure cannot erase or advance the accepted baseline.
 
-## P3 — install/grant/Agent lifecycle
+## P2 — Affairs Navigator structured procedure entry
 
-- development identity boundary;
-- install/enable/disable/grant/audit;
-- tool gateway and schema/grant resolution;
-- bounded conversation stream;
-- PlatformOperator role and snapshot import audit;
-- planner spike connected to Rust hard-constraint validation.
+- stable tree/node and board-policy contract;
+- Git Markdown/YAML reviewed canonical artifacts;
+- typed `ProcedureDraft`, direct supersession edges, and current/archived lifecycle;
+- Rust schema, cross-field, citation, and policy validation;
+- deterministic Markdown rendering and administrator approval/publish;
+- exact ID/path/URL lookup plus PostgreSQL structured search projection.
 
-Gate: disabling the package removes Agent tool discovery/invocation immediately.
+Gate: one administrator-maintained board answers a real campus procedure with conditions, steps, effective time, sources, and explicit uncertainty. Full-corpus RAG is not required.
 
-## P4 — Course Planning real journey
+## P3 — ChangeRadar per-board feed
 
-- integrate plan/offering/link-out/review adapters;
-- source revisions, provenance, conflict records;
-- user academic snapshot and preferences;
-- multi-candidate planner explanation;
-- stale/conflict/low-confidence UX;
-- planner/LLM consistency gate.
+- Affairs and ChangeRadar reuse the same Source Registry, immutable revisions, board policies, and change ledger;
+- board-scoped maintainer workers can propose candidates but cannot publish canonical facts;
+- durable leases, idempotency, and approved semantic-change events;
+- per-board RSS/Atom with stable event GUID, affected scope, provenance, and before/after summary.
 
-Gate: a non-developer can reproduce one complete journey with source evidence.
+Gate: approved semantic changes publish once; raw HTML/hash noise, parser failure, and unreviewed inference never enter the feed.
+
+## P4 — Opportunity Graph consent/profile integration
+
+- reviewed opportunity graph ontology and source projection;
+- consent-aware, tenant-isolated, viewable and deletable profile facts;
+- qualification, dependency, temporal-window, and conflict explanation;
+- integrate the existing Course Planning planner behind Market installation/grant/tool-discovery boundaries;
+- retain iCourse as link-out-only unless explicit permission is obtained.
+
+Gate: the existing offline planner becomes an honest installed-plugin journey without weakening hard constraints or source authority.
 
 ## P5 — productization and adversarial testing
 
-- polish Market/Agent/plugin detail;
+- three package detail surfaces and independent disable/re-enable behavior;
 - browser desktop/mobile, keyboard, focus, console/network checks;
-- tenant isolation, redaction, disable/revoke, stale-source tests;
-- fixture oracle and small user trial;
-- deployment/restore/evidence bundle.
-
-Extra ecosystem fixture is stretch only after P4 passes.
+- tenant isolation, redaction, revoke, stale-source, and recovery tests;
+- compact user trial and evidence bundle;
+- deployment/restore verification.
 
 ## P6 — freeze and submission
 
 - fix blockers only;
-- record demo and failure/recovery cut;
+- record the three-Plugin narrative and failure/recovery demo;
 - prepare architecture, framework influence, source/license, and evidence documents;
 - clean-host restore/read-back where applicable;
 - submit.

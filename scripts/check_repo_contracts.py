@@ -27,6 +27,8 @@ KEY_FILES = [
     "AGENTS.md",
     "docs/acceptance/gates.md",
     "docs/acceptance/matrix.tsv",
+    "docs/architecture/03-three-first-party-plugins.md",
+    "docs/decisions/ADR-0006-three-default-first-party-plugins.md",
     "docs/collaboration/agent-workflow.md",
     "docs/collaboration/ownership.md",
     "docs/collaboration/pr-contract.md",
@@ -107,31 +109,223 @@ def load_json(rel: str, issues: list[str]) -> object | None:
 
 
 def check_market(issues: list[str]) -> None:
-    manifest = load_json("market/packages/ustc.opportunity-graph/package.json", issues)
+    schema = load_json("market/schemas/plugin-package.schema.json", issues)
     publishers = load_json("market/publishers/first-party.json", issues)
     capabilities = load_json("market/capabilities/registry.json", issues)
-    if not isinstance(manifest, dict) or not isinstance(publishers, dict) or not isinstance(capabilities, dict):
+    if not isinstance(schema, dict) or not isinstance(publishers, dict) or not isinstance(capabilities, dict):
         return
 
-    required = {"id", "version", "publisher", "tier", "displayName", "components", "capabilities", "sourcePolicy"}
-    missing = required - manifest.keys()
-    if missing:
-        fail(f"manifest missing keys: {sorted(missing)}", issues)
-    if manifest.get("id") != "ustc.opportunity-graph":
-        fail("flagship package id drift", issues)
-    if manifest.get("publisher") != publishers.get("id"):
-        fail("manifest publisher does not match publisher registry", issues)
-    registered = {item.get("id") for item in capabilities.get("capabilities", []) if isinstance(item, dict)}
-    for cap in manifest.get("capabilities", []):
-        if cap not in registered:
-            fail(f"manifest capability not registered: {cap}", issues)
-    for component in manifest.get("components", []):
-        if not isinstance(component, dict):
-            fail("manifest component is not an object", issues)
+    expected_first_party_statuses = {
+        "ustc.affairs-navigator": "planned",
+        "ustc.change-radar": "planned",
+        "ustc.opportunity-graph": "development",
+    }
+    expected_first_party_versions = {
+        package_id: "0.1.0" for package_id in expected_first_party_statuses
+    }
+    expected_first_party_capabilities = {
+        "ustc.affairs-navigator": ["campus.public_rules.read"],
+        "ustc.change-radar": [
+            "campus.public_rules.read",
+            "campus.public_changes.read",
+        ],
+        "ustc.opportunity-graph": [
+            "campus.public_plan.read",
+            "campus.public_course.read",
+            "campus.community_review.linkout",
+        ],
+    }
+    expected_first_party_ids = set(expected_first_party_statuses)
+    required = set(schema.get("required", []))
+    allowed = set(schema.get("properties", {}))
+    expected_required = {
+        "id",
+        "version",
+        "publisher",
+        "tier",
+        "displayName",
+        "implementationStatus",
+        "installPolicy",
+        "components",
+        "capabilities",
+        "sourcePolicy",
+    }
+    if required != expected_required:
+        fail(f"PluginPackage schema required-field drift: {sorted(required)}", issues)
+    if not expected_required <= allowed:
+        fail("PluginPackage schema does not define every required field", issues)
+
+    capability_rows = capabilities.get("capabilities", [])
+    if not isinstance(capability_rows, list):
+        fail("capability registry must contain a capabilities list", issues)
+        return
+    registered = {
+        item.get("id")
+        for item in capability_rows
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+    auto_grant = {
+        item.get("id")
+        for item in capability_rows
+        if isinstance(item, dict) and item.get("autoGrantEligible") is True
+    }
+    if len(registered) != len(capability_rows):
+        fail("capability registry contains duplicate or malformed ids", issues)
+
+    manifests: list[dict[str, object]] = []
+    for path in sorted((ROOT / "market/packages").glob("*/package.json")):
+        rel_path = path.relative_to(ROOT).as_posix()
+        manifest = load_json(rel_path, issues)
+        if not isinstance(manifest, dict):
             continue
-        rel = component.get("path")
-        if not isinstance(rel, str) or not (ROOT / rel).exists():
-            fail(f"manifest component path missing: {rel}", issues)
+        manifests.append(manifest)
+
+        missing = required - manifest.keys()
+        unexpected = manifest.keys() - allowed
+        if missing:
+            fail(f"{rel_path}: missing keys: {sorted(missing)}", issues)
+        if unexpected:
+            fail(f"{rel_path}: unexpected keys: {sorted(unexpected)}", issues)
+
+        package_id = manifest.get("id")
+        if package_id != path.parent.name:
+            fail(f"{rel_path}: package id does not match directory", issues)
+        if not isinstance(package_id, str) or re.fullmatch(
+            r"[a-z0-9]+(?:\.[a-z0-9-]+)+", package_id
+        ) is None:
+            fail(f"{rel_path}: invalid package id", issues)
+        if not isinstance(manifest.get("version"), str) or re.fullmatch(
+            r"(?:0|[1-9][0-9]*)\.[0-9]+\.[0-9]+", manifest.get("version", "")
+        ) is None:
+            fail(f"{rel_path}: invalid SemVer package version", issues)
+        if not isinstance(manifest.get("displayName"), str) or not manifest.get("displayName"):
+            fail(f"{rel_path}: displayName must be a non-empty string", issues)
+        if "description" in manifest and not isinstance(manifest.get("description"), str):
+            fail(f"{rel_path}: description must be a string", issues)
+        if not isinstance(manifest.get("publisher"), str) or not manifest.get("publisher"):
+            fail(f"{rel_path}: publisher must be a non-empty string", issues)
+        if manifest.get("tier") not in {
+            "FirstParty",
+            "VerifiedCommunityText",
+            "VerifiedRemoteMcp",
+        }:
+            fail(f"{rel_path}: invalid package tier", issues)
+
+        is_default_first_party = package_id in expected_first_party_ids
+        if is_default_first_party:
+            if manifest.get("publisher") != publishers.get("id"):
+                fail(f"{rel_path}: publisher does not match first-party registry", issues)
+            if manifest.get("tier") != "FirstParty":
+                fail(f"{rel_path}: default package tier must be FirstParty", issues)
+            if manifest.get("version") != expected_first_party_versions[package_id]:
+                fail(f"{rel_path}: default package version drift", issues)
+        elif manifest.get("publisher") == publishers.get("id") or manifest.get("tier") == "FirstParty":
+            fail(f"{rel_path}: unregistered first-party package identity", issues)
+
+        status = manifest.get("implementationStatus")
+        if status not in {"planned", "development", "implemented"}:
+            fail(f"{rel_path}: invalid implementationStatus", issues)
+        elif is_default_first_party and status != expected_first_party_statuses[package_id]:
+            fail(f"{rel_path}: default package implementationStatus drift", issues)
+
+        install_policy = manifest.get("installPolicy")
+        if not isinstance(install_policy, dict) or set(install_policy) != {
+            "class",
+            "defaultInstalled",
+            "defaultEnabled",
+            "userDisableAllowed",
+        }:
+            fail(f"{rel_path}: malformed installPolicy", issues)
+        elif is_default_first_party:
+            expected_install_policy = {
+                "class": "FirstPartySystemPlugin",
+                "defaultInstalled": True,
+                "defaultEnabled": True,
+                "userDisableAllowed": True,
+            }
+            if install_policy != expected_install_policy:
+                fail(f"{rel_path}: default first-party installPolicy drift", issues)
+        elif (
+            install_policy.get("class") != "UserInstalledPlugin"
+            or install_policy.get("defaultInstalled") is not False
+            or install_policy.get("defaultEnabled") is not False
+            or not isinstance(install_policy.get("userDisableAllowed"), bool)
+        ):
+            fail(f"{rel_path}: non-default package installPolicy is unsafe", issues)
+
+        components = manifest.get("components")
+        if not isinstance(components, list):
+            fail(f"{rel_path}: components must be a list", issues)
+            components = []
+        if status == "planned" and components:
+            fail(f"{rel_path}: planned package must not claim components", issues)
+        if status == "implemented" and not components:
+            fail(f"{rel_path}: implemented package must declare at least one component", issues)
+        for component in components:
+            if not isinstance(component, dict):
+                fail(f"{rel_path}: component is not an object", issues)
+                continue
+            if set(component) - {"type", "path", "mode"}:
+                fail(f"{rel_path}: component contains unsupported fields", issues)
+            if component.get("type") not in {
+                "SkillComponent",
+                "DeclarativeResourcePack",
+                "McpServerComponent",
+                "NativeRustComponent",
+            }:
+                fail(f"{rel_path}: unsupported component type", issues)
+            component_path = component.get("path")
+            if not isinstance(component_path, str):
+                fail(f"{rel_path}: component path must be a string", issues)
+                continue
+            candidate = Path(component_path)
+            try:
+                resolved = (ROOT / candidate).resolve(strict=True)
+                resolved.relative_to(ROOT.resolve())
+            except (OSError, ValueError):
+                fail(f"{rel_path}: component path missing or unsafe: {component_path}", issues)
+                continue
+            if candidate.is_absolute() or ".." in candidate.parts or not resolved.is_file():
+                fail(f"{rel_path}: component path missing or unsafe: {component_path}", issues)
+
+        manifest_capabilities = manifest.get("capabilities")
+        if not isinstance(manifest_capabilities, list) or not all(
+            isinstance(capability, str) for capability in manifest_capabilities
+        ):
+            fail(f"{rel_path}: capabilities must be a string list", issues)
+            manifest_capabilities = []
+        if len(set(manifest_capabilities)) != len(manifest_capabilities):
+            fail(f"{rel_path}: duplicate capabilities", issues)
+        if (
+            is_default_first_party
+            and manifest_capabilities != expected_first_party_capabilities[package_id]
+        ):
+            fail(f"{rel_path}: default package capability set drift", issues)
+        for capability in manifest_capabilities:
+            if capability not in registered:
+                fail(f"{rel_path}: capability not registered: {capability}", issues)
+            if is_default_first_party and capability not in auto_grant:
+                fail(f"{rel_path}: default package capability is not auto-grant-eligible: {capability}", issues)
+
+        source_policy = manifest.get("sourcePolicy")
+        if not isinstance(source_policy, dict) or not source_policy or not all(
+            isinstance(key, str) and isinstance(value, str) for key, value in source_policy.items()
+        ):
+            fail(f"{rel_path}: sourcePolicy must be a non-empty string map", issues)
+        elif is_default_first_party and not source_policy.get("personalData"):
+            fail(f"{rel_path}: default package sourcePolicy must state personalData scope", issues)
+
+    first_party_ids = {
+        manifest.get("id")
+        for manifest in manifests
+        if manifest.get("publisher") == publishers.get("id") and manifest.get("tier") == "FirstParty"
+    }
+    if first_party_ids != expected_first_party_ids:
+        fail(
+            "default first-party package identity drift: "
+            f"expected={sorted(expected_first_party_ids)} actual={sorted(str(item) for item in first_party_ids)}",
+            issues,
+        )
 
 
 def check_course_fixture(issues: list[str]) -> None:

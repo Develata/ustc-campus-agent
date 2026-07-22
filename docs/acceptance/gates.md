@@ -5,6 +5,7 @@
 - `cargo fmt --all -- --check`
 - `cargo clippy --locked --all-targets --all-features -- -D warnings`
 - `cargo test --locked --all-targets --all-features`
+- `python3 -m unittest discover -s scripts/tests -p 'test_*.py'`
 - `python3 scripts/check_repo_contracts.py`
 
 ## Core demo gate

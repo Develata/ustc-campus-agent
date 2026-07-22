@@ -1,6 +1,16 @@
 {
   "capabilities": [
     {
+      "id": "campus.public_rules.read",
+      "class": "public-read",
+      "autoGrantEligible": true
+    },
+    {
+      "id": "campus.public_changes.read",
+      "class": "public-read",
+      "autoGrantEligible": true
+    },
+    {
       "id": "campus.public_plan.read",
       "class": "public-read",
       "autoGrantEligible": true

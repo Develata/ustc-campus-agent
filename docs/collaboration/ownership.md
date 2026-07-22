@@ -12,7 +12,7 @@ This file records collaboration lanes before a GitHub Organization or formal tea
 
 | Lane | Paths / contracts | Initial responsibility |
 |---|---|---|
-| Product / Source | `docs/plan/`, `docs/contracts/source-import.md`, source fixtures | Course Planning journey, source authority, USTC/iCourse permission path |
+| Product / Source | `docs/plan/`, `docs/contracts/source-import.md`, source fixtures | three Plugin journeys, shared source/revision authority, USTC/iCourse permission paths |
 | Backend / Runtime / Security | `crates/`, `apps/`, `docs/contracts/`, `SECURITY.md` | Rust authority core, install/grant/gateway/privacy |
 | Frontend / Demo | future `apps/web/`, `docs/public/`, demo script | Market + Agent Web/PWA, Pages handoff, browser evidence |
 | Evaluation / Release | `docs/acceptance/`, `.github/workflows/`, `scripts/` | CI, evidence, fixture oracle, release/public gates |

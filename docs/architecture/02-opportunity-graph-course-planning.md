@@ -1,6 +1,8 @@
 # Campus Opportunity Graph and Course Planning
 
-The flagship plugin is Campus Opportunity Graph. Course Planning is its first vertical slice.
+Campus Opportunity Graph is one of three default first-party Plugins. Course Planning is a vertical slice inside it, not the platform's sole product spine.
+
+The current deterministic planner is an out-of-order bounded offline spike. It proves typed fixture validation and hard-constraint planning, but not Market installation, grants, Agent discovery, source ingestion, or consent-aware profile integration. The main implementation sequence remains defined by [`ADR-0006`](../decisions/ADR-0006-three-default-first-party-plugins.md).
 
 ## Minimal ontology
 

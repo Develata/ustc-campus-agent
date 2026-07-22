@@ -6,7 +6,7 @@
 
 ## Why not split now
 
-Splitting immediately would add cross-repo versioning, PR synchronization, permissions, CI, and release coordination before the PluginPackage contract is proven by one real package.
+Splitting immediately would add cross-repo versioning, PR synchronization, permissions, CI, and release coordination before the exact three default first-party manifests and shared PluginPackage contract are proven through independent lifecycle journeys.
 
 ## Future split conditions
 

@@ -3,6 +3,11 @@ MARKET-001	market	anonymous users can browse package metadata without installing
 MARKET-002	market	installation pins exact package id version components schema and grants	future integration test	core-demo	planned	backend
 MARKET-003	market	disable blocks Agent discovery and invocation immediately	future integration test	core-demo	planned	backend
 MARKET-004	market	permission expansion is never automatic during upgrade	future unit/integration test	release	planned	security
+FP-001	first-party	all three default first-party package identities versions install policies capabilities and implementation statuses validate exactly	scripts/check_repo_contracts.py::check_market	core-demo	implemented	backend
+FP-002	first-party	Rust authority exposes the exact three default first-party package identities and matches catalog ids and versions	platform_core::tests::default_first_party_plugin_identities_are_stable + platform_core::tests::manifest_identities_match_rust_authority	core-demo	implemented	backend
+FP-003	first-party	Affairs Navigator answers one reviewed structured procedure with conditions steps effective time provenance and uncertainty	future integration test	core-demo	planned	product
+FP-004	first-party	ChangeRadar replays one approved source revision into one reviewed semantic change without advancing baseline on failure	future integration test	core-demo	planned	backend
+FP-005	first-party	each default first-party Plugin can be disabled and re-enabled independently	future integration/browser test	core-demo	planned	backend
 COURSE-001	course	official catalog facts outrank iCourse mirrors and community sources cannot author hard facts	course_planning::tests::official_source_wins_over_lower_authority_duplicate + course_planning::tests::community_source_cannot_author_course_facts	core-demo	implemented	backend
 COURSE-002	course	course-code alias conflicts are unresolved rather than guessed	course_planning::tests::unresolved_alias_is_excluded_instead_of_guessed	core-demo	implemented	product
 COURSE-003	course	planner hard-constraint violation count is zero on the canonical curated fixture	course_planning::tests::minimal_fixture_produces_multiple_zero_violation_candidates	core-demo	implemented	backend

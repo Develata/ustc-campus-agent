@@ -4,7 +4,9 @@
 
 USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是做一个有清晰边界的校园 Agent 平台：用户从 Market 安装可信插件，Agent 在来源、权限、版本和审计约束下完成校园任务。
 
-当前 flagship Plugin 是 **Campus Opportunity Graph**；首个可交付 vertical slice 是 **Course Planning**（产品展示名可暂用 Course Compass）。它把培养方案、课程供给、先修/冲突、社区评价和用户偏好表示为 typed opportunity graph，并输出可追溯、可解释、可约束的选课建议。
+平台有三个正式的 default first-party Plugins：**USTC Affairs Navigator**、**USTC ChangeRadar** 与 **Campus Opportunity Graph**。三者共享 Campus Trust Kernel，但保持独立的 package identity、版本、安装与启停边界。
+
+工程主线按 `ChangeRadar source/revision/diff foundation → Affairs Navigator structured procedure entry → ChangeRadar per-board feed → Opportunity Graph consent/profile integration` 推进。已完成的 **Course Planning** 是 Opportunity Graph 内提前落地的 bounded offline spike；它不把 Opportunity Graph 提升为唯一旗舰，也不代表 Market/runtime 闭环已完成。
 
 ## Current decisions
 
@@ -12,6 +14,9 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 |---|---|
 | Repository | `ustc-campus-agent`，GitHub private，Develata personal account |
 | Product name | USTC Campus Agent |
+| Default first-party Plugins | `ustc.affairs-navigator`, `ustc.change-radar`, `ustc.opportunity-graph` |
+| Implementation order | ChangeRadar foundation → Affairs Navigator → ChangeRadar feed → Opportunity Graph integration |
+| Course Planning | Retained bounded offline spike inside Opportunity Graph; not Market/runtime completion |
 | Chinese name | TBD；首版使用中文描述“面向科大学生的插件化校园智能体” |
 | Backup | Self-hosted Gitea pull mirror |
 | GitHub organization | Deferred |
@@ -30,7 +35,7 @@ crates/
   adapters/               # replaceable external adapters; no authority ownership
   course-planning/         # typed fixture validation and deterministic planner core
 market/                   # plugin catalog authority boundary inside this repo
-plugins/                  # first-party plugin implementation/doc boundary
+plugins/                  # three first-party plugin implementation/doc boundaries
 docs/                     # current contracts, ADRs, plans, acceptance matrix, legacy migration archive
 scripts/                  # local and CI validation scripts
 .github/                  # CI, PR template, issue templates, CODEOWNERS
@@ -52,6 +57,7 @@ Then run:
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-targets --all-features
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 python3 scripts/check_repo_contracts.py
 ```
 
@@ -70,6 +76,7 @@ cargo run --locked -p ustc-agentd -- --version
 
 - Product and execution plan: [`docs/plan/`](docs/plan/)
 - Architecture contracts: [`docs/architecture/`](docs/architecture/)
+- Three first-party Plugin contract: [`docs/architecture/03-three-first-party-plugins.md`](docs/architecture/03-three-first-party-plugins.md)
 - Public interfaces and package schema: [`docs/contracts/`](docs/contracts/)
 - Acceptance matrix and gates: [`docs/acceptance/`](docs/acceptance/)
 - Collaboration rules for multi-human/multi-agent work: [`docs/collaboration/`](docs/collaboration/)

@@ -10,6 +10,8 @@ ustc-agentd
 ├── installation/grant resolver
 ├── bounded conversation runner
 ├── tool gateway
+├── Affairs Navigator procedure use cases
+├── ChangeRadar source/revision/diff and feed use cases
 ├── Opportunity Graph / Course Planning use cases
 └── audit/evidence
     │
@@ -21,6 +23,8 @@ ustc-agentd
 ```
 
 The Rust domain core owns canonical decisions: package identity, grants, approvals, receipts, source revisions, and acceptance evidence. Adapters and framework workers may assist execution but cannot overwrite authority state.
+
+The three default first-party Plugins share one Campus Trust Kernel but keep independent package/install/enable boundaries. See [`03-three-first-party-plugins.md`](03-three-first-party-plugins.md).
 
 ## Initial executable scope
 

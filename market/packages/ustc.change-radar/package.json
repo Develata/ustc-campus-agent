@@ -1,0 +1,25 @@
+{
+  "id": "ustc.change-radar",
+  "version": "0.1.0",
+  "publisher": "first-party",
+  "tier": "FirstParty",
+  "displayName": "USTC ChangeRadar",
+  "description": "Reviewed semantic changes over approved campus sources with stable revisions, affected scope, provenance, and per-board feeds.",
+  "implementationStatus": "planned",
+  "installPolicy": {
+    "class": "FirstPartySystemPlugin",
+    "defaultInstalled": true,
+    "defaultEnabled": true,
+    "userDisableAllowed": true
+  },
+  "components": [],
+  "capabilities": [
+    "campus.public_rules.read",
+    "campus.public_changes.read"
+  ],
+  "sourcePolicy": {
+    "officialSources": "individually reviewed Source Registry entries; no arbitrary URL fetching",
+    "publication": "approved semantic changes only; crawl, hash, parser, and unreviewed inference noise is excluded",
+    "personalData": "none in planned scope"
+  }
+}

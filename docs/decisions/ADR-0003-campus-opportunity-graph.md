@@ -1,11 +1,13 @@
-# ADR-0003: Campus Opportunity Graph as flagship plugin
+# ADR-0003: Course Planning belongs to Campus Opportunity Graph
 
-- Status: Accepted
+- Status: Amended by [`ADR-0006`](ADR-0006-three-default-first-party-plugins.md)
 - Date: 2026-07-22
 
 ## Decision
 
-The flagship PluginPackage is `ustc.opportunity-graph`. Course Planning is its first vertical slice, not a separate top-level product spine.
+Course Planning is a vertical slice inside `ustc.opportunity-graph`, not a separate top-level `PluginPackage`.
+
+`ADR-0006` rejects the former single-flagship interpretation: Opportunity Graph is one of three formal default first-party Plugins, and Course Planning is retained as an out-of-order bounded spike rather than implementation-order authority.
 
 ## Rationale
 
