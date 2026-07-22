@@ -4,7 +4,7 @@
 
 - `Layer`: Runtime architecture
 - `Status`: R0 platform-owned transition kernel implemented; orchestration, persistence and production adapters planned
-- `Version`: `0.3.0`
+- `Version`: `0.4.0`
 - `Last Review`: `2026-07-23`
 - `Authority Owns`: platform run state, tool-effect ordering, framework/provider adapter boundary
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
@@ -67,14 +67,41 @@ Crash/resume MUST NOT repeat a successful receipt. Budgets do not reset on resum
 
 Domain/run/authorization code MUST NOT import framework-specific state as authority. A narrow adapter accepts platform-owned requests and emits typed model/tool events.
 
-| Reference | May borrow | Must not own |
-|---|---|---|
-| Rig | Rust provider/tool types, structured output, provider/MCP plumbing | platform run, grants or audit |
-| goose | extension diagnostics and permission UX ideas | arbitrary local command authority in central plane |
-| Pi | package/resource/session organization ideas | in-process TypeScript hot-load or broad system access |
-| LangGraph | durable checkpoint/interruption benchmark | canonical checkpoint or authorization truth |
+| Reference | Strong patterns to study and selectively borrow | Platform application | Must not own |
+|---|---|---|---|
+| Rig | Rust-native provider abstraction, structured output, streaming and cassette-backed provider tests | narrow `ModelBackend` transport and offline provider conformance | platform run loop, grants, receipts, memory or audit |
+| LangGraph | checkpoint/store separation, interrupt/resume, observable state and idempotency discipline around resumed work | durable-journal, approval and restart benchmarks | canonical checkpoint, installation, grant or authorization truth |
+| Pi Agent | app-message to LLM-message projection, explicit event lifecycle, tool-preflight barrier, ordered sequential/parallel tool results, steering/follow-up queues and lossless session history behind lossy compaction | model-event projection, turn barriers, queue semantics and future branch/compaction evaluation | TypeScript hot-load, mutable session state or package extensions as platform authority |
+| goose | MCP extension lifecycle, session-scoped extension activation, diagnostics and per-tool allow/ask/deny controls | `McpBinding` lifecycle, capability-scoped tool projection and permission UX | autonomous-by-default execution or direct extension authority in the central plane |
+| Hermes Agent | platform-agnostic core with entry-point adapters, central registry plus toolsets/availability gates, progressive skills, bounded memory versus session recall, profile isolation and isolated delegation versus durable scheduling | interface adapters, grant-filtered toolsets, layered context, procedural knowledge and execution-class separation | chat memory, skills, registry state, subagent state or gateway session as campus authority |
 
 A framework checkpoint is adapter state keyed by `platform_run_id`. Conflict with platform state fails closed.
+
+### 4.1 Mandatory reference protocol
+
+Before adding or materially changing a runtime capability:
+
+1. name the platform-owned invariant, threat boundary and first real consumer;
+2. inspect applicable official docs and current source for all relevant references above, recording date and exact release/commit plus license when dependency or code adoption is considered;
+3. write a capability matrix with `borrow`, `adapt`, `reject` and rationale—feature-table similarity alone is insufficient;
+4. map accepted patterns into owned commands/events/types rather than importing framework state into domain contracts;
+5. test the pattern through an equal-contract spike or deterministic fixture before dependency adoption;
+6. run the deployment, build, type, semantic, persistence and authority/security intrusion audit;
+7. require a new/amended ADR if a framework will own more than protocol plumbing inside a bounded adapter.
+
+The comparison is a design gate, not a mandate to implement every feature. A simpler owned mechanism wins when it preserves the invariant with less total maintained semantic surface.
+
+### 4.2 Dated official-source baseline
+
+The reference matrix above was revalidated on `2026-07-23` against:
+
+- [Rig official repository/docs](https://github.com/0xPlaygrounds/rig) and its provider/test guidance;
+- [LangGraph durable execution](https://docs.langchain.com/oss/python/langgraph/durable-execution) and [interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts);
+- [Pi Agent core](https://github.com/earendil-works/pi/tree/main/packages/agent) and [coding-agent harness](https://github.com/earendil-works/pi/tree/main/packages/coding-agent);
+- [goose extensions](https://goose-docs.ai/docs/getting-started/using-extensions), [permission modes](https://goose-docs.ai/docs/guides/managing-tools/goose-permissions) and [tool permissions](https://goose-docs.ai/docs/guides/managing-tools/tool-permissions);
+- [Hermes Agent architecture](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture), [tools](https://hermes-agent.nousresearch.com/docs/user-guide/features/tools), [skills](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills) and [memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory).
+
+These links are evidence pointers, not frozen compatibility claims. Revalidate them before each adoption decision.
 
 ## 5. Model provider profiles
 
