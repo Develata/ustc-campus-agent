@@ -1,0 +1,7 @@
+{
+  "id": "first-party",
+  "displayName": "USTC Campus Agent Team",
+  "trustTier": "FirstParty",
+  "contact": "repository maintainers",
+  "notes": "Student competition project; not an official USTC publisher."
+}

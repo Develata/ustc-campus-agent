@@ -1,0 +1,33 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# CodeGraph runtime index
+.codegraph/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Generated/local runtime state
+tmp/
+cache/
+logs/
+dist/
+coverage/
+.pytest_cache/
+.ruff_cache/
+node_modules/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

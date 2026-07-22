@@ -1,0 +1,15 @@
+[package]
+name = "ustc-agentd"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+ustc-campus-agent-core = { path = "../../crates/platform-core" }
+
+[lints]
+workspace = true

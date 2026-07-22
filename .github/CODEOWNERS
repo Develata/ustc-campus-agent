@@ -1,0 +1,8 @@
+# Repository owner fallback
+* @Develata
+
+# Contract-heavy boundaries
+/docs/contracts/ @Develata
+/docs/architecture/ @Develata
+/docs/decisions/ @Develata
+/market/ @Develata

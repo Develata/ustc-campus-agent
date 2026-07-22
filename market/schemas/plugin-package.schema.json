@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Develata/ustc-campus-agent/market/schemas/plugin-package.schema.json",
+  "title": "USTC Campus Agent PluginPackage",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "publisher",
+    "tier",
+    "displayName",
+    "components",
+    "capabilities",
+    "sourcePolicy"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^0\\.[0-9]+\\.[0-9]+$|^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"
+    },
+    "publisher": {
+      "type": "string"
+    },
+    "tier": {
+      "enum": [
+        "FirstParty",
+        "VerifiedCommunityText",
+        "VerifiedRemoteMcp"
+      ]
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sourcePolicy": {
+      "type": "object"
+    }
+  }
+}

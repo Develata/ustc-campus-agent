@@ -1,0 +1,34 @@
+{
+  "capabilities": [
+    {
+      "id": "campus.public_plan.read",
+      "class": "public-read",
+      "autoGrantEligible": true
+    },
+    {
+      "id": "campus.public_course.read",
+      "class": "public-read",
+      "autoGrantEligible": true
+    },
+    {
+      "id": "campus.community_review.linkout",
+      "class": "public-linkout",
+      "autoGrantEligible": true
+    },
+    {
+      "id": "user.own_academic_snapshot.read",
+      "class": "tenant-private-read",
+      "autoGrantEligible": false
+    },
+    {
+      "id": "user.own_course_preferences.read",
+      "class": "tenant-private-read",
+      "autoGrantEligible": false
+    },
+    {
+      "id": "user.own_plan_draft.write",
+      "class": "tenant-private-write",
+      "autoGrantEligible": false
+    }
+  ]
+}

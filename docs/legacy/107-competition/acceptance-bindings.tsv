@@ -1,0 +1,14 @@
+case_id|binding|owner|evidence|status|note
+DOC-006|manual-doc|unassigned|-|not-run|Authority precedence review; assign before release
+CAT-010|manual-security|unassigned|-|not-run|GitHub ownership/ruleset/status-check review
+AUTH-006|manual-security|unassigned|-|not-run|Break-glass entry/rate-limit/audit/rotation review
+AUTH-009|manual-security|unassigned|-|not-run|CSRF/cookie/origin review on mutation routes
+AUTH-010|manual-security|unassigned|-|not-run|Raw USTC credential storage/logging review
+SEC-007|manual-security|unassigned|-|not-run|Worker privilege/credential/socket review
+SKILL-008|manual-security|unassigned|-|not-run|Semantic Skill escalation/exfiltration review
+MCP-013|manual-security|unassigned|-|not-run|USTC token non-forwarding review
+RUN-006|manual-security|unassigned|-|not-run|Hosted workload sandbox review
+RUN-009|manual-security|unassigned|-|not-run|Public API orchestrator capability review
+I18N-006|manual-security|unassigned|-|not-run|Security-sensitive prompt localization review
+SRC-002|manual-security|unassigned|-|not-run|Crawl permission/rate policy/operator ownership review
+DEP-005|manual-security|unassigned|-|not-run|Dev/staging/production isolation review
