@@ -244,6 +244,14 @@ class DocsTopologyContractTests(unittest.TestCase):
         checker.check_acceptance_catalog(issues)
         self.assertTrue(any("active case missing from long-horizon catalog" in issue for issue in issues))
 
+    def test_active_agent_case_must_exist_in_catalog(self) -> None:
+        matrix_path = self.root / "docs/acceptance/matrix.tsv"
+        matrix = matrix_path.read_text(encoding="utf-8")
+        matrix_path.write_text(matrix.replace("AGENT-002", "AGENT-999", 1), encoding="utf-8")
+        issues: list[str] = []
+        checker.check_acceptance_catalog(issues)
+        self.assertTrue(any("active case missing from long-horizon catalog" in issue for issue in issues))
+
 
 if __name__ == "__main__":
     unittest.main()

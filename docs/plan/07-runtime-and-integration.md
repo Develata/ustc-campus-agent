@@ -3,15 +3,15 @@
 ## Metadata
 
 - `Layer`: Runtime architecture
-- `Status`: Architecture accepted; production runtime planned
-- `Version`: `0.2.0`
-- `Last Review`: `2026-07-22`
+- `Status`: R0 platform-owned transition kernel implemented; orchestration, persistence and production adapters planned
+- `Version`: `0.3.0`
+- `Last Review`: `2026-07-23`
 - `Authority Owns`: platform run state, tool-effect ordering, framework/provider adapter boundary
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
 - `Counterpart Features`: future bounded Agent journey; current Market and product features
-- `Counterpart Contracts`: `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: active `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*`, `AGENT-*`
-- `Primary Code Areas`: future runtime modules; current `crates/adapters/`
+- `Counterpart Contracts`: `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
+- `Counterpart Acceptance`: active `AGENT-001`, `AGENT-002` and planned `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
+- `Primary Code Areas`: `crates/agent-runtime/`, future orchestration modules and `crates/adapters/`
 
 ## 1. Principle
 
@@ -30,6 +30,8 @@ A platform run has an immutable specification containing at least:
 - source/profile context references;
 - turn, token/cost, tool, time and retry budgets.
 
+The exact R0 shape, validation rules and event semantics are owned by [`docs/contracts/agent-runtime.md`](../contracts/agent-runtime.md) and `crates/agent-runtime/`. The kernel pins resolved identities; it does not itself claim that an installation or grant exists.
+
 State machine target:
 
 ```text
@@ -38,6 +40,7 @@ Created
 → ModelTurn
 → AwaitingToolApproval
 → ExecutingTools
+→ Preparing
 → ModelTurn
 → Completed
 
@@ -193,7 +196,20 @@ If these cannot remain inside the adapter, retain the same domain contracts and 
 
 ## 10. Current state and verification
 
-Current runtime code is a skeleton; no model provider profile, MCP binding, hosted runtime or Agent run is implemented. The Course Planning CLI calls deterministic Rust domain code and is not an Agent run.
+Implemented now:
+
+- framework-neutral `RunSpec`, phase, command and immutable event contracts;
+- legal-transition validation and deterministic replay;
+- effect intent/receipt identity and ordering checks;
+- replay-stable turn/tool/input-token/output-token/cost/retry/elapsed budget accounting;
+- typed fail-closed errors for illegal transitions, identity mismatch and budget violation.
+
+This is an R0 domain kernel, not a production Agent run. No durable journal, model provider profile, MCP binding, hosted runtime, external tool execution or HTTP/SSE run surface is implemented. The Course Planning CLI still calls deterministic Rust domain code directly.
+
+Active implemented proof:
+
+- `AGENT-001`: only legal, evidenced transitions replay;
+- `AGENT-002`: immutable run spec pins exact platform identities and budgets.
 
 Active planned proof:
 

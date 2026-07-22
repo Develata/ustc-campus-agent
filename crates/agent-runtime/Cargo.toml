@@ -1,5 +1,5 @@
 [package]
-name = "ustc-agentd"
+name = "ustc-campus-agent-runtime"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -9,8 +9,13 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-ustc-campus-agent-runtime = { path = "../../crates/agent-runtime" }
-ustc-campus-agent-core = { path = "../../crates/platform-core" }
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lib]
+path = "src/lib.rs"
 
 [lints]
 workspace = true

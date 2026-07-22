@@ -148,6 +148,7 @@ dependencies = [
  "ustc-campus-agent-adapters",
  "ustc-campus-agent-core",
  "ustc-campus-agent-course-planning",
+ "ustc-campus-agent-runtime",
 ]
 
 [[package]]
@@ -155,6 +156,7 @@ name = "ustc-agentd"
 version = "0.1.0"
 dependencies = [
  "ustc-campus-agent-core",
+ "ustc-campus-agent-runtime",
 ]
 
 [[package]]
@@ -180,6 +182,14 @@ dependencies = [
  "serde_json",
  "time",
  "ustc-campus-agent-core",
+]
+
+[[package]]
+name = "ustc-campus-agent-runtime"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

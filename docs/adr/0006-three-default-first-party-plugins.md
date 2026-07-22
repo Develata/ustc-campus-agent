@@ -47,7 +47,7 @@ No Chinese product brand or `Course Compass` display name is approved.
 
 - All three package identities exist in the Market catalog and Rust authority constants.
 - Planned manifests state honest status and do not claim executable components.
-- The next mainline returns to ChangeRadar and then Affairs Navigator.
+- Within first-party product delivery, the next mainline returns to ChangeRadar and then Affairs Navigator; shared platform foundations may precede that product slice.
 - Affairs and ChangeRadar share one source/revision/change ledger.
 - Opportunity Graph may reuse Course Planning after shared source/temporal and consent boundaries exist.
 - The rejected draft is not canonical documentation; this ADR preserves the decision and rationale without retaining a duplicate proposal dump.

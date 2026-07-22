@@ -12,11 +12,11 @@ This matrix keeps the four live documentation layers aligned:
 | `00-engineering-constitution` | — | repository `AGENTS.md` | `docs/acceptance/gates.md`, repository checker |
 | `01-terminology` | all feature vocabulary | `market/` schema/capability IDs | matrix/checker vocabulary |
 | `02-product-positioning` | `00-market-browse-install`, `01-ustc-affairs-navigator`, `02-ustc-change-radar`, `03-campus-opportunity-graph` | `plugin-package.md` | `MARKET-*`, `FP-*` |
-| `03-platform-authority` | `00-market-browse-install` | `interfaces.md`, `permissions.md`, Rust domain identities | `MARKET-*`, `RUNTIME-*` |
+| `03-platform-authority` | `00-market-browse-install` | `agent-runtime.md`, `interfaces.md`, `permissions.md`, Rust domain identities | `AGENT-*`, `MARKET-*`, `RUNTIME-*` |
 | `04-market-and-plugin-lifecycle` | `00-market-browse-install` | `plugin-package.md`, `permissions.md`, Market JSON schema/registry/manifests | `MARKET-*`, `FP-006`, `FP-015`, `FP-007` |
 | `05-campus-trust-kernel` | all three first-party feature docs | `source-import.md`, `data-models.md` | `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
 | `06-first-party-plugins` | three first-party feature docs | package manifests, `data-models.md`, `source-import.md` | `FP-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
-| `07-runtime-and-integration` | future bounded Agent journey; Market invocation states today | `interfaces.md`, `permissions.md` | `RUNTIME-*` |
+| `07-runtime-and-integration` | R0 owned kernel; future bounded Agent journey | `agent-runtime.md`, `interfaces.md`, `permissions.md` | `AGENT-001`, `AGENT-002`, planned `RUNTIME-*` |
 | `08-security-and-delivery` | publication and permission failure states across features | `permissions.md`, `source-import.md` | `PUBLIC-*`, release-gated security rows |
 
 ## Non-matrix documents

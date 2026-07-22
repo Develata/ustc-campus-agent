@@ -1,7 +1,7 @@
 # USTC ChangeRadar
 
 - Package ID: `ustc.change-radar`
-- Status: planned manifest skeleton; source/revision/diff is the next mainline
+- Status: planned manifest skeleton; source/revision/diff is the next first-party product mainline
 - Product question: What changed, and does it affect me?
 
 Canonical documentation:

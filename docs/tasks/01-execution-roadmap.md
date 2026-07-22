@@ -10,13 +10,14 @@ This task document schedules implementation; it does not override the owning pla
 ## Dependency spine
 
 ```text
-P0 Market identity/read skeleton
-  └→ P1 ChangeRadar source/revision/diff foundation
-       ├→ P2 Affairs Navigator procedure entry
-       └→ P3 ChangeRadar board feed
-            └→ P4 Opportunity Graph consent/profile integration
-                 └→ P5 productization and adversarial verification
-                      └→ P6 freeze/submission
+R0 platform-owned Agent runtime kernel
+  └→ P0 Market identity/read and invocation-resolution skeleton
+       └→ P1 ChangeRadar source/revision/diff foundation
+            ├→ P2 Affairs Navigator procedure entry
+            └→ P3 ChangeRadar board feed
+                 └→ P4 Opportunity Graph consent/profile integration
+                      └→ P5 productization and adversarial verification
+                           └→ P6 freeze/submission
 ```
 
 The Course Planning spike was completed out of order. It remains reusable evidence inside Opportunity Graph but does not move the mainline past P1/P2/P3.
@@ -27,9 +28,31 @@ The Course Planning spike was completed out of order. It remains reusable eviden
 - GitHub collaboration baseline and protected `main`;
 - exactly three default first-party identities and typed manifest skeletons;
 - Course Planning bounded spike: strict synthetic fixture, deterministic planner, CLI smoke, provenance and fail-closed tests;
+- R0 framework-neutral Agent runtime kernel: immutable run spec, legal transitions, replay, effect identity/order and budget accounting;
 - plan/feature/contract/acceptance documentation layering.
 
-## P0 — Market identity and read skeleton
+## R0 — Platform-owned Agent runtime kernel
+
+**Inputs**
+
+- accepted platform authority and runtime boundary;
+- exact package/component/grant/schema identities already defined by current contracts;
+- ADR-0004 framework-neutral authority decision.
+
+**Deliverables**
+
+- immutable validated `RunSpec`;
+- legal phase/command/event transitions and deterministic replay;
+- effect intent/receipt identity and ordering;
+- replay-stable budget accounting;
+- typed fail-closed errors with no silent provider/tool/runtime fallback;
+- adapter boundary retained without prematurely freezing a framework API.
+
+**Exit gate**
+
+`AGENT-001` and `AGENT-002` pass against the Rust kernel. Durable orchestration, provider/tool adapters, HTTP/SSE and external effects remain explicitly planned.
+
+## P0 — Market identity, read and invocation-resolution skeleton
 
 **Inputs**
 
@@ -42,6 +65,7 @@ The Course Planning spike was completed out of order. It remains reusable eviden
 - anonymous package browse/detail projection;
 - exact version/component/capability/source-policy display;
 - typed installation/enable/grant state design before persistence;
+- a minimal resolver boundary that can supply an exact installation/component/grant snapshot to the runtime kernel;
 - no runtime claim for planned manifests.
 
 **Exit gate**

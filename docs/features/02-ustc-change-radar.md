@@ -1,7 +1,7 @@
 # USTC ChangeRadar
 
 - `Package ID`: `ustc.change-radar`
-- `Status`: Planned manifest skeleton; source/revision/diff is the next mainline
+- `Status`: Planned manifest skeleton; source/revision/diff is the next first-party product mainline
 - `Owning plan`: `docs/plan/06-first-party-plugins.md`
 - `Contracts`: `docs/contracts/source-import.md`, `docs/contracts/permissions.md`
 - `Acceptance`: `FP-002`, `RADAR-*`, `SRC-*`

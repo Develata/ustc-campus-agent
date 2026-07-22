@@ -3,6 +3,7 @@ members = [
   "apps/ustc-agentd",
   "apps/ustc-agentctl",
   "crates/platform-core",
+  "crates/agent-runtime",
   "crates/adapters",
   "crates/course-planning",
 ]

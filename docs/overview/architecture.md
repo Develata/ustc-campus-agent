@@ -25,7 +25,7 @@ ustc-agentd authority plane
 ├── identity/session                    (planned)
 ├── Market catalog projection           (planned; Git manifests exist)
 ├── installation/grant resolver         (planned)
-├── platform Agent run + tool gateway   (planned)
+├── platform Agent run + tool gateway   (R0 transition kernel implemented; orchestration planned)
 ├── Campus Trust Kernel                 (contract; planner subset exists)
 ├── first-party product use cases       (mostly planned)
 └── audit/evidence                      (planned)
@@ -45,9 +45,10 @@ Implemented today:
 - Rust workspace and daemon/CLI skeleton;
 - exact three first-party identities and manifest contract;
 - deterministic repository/manifest checks;
-- offline Course Planning fixture validation and planner.
+- offline Course Planning fixture validation and planner;
+- framework-neutral Agent run-spec, transition, replay, effect-ordering and budget kernel.
 
-The next mainline is ChangeRadar source/revision/diff—not additional Course Planning productization.
+The next platform slice is the minimal Market read/invocation resolver consumed by the R0 kernel; the next first-party product slice remains ChangeRadar source/revision/diff. Additional Course Planning productization is not the mainline.
 
 ## Navigation
 

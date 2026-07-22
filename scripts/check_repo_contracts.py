@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VALID_GATES = {"pr", "core-demo", "release", "public"}
 VALID_ACCEPTANCE_STATUSES = {"planned", "implemented"}
-STABLE_CATALOG_PREFIXES = {"FP", "PROC", "SRC"}
+STABLE_CATALOG_PREFIXES = {"AGENT", "FP", "PROC", "SRC"}
 MIN_LONG_HORIZON_CASES = 200
 EXPECTED_DOC_DIRECTORIES = {
     "acceptance",
@@ -76,6 +76,7 @@ KEY_FILES = [
     "docs/guides/development.md",
     "docs/guides/github-pages-brief.md",
     "docs/contracts/cli.md",
+    "docs/contracts/agent-runtime.md",
     "docs/contracts/data-models.md",
     "docs/contracts/interfaces.md",
     "docs/contracts/permissions.md",

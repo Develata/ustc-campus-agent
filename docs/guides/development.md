@@ -46,7 +46,7 @@ cargo run --locked -p ustc-agentctl -- course plan \
 
 The command must emit `course-plan-result/v0`, at least two candidates for the canonical fixture and `hard_constraint_violations: 0`.
 
-This validates only the retained offline spike inside Opportunity Graph. It does not prove Market installation/runtime integration. The next mainline remains ChangeRadar source/revision/diff.
+This validates only the retained offline spike inside Opportunity Graph. It does not prove Market installation/runtime integration. The platform now has an R0 framework-neutral runtime kernel; the next first-party product mainline remains ChangeRadar source/revision/diff.
 
 ## Operator smokes
 

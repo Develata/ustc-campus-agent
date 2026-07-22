@@ -3,15 +3,15 @@
 ## Metadata
 
 - `Layer`: Authority architecture
-- `Status`: Accepted architecture; runtime largely planned
-- `Version`: `0.1.0`
-- `Last Review`: `2026-07-22`
+- `Status`: Accepted architecture; R0 Agent transition kernel implemented, authority plane largely planned
+- `Version`: `0.2.0`
+- `Last Review`: `2026-07-23`
 - `Authority Owns`: authority partition, canonical state ownership, client/execution-plane boundary
 - `Authority Defers To`: product positioning for scope and contracts for exact external shapes
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`
-- `Counterpart Contracts`: `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: `MARKET-*`, `RUNTIME-*`, `PUBLIC-*`
-- `Primary Code Areas`: `crates/platform-core/`, `apps/ustc-agentd/`, `apps/ustc-agentctl/`
+- `Counterpart Contracts`: `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
+- `Counterpart Acceptance`: `AGENT-*`, `MARKET-*`, `RUNTIME-*`, `PUBLIC-*`
+- `Primary Code Areas`: `crates/platform-core/`, `crates/agent-runtime/`, `apps/ustc-agentd/`, `apps/ustc-agentctl/`
 
 ## 1. Scope
 
@@ -112,13 +112,14 @@ Implemented now:
 - Rust workspace and canonical first-party identities;
 - deterministic package/manifest contract checks;
 - operator CLI/daemon skeleton;
+- framework-neutral Agent run-spec, transition, replay, effect-ordering and budget kernel;
 - bounded offline Course Planning core and smoke command.
 
 Not yet implemented:
 
 - production identity/session;
 - durable installations and grants;
-- Agent run state and tool gateway;
+- durable Agent orchestration, journal and tool gateway;
 - source ingestion and publication state;
 - production database/evidence store;
 - Web/PWA journey.
@@ -140,4 +141,4 @@ These planned systems MUST NOT be described as operational merely because their 
 - `cargo test --locked --all-targets --all-features`
 - `ustc-agentctl doctor`
 - `ustc-agentctl market validate`
-- `MARKET-*`, `FP-*` and `RUNTIME-*` rows in `docs/acceptance/matrix.tsv`
+- `AGENT-*`, `MARKET-*`, `FP-*` and `RUNTIME-*` rows in `docs/acceptance/matrix.tsv`

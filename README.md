@@ -6,7 +6,7 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 
 平台有三个正式的 default first-party Plugins：**USTC Affairs Navigator**、**USTC ChangeRadar** 与 **Campus Opportunity Graph**。三者共享 Campus Trust Kernel，但保持独立的 package identity、版本、安装与启停边界。
 
-工程主线按 `ChangeRadar source/revision/diff foundation → Affairs Navigator structured procedure entry → ChangeRadar per-board feed → Opportunity Graph consent/profile integration` 推进。已完成的 **Course Planning** 是 Opportunity Graph 内提前落地的 bounded offline spike；它不把 Opportunity Graph 提升为唯一旗舰，也不代表 Market/runtime 闭环已完成。
+平台主线先建立 framework-neutral Agent runtime kernel，再补齐最小 Market read/invocation resolver；first-party 产品仍按 `ChangeRadar source/revision/diff foundation → Affairs Navigator structured procedure entry → ChangeRadar per-board feed → Opportunity Graph consent/profile integration` 推进。已完成的 **Course Planning** 是 Opportunity Graph 内提前落地的 bounded offline spike；它不把 Opportunity Graph 提升为唯一旗舰，也不代表 Market/runtime 闭环已完成。
 
 ## Current decisions
 
@@ -31,6 +31,7 @@ apps/                     # runnable binaries and future frontend shell
   ustc-agentctl/          # operator/developer CLI skeleton
 crates/
   platform-core/          # canonical domain invariants and authority decisions
+  agent-runtime/          # platform-owned run state, events, replay and effect ordering
   adapters/               # replaceable external adapters; no authority ownership
   course-planning/         # typed fixture validation and deterministic planner core
 market/                   # plugin catalog authority boundary inside this repo

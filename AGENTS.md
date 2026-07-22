@@ -10,8 +10,8 @@ This file governs all work in this repository. Read this file, then `README.md`,
 - Status: student competition project; not an official USTC service.
 - Core product spine: Plugins Market + bounded campus Agent.
 - Default first-party Plugins: `ustc.affairs-navigator`, `ustc.change-radar`, and `ustc.opportunity-graph`.
-- Frozen implementation order: ChangeRadar source/revision/diff foundation → Affairs Navigator structured procedure entry → ChangeRadar board feed → Opportunity Graph consent/profile integration.
-- Course Planning is an out-of-order bounded spike inside Opportunity Graph; it does not change product topology, implementation order, or Market/runtime readiness.
+- Frozen first-party product implementation order: ChangeRadar source/revision/diff foundation → Affairs Navigator structured procedure entry → ChangeRadar board feed → Opportunity Graph consent/profile integration. Shared platform foundations such as the framework-neutral Agent runtime kernel and minimal Market resolver may precede that product sequence when the dependency roadmap requires them.
+- Course Planning is an out-of-order bounded spike inside Opportunity Graph; it does not change product topology, first-party product implementation order, or Market/runtime readiness.
 - Chinese product name: TBD; do not invent a new Chinese brand inside code/docs unless Develata decides it.
 
 ## Source of truth

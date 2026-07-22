@@ -2,6 +2,8 @@
 
 This registry names draft public surfaces before implementation. Implementation PRs must update this document or create a more specific contract before changing surfaces.
 
+The implemented internal Agent state/event contract is defined separately in [`agent-runtime.md`](agent-runtime.md). It does not make the HTTP routes below operational.
+
 ## HTTP routes — draft
 
 | Route | Method | Purpose | Status |
