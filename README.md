@@ -28,6 +28,7 @@ apps/                     # runnable binaries and future frontend shell
 crates/
   platform-core/          # canonical domain invariants and authority decisions
   adapters/               # replaceable external adapters; no authority ownership
+  course-planning/         # typed fixture validation and deterministic planner core
 market/                   # plugin catalog authority boundary inside this repo
 plugins/                  # first-party plugin implementation/doc boundary
 docs/                     # current contracts, ADRs, plans, acceptance matrix, legacy migration archive
@@ -59,6 +60,9 @@ Useful smoke commands:
 ```bash
 cargo run --locked -p ustc-agentctl -- doctor
 cargo run --locked -p ustc-agentctl -- market validate
+cargo run --locked -p ustc-agentctl -- course plan \
+  --fixture market/fixtures/course-planning/minimal-v0.json \
+  --format json
 cargo run --locked -p ustc-agentd -- --version
 ```
 

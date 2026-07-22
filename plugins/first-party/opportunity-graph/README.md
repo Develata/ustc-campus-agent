@@ -15,4 +15,8 @@ Course Planning is the first slice:
 - `EvidenceSignal`: official fact, mirror fact, community link-out, uncertainty;
 - `ProfileFact`: user-provided academic snapshot or preference.
 
+The development-time authority core is `crates/course-planning`. It validates the synthetic `course-planning/v0` fixture, applies source authority and hard constraints, and emits deterministic `course-plan-result/v0` JSON through the operator smoke command `ustc-agentctl course plan`.
+
+This core is intentionally offline and read-only. The CLI smoke does **not** establish Market installation, enable/disable, grant, or Agent-discovery semantics. The crate is therefore not declared as an installable `NativeRustComponent` until the typed Market read/install path can enforce those lifecycle boundaries. Real catalog/iCourse adapters remain separate risk-first source spikes and must not weaken the source authority contract.
+
 Future research/competition/lecture/scholarship packs must reuse the same core semantics. If they require a different ontology, they need a new ADR before entering the flagship plugin.

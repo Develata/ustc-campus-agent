@@ -16,6 +16,16 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-targets --all-features
 ```
 
+## Course Planning vertical-slice smoke
+
+```bash
+cargo run --locked -p ustc-agentctl -- course plan \
+  --fixture market/fixtures/course-planning/minimal-v0.json \
+  --format json
+```
+
+The command must return `course-plan-result/v0`, at least two candidates for the canonical fixture, and `hard_constraint_violations: 0`.
+
 ## Repository contract gate
 
 ```bash

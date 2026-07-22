@@ -37,6 +37,7 @@ KEY_FILES = [
     "docs/public/github-pages-brief.md",
     "market/review-policy/first-party.md",
     "market/fixtures/course-planning/README.md",
+    "market/fixtures/course-planning/minimal-v0.json",
 ]
 
 
@@ -133,6 +134,88 @@ def check_market(issues: list[str]) -> None:
             fail(f"manifest component path missing: {rel}", issues)
 
 
+def check_course_fixture(issues: list[str]) -> None:
+    fixture = load_json("market/fixtures/course-planning/minimal-v0.json", issues)
+    if not isinstance(fixture, dict):
+        return
+    expected_top_level = {
+        "schema_version",
+        "source_revision",
+        "sources",
+        "profile",
+        "requirements",
+        "courses",
+        "community_signals",
+    }
+    unexpected = set(fixture) - expected_top_level
+    if unexpected:
+        fail(f"Course Planning fixture has unexpected top-level fields: {sorted(unexpected)}", issues)
+    if fixture.get("schema_version") != "course-planning/v0":
+        fail("Course Planning fixture schema drift", issues)
+    if fixture.get("source_revision") != "synthetic-course-planning-v0":
+        fail("Course Planning fixture must remain explicitly synthetic", issues)
+
+    sources = fixture.get("sources")
+    allowed_authorities = {
+        "official_catalog_snapshot",
+        "reviewed_official_source",
+        "icourse_mirror",
+        "community_signal",
+    }
+    if not isinstance(sources, list):
+        fail("Course Planning fixture sources must be a list", issues)
+    else:
+        for source in sources:
+            if not isinstance(source, dict):
+                fail("Course Planning fixture source must be an object", issues)
+                continue
+            if source.get("authority") not in allowed_authorities:
+                fail(f"Course Planning fixture source authority is not allowed: {source.get('authority')}", issues)
+            if not isinstance(source.get("effective_time"), str):
+                fail(f"Course Planning fixture source lacks effective_time: {source.get('id')}", issues)
+
+    courses = fixture.get("courses")
+    if not isinstance(courses, list):
+        fail("Course Planning fixture courses must be a list", issues)
+        return
+    unique_codes = {
+        course.get("code")
+        for course in courses
+        if isinstance(course, dict) and isinstance(course.get("code"), str)
+    }
+    if len(unique_codes) < 20:
+        fail("Course Planning fixture must retain at least 20 unique synthetic candidates", issues)
+
+    signals = fixture.get("community_signals")
+    signal_fields = {"course_code", "source_id", "score", "link"}
+    if not isinstance(signals, list):
+        fail("Course Planning community_signals must be a list", issues)
+    else:
+        for signal in signals:
+            if not isinstance(signal, dict):
+                fail("Course Planning community signal must be an object", issues)
+                continue
+            if set(signal) != signal_fields:
+                fail(f"Course Planning community signal field drift: {sorted(signal)}", issues)
+            link = signal.get("link")
+            if not isinstance(link, str) or not link.startswith("https://icourse.club/"):
+                fail("Course Planning community signal must remain iCourse link-out-only", issues)
+
+    forbidden_keys = {"password", "cookie", "student_id", "review_text", "review_content", "raw_review"}
+
+    def walk(value: object) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key.lower() in forbidden_keys:
+                    fail(f"forbidden sensitive fixture field: {key}", issues)
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(fixture)
+
+
 def check_acceptance_matrix(issues: list[str]) -> None:
     path = ROOT / "docs/acceptance/matrix.tsv"
     rows = path.read_text(encoding="utf-8").splitlines()
@@ -169,6 +252,7 @@ def main() -> int:
     check_markdown_links(issues)
     check_no_obvious_secrets(issues)
     check_market(issues)
+    check_course_fixture(issues)
     check_acceptance_matrix(issues)
     if issues:
         print("contract-check: FAIL")

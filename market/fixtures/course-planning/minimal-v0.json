@@ -1,0 +1,331 @@
+{
+  "schema_version": "course-planning/v0",
+  "source_revision": "synthetic-course-planning-v0",
+  "sources": [
+    {
+      "id": "official-catalog-synthetic",
+      "authority": "official_catalog_snapshot",
+      "revision": "synthetic-official-v0",
+      "retrieved_at": "2026-07-22T00:00:00Z",
+      "effective_time": "2026-fall",
+      "stale": false,
+      "note": "Synthetic fixture shaped like an approved official catalog snapshot; contains no real student data or credentials."
+    },
+    {
+      "id": "department-notice-synthetic",
+      "authority": "reviewed_official_source",
+      "revision": "synthetic-department-v0",
+      "retrieved_at": "2026-07-22T00:00:00Z",
+      "effective_time": "2026-fall",
+      "stale": false,
+      "note": "Synthetic reviewed department source used only for contract testing."
+    },
+    {
+      "id": "icourse-mirror-synthetic",
+      "authority": "icourse_mirror",
+      "revision": "synthetic-mirror-v0",
+      "retrieved_at": "2026-07-22T00:00:00Z",
+      "effective_time": "2026-fall",
+      "stale": false,
+      "note": "Synthetic lower-authority mirror fact used to test official-source precedence."
+    },
+    {
+      "id": "icourse-linkout",
+      "authority": "community_signal",
+      "revision": "linkout-only-v0",
+      "retrieved_at": "2026-07-22T00:00:00Z",
+      "effective_time": "2026-fall",
+      "stale": false,
+      "note": "Link-out metadata only; no iCourse review text is embedded or cached."
+    }
+  ],
+  "profile": {
+    "completed_courses": [
+      "MATH1001",
+      "MATH1002",
+      "CS1001",
+      "PHYS1001"
+    ],
+    "min_credits": 9,
+    "max_credits": 12,
+    "preference_weights": {
+      "MATH2001": 9,
+      "MATH2003": 8,
+      "CS2006": 7,
+      "PHYS2003": 5,
+      "HUM2001": 4,
+      "GEN2001": 3,
+      "LANG2001": 2
+    }
+  },
+  "requirements": [
+    {
+      "id": "major-mathematics",
+      "name": "Mathematics major core",
+      "min_credits": 4,
+      "eligible_courses": [
+        "MATH2001",
+        "MATH2002",
+        "MATH2003",
+        "MATH2004",
+        "MATH2005",
+        "MATH2006"
+      ],
+      "source_id": "official-catalog-synthetic"
+    },
+    {
+      "id": "science-computing-breadth",
+      "name": "Science or computing breadth",
+      "min_credits": 3,
+      "eligible_courses": [
+        "CS2001",
+        "CS2002",
+        "CS2003",
+        "CS2004",
+        "CS2005",
+        "CS2006",
+        "PHYS2001",
+        "PHYS2002",
+        "PHYS2003"
+      ],
+      "source_id": "official-catalog-synthetic"
+    },
+    {
+      "id": "general-education",
+      "name": "General education",
+      "min_credits": 2,
+      "eligible_courses": [
+        "HUM2001",
+        "HUM2002",
+        "LANG2001",
+        "PE2001",
+        "GEN2001"
+      ],
+      "source_id": "official-catalog-synthetic"
+    }
+  ],
+  "courses": [
+    {
+      "code": "MATH2001",
+      "title": "Real Analysis I",
+      "credits": 4,
+      "prerequisites": ["MATH1001"],
+      "slots": [{"weekday": 1, "start_minute": 480, "end_minute": 570}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "MATH2001",
+      "title": "Real Analysis I (mirror)",
+      "credits": 3,
+      "prerequisites": ["MATH1001"],
+      "slots": [{"weekday": 1, "start_minute": 480, "end_minute": 570}],
+      "source_id": "icourse-mirror-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "MATH2002",
+      "title": "Abstract Algebra I",
+      "credits": 4,
+      "prerequisites": ["MATH1002"],
+      "slots": [{"weekday": 2, "start_minute": 480, "end_minute": 570}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "MATH2003",
+      "title": "Probability Theory",
+      "credits": 4,
+      "prerequisites": ["MATH1001"],
+      "slots": [{"weekday": 3, "start_minute": 480, "end_minute": 570}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "MATH2004",
+      "title": "Numerical Analysis",
+      "credits": 3,
+      "prerequisites": ["MATH1001"],
+      "slots": [{"weekday": 1, "start_minute": 480, "end_minute": 570}],
+      "source_id": "department-notice-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "MATH2005",
+      "title": "Topology",
+      "credits": 3,
+      "prerequisites": ["MATH1002"],
+      "slots": [{"weekday": 4, "start_minute": 600, "end_minute": 690}],
+      "source_id": "department-notice-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "MATH2006",
+      "title": "Mathematical Statistics",
+      "credits": 4,
+      "prerequisites": ["MATH2003"],
+      "slots": [{"weekday": 5, "start_minute": 480, "end_minute": 570}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "CS2001",
+      "title": "Data Structures",
+      "credits": 4,
+      "prerequisites": ["CS1001"],
+      "slots": [{"weekday": 1, "start_minute": 600, "end_minute": 690}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "CS2002",
+      "title": "Algorithms",
+      "credits": 4,
+      "prerequisites": ["CS2001"],
+      "slots": [{"weekday": 2, "start_minute": 600, "end_minute": 690}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "CS2003",
+      "title": "Database Systems",
+      "credits": 3,
+      "prerequisites": ["CS1001"],
+      "slots": [{"weekday": 2, "start_minute": 600, "end_minute": 690}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "CS2004",
+      "title": "Operating Systems",
+      "credits": 4,
+      "prerequisites": ["CS2001"],
+      "slots": [{"weekday": 3, "start_minute": 600, "end_minute": 690}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "CS2005",
+      "title": "Computer Networks",
+      "credits": 3,
+      "prerequisites": ["CS1001"],
+      "slots": [{"weekday": 4, "start_minute": 480, "end_minute": 570}],
+      "source_id": "department-notice-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "CS2006",
+      "title": "Rust Systems Lab",
+      "credits": 3,
+      "prerequisites": ["CS1001"],
+      "slots": [{"weekday": 5, "start_minute": 480, "end_minute": 570}],
+      "source_id": "department-notice-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "PHYS2001",
+      "title": "Classical Mechanics",
+      "credits": 4,
+      "prerequisites": ["PHYS1001"],
+      "slots": [{"weekday": 3, "start_minute": 600, "end_minute": 690}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "PHYS2002",
+      "title": "Electromagnetism",
+      "credits": 4,
+      "prerequisites": ["PHYS1001"],
+      "slots": [{"weekday": 2, "start_minute": 480, "end_minute": 570}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "PHYS2003",
+      "title": "Statistical Physics",
+      "credits": 4,
+      "prerequisites": ["PHYS1001"],
+      "slots": [{"weekday": 4, "start_minute": 600, "end_minute": 690}],
+      "source_id": "official-catalog-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "HUM2001",
+      "title": "Philosophy of Science",
+      "credits": 2,
+      "prerequisites": [],
+      "slots": [{"weekday": 5, "start_minute": 600, "end_minute": 690}],
+      "source_id": "department-notice-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "HUM2002",
+      "title": "Academic Writing",
+      "credits": 2,
+      "prerequisites": [],
+      "slots": [{"weekday": 1, "start_minute": 720, "end_minute": 810}],
+      "source_id": "department-notice-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "LANG2001",
+      "title": "Advanced English",
+      "credits": 2,
+      "prerequisites": [],
+      "slots": [{"weekday": 2, "start_minute": 720, "end_minute": 810}],
+      "source_id": "department-notice-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    },
+    {
+      "code": "PE2001",
+      "title": "Swimming",
+      "credits": 1,
+      "prerequisites": [],
+      "slots": [{"weekday": 3, "start_minute": 720, "end_minute": 810}],
+      "source_id": "department-notice-synthetic",
+      "available": true,
+      "identity_status": "unresolved_alias"
+    },
+    {
+      "code": "GEN2001",
+      "title": "Innovation Seminar",
+      "credits": 2,
+      "prerequisites": [],
+      "slots": [{"weekday": 4, "start_minute": 720, "end_minute": 810}],
+      "source_id": "department-notice-synthetic",
+      "available": true,
+      "identity_status": "verified"
+    }
+  ],
+  "community_signals": [
+    {"course_code": "MATH2001", "source_id": "icourse-linkout", "score": 86, "link": "https://icourse.club/"},
+    {"course_code": "MATH2002", "source_id": "icourse-linkout", "score": 72, "link": "https://icourse.club/"},
+    {"course_code": "MATH2003", "source_id": "icourse-linkout", "score": 91, "link": "https://icourse.club/"},
+    {"course_code": "CS2001", "source_id": "icourse-linkout", "score": 78, "link": "https://icourse.club/"},
+    {"course_code": "CS2003", "source_id": "icourse-linkout", "score": 69, "link": "https://icourse.club/"},
+    {"course_code": "CS2006", "source_id": "icourse-linkout", "score": 88, "link": "https://icourse.club/"},
+    {"course_code": "PHYS2001", "source_id": "icourse-linkout", "score": 74, "link": "https://icourse.club/"},
+    {"course_code": "PHYS2003", "source_id": "icourse-linkout", "score": 83, "link": "https://icourse.club/"},
+    {"course_code": "HUM2001", "source_id": "icourse-linkout", "score": 80, "link": "https://icourse.club/"},
+    {"course_code": "GEN2001", "source_id": "icourse-linkout", "score": 75, "link": "https://icourse.club/"}
+  ]
+}

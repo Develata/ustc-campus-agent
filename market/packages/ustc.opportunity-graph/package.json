@@ -25,8 +25,7 @@
     "campus.public_course.read",
     "campus.community_review.linkout",
     "user.own_academic_snapshot.read",
-    "user.own_course_preferences.read",
-    "user.own_plan_draft.write"
+    "user.own_course_preferences.read"
   ],
   "sourcePolicy": {
     "officialCatalog": "official-first snapshot/import; no stored raw password",
