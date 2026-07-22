@@ -1,30 +1,34 @@
 # Contributing
 
-This repository is currently private. Contributors should follow [`docs/collaboration/pr-contract.md`](docs/collaboration/pr-contract.md) and [`AGENTS.md`](AGENTS.md).
+This private repository uses [`docs/guides/contributing.md`](docs/guides/contributing.md) as the detailed collaboration contract. Also read [`AGENTS.md`](AGENTS.md), [`docs/AGENTS.md`](docs/AGENTS.md) and the matching row in [`docs/coverage-matrix.md`](docs/coverage-matrix.md).
 
 ## Quick workflow
 
-1. Create or pick an issue/task ID.
-2. Create a branch: `feat/<topic>`, `fix/<topic>`, `docs/<topic>`, or `chore/<topic>`.
-3. Keep one semantic intent per PR.
-4. Run the relevant gates and paste evidence into the PR.
-5. Request review from the owner of the touched contract.
+1. Bind the slice to a task/ADR/contract/acceptance case.
+2. Name one owner and reviewer; declare touched paths and non-goals.
+3. Use `feat/<topic>`, `fix/<topic>`, `docs/<topic>`, `chore/<topic>` or disposable `spike/<topic>`.
+4. Keep one semantic intent per PR and stage exact paths only.
+5. Run the owning gates and include real output/not-run state.
+6. Request review from the owner of the touched contract.
+7. Do not push, tag, publish or change visibility without explicit Develata approval.
 
 ## Commit style
 
-Prefer concise conventional-style commits:
+Prefer concise conventional-style commits, for example:
 
 ```text
-docs: define market authority boundary
-feat: add package manifest validator skeleton
-test: cover course-planning hard-constraint gate
+docs: align Market authority layers
+feat: add package manifest validator
+test: cover Course Planning hard-constraint gate
 ```
 
-## Required checks
+## PR gate
 
 ```bash
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-targets --all-features
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 python3 scripts/check_repo_contracts.py
+git diff --check
 ```

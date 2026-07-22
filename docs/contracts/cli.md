@@ -37,10 +37,13 @@ The command is read-only: it does not access the network, store credentials, mod
 
 | Command | Purpose | Side effect policy |
 |---|---|---|
-| `ustc-agentctl market validate` | move final market schema/manifests authority into Rust | read-only |
-| `ustc-agentctl acceptance run --gate pr` | run PR acceptance subset | evidence write only when requested |
-| `ustc-agentctl source import-snapshot` | import approved source snapshot | operator-only, audited |
-| `ustc-agentctl source diff` | compare source revisions | read-only |
-| `ustc-agentctl doctor` | expand local configuration and binary sanity | read-only |
+| `ustc-agentctl acceptance run --gate pr` | run a named acceptance subset | evidence write only when requested |
+| `ustc-agentctl source registry-check --strict` | validate reviewed source declarations | read-only |
+| `ustc-agentctl source crawl-plan <source-id>` | produce a bounded retrieval plan | read-only; no cursor/baseline mutation |
+| `ustc-agentctl source crawl-apply --plan <path> --plan-digest <digest>` | apply an approved retrieval plan | operator-only, idempotent, audited |
+| `ustc-agentctl source diff` | compare immutable source revisions | read-only |
+| `ustc-agentctl procedure validate --candidate <path>` | validate typed procedure candidate | read-only |
+| `ustc-agentctl procedure publish-plan --candidate <path>` | produce deterministic publish plan | read-only |
+| `ustc-agentctl procedure publish-apply --plan <path> --plan-digest <digest>` | publish an approved artifact | administrator-only, audited |
 
-Any command that writes durable state must define `--dry-run` semantics before implementation.
+Any durable mutation must define dry-run/plan semantics, idempotency identity, authorization, receipt and recovery before implementation. Server/runtime code calls shared Rust domain services directly; it does not shell out to this CLI for normal business paths.

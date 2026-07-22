@@ -21,6 +21,8 @@ cache/
 logs/
 dist/
 coverage/
+__pycache__/
+*.py[cod]
 .pytest_cache/
 .ruff_cache/
 node_modules/

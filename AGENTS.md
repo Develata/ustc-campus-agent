@@ -9,16 +9,17 @@ This file governs all work in this repository. Read this file, then `README.md`,
 - Project: **USTC Campus Agent**.
 - Status: student competition project; not an official USTC service.
 - Core product spine: Plugins Market + bounded campus Agent.
-- First flagship Plugin: `ustc.opportunity-graph`.
-- First vertical slice: Course Planning.
+- Default first-party Plugins: `ustc.affairs-navigator`, `ustc.change-radar`, and `ustc.opportunity-graph`.
+- Frozen implementation order: ChangeRadar source/revision/diff foundation → Affairs Navigator structured procedure entry → ChangeRadar board feed → Opportunity Graph consent/profile integration.
+- Course Planning is an out-of-order bounded spike inside Opportunity Graph; it does not change product topology, implementation order, or Market/runtime readiness.
 - Chinese product name: TBD; do not invent a new Chinese brand inside code/docs unless Develata decides it.
 
 ## Source of truth
 
-- Current plans/contracts live under `docs/plan/`, `docs/architecture/`, `docs/contracts/`, and `docs/acceptance/`.
-- Historical planning material is preserved under `docs/legacy/`; it is **not** canonical when it conflicts with current docs.
+- Documentation roles and reading order are governed by `docs/AGENTS.md` and `docs/coverage-matrix.md`.
+- Current engineering authority lives under `docs/plan/` and `docs/contracts/`; features, acceptance, tasks, guides, overview and ADRs have the distinct roles defined by `docs/AGENTS.md`.
 - `market/` is a logical catalog authority boundary even while it remains in this monorepo.
-- Runtime generated state, credentials, local snapshots, and `.codegraph/` are not source.
+- Raw discovery archives, personal infrastructure/backup procedures, runtime generated state, credentials, local snapshots, and `.codegraph/` are not repository source.
 
 ## Engineering rules
 

@@ -1,6 +1,6 @@
 # Course Planning fixtures
 
-This directory contains non-sensitive, deterministic fixtures for the first Course Planning vertical slice.
+This directory contains non-sensitive, deterministic fixtures for the retained Course Planning bounded spike inside Opportunity Graph.
 
 ## `minimal-v0.json`
 

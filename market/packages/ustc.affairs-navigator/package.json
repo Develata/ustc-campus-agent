@@ -1,0 +1,24 @@
+{
+  "id": "ustc.affairs-navigator",
+  "version": "0.1.0",
+  "publisher": "first-party",
+  "tier": "FirstParty",
+  "displayName": "USTC Affairs Navigator",
+  "description": "Reviewed campus procedure navigation with explicit conditions, steps, effective time, provenance, and uncertainty.",
+  "implementationStatus": "planned",
+  "installPolicy": {
+    "class": "FirstPartySystemPlugin",
+    "defaultInstalled": true,
+    "defaultEnabled": true,
+    "userDisableAllowed": true
+  },
+  "components": [],
+  "capabilities": [
+    "campus.public_rules.read"
+  ],
+  "sourcePolicy": {
+    "officialSources": "reviewed Source Registry entries and approved revisions only",
+    "truthPath": "reviewed structured procedures; bounded retrieval over approved snapshots is later fallback",
+    "personalData": "none in planned scope"
+  }
+}

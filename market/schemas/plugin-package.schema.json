@@ -9,6 +9,8 @@
     "publisher",
     "tier",
     "displayName",
+    "implementationStatus",
+    "installPolicy",
     "components",
     "capabilities",
     "sourcePolicy"
@@ -39,20 +41,81 @@
     "description": {
       "type": "string"
     },
+    "implementationStatus": {
+      "enum": [
+        "planned",
+        "development",
+        "implemented"
+      ]
+    },
+    "installPolicy": {
+      "type": "object",
+      "required": [
+        "class",
+        "defaultInstalled",
+        "defaultEnabled",
+        "userDisableAllowed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "enum": [
+            "FirstPartySystemPlugin",
+            "UserInstalledPlugin"
+          ]
+        },
+        "defaultInstalled": {
+          "type": "boolean"
+        },
+        "defaultEnabled": {
+          "type": "boolean"
+        },
+        "userDisableAllowed": {
+          "type": "boolean"
+        }
+      }
+    },
     "components": {
       "type": "array",
       "items": {
-        "type": "object"
+        "type": "object",
+        "required": [
+          "type",
+          "path"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "enum": [
+              "SkillComponent",
+              "DeclarativeResourcePack",
+              "McpServerComponent",
+              "NativeRustComponent"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mode": {
+            "type": "string"
+          }
+        }
       }
     },
     "capabilities": {
       "type": "array",
+      "uniqueItems": true,
       "items": {
         "type": "string"
       }
     },
     "sourcePolicy": {
-      "type": "object"
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   }
 }

@@ -32,5 +32,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+      - name: Contract unit tests
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
       - name: Repository contract checks
         run: python3 scripts/check_repo_contracts.py

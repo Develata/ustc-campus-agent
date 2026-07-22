@@ -4,32 +4,23 @@
   "publisher": "first-party",
   "tier": "FirstParty",
   "displayName": "Campus Opportunity Graph",
-  "description": "Typed campus opportunity graph; first domain pack is Course Planning.",
-  "components": [
-    {
-      "type": "SkillComponent",
-      "path": "plugins/first-party/opportunity-graph/README.md"
-    },
-    {
-      "type": "DeclarativeResourcePack",
-      "path": "plugins/first-party/opportunity-graph/resources/course-domain/README.md"
-    },
-    {
-      "type": "McpServerComponent",
-      "path": "docs/contracts/interfaces.md",
-      "mode": "read-only-draft"
-    }
-  ],
+  "description": "Typed campus opportunity graph; Course Planning currently exists as a bounded offline development spike.",
+  "implementationStatus": "development",
+  "installPolicy": {
+    "class": "FirstPartySystemPlugin",
+    "defaultInstalled": true,
+    "defaultEnabled": true,
+    "userDisableAllowed": true
+  },
+  "components": [],
   "capabilities": [
     "campus.public_plan.read",
     "campus.public_course.read",
-    "campus.community_review.linkout",
-    "user.own_academic_snapshot.read",
-    "user.own_course_preferences.read"
+    "campus.community_review.linkout"
   ],
   "sourcePolicy": {
     "officialCatalog": "official-first snapshot/import; no stored raw password",
     "icourse": "link-out-only unless explicit permission is obtained",
-    "personalData": "tenant-owned and deletable"
+    "personalData": "future consent-aware tenant-owned projection; not part of the current Market manifest"
   }
 }

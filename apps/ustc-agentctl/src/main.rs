@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 use ustc_campus_agent_adapters::adapter_health;
-use ustc_campus_agent_core::{FIRST_VERTICAL_SLICE, OPPORTUNITY_GRAPH_PLUGIN_ID, PRODUCT_NAME};
+use ustc_campus_agent_core::{
+    COURSE_PLANNING_SLICE, DEFAULT_FIRST_PARTY_PLUGIN_IDENTITIES, OPPORTUNITY_GRAPH_PLUGIN_ID,
+    PRODUCT_NAME,
+};
 use ustc_campus_agent_course_planning::{PlanningConfig, load_fixture, plan_fixture};
 
 fn main() {
@@ -27,14 +30,22 @@ fn run(args: &[String]) -> Result<(), String> {
         }
         [cmd] if cmd == "doctor" => {
             println!("product={PRODUCT_NAME}");
-            println!("first_plugin={OPPORTUNITY_GRAPH_PLUGIN_ID}");
-            println!("first_vertical_slice={FIRST_VERTICAL_SLICE}");
+            for plugin in DEFAULT_FIRST_PARTY_PLUGIN_IDENTITIES {
+                println!(
+                    "default_first_party_plugin={}@{}",
+                    plugin.id, plugin.version
+                );
+            }
+            println!("bounded_spike_plugin={OPPORTUNITY_GRAPH_PLUGIN_ID}");
+            println!("bounded_spike_slice={COURSE_PLANNING_SLICE}");
             println!("{}", adapter_health());
             Ok(())
         }
         [cmd, sub] if cmd == "market" && sub == "validate" => {
             println!("market validation is implemented by scripts/check_repo_contracts.py");
-            println!("first_party_package={OPPORTUNITY_GRAPH_PLUGIN_ID}");
+            for plugin in DEFAULT_FIRST_PARTY_PLUGIN_IDENTITIES {
+                println!("first_party_package={}@{}", plugin.id, plugin.version);
+            }
             Ok(())
         }
         [cmd, sub, rest @ ..] if cmd == "course" && sub == "plan" => run_course_plan(rest),
