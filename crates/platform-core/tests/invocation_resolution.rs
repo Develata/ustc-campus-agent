@@ -895,8 +895,10 @@ fn golden_arguments() -> CanonicalArgumentValueV0 {
     }
 }
 
-fn valid_call_state() -> (ToolProjectionSnapshot, CurrentDenyState, ProposedToolCall) {
-    let (projection, candidate) = resolve_valid();
+fn call_state_from_resolved(
+    projection: ToolProjectionSnapshot,
+    candidate: InvocationAuthorityCandidate,
+) -> (ToolProjectionSnapshot, CurrentDenyState, ProposedToolCall) {
     let Some(installation) = candidate.installation else {
         panic!("fixture installation required")
     };
@@ -923,6 +925,28 @@ fn valid_call_state() -> (ToolProjectionSnapshot, CurrentDenyState, ProposedTool
     (projection, current, call)
 }
 
+fn valid_call_state_with_confirmation_policy(
+    confirmation_policy: ConfirmationPolicy,
+) -> (ToolProjectionSnapshot, CurrentDenyState, ProposedToolCall) {
+    let (request, mut candidate) = valid_authority();
+    candidate
+        .grant
+        .as_mut()
+        .expect("fixture grant required")
+        .confirmation_policy = confirmation_policy;
+    let projection = match InvocationResolver::resolve_projection(request, vec![candidate.clone()])
+    {
+        Ok(projection) => projection,
+        Err(error) => panic!("valid fixture must resolve: {error}"),
+    };
+    call_state_from_resolved(projection, candidate)
+}
+
+fn valid_call_state() -> (ToolProjectionSnapshot, CurrentDenyState, ProposedToolCall) {
+    let (projection, candidate) = resolve_valid();
+    call_state_from_resolved(projection, candidate)
+}
+
 #[test]
 fn call_authorization_uses_only_frozen_dispatch_and_current_narrowing() {
     let (projection, current, call) = valid_call_state();
@@ -930,8 +954,24 @@ fn call_authorization_uses_only_frozen_dispatch_and_current_narrowing() {
     let Ok(authorized) = authorized else {
         panic!("valid frozen call must authorize")
     };
-    assert_eq!(authorized.entry, projection.entries()[0]);
-    assert_eq!(authorized.arguments.digest().as_str(), ARGUMENT_DIGEST);
+    assert_eq!(authorized.entry(), &projection.entries()[0]);
+    assert_eq!(authorized.arguments().digest().as_str(), ARGUMENT_DIGEST);
+    assert_eq!(
+        authorized.provider_tool_call_id(),
+        &parsed!(ProviderToolCallId, "provider-call:1")
+    );
+    assert_eq!(
+        authorized.current_installation_revision(),
+        &parsed!(InstallationRevision, "installation-revision:7")
+    );
+    assert_eq!(
+        authorized.current_grant_version(),
+        &parsed!(GrantVersion, "grant-version:3")
+    );
+    assert_eq!(
+        authorized.current_policy_revision(),
+        &parsed!(PolicyRevision, "policy-revision:9")
+    );
 
     let mut unknown = call.clone();
     unknown.model_visible_name = "not_projected".to_owned();
@@ -956,6 +996,24 @@ fn call_authorization_uses_only_frozen_dispatch_and_current_narrowing() {
     assert_eq!(
         authorize_call(&projection, current, call),
         Err(InvocationAuthorizationError::AuthorityConflict)
+    );
+}
+
+#[test]
+fn call_time_confirmation_policy_must_match_the_frozen_grant() {
+    let (projection, mut current, call) = valid_call_state();
+    current.grant.confirmation_policy = ConfirmationPolicy::Ask;
+    assert_eq!(
+        authorize_call(&projection, current, call),
+        Err(InvocationAuthorizationError::GrantVersionMismatch)
+    );
+
+    let (projection, mut current, call) =
+        valid_call_state_with_confirmation_policy(ConfirmationPolicy::Ask);
+    current.grant.confirmation_policy = ConfirmationPolicy::Allow;
+    assert_eq!(
+        authorize_call(&projection, current, call),
+        Err(InvocationAuthorizationError::GrantVersionMismatch)
     );
 }
 

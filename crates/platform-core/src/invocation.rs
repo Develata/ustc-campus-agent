@@ -1482,14 +1482,95 @@ pub struct CurrentDenyState {
     pub policy: InvocationPolicySnapshot,
 }
 
+/// A call-time authorization decision sealed by [`authorize_call`].
+///
+/// External callers cannot construct a replacement decision directly:
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::invocation::AuthorizedInvocation;
+///
+/// fn reconstruct(value: AuthorizedInvocation) -> AuthorizedInvocation {
+///     AuthorizedInvocation { ..value }
+/// }
+/// ```
+///
+/// External callers cannot replace authority-bearing contents after authorization:
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::invocation::{AuthorizedInvocation, ResolvedInvocation};
+///
+/// fn replace_entry(value: &mut AuthorizedInvocation, replacement: ResolvedInvocation) {
+///     value.entry = replacement;
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::invocation::{AuthorizedInvocation, CanonicalArgumentValueV0};
+///
+/// fn replace_arguments(
+///     value: &mut AuthorizedInvocation,
+///     replacement: CanonicalArgumentValueV0,
+/// ) {
+///     value.arguments = replacement;
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::invocation::{
+///     AuthorizedInvocation, GrantVersion, InstallationRevision, PolicyRevision,
+/// };
+///
+/// fn replace_revisions(
+///     value: &mut AuthorizedInvocation,
+///     installation: InstallationRevision,
+///     grant: GrantVersion,
+///     policy: PolicyRevision,
+/// ) {
+///     value.current_installation_revision = installation;
+///     value.current_grant_version = grant;
+///     value.current_policy_revision = policy;
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthorizedInvocation {
-    pub entry: ResolvedInvocation,
-    pub provider_tool_call_id: ProviderToolCallId,
-    pub arguments: CanonicalArgumentValueV0,
-    pub current_installation_revision: InstallationRevision,
-    pub current_grant_version: GrantVersion,
-    pub current_policy_revision: PolicyRevision,
+    entry: ResolvedInvocation,
+    provider_tool_call_id: ProviderToolCallId,
+    arguments: CanonicalArgumentValueV0,
+    current_installation_revision: InstallationRevision,
+    current_grant_version: GrantVersion,
+    current_policy_revision: PolicyRevision,
+}
+
+impl AuthorizedInvocation {
+    #[must_use]
+    pub const fn entry(&self) -> &ResolvedInvocation {
+        &self.entry
+    }
+
+    #[must_use]
+    pub const fn provider_tool_call_id(&self) -> &ProviderToolCallId {
+        &self.provider_tool_call_id
+    }
+
+    #[must_use]
+    pub const fn arguments(&self) -> &CanonicalArgumentValueV0 {
+        &self.arguments
+    }
+
+    #[must_use]
+    pub const fn current_installation_revision(&self) -> &InstallationRevision {
+        &self.current_installation_revision
+    }
+
+    #[must_use]
+    pub const fn current_grant_version(&self) -> &GrantVersion {
+        &self.current_grant_version
+    }
+
+    #[must_use]
+    pub const fn current_policy_revision(&self) -> &PolicyRevision {
+        &self.current_policy_revision
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1593,6 +1674,7 @@ pub fn authorize_call(
     if current.grant.snapshot_id != entry.grant_snapshot_id
         || current.grant.version != entry.grant_version
         || current.grant.capability_manifest_digest != entry.capability_manifest_digest
+        || current.grant.confirmation_policy != entry.confirmation_policy
     {
         return Err(InvocationAuthorizationError::GrantVersionMismatch);
     }
