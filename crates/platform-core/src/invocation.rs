@@ -1059,27 +1059,9 @@ fn authority_snapshot_shape_is_valid(candidate: &InvocationAuthorityCandidate) -
 }
 
 fn same_catalog_authority_anchor(
-    left: Option<&CatalogPackageRevision>,
-    right: Option<&CatalogPackageRevision>,
+    left: &CatalogPackageRevision,
+    right: &CatalogPackageRevision,
 ) -> bool {
-    let (Some(left), Some(right)) = (left, right) else {
-        return true;
-    };
-    // Parity audit for two present package snapshots: catalog revision, package identity/digest,
-    // runnable/revoked status, capability manifest, and source policy are singular. For two
-    // present components, every field except the deliberately per-entry tool definition is
-    // singular; absent package/component/tool evidence remains target-local.
-    let components_match = match (left.component.as_ref(), right.component.as_ref()) {
-        (Some(left), Some(right)) => {
-            left.id == right.id
-                && left.kind == right.kind
-                && left.version == right.version
-                && left.digest == right.digest
-                && left.execution_identity == right.execution_identity
-                && left.declared_capabilities == right.declared_capabilities
-        }
-        _ => true,
-    };
     left.catalog_revision == right.catalog_revision
         && left.package_id == right.package_id
         && left.package_version == right.package_version
@@ -1088,18 +1070,12 @@ fn same_catalog_authority_anchor(
         && left.revoked == right.revoked
         && left.capability_manifest_digest == right.capability_manifest_digest
         && left.source_policy == right.source_policy
-        && components_match
 }
 
 fn same_installation_authority_anchor(
-    left: Option<&PluginInstallationSnapshot>,
-    right: Option<&PluginInstallationSnapshot>,
+    left: &PluginInstallationSnapshot,
+    right: &PluginInstallationSnapshot,
 ) -> bool {
-    let (Some(left), Some(right)) = (left, right) else {
-        return true;
-    };
-    // Parity audit: id, tenant/user, package identity, component identity, state, and revision
-    // cover every PluginInstallationSnapshot field.
     left.id == right.id
         && left.tenant_id == right.tenant_id
         && left.user_id == right.user_id
@@ -1112,14 +1088,9 @@ fn same_installation_authority_anchor(
 }
 
 fn same_grant_authority_anchor(
-    left: Option<&CapabilityGrantSnapshot>,
-    right: Option<&CapabilityGrantSnapshot>,
+    left: &CapabilityGrantSnapshot,
+    right: &CapabilityGrantSnapshot,
 ) -> bool {
-    let (Some(left), Some(right)) = (left, right) else {
-        return true;
-    };
-    // Parity audit: snapshot/version, tenant/user/installation, capability/scope/confirmation,
-    // manifest digest, and state cover every CapabilityGrantSnapshot field.
     left.snapshot_id == right.snapshot_id
         && left.version == right.version
         && left.tenant_id == right.tenant_id
@@ -1132,7 +1103,20 @@ fn same_grant_authority_anchor(
         && left.state == right.state
 }
 
-fn same_singular_authority_anchor(
+fn same_component_authority_anchor(
+    left: &CatalogComponentRevision,
+    right: &CatalogComponentRevision,
+) -> bool {
+    // Tool definition and schema are deliberately per-entry authority.
+    left.id == right.id
+        && left.kind == right.kind
+        && left.version == right.version
+        && left.digest == right.digest
+        && left.execution_identity == right.execution_identity
+        && left.declared_capabilities == right.declared_capabilities
+}
+
+fn same_required_singular_authority_anchor(
     left: &InvocationAuthorityCandidate,
     right: &InvocationAuthorityCandidate,
 ) -> bool {
@@ -1145,18 +1129,95 @@ fn same_singular_authority_anchor(
         && left.target.component_id == right.target.component_id
         && left.target.capability_id == right.target.capability_id
         && left.target.object_scope == right.target.object_scope
-        && same_catalog_authority_anchor(left.catalog.as_ref(), right.catalog.as_ref())
-        && same_installation_authority_anchor(
-            left.installation.as_ref(),
-            right.installation.as_ref(),
-        )
-        && same_grant_authority_anchor(left.grant.as_ref(), right.grant.as_ref())
         && left.policy.snapshot_id == right.policy.snapshot_id
         && left.policy.revision == right.policy.revision
         && left.policy.capability_id == right.policy.capability_id
         && left.policy.capability_class == right.policy.capability_class
         && left.policy.admitted_execution_identity == right.policy.admitted_execution_identity
         && left.policy.admitted_source_policy == right.policy.admitted_source_policy
+}
+
+fn singular_authority_is_consistent(candidates: &[InvocationAuthorityCandidate]) -> bool {
+    let required_anchor = &candidates[0];
+    let mut catalog_anchor = None;
+    let mut component_anchor = None;
+    let mut installation_anchor = None;
+    let mut grant_anchor = None;
+
+    for candidate in candidates {
+        if !same_required_singular_authority_anchor(required_anchor, candidate) {
+            return false;
+        }
+        if let Some(catalog) = candidate.catalog.as_ref() {
+            if catalog_anchor.is_some_and(|anchor| !same_catalog_authority_anchor(anchor, catalog))
+            {
+                return false;
+            }
+            catalog_anchor.get_or_insert(catalog);
+            if let Some(component) = catalog.component.as_ref() {
+                if component_anchor
+                    .is_some_and(|anchor| !same_component_authority_anchor(anchor, component))
+                {
+                    return false;
+                }
+                component_anchor.get_or_insert(component);
+            }
+        }
+        if let Some(installation) = candidate.installation.as_ref() {
+            if installation_anchor
+                .is_some_and(|anchor| !same_installation_authority_anchor(anchor, installation))
+            {
+                return false;
+            }
+            installation_anchor.get_or_insert(installation);
+        }
+        if let Some(grant) = candidate.grant.as_ref() {
+            if grant_anchor.is_some_and(|anchor| !same_grant_authority_anchor(anchor, grant)) {
+                return false;
+            }
+            grant_anchor.get_or_insert(grant);
+        }
+    }
+    true
+}
+
+const fn projection_error_group(error: ProjectionResolutionError) -> u8 {
+    match error {
+        ProjectionResolutionError::InvalidRequest
+        | ProjectionResolutionError::InvalidAuthoritySnapshot => 1,
+        ProjectionResolutionError::EmergencyBlocked
+        | ProjectionResolutionError::AuthorityConflict => 2,
+        ProjectionResolutionError::TenantOrUserScopeMismatch => 3,
+        ProjectionResolutionError::PackageMissing
+        | ProjectionResolutionError::PackageNotRunnable
+        | ProjectionResolutionError::PackageVersionMismatch
+        | ProjectionResolutionError::PackageDigestMismatch
+        | ProjectionResolutionError::CatalogRevoked => 4,
+        ProjectionResolutionError::InstallationMissing
+        | ProjectionResolutionError::InstallationDisabled
+        | ProjectionResolutionError::InstallationRevoked
+        | ProjectionResolutionError::InstallationRevisionMismatch => 5,
+        ProjectionResolutionError::ComponentMissing
+        | ProjectionResolutionError::ComponentIdentityMismatch
+        | ProjectionResolutionError::ExecutionIdentityUnknown
+        | ProjectionResolutionError::ExecutionIdentityMismatch => 6,
+        ProjectionResolutionError::ToolMissing
+        | ProjectionResolutionError::ToolIdentityMismatch => 7,
+        ProjectionResolutionError::CapabilityUnknown
+        | ProjectionResolutionError::CapabilityNotDeclared
+        | ProjectionResolutionError::CapabilityManifestMismatch
+        | ProjectionResolutionError::CapabilityNotGranted => 8,
+        ProjectionResolutionError::GrantStale
+        | ProjectionResolutionError::GrantExpired
+        | ProjectionResolutionError::GrantRevoked
+        | ProjectionResolutionError::GrantVersionMismatch
+        | ProjectionResolutionError::GrantScopeMismatch => 9,
+        ProjectionResolutionError::SourcePolicyMissing
+        | ProjectionResolutionError::SourcePolicyMismatch => 10,
+        ProjectionResolutionError::SchemaMissing
+        | ProjectionResolutionError::SchemaDigestMismatch => 11,
+        ProjectionResolutionError::ToolNameCollision => 12,
+    }
 }
 
 impl InvocationResolver {
@@ -1192,17 +1253,24 @@ impl InvocationResolver {
         {
             return Err(ProjectionResolutionError::EmergencyBlocked);
         }
-        let authority_anchor = &candidates[0];
-        if candidates
-            .iter()
-            .skip(1)
-            .any(|candidate| !same_singular_authority_anchor(authority_anchor, candidate))
-        {
+        if !singular_authority_is_consistent(&candidates) {
             return Err(ProjectionResolutionError::AuthorityConflict);
         }
         let mut entries = Vec::with_capacity(candidates.len());
-        for candidate in candidates {
-            entries.push(resolve_candidate(&request, candidate)?);
+        let mut primary_error = None;
+        for (target_index, candidate) in candidates.into_iter().enumerate() {
+            match resolve_candidate(&request, candidate) {
+                Ok(entry) => entries.push(entry),
+                Err(error) => {
+                    let key = (projection_error_group(error), target_index);
+                    if primary_error.is_none_or(|(primary_key, _)| key < primary_key) {
+                        primary_error = Some((key, error));
+                    }
+                }
+            }
+        }
+        if let Some((_, error)) = primary_error {
+            return Err(error);
         }
         let first = &entries[0];
         if entries.iter().any(|entry| {
@@ -1266,6 +1334,8 @@ fn resolve_candidate(
     let target = candidate.target;
     if candidate.installation.as_ref().is_some_and(|installation| {
         installation.tenant_id != request.tenant_id || installation.user_id != request.user_id
+    }) || candidate.grant.as_ref().is_some_and(|grant| {
+        grant.tenant_id != request.tenant_id || grant.user_id != request.user_id
     }) {
         return Err(ProjectionResolutionError::TenantOrUserScopeMismatch);
     }
@@ -1647,6 +1717,8 @@ pub fn authorize_call(
         || current.installation.as_ref().is_some_and(|installation| {
             installation.tenant_id != entry.tenant_id || installation.user_id != entry.user_id
         })
+        || current.grant.tenant_id != entry.tenant_id
+        || current.grant.user_id != entry.user_id
     {
         return Err(InvocationAuthorizationError::TenantOrUserScopeMismatch);
     }
@@ -1690,9 +1762,7 @@ pub fn authorize_call(
     {
         return Err(InvocationAuthorizationError::GrantVersionMismatch);
     }
-    if current.grant.tenant_id != entry.tenant_id
-        || current.grant.user_id != entry.user_id
-        || current.grant.installation_id != entry.installation_id
+    if current.grant.installation_id != entry.installation_id
         || current.grant.capability_id != entry.capability_id
         || current.grant.object_scope != entry.object_scope
     {

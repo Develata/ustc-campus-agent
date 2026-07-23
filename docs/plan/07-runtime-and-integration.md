@@ -30,7 +30,7 @@ A platform run has an immutable specification containing at least:
 - source/profile context references;
 - turn, token/cost, tool, time and retry budgets.
 
-The exact R0 shape, validation rules and event semantics are owned by [`docs/contracts/agent-runtime.md`](../contracts/agent-runtime.md) and `crates/agent-runtime/`. The kernel pins resolved identities; it does not itself claim that an installation or grant exists. The planned P0a producer of those identities is defined by [`docs/contracts/invocation-resolution.md`](../contracts/invocation-resolution.md).
+The exact R0 shape, validation rules and event semantics are owned by [`docs/contracts/agent-runtime.md`](../contracts/agent-runtime.md) and `crates/agent-runtime/`. The kernel pins resolved identities; it does not itself claim that an installation or grant exists. The implemented pure P0a producer of synthetic in-memory resolved identities is defined by [`docs/contracts/invocation-resolution.md`](../contracts/invocation-resolution.md); durable loaders remain planned.
 
 State machine target:
 

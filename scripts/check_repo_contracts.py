@@ -7,6 +7,7 @@ before the project chooses additional tooling.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -32,6 +33,25 @@ INVOCATION_FIXTURES = {
     "tool-identity-mismatch-v0.json",
     "valid-synthetic-v0.json",
 }
+INVOCATION_FIXTURE_DIGESTS = {
+    "arguments-golden-v0.json": "9624d3f50c6d50d9871c42476b345d686276173d091c0dd9adcaf80d6e3cde1a",
+    "call-dispatch-denials-v0.json": "976291a00d4d9446049fc36fd97dc1a50d7e87b183ea8d13002ac52dfa7ed373",
+    "call-precedence-v0.json": "c6fc030cae68ed163ab482bff9038d04914459ed54d9d1b92c1c99b6be15e3c4",
+    "grant-scope-stale-v0.json": "1d287d368df49eb9cb68b5d90490ec68a32820b5cb4de267f10b0825801f05fe",
+    "identity-mismatch-v0.json": "67d8e1f4043335a2c064ea18a5149270d536b7ef886a238f267b1e4f95534f8c",
+    "installation-authority-v0.json": "ecfa34988e6e8cc98e0f876bd8c89857b934531f77859415701947185d1504c7",
+    "post-projection-revoke-v0.json": "c85a5cfd2b333de8b6d9f7372f1386c235f48f798e03ad2ff862eefbc960a450",
+    "projection-precedence-v0.json": "239d2bcd5434ac19506d98ea675438a1655d8715b4f5f5f98655a93b8fa3dc1e",
+    "schema-golden-v0.json": "89ddd43523f868de889851ea83e2512a073b6ae49d2301bbba6f5d5fd7fd8bd4",
+    "scope-capability-source-v0.json": "9127908fd89dd8326d02e46d3852bc9f6f2ba537ac92feb975ee4cb69a16e182",
+    "tool-definition-mutation-v0.json": "dd1ca3fa664f320cadba84e3bb18d528ec679130f6477546d3fbe036f9c5e064",
+    "tool-identity-mismatch-v0.json": "b4e94adb2415e28850f3073c9b1e33abc8fd24a4e7e231572527e139d88d0706",
+    "valid-synthetic-v0.json": "4058327f9da3509741c0625381853255b2218143b9a19184ad2be053247283eb",
+}
+INVOCATION_FIXTURE_TEST_COMMAND = (
+    "cargo test --locked -p ustc-campus-agent-core --test invocation_resolution "
+    "executable_synthetic_fixture_matrix_is_complete -- --exact"
+)
 EXPECTED_DOC_DIRECTORIES = {
     "acceptance",
     "adr",
@@ -528,7 +548,12 @@ def check_invocation_fixtures(issues: list[str]) -> None:
             issues,
         )
         return
+    seen_case_names: set[str] = set()
     for name in sorted(INVOCATION_FIXTURES):
+        path = directory / name
+        actual_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual_digest != INVOCATION_FIXTURE_DIGESTS[name]:
+            fail(f"{name}: invocation fixture executable details drift", issues)
         fixture = load_json(
             f"crates/platform-core/tests/fixtures/invocation-resolution/{name}", issues
         )
@@ -538,16 +563,44 @@ def check_invocation_fixtures(issues: list[str]) -> None:
             fail(f"{name}: invocation fixture schema drift", issues)
         if fixture.get("synthetic") is not True or fixture.get("fixture") != name:
             fail(f"{name}: invocation fixture must remain exactly synthetic", issues)
+        expected_top_level = {"schema_version", "synthetic", "fixture", "cases"}
+        if set(fixture) != expected_top_level:
+            fail(f"{name}: invocation fixture top-level fields drift", issues)
         cases = fixture.get("cases")
-        if not isinstance(cases, list) or not cases or not all(
-            isinstance(case, str) and case for case in cases
-        ):
-            fail(f"{name}: invocation fixture cases must be a non-empty string list", issues)
+        if not isinstance(cases, list) or not cases:
+            fail(f"{name}: invocation fixture cases must be a non-empty object list", issues)
+            continue
+        for case in cases:
+            if not isinstance(case, dict):
+                fail(f"{name}: invocation fixture case must be an object", issues)
+                continue
+            expected_fields = {"name", "api", "recipe", "expected", "precedence"}
+            if set(case) != expected_fields:
+                fail(f"{name}: invocation fixture case fields drift", issues)
+                continue
+            if not all(isinstance(case[field], str) and case[field] for field in expected_fields):
+                fail(f"{name}: invocation fixture case fields must be non-empty strings", issues)
+                continue
+            if case["api"] not in {
+                "schema_constructor",
+                "argument_constructor",
+                "resolve_projection",
+                "authorize_call",
+                "run_spec_mapping",
+            }:
+                fail(f"{name}: invocation fixture case API is unknown: {case['api']}", issues)
+            if case["name"] in seen_case_names:
+                fail(f"duplicate invocation fixture case name: {case['name']}", issues)
+            seen_case_names.add(case["name"])
 
     matrix = (ROOT / "docs/acceptance/matrix.tsv").read_text(encoding="utf-8")
     for case_id in ("MARKET-005", "MARKET-006"):
         rows = [row for row in matrix.splitlines() if row.startswith(f"{case_id}\t")]
-        if len(rows) != 1 or "\timplemented\t" not in rows[0]:
+        if (
+            len(rows) != 1
+            or "\timplemented\t" not in rows[0]
+            or INVOCATION_FIXTURE_TEST_COMMAND not in rows[0]
+        ):
             fail(f"{case_id}: implemented invocation binding/status drift", issues)
 
 

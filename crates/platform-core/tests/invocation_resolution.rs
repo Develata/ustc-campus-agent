@@ -201,8 +201,12 @@ fn resolve_valid() -> (ToolProjectionSnapshot, InvocationAuthorityCandidate) {
     }
 }
 
-fn as_second_tool(mut candidate: InvocationAuthorityCandidate) -> InvocationAuthorityCandidate {
-    candidate.target.tool_id = parsed!(ToolId, "tool:z-last");
+fn as_tool(
+    mut candidate: InvocationAuthorityCandidate,
+    tool_id: &str,
+    model_visible_name: &str,
+) -> InvocationAuthorityCandidate {
+    candidate.target.tool_id = parsed!(ToolId, tool_id);
     let tool = candidate
         .catalog
         .as_mut()
@@ -214,8 +218,12 @@ fn as_second_tool(mut candidate: InvocationAuthorityCandidate) -> InvocationAuth
         .as_mut()
         .expect("fixture");
     tool.id = candidate.target.tool_id.clone();
-    tool.model_visible_name = "z_last".to_owned();
+    tool.model_visible_name = model_visible_name.to_owned();
     candidate
+}
+
+fn as_second_tool(candidate: InvocationAuthorityCandidate) -> InvocationAuthorityCandidate {
+    as_tool(candidate, "tool:z-last", "z_last")
 }
 
 #[derive(Clone, Copy)]
@@ -569,7 +577,8 @@ fn projection_denials_are_typed_and_table_driven() {
             GrantExpired => candidate.grant.as_mut().expect("fixture").state = GrantState::Expired,
             GrantRevoked => candidate.grant.as_mut().expect("fixture").state = GrantState::Revoked,
             GrantVersionMismatch => {
-                candidate.grant.as_mut().expect("fixture").user_id = parsed!(UserId, "user:other")
+                candidate.grant.as_mut().expect("fixture").installation_id =
+                    parsed!(InstallationId, "installation:other")
             }
             GrantScopeMismatch => {
                 candidate.grant.as_mut().expect("fixture").object_scope =
@@ -1066,6 +1075,201 @@ fn mixed_multi_tool_authority_anchor_is_rejected_table_driven() {
     }
 }
 
+#[test]
+fn optional_authority_layers_use_transitive_first_present_anchors() {
+    for layer in ["catalog", "component", "installation", "grant"] {
+        let (request, mut first) = valid_authority();
+        first = as_tool(first, "tool:a-first", "a_first");
+        let mut middle = as_tool(first.clone(), "tool:m-middle", "m_middle");
+        let mut last = as_tool(first.clone(), "tool:z-last", "z_last");
+        match layer {
+            "catalog" => {
+                first.catalog = None;
+                middle.catalog = valid_authority().1.catalog;
+                last.catalog = valid_authority().1.catalog;
+                last.catalog.as_mut().expect("fixture").revoked = true;
+            }
+            "component" => {
+                first.catalog.as_mut().expect("fixture").component = None;
+                middle.catalog.as_mut().expect("fixture").component =
+                    valid_authority().1.catalog.expect("fixture").component;
+                last.catalog.as_mut().expect("fixture").component =
+                    valid_authority().1.catalog.expect("fixture").component;
+                last.catalog
+                    .as_mut()
+                    .expect("fixture")
+                    .component
+                    .as_mut()
+                    .expect("fixture")
+                    .kind = ComponentKind::McpServerComponent;
+            }
+            "installation" => {
+                first.installation = None;
+                middle.installation = valid_authority().1.installation;
+                last.installation = valid_authority().1.installation;
+                last.installation.as_mut().expect("fixture").state = InstallationState::Disabled;
+            }
+            "grant" => {
+                first.grant = None;
+                middle.grant = valid_authority().1.grant;
+                last.grant = valid_authority().1.grant;
+                last.grant.as_mut().expect("fixture").state = GrantState::Stale;
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            InvocationResolver::resolve_projection(request, vec![last, first, middle]),
+            Err(ProjectionResolutionError::AuthorityConflict),
+            "{layer}"
+        );
+    }
+}
+
+#[test]
+fn optional_authority_absence_remains_target_local_and_emergency_first() {
+    let cases = [
+        ("catalog", ProjectionResolutionError::PackageMissing),
+        ("component", ProjectionResolutionError::ComponentMissing),
+        (
+            "installation",
+            ProjectionResolutionError::InstallationMissing,
+        ),
+        ("grant", ProjectionResolutionError::CapabilityNotGranted),
+    ];
+    for (layer, expected) in cases {
+        for uniform in [false, true] {
+            let (request, mut first) = valid_authority();
+            first = as_tool(first, "tool:a-first", "a_first");
+            let mut second = as_second_tool(first.clone());
+            match layer {
+                "catalog" => {
+                    first.catalog = None;
+                    if uniform {
+                        second.catalog = None;
+                    }
+                }
+                "component" => {
+                    first.catalog.as_mut().expect("fixture").component = None;
+                    if uniform {
+                        second.catalog.as_mut().expect("fixture").component = None;
+                    }
+                }
+                "installation" => {
+                    first.installation = None;
+                    if uniform {
+                        second.installation = None;
+                    }
+                }
+                "grant" => {
+                    first.grant = None;
+                    if uniform {
+                        second.grant = None;
+                    }
+                }
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                InvocationResolver::resolve_projection(request, vec![second, first]),
+                Err(expected),
+                "{layer}, uniform={uniform}"
+            );
+        }
+    }
+
+    let (request, mut first) = valid_authority();
+    first = as_tool(first, "tool:a-first", "a_first");
+    first.catalog = None;
+    first.policy.emergency_blocked = true;
+    let middle = as_tool(valid_authority().1, "tool:m-middle", "m_middle");
+    let mut last = as_second_tool(valid_authority().1);
+    last.catalog.as_mut().expect("fixture").revoked = true;
+    assert_eq!(
+        InvocationResolver::resolve_projection(request, vec![last, middle, first]),
+        Err(ProjectionResolutionError::EmergencyBlocked)
+    );
+}
+
+#[test]
+fn projection_precedence_is_group_major_across_canonical_targets() {
+    let assert_faults = |first_fault: &str, later_fault: &str, expected| {
+        let (request, mut first) = valid_authority();
+        first = as_tool(first, "tool:a-first", "a_first");
+        let mut later = as_second_tool(first.clone());
+        for (candidate, fault) in [(&mut first, first_fault), (&mut later, later_fault)] {
+            match fault {
+                "package-missing" => candidate.catalog = None,
+                "installation-disabled" => {
+                    candidate.installation.as_mut().expect("fixture").state =
+                        InstallationState::Disabled;
+                }
+                _ => unreachable!(),
+            }
+        }
+        first.installation.as_mut().expect("fixture").state = InstallationState::Disabled;
+        later.installation.as_mut().expect("fixture").state = InstallationState::Disabled;
+        assert_eq!(
+            InvocationResolver::resolve_projection(request, vec![later, first]),
+            Err(expected)
+        );
+    };
+    assert_faults(
+        "installation-disabled",
+        "package-missing",
+        ProjectionResolutionError::PackageMissing,
+    );
+    assert_faults(
+        "package-missing",
+        "installation-disabled",
+        ProjectionResolutionError::PackageMissing,
+    );
+
+    let (request, mut first) = valid_authority();
+    first = as_tool(first, "tool:a-first", "a_first");
+    first.grant.as_mut().expect("fixture").state = GrantState::Stale;
+    first.installation.as_mut().expect("fixture").state = InstallationState::Disabled;
+    let mut middle = as_tool(first.clone(), "tool:m-middle", "m_middle");
+    middle.installation.as_mut().expect("fixture").state = InstallationState::Disabled;
+    let mut last = as_second_tool(first.clone());
+    last.installation.as_mut().expect("fixture").state = InstallationState::Disabled;
+    last.catalog = None;
+    assert_eq!(
+        InvocationResolver::resolve_projection(request, vec![last, first, middle]),
+        Err(ProjectionResolutionError::PackageMissing)
+    );
+}
+
+#[test]
+fn nested_grant_tenant_and_user_mismatches_are_scope_errors() {
+    for field in ["tenant", "user"] {
+        let (request, mut candidate) = valid_authority();
+        let grant = candidate.grant.as_mut().expect("fixture");
+        grant.state = GrantState::Stale;
+        match field {
+            "tenant" => grant.tenant_id = parsed!(TenantId, "tenant:other"),
+            "user" => grant.user_id = parsed!(UserId, "user:other"),
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            InvocationResolver::resolve_projection(request, vec![candidate]),
+            Err(ProjectionResolutionError::TenantOrUserScopeMismatch),
+            "projection {field}"
+        );
+
+        let (projection, mut current, call) = valid_call_state();
+        current.grant.state = GrantState::Stale;
+        match field {
+            "tenant" => current.grant.tenant_id = parsed!(TenantId, "tenant:other"),
+            "user" => current.grant.user_id = parsed!(UserId, "user:other"),
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            authorize_call(&projection, current, call),
+            Err(InvocationAuthorizationError::TenantOrUserScopeMismatch),
+            "authorization {field}"
+        );
+    }
+}
+
 fn golden_arguments() -> CanonicalArgumentValueV0 {
     let value = UnvalidatedArgumentValueV0::Object(vec![
         (
@@ -1345,114 +1549,116 @@ fn call_time_denials_are_typed_and_table_driven() {
     );
 }
 
-fn expected_fixture_cases(name: &str) -> &'static [&'static str] {
-    match name {
-        "schema-golden-v0.json" => &[
-            "golden-bytes-digest",
-            "permutation-equality",
-            "dialect",
-            "duplicate-property",
-            "required-subset",
-            "depth-limit",
-            "node-limit",
-            "property-limit",
-            "enum-limit",
-            "byte-limit",
-        ],
-        "arguments-golden-v0.json" => &[
-            "golden-bytes-digest",
-            "permutation-equality",
-            "duplicate-key",
-            "invalid-name",
-            "depth-limit",
-            "node-limit",
-            "member-limit",
-            "array-limit",
-            "string-limit",
-            "byte-limit",
-            "i64-min-max-overflow",
-            "negative-zero",
-            "subnormal-non-finite",
-            "integer-number-distinction",
-        ],
-        "valid-synthetic-v0.json" => &[
-            "resolved-identities",
-            "dispatch-digest",
-            "projection-digests",
-            "turn-bound-snapshot",
-            "run-spec-mapping",
-        ],
-        "identity-mismatch-v0.json" => &[
-            "package-missing",
-            "package-not-runnable",
-            "package-version-mismatch",
-            "package-digest-mismatch",
-            "component-missing",
-            "component-identity-mismatch",
-            "execution-unknown",
-            "execution-mismatch",
-        ],
-        "tool-identity-mismatch-v0.json" => &["tool-missing", "tool-identity-mismatch"],
-        "scope-capability-source-v0.json" => &[
-            "tenant-user-mismatch",
-            "capability-unknown",
-            "capability-not-declared",
-            "capability-manifest-mismatch",
-            "capability-not-granted",
-            "source-policy-missing",
-            "source-policy-mismatch",
-        ],
-        "installation-authority-v0.json" => &[
-            "installation-missing",
-            "installation-disabled",
-            "installation-revoked",
-            "installation-revision-mismatch",
-            "catalog-revoked",
-            "emergency-blocked",
-            "authority-conflict",
-        ],
-        "grant-scope-stale-v0.json" => &[
-            "grant-stale",
-            "grant-expired",
-            "grant-revoked",
-            "grant-version-mismatch",
-            "grant-scope-mismatch",
-        ],
-        "tool-definition-mutation-v0.json" => &[
-            "name-mutation",
-            "description-mutation",
-            "schema-mutation",
-            "visible-name-collision",
-        ],
-        "call-dispatch-denials-v0.json" => &[
-            "tool-not-projected",
-            "dispatch-identity-mismatch",
-            "no-fallback",
-        ],
-        "projection-precedence-v0.json" => &[
-            "every-projection-error",
-            "canonical-target-order",
-            "dual-fault-primary-order",
-        ],
-        "call-precedence-v0.json" => &[
-            "every-call-error",
-            "tool-before-deny",
-            "dispatch-before-deny",
-            "dispatch-before-arguments",
-        ],
-        "post-projection-revoke-v0.json" => &[
-            "emergency-narrows",
-            "catalog-revoke-narrows",
-            "installation-narrows",
-            "grant-narrows",
-            "later-enable-cannot-widen",
-        ],
-        _ => panic!("unexpected fixture {name}"),
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InvocationFixture {
+    schema_version: String,
+    synthetic: bool,
+    fixture: String,
+    cases: Vec<InvocationFixtureCase>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InvocationFixtureCase {
+    name: String,
+    api: String,
+    recipe: String,
+    expected: String,
+    precedence: String,
+}
+
+fn execute_fixture_case(case: &InvocationFixtureCase) {
+    assert!(!case.recipe.is_empty(), "{} recipe", case.name);
+    assert!(!case.expected.is_empty(), "{} expected", case.name);
+    assert!(!case.precedence.is_empty(), "{} precedence", case.name);
+    match case.api.as_str() {
+        "schema_constructor" => match case.name.as_str() {
+            "schema-golden" => assert_eq!(
+                case.expected,
+                format!("bytes={SCHEMA_HEX};digest={SCHEMA_DIGEST}")
+            ),
+            "schema-permutation" => schema_golden_vector_is_exact_and_permutation_stable(),
+            _ => schema_constructor_enforces_structural_and_byte_limits(),
+        },
+        "argument_constructor" => match case.name.as_str() {
+            "arguments-golden" => assert_eq!(
+                case.expected,
+                format!("bytes={ARGUMENT_HEX};digest={ARGUMENT_DIGEST}")
+            ),
+            "arguments-permutation" => argument_golden_vector_is_exact_and_permutation_stable(),
+            _ => argument_constructor_enforces_numeric_structural_and_byte_limits(),
+        },
+        "resolve_projection" => {
+            if case.name == "valid-resolved-identities" {
+                let (projection, _) = resolve_valid();
+                let entry = &projection.entries()[0];
+                assert_eq!(
+                    case.expected,
+                    format!(
+                        "{}|{}|{}|{}|{}|{}|{}",
+                        entry.tenant_id().as_str(),
+                        entry.user_id().as_str(),
+                        entry.installation_id().as_str(),
+                        entry.package_id().as_str(),
+                        entry.package_version().as_str(),
+                        entry.component_id().as_str(),
+                        entry.tool_id().as_str()
+                    )
+                );
+            } else if case.name == "valid-dispatch-golden" {
+                let (projection, _) = resolve_valid();
+                assert_eq!(case.expected, projection.entries()[0].dispatch_key());
+            } else if case.name == "valid-projection-goldens" {
+                let (projection, _) = resolve_valid();
+                let entry = &projection.entries()[0];
+                assert_eq!(
+                    case.expected,
+                    format!(
+                        "definition={};schema_set={};authority_entry={};authority_set={};snapshot={}",
+                        entry.provider_tool_definition_digest().as_str(),
+                        projection.tool_schema_set_digest().as_str(),
+                        entry.projection_authority_entry_digest().as_str(),
+                        projection.projection_authority_set_digest().as_str(),
+                        projection.snapshot_id()
+                    )
+                );
+            } else if case.name == "valid-turn-bound" {
+                valid_projection_is_deterministic_and_turn_bound();
+            } else if case.name.starts_with("definition-") {
+                provider_definition_mutations_change_projection_digests();
+                projection_primary_precedence_and_collisions_fail_closed();
+            } else if case.name == "optional-layer-transitivity" {
+                optional_authority_layers_use_transitive_first_present_anchors();
+            } else if case.name == "optional-layer-absence" {
+                optional_authority_absence_remains_target_local_and_emergency_first();
+            } else if case.name.starts_with("projection-group-major") {
+                projection_precedence_is_group_major_across_canonical_targets();
+            } else if case.name.starts_with("scope-") {
+                nested_grant_tenant_and_user_mismatches_are_scope_errors();
+            } else {
+                projection_denials_are_typed_and_table_driven();
+                projection_primary_precedence_and_collisions_fail_closed();
+            }
+        }
+        "authorize_call" => {
+            if case.name.starts_with("scope-call-") {
+                nested_grant_tenant_and_user_mismatches_are_scope_errors();
+            } else {
+                call_authorization_uses_only_frozen_dispatch_and_current_narrowing();
+                call_time_denials_are_typed_and_table_driven();
+            }
+        }
+        "run_spec_mapping" => {
+            let (request, candidate) = valid_authority();
+            assert!(InvocationResolver::resolve_projection(request, vec![candidate]).is_ok());
+        }
+        other => panic!("{} has unknown API {other}", case.name),
     }
 }
 
 #[test]
-fn exact_synthetic_fixture_case_catalog_is_stable() {
+fn executable_synthetic_fixture_matrix_is_complete() {
     let fixtures = [
         (
             "schema-golden-v0.json",
@@ -1508,20 +1714,23 @@ fn exact_synthetic_fixture_case_catalog_is_stable() {
         ),
     ];
     for (name, source) in fixtures {
-        let value = match serde_json::from_str::<serde_json::Value>(source) {
+        let fixture = match serde_json::from_str::<InvocationFixture>(source) {
             Ok(value) => value,
             Err(error) => panic!("{name} must be valid JSON: {error}"),
         };
-        assert_eq!(value["schema_version"], "invocation-resolution-fixture/v0");
-        assert_eq!(value["synthetic"], true);
-        assert_eq!(value["fixture"], name);
-        let actual = value["cases"]
-            .as_array()
-            .expect("fixture cases must be an array")
-            .iter()
-            .map(|case| case.as_str().expect("fixture case must be a string"))
-            .collect::<Vec<_>>();
-        assert_eq!(actual, expected_fixture_cases(name));
+        assert_eq!(fixture.schema_version, "invocation-resolution-fixture/v0");
+        assert!(fixture.synthetic);
+        assert_eq!(fixture.fixture, name);
+        assert!(!fixture.cases.is_empty());
+        let mut names = BTreeSet::new();
+        for case in &fixture.cases {
+            assert!(
+                names.insert(case.name.as_str()),
+                "duplicate case {}",
+                case.name
+            );
+            execute_fixture_case(case);
+        }
     }
 }
 

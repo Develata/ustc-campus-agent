@@ -335,6 +335,70 @@ class InvocationFixtureContractTests(unittest.TestCase):
             any("must remain exactly synthetic" in issue for issue in self.check_invocation())
         )
 
+    def test_missing_and_unknown_invocation_case_fields_fail_closed(self) -> None:
+        path = (
+            self.root
+            / "crates/platform-core/tests/fixtures/invocation-resolution/identity-mismatch-v0.json"
+        )
+        original = json.loads(path.read_text(encoding="utf-8"))
+        for mutation in ("missing", "unknown"):
+            fixture = json.loads(json.dumps(original))
+            if mutation == "missing":
+                fixture["cases"][0].pop("expected")
+            else:
+                fixture["cases"][0]["unknown"] = "value"
+            path.write_text(json.dumps(fixture), encoding="utf-8")
+            self.assertTrue(
+                any("case fields drift" in issue for issue in self.check_invocation()),
+                mutation,
+            )
+        path.write_text(json.dumps(original, separators=(",", ":")) + "\n", encoding="utf-8")
+
+    def test_duplicate_and_unknown_api_invocation_cases_fail_closed(self) -> None:
+        path = (
+            self.root
+            / "crates/platform-core/tests/fixtures/invocation-resolution/schema-golden-v0.json"
+        )
+        original = json.loads(path.read_text(encoding="utf-8"))
+        fixture = json.loads(json.dumps(original))
+        fixture["cases"][1]["name"] = fixture["cases"][0]["name"]
+        path.write_text(json.dumps(fixture), encoding="utf-8")
+        self.assertTrue(
+            any("duplicate invocation fixture case name" in issue for issue in self.check_invocation())
+        )
+        fixture = json.loads(json.dumps(original))
+        fixture["cases"][0]["api"] = "framework_registry"
+        path.write_text(json.dumps(fixture), encoding="utf-8")
+        self.assertTrue(any("case API is unknown" in issue for issue in self.check_invocation()))
+        path.write_text(json.dumps(original, separators=(",", ":")) + "\n", encoding="utf-8")
+
+    def test_invocation_expected_precedence_and_golden_detail_drift_fails_closed(self) -> None:
+        path = (
+            self.root
+            / "crates/platform-core/tests/fixtures/invocation-resolution/valid-synthetic-v0.json"
+        )
+        original = json.loads(path.read_text(encoding="utf-8"))
+        for field in ("expected", "precedence", "recipe"):
+            fixture = json.loads(json.dumps(original))
+            fixture["cases"][0][field] = "wrong"
+            path.write_text(json.dumps(fixture), encoding="utf-8")
+            self.assertTrue(
+                any("executable details drift" in issue for issue in self.check_invocation()),
+                field,
+            )
+        path.write_text(json.dumps(original, separators=(",", ":")) + "\n", encoding="utf-8")
+
+    def test_invocation_acceptance_binding_drift_fails_closed(self) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        matrix = path.read_text(encoding="utf-8")
+        path.write_text(
+            matrix.replace(checker.INVOCATION_FIXTURE_TEST_COMMAND + " && ", "", 1),
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any("MARKET-005: implemented invocation binding/status drift" in issue for issue in self.check_invocation())
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

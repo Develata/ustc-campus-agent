@@ -246,7 +246,7 @@ This proves deterministic resolver output and the `RunSpec` mapping only. It is 
 
 The positive fixture MUST remain synthetic because all current first-party manifests have empty `components` arrays and do not prove runnable installation state. P0a must not change their `implementationStatus` or claim Course Planning is Market-integrated.
 
-Planned fixture directory: `crates/platform-core/tests/fixtures/invocation-resolution/`.
+Executable fixture directory: `crates/platform-core/tests/fixtures/invocation-resolution/`.
 
 | Fixture | Required proof | Acceptance |
 |---|---|---|
@@ -264,7 +264,7 @@ Planned fixture directory: `crates/platform-core/tests/fixtures/invocation-resol
 | `call-precedence-v0.json` | `ToolNotProjected` and dispatch mismatch precede deny-state and argument faults; every call-time variant has an exact case | supports future `MARKET-007` |
 | `post-projection-revoke-v0.json` | current deny state narrows a frozen projection; later grant/enable state cannot widen it | supports future `MARKET-007` and later `MARKET-003` |
 
-Fixture JSON is test input, not a catalog schema, source JSON Schema or durable-state format. Every negative case names the constructor/resolver/authorization API, exact error variant and expected primary-error precedence; a fixture file containing several cases is not evidence unless every listed case executes.
+Fixture JSON is typed test input, not a catalog schema, source JSON Schema or durable-state format. Every case carries a stable name, API, concrete recipe/mutation, exact expected result and precedence semantics; literal schema, argument, dispatch, projection and authority goldens live in the fixture data. The Rust fixture-matrix test deserializes with unknown-field denial and executes every listed case, while repository governance pins the complete fixture content and acceptance binding.
 
 ## 7. Framework evidence mapping
 
