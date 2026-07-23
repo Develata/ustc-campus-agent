@@ -52,6 +52,10 @@ INVOCATION_FIXTURE_TEST_COMMAND = (
     "cargo test --locked -p ustc-campus-agent-core --test invocation_resolution "
     "executable_synthetic_fixture_matrix_is_complete -- --exact"
 )
+INVOCATION_RUNTIME_FIXTURE_TEST_COMMAND = (
+    "cargo test --locked -p ustc-campus-agent-runtime --test resolved_run_spec "
+    "fixture_run_spec_mapping_constructs_run_and_denial_constructs_neither -- --exact"
+)
 EXPECTED_DOC_DIRECTORIES = {
     "acceptance",
     "adr",
@@ -600,6 +604,7 @@ def check_invocation_fixtures(issues: list[str]) -> None:
             len(rows) != 1
             or "\timplemented\t" not in rows[0]
             or INVOCATION_FIXTURE_TEST_COMMAND not in rows[0]
+            or INVOCATION_RUNTIME_FIXTURE_TEST_COMMAND not in rows[0]
         ):
             fail(f"{case_id}: implemented invocation binding/status drift", issues)
 

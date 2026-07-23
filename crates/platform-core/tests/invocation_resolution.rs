@@ -75,6 +75,16 @@ macro_rules! parsed {
     }};
 }
 
+#[path = "support/invocation_fixture.rs"]
+mod invocation_fixture;
+#[path = "support/invocation_fixture_executor.rs"]
+mod invocation_fixture_executor;
+
+use invocation_fixture::{
+    FixtureExpected, FixtureExpectedName, FixturePrecedence, FixtureRecipe, InvocationFixture,
+};
+use invocation_fixture_executor::{execute_fixture_case, verify_fixture_case};
+
 fn digest(byte: char) -> Sha256Digest {
     parsed!(
         Sha256Digest,
@@ -1549,114 +1559,6 @@ fn call_time_denials_are_typed_and_table_driven() {
     );
 }
 
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct InvocationFixture {
-    schema_version: String,
-    synthetic: bool,
-    fixture: String,
-    cases: Vec<InvocationFixtureCase>,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct InvocationFixtureCase {
-    name: String,
-    api: String,
-    recipe: String,
-    expected: String,
-    precedence: String,
-}
-
-fn execute_fixture_case(case: &InvocationFixtureCase) {
-    assert!(!case.recipe.is_empty(), "{} recipe", case.name);
-    assert!(!case.expected.is_empty(), "{} expected", case.name);
-    assert!(!case.precedence.is_empty(), "{} precedence", case.name);
-    match case.api.as_str() {
-        "schema_constructor" => match case.name.as_str() {
-            "schema-golden" => assert_eq!(
-                case.expected,
-                format!("bytes={SCHEMA_HEX};digest={SCHEMA_DIGEST}")
-            ),
-            "schema-permutation" => schema_golden_vector_is_exact_and_permutation_stable(),
-            _ => schema_constructor_enforces_structural_and_byte_limits(),
-        },
-        "argument_constructor" => match case.name.as_str() {
-            "arguments-golden" => assert_eq!(
-                case.expected,
-                format!("bytes={ARGUMENT_HEX};digest={ARGUMENT_DIGEST}")
-            ),
-            "arguments-permutation" => argument_golden_vector_is_exact_and_permutation_stable(),
-            _ => argument_constructor_enforces_numeric_structural_and_byte_limits(),
-        },
-        "resolve_projection" => {
-            if case.name == "valid-resolved-identities" {
-                let (projection, _) = resolve_valid();
-                let entry = &projection.entries()[0];
-                assert_eq!(
-                    case.expected,
-                    format!(
-                        "{}|{}|{}|{}|{}|{}|{}",
-                        entry.tenant_id().as_str(),
-                        entry.user_id().as_str(),
-                        entry.installation_id().as_str(),
-                        entry.package_id().as_str(),
-                        entry.package_version().as_str(),
-                        entry.component_id().as_str(),
-                        entry.tool_id().as_str()
-                    )
-                );
-            } else if case.name == "valid-dispatch-golden" {
-                let (projection, _) = resolve_valid();
-                assert_eq!(case.expected, projection.entries()[0].dispatch_key());
-            } else if case.name == "valid-projection-goldens" {
-                let (projection, _) = resolve_valid();
-                let entry = &projection.entries()[0];
-                assert_eq!(
-                    case.expected,
-                    format!(
-                        "definition={};schema_set={};authority_entry={};authority_set={};snapshot={}",
-                        entry.provider_tool_definition_digest().as_str(),
-                        projection.tool_schema_set_digest().as_str(),
-                        entry.projection_authority_entry_digest().as_str(),
-                        projection.projection_authority_set_digest().as_str(),
-                        projection.snapshot_id()
-                    )
-                );
-            } else if case.name == "valid-turn-bound" {
-                valid_projection_is_deterministic_and_turn_bound();
-            } else if case.name.starts_with("definition-") {
-                provider_definition_mutations_change_projection_digests();
-                projection_primary_precedence_and_collisions_fail_closed();
-            } else if case.name == "optional-layer-transitivity" {
-                optional_authority_layers_use_transitive_first_present_anchors();
-            } else if case.name == "optional-layer-absence" {
-                optional_authority_absence_remains_target_local_and_emergency_first();
-            } else if case.name.starts_with("projection-group-major") {
-                projection_precedence_is_group_major_across_canonical_targets();
-            } else if case.name.starts_with("scope-") {
-                nested_grant_tenant_and_user_mismatches_are_scope_errors();
-            } else {
-                projection_denials_are_typed_and_table_driven();
-                projection_primary_precedence_and_collisions_fail_closed();
-            }
-        }
-        "authorize_call" => {
-            if case.name.starts_with("scope-call-") {
-                nested_grant_tenant_and_user_mismatches_are_scope_errors();
-            } else {
-                call_authorization_uses_only_frozen_dispatch_and_current_narrowing();
-                call_time_denials_are_typed_and_table_driven();
-            }
-        }
-        "run_spec_mapping" => {
-            let (request, candidate) = valid_authority();
-            assert!(InvocationResolver::resolve_projection(request, vec![candidate]).is_ok());
-        }
-        other => panic!("{} has unknown API {other}", case.name),
-    }
-}
-
 #[test]
 fn executable_synthetic_fixture_matrix_is_complete() {
     let fixtures = [
@@ -1732,6 +1634,79 @@ fn executable_synthetic_fixture_matrix_is_complete() {
             execute_fixture_case(case);
         }
     }
+}
+
+#[test]
+fn fixture_semantic_mutations_fail_independently_of_content_checksums() {
+    let fixture = match serde_json::from_str::<InvocationFixture>(include_str!(
+        "fixtures/invocation-resolution/identity-mismatch-v0.json"
+    )) {
+        Ok(value) => value,
+        Err(error) => panic!("fixture must parse: {error}"),
+    };
+    let Some(original) = fixture
+        .cases
+        .into_iter()
+        .find(|case| case.name == "identity-package-missing")
+    else {
+        panic!("identity-package-missing fixture case must exist")
+    };
+
+    let mut wrong_expected = original.clone();
+    wrong_expected.expected = FixtureExpected::Named(FixtureExpectedName::PackageNotRunnable);
+    assert!(verify_fixture_case(&wrong_expected).is_err());
+
+    let mut wrong_recipe = original.clone();
+    wrong_recipe.recipe = FixtureRecipe::CatalogNotRunnable;
+    assert!(verify_fixture_case(&wrong_recipe).is_err());
+
+    let mut wrong_precedence = original;
+    wrong_precedence.precedence = FixturePrecedence::ProjectionGroup5CanonicalLeftmost;
+    assert!(verify_fixture_case(&wrong_precedence).is_err());
+
+    let golden = match serde_json::from_str::<InvocationFixture>(include_str!(
+        "fixtures/invocation-resolution/schema-golden-v0.json"
+    )) {
+        Ok(value) => value,
+        Err(error) => panic!("fixture must parse: {error}"),
+    };
+    let Some(mut golden) = golden
+        .cases
+        .into_iter()
+        .find(|case| case.name == "schema-golden")
+    else {
+        panic!("schema-golden fixture case must exist")
+    };
+    let mut wrong_golden = golden.clone();
+    let FixtureExpected::CanonicalGolden { bytes, .. } = &mut wrong_golden.expected else {
+        panic!("schema golden must carry literal bytes and digest")
+    };
+    bytes.push_str("00");
+    assert!(verify_fixture_case(&wrong_golden).is_err());
+
+    golden.recipe = FixtureRecipe::GoldenSchemaReversed;
+    assert!(verify_fixture_case(&golden).is_err());
+}
+
+#[test]
+fn fixture_typed_fields_and_records_deny_unknown_values() {
+    let original = match serde_json::from_str::<serde_json::Value>(include_str!(
+        "fixtures/invocation-resolution/identity-mismatch-v0.json"
+    )) {
+        Ok(value) => value,
+        Err(error) => panic!("fixture JSON must parse: {error}"),
+    };
+    for field in ["api", "recipe", "expected", "precedence"] {
+        let mut changed = original.clone();
+        changed["cases"][0][field] = serde_json::Value::String("unknown".to_owned());
+        assert!(
+            serde_json::from_value::<InvocationFixture>(changed).is_err(),
+            "unknown {field} must fail typed fixture parsing"
+        );
+    }
+    let mut changed = original;
+    changed["cases"][0]["unknown"] = serde_json::Value::Bool(true);
+    assert!(serde_json::from_value::<InvocationFixture>(changed).is_err());
 }
 
 fn nested_schema(depth: usize) -> UnvalidatedSchemaNodeV0 {

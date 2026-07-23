@@ -2,6 +2,14 @@ use std::collections::BTreeSet;
 use ustc_campus_agent_core::invocation::*;
 use ustc_campus_agent_runtime::{AgentRun, RUN_SPEC_SCHEMA_VERSION, RunBudgets, RunSpec};
 
+#[path = "../../platform-core/tests/support/invocation_fixture.rs"]
+mod invocation_fixture;
+
+use invocation_fixture::{
+    FixtureApi, FixtureExpected, FixtureExpectedName, FixturePrecedence, FixtureRecipe,
+    InvocationFixture,
+};
+
 macro_rules! parsed {
     ($kind:ty, $value:expr) => {{
         match <$kind>::parse($value) {
@@ -138,12 +146,12 @@ fn authority() -> (ToolProjectionRequest, InvocationAuthorityCandidate) {
     )
 }
 
-fn create_run_only_from_resolution(
+fn create_run_spec_only_from_resolution(
     resolution: Result<ToolProjectionSnapshot, ProjectionResolutionError>,
-) -> Option<Result<AgentRun, ustc_campus_agent_runtime::RuntimeError>> {
+) -> Option<RunSpec> {
     resolution.ok().map(|projection| {
         let entry = &projection.entries()[0];
-        AgentRun::new(RunSpec {
+        RunSpec {
             schema_version: RUN_SPEC_SCHEMA_VERSION.to_owned(),
             run_id: projection.run_id().as_str().to_owned(),
             tenant_id: entry.tenant_id().as_str().to_owned(),
@@ -163,8 +171,14 @@ fn create_run_only_from_resolution(
                 max_retries: 1,
                 max_elapsed_ms: 1,
             },
-        })
+        }
     })
+}
+
+fn create_run_only_from_resolution(
+    resolution: Result<ToolProjectionSnapshot, ProjectionResolutionError>,
+) -> Option<Result<AgentRun, ustc_campus_agent_runtime::RuntimeError>> {
+    create_run_spec_only_from_resolution(resolution).map(AgentRun::new)
 }
 
 #[test]
@@ -187,5 +201,55 @@ fn denied_resolution_cannot_construct_run_spec_or_run() {
     candidate.policy.emergency_blocked = true;
     let denied = InvocationResolver::resolve_projection(request, vec![candidate]);
     assert_eq!(denied, Err(ProjectionResolutionError::EmergencyBlocked));
+    assert!(create_run_only_from_resolution(denied).is_none());
+}
+
+#[test]
+fn fixture_run_spec_mapping_constructs_run_and_denial_constructs_neither() {
+    let fixture = match serde_json::from_str::<InvocationFixture>(include_str!(
+        "../../platform-core/tests/fixtures/invocation-resolution/valid-synthetic-v0.json"
+    )) {
+        Ok(value) => value,
+        Err(error) => panic!("valid synthetic fixture must parse: {error}"),
+    };
+    assert_eq!(fixture.schema_version, "invocation-resolution-fixture/v0");
+    assert!(fixture.synthetic);
+    assert_eq!(fixture.fixture, "valid-synthetic-v0.json");
+    let cases = fixture
+        .cases
+        .iter()
+        .filter(|case| case.api == FixtureApi::RunSpecMapping)
+        .collect::<Vec<_>>();
+    let [case] = cases.as_slice() else {
+        panic!("fixture must contain exactly one run-spec mapping case")
+    };
+    assert_eq!(case.name, "valid-run-spec-mapping");
+    assert_eq!(case.api.as_str(), "run_spec_mapping");
+    assert_eq!(case.recipe, FixtureRecipe::ProjectionValidAuthority);
+    assert_eq!(case.recipe.as_str(), "projection=valid_authority");
+    assert_eq!(
+        case.expected,
+        FixtureExpected::Named(FixtureExpectedName::SuccessOnly)
+    );
+    assert_eq!(FixtureExpectedName::SuccessOnly.as_str(), "success-only");
+    assert_eq!(case.precedence, FixturePrecedence::DenialProducesNoRun);
+    assert_eq!(case.precedence.as_str(), "denial-produces-no-run");
+
+    let (request, candidate) = authority();
+    let resolution = InvocationResolver::resolve_projection(request, vec![candidate]);
+    let Some(spec) = create_run_spec_only_from_resolution(resolution) else {
+        panic!("fixture success must construct RunSpec")
+    };
+    let run = match AgentRun::new(spec) {
+        Ok(run) => run,
+        Err(error) => panic!("fixture RunSpec must construct AgentRun: {error}"),
+    };
+    assert_eq!(run.spec().package_id, "synthetic.proof");
+
+    let (request, mut denied_candidate) = authority();
+    denied_candidate.policy.emergency_blocked = true;
+    let denied = InvocationResolver::resolve_projection(request, vec![denied_candidate]);
+    assert_eq!(denied, Err(ProjectionResolutionError::EmergencyBlocked));
+    assert!(create_run_spec_only_from_resolution(denied.clone()).is_none());
     assert!(create_run_only_from_resolution(denied).is_none());
 }

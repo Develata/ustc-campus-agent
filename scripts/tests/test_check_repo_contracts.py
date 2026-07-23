@@ -391,13 +391,19 @@ class InvocationFixtureContractTests(unittest.TestCase):
     def test_invocation_acceptance_binding_drift_fails_closed(self) -> None:
         path = self.root / "docs/acceptance/matrix.tsv"
         matrix = path.read_text(encoding="utf-8")
-        path.write_text(
-            matrix.replace(checker.INVOCATION_FIXTURE_TEST_COMMAND + " && ", "", 1),
-            encoding="utf-8",
-        )
-        self.assertTrue(
-            any("MARKET-005: implemented invocation binding/status drift" in issue for issue in self.check_invocation())
-        )
+        commands = [
+            checker.INVOCATION_FIXTURE_TEST_COMMAND,
+            checker.INVOCATION_RUNTIME_FIXTURE_TEST_COMMAND,
+        ]
+        for command in commands:
+            path.write_text(matrix.replace(command + " && ", "", 1), encoding="utf-8")
+            self.assertTrue(
+                any(
+                    "MARKET-005: implemented invocation binding/status drift" in issue
+                    for issue in self.check_invocation()
+                ),
+                command,
+            )
 
 
 if __name__ == "__main__":

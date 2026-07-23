@@ -235,7 +235,7 @@ Every error leaves inputs unchanged, returns no partial projection/dispatch hand
 
 ## 6. Bounded proof consumer and fixtures
 
-The first bounded proof consumer is a cross-crate test in planned `crates/agent-runtime/tests/resolved_run_spec.rs`:
+The first bounded proof consumer is the cross-crate test in `crates/agent-runtime/tests/resolved_run_spec.rs`:
 
 1. resolve a synthetic implemented package/component in memory;
 2. combine only successful resolved fields with caller-supplied run ID, provider profile and budgets;
@@ -264,7 +264,7 @@ Executable fixture directory: `crates/platform-core/tests/fixtures/invocation-re
 | `call-precedence-v0.json` | `ToolNotProjected` and dispatch mismatch precede deny-state and argument faults; every call-time variant has an exact case | supports future `MARKET-007` |
 | `post-projection-revoke-v0.json` | current deny state narrows a frozen projection; later grant/enable state cannot widen it | supports future `MARKET-007` and later `MARKET-003` |
 
-Fixture JSON is typed test input, not a catalog schema, source JSON Schema or durable-state format. Every case carries a stable name, API, concrete recipe/mutation, exact expected result and precedence semantics; literal schema, argument, dispatch, projection and authority goldens live in the fixture data. The Rust fixture-matrix test deserializes with unknown-field denial and executes every listed case, while repository governance pins the complete fixture content and acceptance binding.
+Fixture JSON is typed test input, not a catalog schema, source JSON Schema or durable-state format. Every case carries a stable name, API, concrete recipe/mutation, exact expected result and precedence semantics; literal schema, argument, dispatch, projection and authority goldens live in the fixture data. Rust deserializes API, recipe, expected outcome and precedence into closed typed enums/records with unknown-field/value denial. The platform-core fixture-matrix test executes every constructor, projection and authorization case from its current recipe, while the agent-runtime fixture consumer executes the run-spec case and constructs `RunSpec`/`AgentRun` only after successful resolution; repository governance pins the complete fixture content and both acceptance bindings.
 
 ## 7. Framework evidence mapping
 
