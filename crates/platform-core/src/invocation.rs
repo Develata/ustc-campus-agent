@@ -735,48 +735,267 @@ pub struct ToolProjectionRequest {
     pub activation_allowlist: Option<BTreeSet<ToolId>>,
 }
 
+/// One frozen resolved tool authority entry.
+///
+/// Its authority-bearing contents cannot be replaced by downstream callers:
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::invocation::{ResolvedInvocation, ValidatedToolInputSchemaV0};
+///
+/// fn replace_schema(
+///     entry: &mut ResolvedInvocation,
+///     replacement: ValidatedToolInputSchemaV0,
+/// ) {
+///     entry.input_schema = replacement;
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedInvocation {
-    pub tenant_id: TenantId,
-    pub user_id: UserId,
-    pub installation_id: InstallationId,
-    pub installation_revision: InstallationRevision,
-    pub package_id: PackageId,
-    pub package_version: PackageVersion,
-    pub package_digest: Sha256Digest,
-    pub catalog_revision: CatalogRevision,
-    pub component_id: ComponentId,
-    pub component_version: ComponentVersion,
-    pub component_digest: Sha256Digest,
-    pub component_kind: ComponentKind,
-    pub execution_identity: ExecutionIdentity,
-    pub tool_id: ToolId,
-    pub model_visible_name: String,
-    pub dispatch_key: String,
-    pub description: String,
-    pub provider_tool_definition_digest: Sha256Digest,
-    pub capability_id: CapabilityId,
-    pub capability_manifest_digest: Sha256Digest,
-    pub grant_snapshot_id: GrantSnapshotId,
-    pub grant_version: GrantVersion,
-    pub object_scope: ObjectScope,
-    pub confirmation_policy: ConfirmationPolicy,
-    pub source_policy: SourcePolicyIdentity,
-    pub input_schema: ValidatedToolInputSchemaV0,
-    pub policy_snapshot_id: PolicySnapshotId,
-    pub policy_revision: PolicyRevision,
-    pub projection_authority_entry_digest: Sha256Digest,
+    tenant_id: TenantId,
+    user_id: UserId,
+    installation_id: InstallationId,
+    installation_revision: InstallationRevision,
+    package_id: PackageId,
+    package_version: PackageVersion,
+    package_digest: Sha256Digest,
+    catalog_revision: CatalogRevision,
+    component_id: ComponentId,
+    component_version: ComponentVersion,
+    component_digest: Sha256Digest,
+    component_kind: ComponentKind,
+    execution_identity: ExecutionIdentity,
+    tool_id: ToolId,
+    model_visible_name: String,
+    dispatch_key: String,
+    description: String,
+    provider_tool_definition_digest: Sha256Digest,
+    capability_id: CapabilityId,
+    capability_class: CapabilityClass,
+    capability_manifest_digest: Sha256Digest,
+    grant_snapshot_id: GrantSnapshotId,
+    grant_version: GrantVersion,
+    object_scope: ObjectScope,
+    confirmation_policy: ConfirmationPolicy,
+    source_policy: SourcePolicyIdentity,
+    input_schema: ValidatedToolInputSchemaV0,
+    policy_snapshot_id: PolicySnapshotId,
+    policy_revision: PolicyRevision,
+    projection_authority_entry_digest: Sha256Digest,
 }
 
+impl ResolvedInvocation {
+    #[must_use]
+    pub const fn tenant_id(&self) -> &TenantId {
+        &self.tenant_id
+    }
+
+    #[must_use]
+    pub const fn user_id(&self) -> &UserId {
+        &self.user_id
+    }
+
+    #[must_use]
+    pub const fn installation_id(&self) -> &InstallationId {
+        &self.installation_id
+    }
+
+    #[must_use]
+    pub const fn installation_revision(&self) -> &InstallationRevision {
+        &self.installation_revision
+    }
+
+    #[must_use]
+    pub const fn package_id(&self) -> &PackageId {
+        &self.package_id
+    }
+
+    #[must_use]
+    pub const fn package_version(&self) -> &PackageVersion {
+        &self.package_version
+    }
+
+    #[must_use]
+    pub const fn package_digest(&self) -> &Sha256Digest {
+        &self.package_digest
+    }
+
+    #[must_use]
+    pub const fn catalog_revision(&self) -> &CatalogRevision {
+        &self.catalog_revision
+    }
+
+    #[must_use]
+    pub const fn component_id(&self) -> &ComponentId {
+        &self.component_id
+    }
+
+    #[must_use]
+    pub const fn component_version(&self) -> &ComponentVersion {
+        &self.component_version
+    }
+
+    #[must_use]
+    pub const fn component_digest(&self) -> &Sha256Digest {
+        &self.component_digest
+    }
+
+    #[must_use]
+    pub const fn component_kind(&self) -> ComponentKind {
+        self.component_kind
+    }
+
+    #[must_use]
+    pub const fn execution_identity(&self) -> &ExecutionIdentity {
+        &self.execution_identity
+    }
+
+    #[must_use]
+    pub const fn tool_id(&self) -> &ToolId {
+        &self.tool_id
+    }
+
+    #[must_use]
+    pub fn model_visible_name(&self) -> &str {
+        &self.model_visible_name
+    }
+
+    #[must_use]
+    pub fn dispatch_key(&self) -> &str {
+        &self.dispatch_key
+    }
+
+    #[must_use]
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+
+    #[must_use]
+    pub const fn provider_tool_definition_digest(&self) -> &Sha256Digest {
+        &self.provider_tool_definition_digest
+    }
+
+    #[must_use]
+    pub const fn capability_id(&self) -> &CapabilityId {
+        &self.capability_id
+    }
+
+    #[must_use]
+    pub const fn capability_class(&self) -> CapabilityClass {
+        self.capability_class
+    }
+
+    #[must_use]
+    pub const fn capability_manifest_digest(&self) -> &Sha256Digest {
+        &self.capability_manifest_digest
+    }
+
+    #[must_use]
+    pub const fn grant_snapshot_id(&self) -> &GrantSnapshotId {
+        &self.grant_snapshot_id
+    }
+
+    #[must_use]
+    pub const fn grant_version(&self) -> &GrantVersion {
+        &self.grant_version
+    }
+
+    #[must_use]
+    pub const fn object_scope(&self) -> &ObjectScope {
+        &self.object_scope
+    }
+
+    #[must_use]
+    pub const fn confirmation_policy(&self) -> ConfirmationPolicy {
+        self.confirmation_policy
+    }
+
+    #[must_use]
+    pub const fn source_policy(&self) -> &SourcePolicyIdentity {
+        &self.source_policy
+    }
+
+    #[must_use]
+    pub const fn input_schema(&self) -> &ValidatedToolInputSchemaV0 {
+        &self.input_schema
+    }
+
+    #[must_use]
+    pub const fn policy_snapshot_id(&self) -> &PolicySnapshotId {
+        &self.policy_snapshot_id
+    }
+
+    #[must_use]
+    pub const fn policy_revision(&self) -> &PolicyRevision {
+        &self.policy_revision
+    }
+
+    #[must_use]
+    pub const fn projection_authority_entry_digest(&self) -> &Sha256Digest {
+        &self.projection_authority_entry_digest
+    }
+}
+
+/// One immutable per-turn projection.
+///
+/// Downstream callers cannot rebuild it around replacement entries while retaining
+/// the resolver-issued snapshot identity and set digests:
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::invocation::{ResolvedInvocation, ToolProjectionSnapshot};
+///
+/// fn replace_entries(
+///     projection: &mut ToolProjectionSnapshot,
+///     replacement: Vec<ResolvedInvocation>,
+/// ) {
+///     projection.entries = replacement;
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolProjectionSnapshot {
-    pub schema_version: &'static str,
-    pub run_id: RunId,
-    pub turn_id: TurnId,
-    pub snapshot_id: String,
-    pub entries: Vec<ResolvedInvocation>,
-    pub tool_schema_set_digest: Sha256Digest,
-    pub projection_authority_set_digest: Sha256Digest,
+    schema_version: &'static str,
+    run_id: RunId,
+    turn_id: TurnId,
+    snapshot_id: String,
+    entries: Vec<ResolvedInvocation>,
+    tool_schema_set_digest: Sha256Digest,
+    projection_authority_set_digest: Sha256Digest,
+}
+
+impl ToolProjectionSnapshot {
+    #[must_use]
+    pub const fn schema_version(&self) -> &'static str {
+        self.schema_version
+    }
+
+    #[must_use]
+    pub const fn run_id(&self) -> &RunId {
+        &self.run_id
+    }
+
+    #[must_use]
+    pub const fn turn_id(&self) -> &TurnId {
+        &self.turn_id
+    }
+
+    #[must_use]
+    pub fn snapshot_id(&self) -> &str {
+        &self.snapshot_id
+    }
+
+    #[must_use]
+    pub fn entries(&self) -> &[ResolvedInvocation] {
+        &self.entries
+    }
+
+    #[must_use]
+    pub const fn tool_schema_set_digest(&self) -> &Sha256Digest {
+        &self.tool_schema_set_digest
+    }
+
+    #[must_use]
+    pub const fn projection_authority_set_digest(&self) -> &Sha256Digest {
+        &self.projection_authority_set_digest
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -826,6 +1045,108 @@ impl Error for ProjectionResolutionError {}
 
 pub struct InvocationResolver;
 
+fn authority_snapshot_shape_is_valid(candidate: &InvocationAuthorityCandidate) -> bool {
+    candidate
+        .catalog
+        .as_ref()
+        .and_then(|catalog| catalog.component.as_ref())
+        .and_then(|component| component.tool.as_ref())
+        .is_none_or(|tool| {
+            tool.model_visible_name.len() <= 64
+                && is_valid_name(&tool.model_visible_name)
+                && tool.description.len() <= 4_096
+        })
+}
+
+fn same_catalog_authority_anchor(
+    left: Option<&CatalogPackageRevision>,
+    right: Option<&CatalogPackageRevision>,
+) -> bool {
+    let (Some(left), Some(right)) = (left, right) else {
+        return true;
+    };
+    let components_match = match (left.component.as_ref(), right.component.as_ref()) {
+        (Some(left), Some(right)) => {
+            left.id == right.id
+                && left.kind == right.kind
+                && left.version == right.version
+                && left.digest == right.digest
+                && left.execution_identity == right.execution_identity
+                && left.declared_capabilities == right.declared_capabilities
+        }
+        _ => true,
+    };
+    left.catalog_revision == right.catalog_revision
+        && left.package_id == right.package_id
+        && left.package_version == right.package_version
+        && left.package_digest == right.package_digest
+        && left.capability_manifest_digest == right.capability_manifest_digest
+        && left.source_policy == right.source_policy
+        && components_match
+}
+
+fn same_installation_authority_anchor(
+    left: Option<&PluginInstallationSnapshot>,
+    right: Option<&PluginInstallationSnapshot>,
+) -> bool {
+    let (Some(left), Some(right)) = (left, right) else {
+        return true;
+    };
+    left.id == right.id
+        && left.tenant_id == right.tenant_id
+        && left.user_id == right.user_id
+        && left.package_id == right.package_id
+        && left.package_version == right.package_version
+        && left.package_digest == right.package_digest
+        && left.component == right.component
+        && left.revision == right.revision
+}
+
+fn same_grant_authority_anchor(
+    left: Option<&CapabilityGrantSnapshot>,
+    right: Option<&CapabilityGrantSnapshot>,
+) -> bool {
+    let (Some(left), Some(right)) = (left, right) else {
+        return true;
+    };
+    left.snapshot_id == right.snapshot_id
+        && left.version == right.version
+        && left.tenant_id == right.tenant_id
+        && left.user_id == right.user_id
+        && left.installation_id == right.installation_id
+        && left.capability_id == right.capability_id
+        && left.object_scope == right.object_scope
+        && left.confirmation_policy == right.confirmation_policy
+        && left.capability_manifest_digest == right.capability_manifest_digest
+}
+
+fn same_singular_authority_anchor(
+    left: &InvocationAuthorityCandidate,
+    right: &InvocationAuthorityCandidate,
+) -> bool {
+    // Tool id, visible definition, and input schema are deliberately per-entry authority.
+    // Their exact digests remain bound by each immutable entry and the two projection set
+    // digests; every other component/run identity below must be singular across the turn.
+    left.target.installation_id == right.target.installation_id
+        && left.target.package_id == right.target.package_id
+        && left.target.package_version == right.target.package_version
+        && left.target.component_id == right.target.component_id
+        && left.target.capability_id == right.target.capability_id
+        && left.target.object_scope == right.target.object_scope
+        && same_catalog_authority_anchor(left.catalog.as_ref(), right.catalog.as_ref())
+        && same_installation_authority_anchor(
+            left.installation.as_ref(),
+            right.installation.as_ref(),
+        )
+        && same_grant_authority_anchor(left.grant.as_ref(), right.grant.as_ref())
+        && left.policy.snapshot_id == right.policy.snapshot_id
+        && left.policy.revision == right.policy.revision
+        && left.policy.capability_id == right.policy.capability_id
+        && left.policy.capability_class == right.policy.capability_class
+        && left.policy.admitted_execution_identity == right.policy.admitted_execution_identity
+        && left.policy.admitted_source_policy == right.policy.admitted_source_policy
+}
+
 impl InvocationResolver {
     pub fn resolve_projection(
         request: ToolProjectionRequest,
@@ -849,22 +1170,22 @@ impl InvocationResolver {
         }
         if candidates
             .iter()
+            .any(|candidate| !authority_snapshot_shape_is_valid(candidate))
+        {
+            return Err(ProjectionResolutionError::InvalidAuthoritySnapshot);
+        }
+        if candidates
+            .iter()
             .any(|candidate| candidate.policy.emergency_blocked)
         {
             return Err(ProjectionResolutionError::EmergencyBlocked);
         }
         let authority_anchor = &candidates[0];
-        if candidates.iter().skip(1).any(|candidate| {
-            candidate.target.installation_id != authority_anchor.target.installation_id
-                || candidate.target.package_id != authority_anchor.target.package_id
-                || candidate.target.package_version != authority_anchor.target.package_version
-                || candidate.target.component_id != authority_anchor.target.component_id
-                || candidate.grant.as_ref().map(|grant| &grant.snapshot_id)
-                    != authority_anchor
-                        .grant
-                        .as_ref()
-                        .map(|grant| &grant.snapshot_id)
-        }) {
+        if candidates
+            .iter()
+            .skip(1)
+            .any(|candidate| !same_singular_authority_anchor(authority_anchor, candidate))
+        {
             return Err(ProjectionResolutionError::AuthorityConflict);
         }
         let mut entries = Vec::with_capacity(candidates.len());
@@ -998,9 +1319,11 @@ fn resolve_candidate(
     if tool.id != target.tool_id {
         return Err(ProjectionResolutionError::ToolIdentityMismatch);
     }
-    if candidate.policy.capability_class.is_none()
-        || candidate.policy.capability_id != target.capability_id
-    {
+    let capability_class = candidate
+        .policy
+        .capability_class
+        .ok_or(ProjectionResolutionError::CapabilityUnknown)?;
+    if candidate.policy.capability_id != target.capability_id {
         return Err(ProjectionResolutionError::CapabilityUnknown);
     }
     if !component
@@ -1118,6 +1441,7 @@ fn resolve_candidate(
         description: tool.description,
         provider_tool_definition_digest,
         capability_id: target.capability_id,
+        capability_class,
         capability_manifest_digest: catalog.capability_manifest_digest,
         grant_snapshot_id: grant.snapshot_id,
         grant_version: grant.version,
@@ -1219,12 +1543,18 @@ pub fn authorize_call(
     if current.policy.snapshot_id != entry.policy_snapshot_id
         || current.policy.revision != entry.policy_revision
         || current.policy.capability_id != entry.capability_id
+        || current.policy.capability_class != Some(entry.capability_class)
         || current.policy.admitted_execution_identity.as_ref() != Some(&entry.execution_identity)
         || current.policy.admitted_source_policy.as_ref() != Some(&entry.source_policy)
     {
         return Err(InvocationAuthorizationError::AuthorityConflict);
     }
-    if current.tenant_id != entry.tenant_id || current.user_id != entry.user_id {
+    if current.tenant_id != entry.tenant_id
+        || current.user_id != entry.user_id
+        || current.installation.as_ref().is_some_and(|installation| {
+            installation.tenant_id != entry.tenant_id || installation.user_id != entry.user_id
+        })
+    {
         return Err(InvocationAuthorizationError::TenantOrUserScopeMismatch);
     }
     if current.catalog_revoked {

@@ -201,6 +201,23 @@ fn resolve_valid() -> (ToolProjectionSnapshot, InvocationAuthorityCandidate) {
     }
 }
 
+fn as_second_tool(mut candidate: InvocationAuthorityCandidate) -> InvocationAuthorityCandidate {
+    candidate.target.tool_id = parsed!(ToolId, "tool:z-last");
+    let tool = candidate
+        .catalog
+        .as_mut()
+        .expect("fixture")
+        .component
+        .as_mut()
+        .expect("fixture")
+        .tool
+        .as_mut()
+        .expect("fixture");
+    tool.id = candidate.target.tool_id.clone();
+    tool.model_visible_name = "z_last".to_owned();
+    candidate
+}
+
 #[test]
 fn valid_projection_is_deterministic_and_turn_bound() {
     let (request, candidate) = valid_authority();
@@ -210,16 +227,20 @@ fn valid_projection_is_deterministic_and_turn_bound() {
     let Ok(left) = left else {
         panic!("valid projection expected")
     };
-    assert_eq!(left.entries.len(), 1);
-    assert!(left.entries[0].dispatch_key.starts_with("dispatch:sha256:"));
+    assert_eq!(left.entries().len(), 1);
+    assert!(
+        left.entries()[0]
+            .dispatch_key()
+            .starts_with("dispatch:sha256:")
+    );
     let mut next_request = request;
     next_request.turn_id = parsed!(TurnId, "turn:2");
     let next = InvocationResolver::resolve_projection(next_request, vec![candidate]);
     let Ok(next) = next else {
         panic!("fresh turn must resolve")
     };
-    assert_eq!(left.tool_schema_set_digest, next.tool_schema_set_digest);
-    assert_ne!(left.snapshot_id, next.snapshot_id);
+    assert_eq!(left.tool_schema_set_digest(), next.tool_schema_set_digest());
+    assert_ne!(left.snapshot_id(), next.snapshot_id());
 
     let (request, first) = valid_authority();
     let mut second = first.clone();
@@ -247,9 +268,9 @@ fn valid_projection_is_deterministic_and_turn_bound() {
     };
     assert!(
         ordered
-            .entries
+            .entries()
             .windows(2)
-            .all(|pair| pair[0].tool_id < pair[1].tool_id)
+            .all(|pair| pair[0].tool_id() < pair[1].tool_id())
     );
 }
 
@@ -296,12 +317,12 @@ fn provider_definition_mutations_change_projection_digests() {
             panic!("mutated definition must resolve")
         };
         assert_ne!(
-            baseline.entries[0].provider_tool_definition_digest,
-            resolved.entries[0].provider_tool_definition_digest
+            baseline.entries()[0].provider_tool_definition_digest(),
+            resolved.entries()[0].provider_tool_definition_digest()
         );
         assert_ne!(
-            baseline.tool_schema_set_digest,
-            resolved.tool_schema_set_digest
+            baseline.tool_schema_set_digest(),
+            resolved.tool_schema_set_digest()
         );
     }
 }
@@ -651,6 +672,210 @@ fn projection_primary_precedence_and_collisions_fail_closed() {
         InvocationResolver::resolve_projection(request, vec![canonical_second, canonical_first]),
         Err(ProjectionResolutionError::PackageMissing)
     );
+
+    let (request, mut invalid) = valid_authority();
+    invalid.policy.emergency_blocked = true;
+    invalid
+        .catalog
+        .as_mut()
+        .expect("fixture")
+        .component
+        .as_mut()
+        .expect("fixture")
+        .tool
+        .as_mut()
+        .expect("fixture")
+        .model_visible_name = "invalid name".to_owned();
+    assert_eq!(
+        InvocationResolver::resolve_projection(request, vec![invalid]),
+        Err(ProjectionResolutionError::InvalidAuthoritySnapshot)
+    );
+}
+
+#[derive(Clone, Copy)]
+enum AuthorityAnchorFault {
+    InstallationRevision,
+    PackageDigest,
+    CatalogRevision,
+    ComponentVersion,
+    ComponentDigest,
+    ComponentKind,
+    ExecutionIdentity,
+    CapabilityManifest,
+    GrantVersion,
+    GrantScope,
+    GrantConfirmation,
+    SourcePolicy,
+    PolicySnapshot,
+    PolicyRevision,
+    CapabilityClass,
+}
+
+#[test]
+fn mixed_multi_tool_authority_anchor_is_rejected_table_driven() {
+    use AuthorityAnchorFault::*;
+    let cases = [
+        InstallationRevision,
+        PackageDigest,
+        CatalogRevision,
+        ComponentVersion,
+        ComponentDigest,
+        ComponentKind,
+        ExecutionIdentity,
+        CapabilityManifest,
+        GrantVersion,
+        GrantScope,
+        GrantConfirmation,
+        SourcePolicy,
+        PolicySnapshot,
+        PolicyRevision,
+        CapabilityClass,
+    ];
+    for fault in cases {
+        let (request, first) = valid_authority();
+        let mut second = as_second_tool(first.clone());
+        match fault {
+            InstallationRevision => {
+                second.installation.as_mut().expect("fixture").revision = parsed!(
+                    ustc_campus_agent_core::invocation::InstallationRevision,
+                    "installation-revision:other"
+                );
+            }
+            PackageDigest => {
+                second.catalog.as_mut().expect("fixture").package_digest = digest('9');
+                second
+                    .installation
+                    .as_mut()
+                    .expect("fixture")
+                    .package_digest = digest('9');
+            }
+            CatalogRevision => {
+                second.catalog.as_mut().expect("fixture").catalog_revision = parsed!(
+                    ustc_campus_agent_core::invocation::CatalogRevision,
+                    "catalog:other"
+                );
+            }
+            ComponentVersion => {
+                let version = parsed!(
+                    ustc_campus_agent_core::invocation::ComponentVersion,
+                    "component-version:other"
+                );
+                second
+                    .catalog
+                    .as_mut()
+                    .expect("fixture")
+                    .component
+                    .as_mut()
+                    .expect("fixture")
+                    .version = version.clone();
+                second
+                    .installation
+                    .as_mut()
+                    .expect("fixture")
+                    .component
+                    .version = version;
+            }
+            ComponentDigest => {
+                second
+                    .catalog
+                    .as_mut()
+                    .expect("fixture")
+                    .component
+                    .as_mut()
+                    .expect("fixture")
+                    .digest = digest('9');
+                second
+                    .installation
+                    .as_mut()
+                    .expect("fixture")
+                    .component
+                    .digest = digest('9');
+            }
+            ComponentKind => {
+                second
+                    .catalog
+                    .as_mut()
+                    .expect("fixture")
+                    .component
+                    .as_mut()
+                    .expect("fixture")
+                    .kind = ustc_campus_agent_core::invocation::ComponentKind::McpServerComponent;
+            }
+            ExecutionIdentity => {
+                let execution = parsed!(
+                    ustc_campus_agent_core::invocation::ExecutionIdentity,
+                    "native:other"
+                );
+                second
+                    .catalog
+                    .as_mut()
+                    .expect("fixture")
+                    .component
+                    .as_mut()
+                    .expect("fixture")
+                    .execution_identity = execution.clone();
+                second
+                    .installation
+                    .as_mut()
+                    .expect("fixture")
+                    .component
+                    .execution_identity = execution.clone();
+                second.policy.admitted_execution_identity = Some(execution);
+            }
+            CapabilityManifest => {
+                second
+                    .catalog
+                    .as_mut()
+                    .expect("fixture")
+                    .capability_manifest_digest = digest('9');
+                second
+                    .grant
+                    .as_mut()
+                    .expect("fixture")
+                    .capability_manifest_digest = digest('9');
+            }
+            GrantVersion => {
+                second.grant.as_mut().expect("fixture").version = parsed!(
+                    ustc_campus_agent_core::invocation::GrantVersion,
+                    "grant-version:other"
+                );
+            }
+            GrantScope => {
+                let scope = parsed!(ObjectScope, "scope:other");
+                second.target.object_scope = scope.clone();
+                second.grant.as_mut().expect("fixture").object_scope = scope;
+            }
+            GrantConfirmation => {
+                second.grant.as_mut().expect("fixture").confirmation_policy =
+                    ConfirmationPolicy::Ask;
+            }
+            SourcePolicy => {
+                let source = SourcePolicyIdentity {
+                    id: parsed!(SourcePolicyId, "source-policy:other"),
+                    digest: digest('9'),
+                };
+                second.catalog.as_mut().expect("fixture").source_policy = Some(source.clone());
+                second.policy.admitted_source_policy = Some(source);
+            }
+            PolicySnapshot => {
+                second.policy.snapshot_id = parsed!(PolicySnapshotId, "policy:other");
+            }
+            PolicyRevision => {
+                second.policy.revision = parsed!(
+                    ustc_campus_agent_core::invocation::PolicyRevision,
+                    "policy-revision:other"
+                );
+            }
+            CapabilityClass => {
+                second.policy.capability_class =
+                    Some(ustc_campus_agent_core::invocation::CapabilityClass::TenantPrivateRead);
+            }
+        }
+        assert_eq!(
+            InvocationResolver::resolve_projection(request, vec![first, second]),
+            Err(ProjectionResolutionError::AuthorityConflict)
+        );
+    }
 }
 
 fn golden_arguments() -> CanonicalArgumentValueV0 {
@@ -679,17 +904,17 @@ fn valid_call_state() -> (ToolProjectionSnapshot, CurrentDenyState, ProposedTool
         panic!("fixture grant required")
     };
     let arguments = golden_arguments();
-    let entry = &projection.entries[0];
+    let entry = &projection.entries()[0];
     let call = ProposedToolCall {
         provider_tool_call_id: parsed!(ProviderToolCallId, "provider-call:1"),
-        model_visible_name: entry.model_visible_name.clone(),
-        dispatch_key: entry.dispatch_key.clone(),
+        model_visible_name: entry.model_visible_name().to_owned(),
+        dispatch_key: entry.dispatch_key().to_owned(),
         claimed_argument_digest: arguments.digest().clone(),
         arguments,
     };
     let current = CurrentDenyState {
-        tenant_id: entry.tenant_id.clone(),
-        user_id: entry.user_id.clone(),
+        tenant_id: entry.tenant_id().clone(),
+        user_id: entry.user_id().clone(),
         catalog_revoked: false,
         installation: Some(installation),
         grant,
@@ -705,7 +930,7 @@ fn call_authorization_uses_only_frozen_dispatch_and_current_narrowing() {
     let Ok(authorized) = authorized else {
         panic!("valid frozen call must authorize")
     };
-    assert_eq!(authorized.entry, projection.entries[0]);
+    assert_eq!(authorized.entry, projection.entries()[0]);
     assert_eq!(authorized.arguments.digest().as_str(), ARGUMENT_DIGEST);
 
     let mut unknown = call.clone();
@@ -736,7 +961,7 @@ fn call_authorization_uses_only_frozen_dispatch_and_current_narrowing() {
 
 #[test]
 fn call_time_denials_are_typed_and_table_driven() {
-    for case in 0_u8..15 {
+    for case in 0_u8..19 {
         let (projection, mut current, mut call) = valid_call_state();
         let expected = match case {
             0 => {
@@ -814,6 +1039,24 @@ fn call_time_denials_are_typed_and_table_driven() {
                 };
                 call.claimed_argument_digest = call.arguments.digest().clone();
                 InvocationAuthorizationError::ArgumentsInvalid
+            }
+            15 => {
+                current.policy.capability_class = None;
+                InvocationAuthorizationError::AuthorityConflict
+            }
+            16 => {
+                current.installation.as_mut().expect("fixture").tenant_id =
+                    parsed!(TenantId, "tenant:other");
+                InvocationAuthorizationError::TenantOrUserScopeMismatch
+            }
+            17 => {
+                current.installation.as_mut().expect("fixture").user_id =
+                    parsed!(UserId, "user:other");
+                InvocationAuthorizationError::TenantOrUserScopeMismatch
+            }
+            18 => {
+                current.policy.capability_class = Some(CapabilityClass::TenantPrivateWrite);
+                InvocationAuthorizationError::AuthorityConflict
             }
             _ => panic!("case table is closed"),
         };

@@ -142,18 +142,18 @@ fn create_run_only_from_resolution(
     resolution: Result<ToolProjectionSnapshot, ProjectionResolutionError>,
 ) -> Option<Result<AgentRun, ustc_campus_agent_runtime::RuntimeError>> {
     resolution.ok().map(|projection| {
-        let entry = &projection.entries[0];
+        let entry = &projection.entries()[0];
         AgentRun::new(RunSpec {
             schema_version: RUN_SPEC_SCHEMA_VERSION.to_owned(),
-            run_id: projection.run_id.as_str().to_owned(),
-            tenant_id: entry.tenant_id.as_str().to_owned(),
-            installation_id: entry.installation_id.as_str().to_owned(),
-            package_id: entry.package_id.as_str().to_owned(),
-            package_version: entry.package_version.as_str(),
-            component_id: entry.component_id.as_str().to_owned(),
+            run_id: projection.run_id().as_str().to_owned(),
+            tenant_id: entry.tenant_id().as_str().to_owned(),
+            installation_id: entry.installation_id().as_str().to_owned(),
+            package_id: entry.package_id().as_str().to_owned(),
+            package_version: entry.package_version().as_str(),
+            component_id: entry.component_id().as_str().to_owned(),
             provider_profile_id: "provider:synthetic-proof".to_owned(),
-            grant_snapshot_id: entry.grant_snapshot_id.as_str().to_owned(),
-            tool_schema_set_digest: projection.tool_schema_set_digest.as_str().to_owned(),
+            grant_snapshot_id: entry.grant_snapshot_id().as_str().to_owned(),
+            tool_schema_set_digest: projection.tool_schema_set_digest().as_str().to_owned(),
             budgets: RunBudgets {
                 max_turns: 1,
                 max_tool_calls: 1,
