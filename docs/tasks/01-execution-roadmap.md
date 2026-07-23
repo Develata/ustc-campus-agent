@@ -70,11 +70,11 @@ P0 is ordered `P0a → P0b → P0c`. Invocation authority comes first so catalog
 **Deliverables**
 
 - pure `platform-core` `InvocationResolver` types and `InvocationResolutionError` taxonomy;
-- exact resolution of tenant/user, installation, package version/digest, component/execution identity, capability/grant/scope, source policy and input-schema digest;
-- immutable, deterministically ordered `ToolProjectionSnapshot` used for both model exposure and dispatch;
-- projection-time authority checks plus call-time argument/current-deny-state recheck before effect intent or outbound I/O;
+- exact resolution of tenant/user, installation, package version/digest, component/execution/tool identity, capability/grant/scope, source policy and bounded input-schema digest;
+- immutable, deterministically ordered `ToolProjectionSnapshot` whose digest binds the complete provider-visible tool definition and exact dispatch identity;
+- pure call-authorization semantics and deny-side recheck that support, but do not yet prove, later placement before effect intent or outbound I/O;
 - no name-only dispatch, last-wins collision, silent fallback, partial output or authority widening by session/framework state;
-- first executable consumer mapping a successful result into the existing `RunSpec` and `AgentRun::new`; every denial proves no run is created.
+- bounded cross-crate proof mapping a successful result into the existing `RunSpec` and `AgentRun::new`; every resolver denial proves no run is created, without claiming a real application consumer.
 
 **Owned boundary**
 
@@ -86,7 +86,7 @@ Catalog persistence or browse UI, install mutation, database/HTTP/SSE, provider/
 
 **Exit gate**
 
-Planned `MARKET-005`, `MARKET-006` and `MARKET-007` become implemented with the exact synthetic fixture matrix in `docs/contracts/invocation-resolution.md`; downstream `AGENT-002` remains green. P0a supplies supporting evidence but does not mark durable `MARKET-002` or `MARKET-003` implemented. Current first-party manifest status is unchanged.
+Planned `MARKET-005` and `MARKET-006` become implemented with the exact synthetic fixture matrix in `docs/contracts/invocation-resolution.md`; downstream `AGENT-002` remains green. P0a supplies supporting evidence but does not mark cross-boundary `MARKET-007` or durable `MARKET-002/003` implemented. Current first-party manifest status is unchanged.
 
 ### P0b — Read-only Market catalog projection
 

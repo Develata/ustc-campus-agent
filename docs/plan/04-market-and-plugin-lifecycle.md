@@ -4,7 +4,7 @@
 
 - `Layer`: Product authority
 - `Status`: Schema/identity baseline implemented; P0a resolver contract and runtime lifecycle planned
-- `Version`: `0.3.0`
+- `Version`: `0.3.1`
 - `Last Review`: `2026-07-23`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
 - `Authority Defers To`: Market JSON schema/registries and package/permission contracts for exact fields
@@ -103,7 +103,7 @@ PluginInstallation
 
 It MUST additionally bind tenant/user scope, source-policy identity, exact canonical input-schema digest and one collision-free dispatch identity. The resulting immutable tool projection controls both schemas exposed to the model and dispatch entries accepted for the turn. Session activation may narrow that projection, never install, grant, re-enable or bypass revoke.
 
-At call time, exact arguments, scope, grant/revoke state and emergency block are checked again before effect intent or outbound I/O. Any missing package, digest/path mismatch, stale grant, disabled installation, revoked capability, schema mismatch, name collision, unknown execution identity or authority conflict fails closed. No error selects a same-name tool, alternate package/component/provider/runtime or previous successful snapshot.
+At call time, exact arguments, scope, grant/revoke state and emergency block are checked again before effect intent or outbound I/O. Any missing package, digest/path mismatch, stale grant, disabled installation, revoked capability, schema mismatch, name collision, unknown execution identity or authority conflict fails closed. No error selects a same-name tool, alternate package/component/provider/runtime or previous successful snapshot. P0a defines and unit-tests the pure decision only; `MARKET-007` remains planned until application composition proves that denial prevents both effect-intent creation and adapter I/O.
 
 [`docs/contracts/invocation-resolution.md`](../contracts/invocation-resolution.md) owns the P0a input/output shapes, deterministic digest rules, error taxonomy, fixture matrix, framework borrow/adapt/reject evidence and the boundary into `RunSpec`/`AgentRun::new`.
 
