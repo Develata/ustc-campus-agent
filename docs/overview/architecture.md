@@ -25,7 +25,8 @@ ustc-agentd authority plane
 ├── identity/session                    (planned)
 ├── Market catalog projection           (planned; Git manifests exist)
 ├── installation/grant resolver         (planned)
-├── platform Agent run + tool gateway   (R0 transition kernel implemented; orchestration planned)
+├── finite HarnessRun + TaskGraph       (accepted H0 contract; implementation planned)
+├── node AgentRun + tool gateway        (R0 transition kernel implemented; orchestration planned)
 ├── Campus Trust Kernel                 (contract; planner subset exists)
 ├── first-party product use cases       (mostly planned)
 └── audit/evidence                      (planned)
@@ -36,7 +37,9 @@ ustc-agentd authority plane
     └── model/tool/source adapters       (replaceable)
 ```
 
-The Rust domain core owns legal transitions. Clients, model frameworks, databases, caches and adapters remain projections or infrastructure.
+The Rust domain core owns legal transitions. A conversation may contain many finite `HarnessRun`s; each graph node may own one bounded `AgentRun`. Clients, prompt projections, context summaries, model frameworks, databases, caches and adapters remain projections or infrastructure.
+
+Every model request is measured before provider I/O against a pinned context-window policy. Deterministic offloading and bounded lossy compression may reduce the working prompt, but never rewrite canonical transcript, graph, receipts or evidence.
 
 ## Current executable slice
 
@@ -49,7 +52,7 @@ Implemented today:
 - framework-neutral Agent run-spec, transition, replay, effect-ordering and budget kernel;
 - pure deterministic typed invocation resolver with executable synthetic fixtures and bounded `RunSpec` mapping.
 
-The next platform slices are read-only Market projection and durable installation/grant state; no real invocation application consumer exists yet. The next first-party product slice remains ChangeRadar source/revision/diff. Additional Course Planning productization is not the mainline.
+The next platform slices are the H0 finite harness kernel and the P0b/P0c Market authority branch; no real invocation application consumer exists yet. They converge before the bounded user Agent journey. The next first-party product slice remains ChangeRadar source/revision/diff. Additional Course Planning productization is not the mainline.
 
 ## Navigation
 

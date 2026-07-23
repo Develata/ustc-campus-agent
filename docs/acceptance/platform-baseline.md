@@ -4,8 +4,8 @@
 
 - `Layer`: `Acceptance / Coverage / Evidence`
 - `Status`: **Planning baseline; only `matrix.tsv` is the active competition gate registry**
-- `Version`: `0.3.0`
-- `Last Review`: `2026-07-22`
+- `Version`: `0.4.0`
+- `Last Review`: `2026-07-24`
 - `Authority Owns`: stable long-horizon case IDs, planned assertions and evidence-binding classes
 - `Authority Defers To`: `docs/plan/`, `docs/contracts/` and `docs/acceptance/matrix.tsv` for current scope/status
 
@@ -52,7 +52,7 @@ A manual or automated case cannot pass without a named owner, exact evidence and
 | catalog authority and Plugin lifecycle | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) | `CAT-*`, `PKG-*` | catalog validator + domain/integration tests |
 | identity/session/RBAC and capability isolation | [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md), [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `AUTH-*`, `SEC-*` | policy/integration/browser/security evidence |
 | community component validation | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) | `SKILL-*` | deterministic validator + security review |
-| MCP binding, hosted runtime, Agent run state and model providers | [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md) | `MCP-*`, `RUN-*`, `AGENT-*`, `AI-*` | owned state-machine tests + protocol/real-host conformance |
+| finite Agent harness, MCP binding, hosted runtime, node AgentRun state and model providers | [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md) | `HARNESS-*`, `MCP-*`, `RUN-*`, `AGENT-*`, `AI-*` | owned state-machine/context/graph tests + protocol/real-host conformance |
 | Market Web, i18n and clients | [`../features/00-market-browse-install.md`](../features/00-market-browse-install.md), [`../guides/github-pages-brief.md`](../guides/github-pages-brief.md) | `WEB-*`, `I18N-*`, `CLIENT-*` | browser/client conformance evidence |
 | Campus Trust Kernel, procedures, graph and evaluation | [`../plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md), [`../plan/06-first-party-plugins.md`](../plan/06-first-party-plugins.md) | `SRC-*`, `PROC-*`, `GRAPH-*`, `EVAL-*`, `FP-*` | source/procedure/graph invariants + evaluated journeys |
 | reliability, deployment and restore | [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `REL-*`, `DEP-*` | doctor/preflight/restore/remote read-back gates |
@@ -69,6 +69,7 @@ Long-horizon suites remain planned until projected into `matrix.tsv`. New curren
 | [`ADR-0004`](../adr/0004-runtime-reference-strategy.md) | owned Rust runtime semantics; bounded adapters | `MCP-*`, `RUN-*`, `AGENT-*`, `AI-*` |
 | [`ADR-0005`](../adr/0005-public-transition-deferred.md) | publication only after explicit gate | `WEB-*`, `SEC-*`, `REL-*`, `DEP-*` |
 | [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md) | three equal first-party Plugins over one kernel | `SRC-*`, `PROC-*`, `GRAPH-*`, `EVAL-*`, `FP-*` |
+| [`ADR-0007`](../adr/0007-finite-agent-harness.md) | finite HarnessRun, typed TaskGraph, bounded review and pre-send context budget | `HARNESS-*`, `AGENT-*`, `AI-*` |
 
 [`../coverage-matrix.md`](../coverage-matrix.md) owns current plan/feature/contract/acceptance projection. This catalog preserves candidate and long-horizon cases without creating a second current authority map.
 
@@ -259,6 +260,21 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AGENT-014` | every transformed tool/procedure input is re-schema-validated and re-authorized before effect | rust-integration | integration |
 | `AGENT-015` | security/publish Gate error fails closed; Observer failure policy is explicit and evidenced | rust-integration | release |
 | `AGENT-016` | restore validates runtime dependency IDs/versions and never auto-retries non-idempotent unfinished effects | rust-integration | release |
+
+### Finite Agent harness — `HARNESS-*`
+
+| Case ID | Assertion | Binding | Required gate |
+| --- | --- | --- | --- |
+| `HARNESS-001` | every HarnessRun follows legal finite evidenced transitions and reaches an explicit terminal phase | rust-unit | PR |
+| `HARNESS-002` | clarification asks only material blocking uncertainty under bounded rounds and deadline | rust-unit | PR |
+| `HARNESS-003` | accepted TaskGraph is finite acyclic authority-valid and resource-compatible | rust-unit | PR |
+| `HARNESS-004` | child planning cannot rewrite parent goal prohibitions deliverables or acceptance | rust-unit | PR |
+| `HARNESS-005` | every complete model request including each compression-plan call satisfies the pinned context inequality before provider I/O | rust-integration | PR |
+| `HARNESS-006` | compaction/compression preserves canonical history and emits provenance-bearing summary artifacts | rust-integration | PR |
+| `HARNESS-007` | anchors and whole tool schemas survive rebuild; compression is finite/non-recursive and failure to fit fails closed | rust-integration | release |
+| `HARNESS-008` | worker context may resume while each reviewer is fresh read-only and remediation bounded | rust-integration | integration |
+| `HARNESS-009` | final rejection appends a validated remediation graph revision without restarting the session/task | rust-integration | integration |
+| `HARNESS-010` | hooks or process exit cannot complete a node without structured outcome artifacts evidence and required review | rust-integration | release |
 
 ## 14. Market Web and i18n — `WEB-*`, `I18N-*`
 

@@ -2,7 +2,7 @@
 
 This registry names draft public surfaces before implementation. Implementation PRs must update this document or create a more specific contract before changing surfaces.
 
-The implemented internal Agent state/event contract is defined separately in [`agent-runtime.md`](agent-runtime.md). It does not make the HTTP routes below operational.
+The implemented single-node Agent state/event contract is defined in [`agent-runtime.md`](agent-runtime.md). The planned finite user-task lifecycle is defined in [`agent-harness.md`](agent-harness.md). Neither makes the HTTP routes below operational.
 
 ## HTTP routes — draft
 
@@ -13,8 +13,11 @@ The implemented internal Agent state/event contract is defined separately in [`a
 | `/api/market/packages/{id}` | GET | package details | planned |
 | `/api/installations` | POST | install exact package version with grants | planned |
 | `/api/installations/{id}:disable` | POST | disable installed package | planned |
-| `/api/agent/runs` | POST | create bounded Agent run | planned |
-| `/api/agent/runs/{id}/events` | GET/SSE | stream model/tool/state events | planned |
+| `/api/agent/runs` | POST | create one finite HarnessRun from typed user intent | planned |
+| `/api/agent/runs/{id}` | GET | read phase, accepted graph projection, evidence and blockers | planned |
+| `/api/agent/runs/{id}/answers` | POST | submit answers to the current bounded clarification gate | planned |
+| `/api/agent/runs/{id}:cancel` | POST | request typed cancellation under current phase/effect semantics | planned |
+| `/api/agent/runs/{id}/events` | GET/SSE | stream harness/node/model/tool/review state projections | planned |
 
 ## MCP/tool surface — Course Planning draft
 

@@ -4,8 +4,8 @@
 
 - `Layer`: Foundation
 - `Status`: Current MUST
-- `Version`: `0.1.0`
-- `Last Review`: `2026-07-22`
+- `Version`: `0.2.0`
+- `Last Review`: `2026-07-24`
 - `Authority Owns`: normative vocabulary used across plans, contracts and acceptance
 - `Authority Defers To`: typed schemas and Rust definitions for machine spelling
 - `Counterpart Acceptance`: `docs/acceptance/matrix.tsv`
@@ -52,7 +52,15 @@ Requirements SHOULD be testable or observable. Words such as “better”, “in
 
 ## 5. Runtime and proof terms
 
-- **Platform run**: platform-owned state machine for one bounded Agent execution. Framework/session state is only an adapter projection keyed to it.
+- **ConversationSession**: durable ordered conversation scope that may contain many finite `HarnessRun`s; it is not itself one execution run.
+- **HarnessRun**: platform-owned finite state machine for one accepted user task, from context/clarification through graph execution, verification and report.
+- **TaskGraph**: validated finite DAG of task nodes, dependencies, resource claims and bounded executor/reviewer policies. It is not a generic workflow language.
+- **TaskContract**: immutable parent-owned goal, non-goals, policy, inputs, deliverables, acceptance and verification contract for one task node.
+- **Platform run / AgentRun**: platform-owned state machine for one bounded node execution and its model/tool/effect loop. Framework/session state is only an adapter projection keyed to it.
+- **PromptProjection**: complete bounded provider-visible request derived from canonical run/session state; it is never canonical history or authority.
+- **Compaction**: deterministic reduction of a prompt projection by replacing eligible persisted/reproducible payloads with typed references.
+- **Compression**: lossy summarization of eligible history into a provenance-bearing context artifact while canonical history remains unchanged.
+- **EvidencePack**: typed artifact and verification references submitted for node or final review; a model report or process exit alone is not evidence.
 - **Receipt**: durable record of an approved attempted/completed side effect, used for audit and duplicate-effect prevention.
 - **Acceptance Case**: stable ID plus preconditions, assertions, binding and required gate.
 - **Evidence Binding**: exact automated test, command, browser check, external conformance result or manual review that can satisfy an Acceptance Case.

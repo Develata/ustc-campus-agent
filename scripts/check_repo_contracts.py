@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VALID_GATES = {"pr", "core-demo", "release", "public"}
 VALID_ACCEPTANCE_STATUSES = {"planned", "implemented"}
-STABLE_CATALOG_PREFIXES = {"AGENT", "FP", "PROC", "SRC"}
+STABLE_CATALOG_PREFIXES = {"AGENT", "FP", "HARNESS", "PROC", "SRC"}
 MIN_LONG_HORIZON_CASES = 200
 INVOCATION_FIXTURES = {
     "arguments-golden-v0.json",
@@ -104,11 +104,13 @@ KEY_FILES = [
     "docs/features/01-ustc-affairs-navigator.md",
     "docs/features/02-ustc-change-radar.md",
     "docs/features/03-campus-opportunity-graph.md",
+    "docs/features/04-bounded-agent-harness.md",
     "docs/acceptance/gates.md",
     "docs/acceptance/matrix.tsv",
     "docs/acceptance/platform-baseline.md",
     "docs/acceptance/public-readiness.md",
     "docs/adr/0006-three-default-first-party-plugins.md",
+    "docs/adr/0007-finite-agent-harness.md",
     "docs/overview/architecture.md",
     "docs/tasks/01-execution-roadmap.md",
     "docs/guides/contributing.md",
@@ -116,6 +118,7 @@ KEY_FILES = [
     "docs/guides/github-pages-brief.md",
     "docs/contracts/cli.md",
     "docs/contracts/agent-runtime.md",
+    "docs/contracts/agent-harness.md",
     "docs/contracts/data-models.md",
     "docs/contracts/interfaces.md",
     "docs/contracts/invocation-resolution.md",

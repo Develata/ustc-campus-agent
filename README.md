@@ -6,7 +6,7 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 
 平台有三个正式的 default first-party Plugins：**USTC Affairs Navigator**、**USTC ChangeRadar** 与 **Campus Opportunity Graph**。三者共享 Campus Trust Kernel，但保持独立的 package identity、版本、安装与启停边界。
 
-平台主线先建立 framework-neutral Agent runtime kernel，再按 `typed invocation resolver → read-only Market projection → durable installation/grant state` 补齐最小 Market authority foundation；first-party 产品仍按 `ChangeRadar source/revision/diff foundation → Affairs Navigator structured procedure entry → ChangeRadar per-board feed → Opportunity Graph consent/profile integration` 推进。已完成的 **Course Planning** 是 Opportunity Graph 内提前落地的 bounded offline spike；它不把 Opportunity Graph 提升为唯一旗舰，也不代表 Market/runtime 闭环已完成。
+平台主线已建立 framework-neutral Agent runtime kernel 与 typed invocation resolver；下一步并行补齐 `finite HarnessRun/TaskGraph kernel` 与 `read-only Market projection → durable installation/grant state`，再收敛为有 clarification、context budget、verification 与 bounded review 的用户 Agent journey。first-party 产品仍按 `ChangeRadar source/revision/diff foundation → Affairs Navigator structured procedure entry → ChangeRadar per-board feed → Opportunity Graph consent/profile integration` 推进。已完成的 **Course Planning** 是 Opportunity Graph 内提前落地的 bounded offline spike；它不把 Opportunity Graph 提升为唯一旗舰，也不代表 Market/runtime 闭环已完成。
 
 ## Current decisions
 
@@ -21,7 +21,8 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | GitHub organization | Deferred |
 | Market repository | Deferred；当前为 monorepo 内 `market/` logical authority boundary |
 | Future public release | Possible；public-readiness gate required before changing visibility |
-| Runtime strategy | Rust authority core；Rig/goose/Pi/LangGraph are references or bounded adapters, not platform authority |
+| Runtime strategy | Rust authority core；ADR-0004 reference systems remain references or bounded adapters, not platform authority |
+| Agent harness | finite HarnessRun over typed TaskGraph；model proposes, Rust validates；every model call passes context-budget preflight |
 
 ## Repository layout
 
@@ -31,7 +32,7 @@ apps/                     # runnable binaries and future frontend shell
   ustc-agentctl/          # operator/developer CLI skeleton
 crates/
   platform-core/          # canonical domain invariants and authority decisions
-  agent-runtime/          # platform-owned run state, events, replay and effect ordering
+  agent-runtime/          # node AgentRun today; future finite harness state, graph, context and review kernel
   adapters/               # replaceable external adapters; no authority ownership
   course-planning/         # typed fixture validation and deterministic planner core
 market/                   # plugin catalog authority boundary inside this repo

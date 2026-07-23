@@ -2,7 +2,7 @@
 
 - `Status`: Current delivery order
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
-- `Architecture decision`: [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md)
+- `Architecture decisions`: [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md), [`ADR-0007`](../adr/0007-finite-agent-harness.md)
 - `Acceptance registry`: [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)
 
 This task document schedules implementation; it does not override the owning plan. The three-Plugin topology and implementation order remain fixed.
@@ -12,13 +12,14 @@ This task document schedules implementation; it does not override the owning pla
 ```text
 R0 platform-owned Agent runtime kernel
   └→ P0a deterministic typed invocation resolver
-       └→ P0b read-only Market catalog projection
-            └→ P0c durable installation/grant/enable state
-                 └→ P1 ChangeRadar source/revision/diff foundation
-                      ├→ P2 Affairs Navigator procedure entry
-                      └→ P3 ChangeRadar board feed
-                           └→ P4 Opportunity Graph consent/profile integration
-                                └→ P5 productization and adversarial verification
+       ├→ H0 finite Agent harness kernel ───────────────────────────┐
+       └→ P0b read-only Market catalog projection                  │
+            └→ P0c durable installation/grant/enable state        │
+                 └→ P1 ChangeRadar source/revision/diff foundation │
+                      ├→ P2 Affairs Navigator procedure entry      │
+                      └→ P3 ChangeRadar board feed                 │
+                           └→ P4 Opportunity Graph integration     │
+                                └→ P5 productization/verification ←┘
                                      └→ P6 freeze/submission
 ```
 
@@ -88,6 +89,27 @@ Catalog persistence or browse UI, install mutation, database/HTTP/SSE, provider/
 **Exit gate**
 
 Planned `MARKET-005` and `MARKET-006` become implemented with the exact synthetic fixture matrix in `docs/contracts/invocation-resolution.md`; downstream `AGENT-002` remains green. P0a supplies supporting evidence but does not mark cross-boundary `MARKET-007` or durable `MARKET-002/003` implemented. Current first-party manifest status is unchanged.
+
+## H0 — Finite Agent harness kernel
+
+**Depends on**: R0 `AgentRun` semantics and P0a exact per-turn tool projection.
+
+**Deliverables**
+
+- immutable `HarnessRunSpec` with root `TaskContract`, legal finite phases, typed commands/events and deterministic replay;
+- validated finite `TaskGraph` with immutable `TaskContract`, dependencies, resource claims, executor/isolation and bounded review policy;
+- bounded clarification, fresh reviewer, remediation graph-patch and explicit terminal non-success semantics;
+- `ContextBudgetSnapshot`, complete-request token preflight and checked fixed-point ceiling/target arithmetic;
+- deterministic compaction before non-recursive bounded lossy compression, non-compressible anchors, provenance-bearing summary artifacts and canonical-history preservation;
+- fake executors/reviewers/supervisor and estimator fixtures proving the contract without external model, subagent process or network I/O.
+
+**Non-goals**
+
+Production provider/tokenizer integration, model-generated orchestration code, durable database, HTTP/SSE/UI, real subagents and a generic workflow/graph language.
+
+**Exit gate**
+
+The active planned `HARNESS-*` rows have exact Rust unit/integration bindings. Every model-call fixture either satisfies the pinned inequality after bounded compaction or produces `ContextBudgetExceeded` before fake provider I/O.
 
 ### P0b — Read-only Market catalog projection
 
@@ -216,7 +238,7 @@ The offline planner becomes one installed-plugin journey without weakening hard 
 
 - separate Market repository;
 - arbitrary third-party hosted execution;
-- generic workflow/graph engine;
+- generic workflow/graph engine beyond the bounded `agent-harness/v0` TaskGraph;
 - personalized private ChangeRadar feeds;
 - broad RAG or vector infrastructure;
 - Android-native full experience before Web/PWA lifecycle proof.

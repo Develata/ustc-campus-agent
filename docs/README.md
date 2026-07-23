@@ -16,7 +16,7 @@ USTC Campus Agent uses a proportionate docs-as-code structure: detailed authorit
 |---|---|
 | [`plan/`](plan/) | How is the system engineered, and who owns authority/failure/recovery? |
 | [`features/`](features/) | What does the user see and what is the honest journey/status? |
-| [`contracts/`](contracts/) | What exact schemas, CLI, interfaces, permissions and data models are exposed? |
+| [`contracts/`](contracts/) | What exact harness/runtime, schemas, CLI, interfaces, permissions and data models are exposed? |
 | [`acceptance/`](acceptance/) | What is active now, and which stable long-horizon proof cases must be retained for future scope? |
 | [`overview/`](overview/) | How do the layers fit together? |
 | [`tasks/`](tasks/) | In what dependency order is approved work delivered? |

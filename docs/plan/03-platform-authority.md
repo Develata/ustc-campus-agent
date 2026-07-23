@@ -3,14 +3,14 @@
 ## Metadata
 
 - `Layer`: Authority architecture
-- `Status`: Accepted architecture; R0 Agent transition kernel implemented, authority plane largely planned
-- `Version`: `0.2.1`
-- `Last Review`: `2026-07-23`
+- `Status`: Accepted architecture; R0 Agent transition kernel implemented, finite harness and authority plane largely planned
+- `Version`: `0.3.0`
+- `Last Review`: `2026-07-24`
 - `Authority Owns`: authority partition, canonical state ownership, client/execution-plane boundary
 - `Authority Defers To`: product positioning for scope and contracts for exact external shapes
-- `Counterpart Features`: `docs/features/00-market-browse-install.md`
-- `Counterpart Contracts`: `docs/contracts/invocation-resolution.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: `AGENT-*`, `MARKET-*`, `RUNTIME-*`, `PUBLIC-*`
+- `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/04-bounded-agent-harness.md`
+- `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
+- `Counterpart Acceptance`: `HARNESS-*`, `AGENT-*`, `MARKET-*`, `RUNTIME-*`, `PUBLIC-*`
 - `Primary Code Areas`: `crates/platform-core/`, `crates/agent-runtime/`, `apps/ustc-agentd/`, `apps/ustc-agentctl/`
 
 ## 1. Scope
@@ -27,6 +27,7 @@ USTC Campus Agent authority plane
 ├── identity/session
 ├── Market catalog projection
 ├── installation/grant resolver
+├── finite HarnessRun / TaskGraph
 ├── platform run state
 ├── tool/capability gateway
 ├── Campus Trust Kernel
@@ -53,6 +54,8 @@ Clients render state and submit typed intent. Execution planes perform bounded w
 | immutable raw/normalized evidence | content-addressed evidence objects with exact revision identity | parser/search indexes |
 | procedure/change/graph publication | reviewed canonical artifacts and durable receipts | PostgreSQL/search/feed projections |
 | tenant-private profile facts | tenant-scoped durable state | consented derived match/planning view |
+| HarnessRun phase, accepted TaskGraph and review/evidence state | Rust commands/events plus future durable journal | client plan panel, model prompts, framework task state |
+| canonical conversation/transcript and context artifacts | tenant-scoped durable session/artifact state | bounded PromptProjection and lossy context summary |
 | framework/provider session | adapter state keyed by platform identity | none; never canonical |
 
 A database brand is not authority by itself. Authority is the contract that decides who may transition which typed state and what evidence makes that transition valid.
@@ -84,10 +87,25 @@ approved SourceDefinition
 → canonical publish + projection refresh
 ```
 
-### 3.3 Platform run
+### 3.3 Finite harness run
+
+```text
+accepted user intent
+→ bounded clarification gate
+→ validated TaskGraph
+→ dependency/resource-safe node execution
+→ per-node evidence and fresh review
+→ root verification and final review
+→ evidenced report or explicit non-success state
+```
+
+Each user task is one finite `HarnessRun`. A reviewer rejection appends a bounded remediation graph revision; it does not restart the conversation or erase completed evidence. Prompt context is a projection of canonical run/session state and passes the context-budget gate before every model call.
+
+### 3.4 Node AgentRun
 
 ```text
 immutable run specification
+→ bounded prompt projection and token preflight
 → model turn
 → proposed tool call
 → grant/policy/argument check
@@ -120,6 +138,7 @@ Not yet implemented:
 - production identity/session;
 - durable installations and grants;
 - durable Agent orchestration, journal and tool gateway;
+- finite HarnessRun/TaskGraph, clarification/review supervisor and context compaction;
 - source ingestion and publication state;
 - production database/evidence store;
 - Web/PWA journey.
@@ -141,4 +160,4 @@ These planned systems MUST NOT be described as operational merely because their 
 - `cargo test --locked --all-targets --all-features`
 - `ustc-agentctl doctor`
 - `ustc-agentctl market validate`
-- `AGENT-*`, `MARKET-*`, `FP-*` and `RUNTIME-*` rows in `docs/acceptance/matrix.tsv`
+- `HARNESS-*`, `AGENT-*`, `MARKET-*`, `FP-*` and `RUNTIME-*` rows in `docs/acceptance/matrix.tsv`

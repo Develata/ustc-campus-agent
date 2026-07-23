@@ -3,14 +3,14 @@
 ## Metadata
 
 - `Layer`: Runtime architecture
-- `Status`: R0 platform-owned transition kernel implemented; orchestration, persistence and production adapters planned
-- `Version`: `0.4.3`
-- `Last Review`: `2026-07-23`
-- `Authority Owns`: platform run state, tool-effect ordering, framework/provider adapter boundary
+- `Status`: R0 platform-owned transition kernel implemented; finite harness, orchestration, persistence and production adapters planned
+- `Version`: `0.5.0`
+- `Last Review`: `2026-07-24`
+- `Authority Owns`: finite HarnessRun/TaskGraph, node AgentRun state, context budget, tool-effect ordering and framework/provider adapter boundary
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
-- `Counterpart Features`: future bounded Agent journey; current Market and product features
-- `Counterpart Contracts`: `docs/contracts/agent-runtime.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: active `AGENT-001`, `AGENT-002` and implemented P0a `MARKET-005/006`; planned `MARKET-007` and `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
+- `Counterpart Features`: `docs/features/04-bounded-agent-harness.md`; current Market and product features
+- `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
+- `Counterpart Acceptance`: planned `HARNESS-*`; active `AGENT-001`, `AGENT-002` and implemented P0a `MARKET-005/006`; planned `MARKET-007` and `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
 - `Primary Code Areas`: `crates/agent-runtime/`, future orchestration modules and `crates/adapters/`
 
 ## 1. Principle
@@ -49,7 +49,34 @@ terminal alternatives: Failed | Cancelled | Expired
 
 Every transition emits a typed immutable event/checkpoint. Streaming and non-streaming are projections of the same transitions.
 
-## 3. Effect ordering
+## 3. Finite harness and context projection
+
+The complete user-task runtime is a finite `HarnessRun` above one or more node-local `AgentRun`s:
+
+```text
+ConversationSession
+└── HarnessRun
+    ├── Contextualize → bounded ClarificationGate
+    ├── model-proposed, Rust-validated TaskGraph
+    ├── direct or supervised node AgentRuns
+    ├── typed EvidencePacks and fresh read-only reviewers
+    ├── bounded remediation graph revisions
+    └── verified report or explicit terminal non-success
+```
+
+The immutable run spec pins the root task contract. The model proposes plans and patches; Rust owns validation, legal transitions, budgets and replay. Parent-owned goal, prohibitions, deliverables and acceptance are immutable. A child planner may refine steps only. Worker context may continue across remediation; every reviewer call is fresh. Hooks and process exit are observations, not completion evidence.
+
+Before every provider call, the complete serialized request `q` must satisfy
+
+```text
+T(q) + O + S ≤ floor(L × ρ / 10_000),
+```
+
+where `L` is the validated model context limit, `ρ` is the fixed-point send ceiling, `O` reserves output and `S` reserves protocol/estimator uncertainty. If it does not fit, deterministic offloading precedes lossy compression; the rebuilt request must meet a lower target `τ < ρ`. Compression executes a prevalidated finite chunk/call plan and cannot recursively re-enter compression. Canonical transcript, graph, receipts and evidence are unchanged. Failure to fit produces `ContextBudgetExceeded` before provider I/O.
+
+[`agent-harness/v0`](../contracts/agent-harness.md) owns the exact phase, graph, review, supervision and context-budget contract. It is a bounded task harness, not a generic workflow language.
+
+## 4. Effect ordering
 
 Before any external or durable effect:
 
@@ -63,21 +90,22 @@ Before any external or durable effect:
 
 Crash/resume MUST NOT repeat a successful receipt. Budgets do not reset on resume. Cancellation distinguishes queued, in-flight and after-turn semantics before implementation.
 
-## 4. Adapter boundary
+## 5. Adapter boundary
 
 Domain/run/authorization code MUST NOT import framework-specific state as authority. A narrow adapter accepts platform-owned requests and emits typed model/tool events.
 
 | Reference | Strong patterns to study and selectively borrow | Platform application | Must not own |
 |---|---|---|---|
 | Rig | Rust-native provider abstraction, structured output, streaming and cassette-backed provider tests | narrow `ModelBackend` transport and offline provider conformance | platform run loop, grants, receipts, memory or audit |
-| LangGraph | checkpoint/store separation, interrupt/resume, observable state and idempotency discipline around resumed work | durable-journal, approval and restart benchmarks | canonical checkpoint, installation, grant or authorization truth |
+| Claude Code | finite agentic loop, plan/clarification, isolated subagents, dynamic fan-out/review workflows and automatic context compaction | harness UX, task supervision and adversarial-review benchmarks | generated workflow code, task files, hooks or summaries as platform authority |
+| LangGraph / Deep Agents | checkpoint/store separation, interrupt/resume, observable state, offloading/summarization and subagent context isolation | durable-journal, approval, context and restart benchmarks | canonical checkpoint, installation, grant or authorization truth |
 | Pi Agent | app-message to LLM-message projection, explicit event lifecycle, tool-preflight barrier, ordered sequential/parallel tool results, steering/follow-up queues and lossless session history behind lossy compaction | model-event projection, turn barriers, queue semantics and future branch/compaction evaluation | TypeScript hot-load, mutable session state or package extensions as platform authority |
 | goose | MCP extension lifecycle, session-scoped extension activation, diagnostics and per-tool allow/ask/deny controls | `McpBinding` lifecycle, capability-scoped tool projection and permission UX | autonomous-by-default execution or direct extension authority in the central plane |
 | Hermes Agent | platform-agnostic core, central registry plus toolsets/availability gates, explicit plugin-shadowing controls, progressive skills, bounded memory and operational profiles that are not filesystem sandboxes | interface adapters, grant-filtered toolsets, layered context and procedural knowledge | chat memory, skills, registry/profile state, subagent state or gateway session as campus authority |
 
 A framework checkpoint is adapter state keyed by `platform_run_id`. Conflict with platform state fails closed.
 
-### 4.1 Mandatory reference protocol
+### 5.1 Mandatory reference protocol
 
 Before adding or materially changing a runtime capability:
 
@@ -91,19 +119,20 @@ Before adding or materially changing a runtime capability:
 
 The comparison is a design gate, not a mandate to implement every feature. A simpler owned mechanism wins when it preserves the invariant with less total maintained semantic surface.
 
-### 4.2 Dated official-source baseline
+### 5.2 Dated official-source baseline
 
-The reference matrix above was revalidated on `2026-07-23` against:
+The reference matrix above was revalidated on `2026-07-24` against:
 
 - [Rig official repository/docs](https://github.com/0xPlaygrounds/rig) and its provider/test guidance;
-- [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence) and [interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts);
-- [Pi Agent core](https://github.com/earendil-works/pi/tree/main/packages/agent) and [coding-agent harness](https://github.com/earendil-works/pi/tree/main/packages/coding-agent);
+- [Claude Code agent loop](https://code.claude.com/docs/en/how-claude-code-works), [context window](https://code.claude.com/docs/en/context-window), [subagents](https://code.claude.com/docs/en/sub-agents), [agent teams](https://code.claude.com/docs/en/agent-teams) and [dynamic workflows](https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code);
+- [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence), [interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts) and [Deep Agents context engineering](https://docs.langchain.com/oss/python/deepagents/context-engineering);
+- [Pi Agent core](https://github.com/badlogic/pi-mono/tree/main/packages/agent) and [coding-agent harness/compaction](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent);
 - [goose extensions](https://goose-docs.ai/docs/getting-started/using-extensions), [permission modes](https://goose-docs.ai/docs/guides/managing-tools/goose-permissions) and [tool permissions](https://goose-docs.ai/docs/guides/managing-tools/tool-permissions);
-- [Hermes Agent architecture](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture), [Tools Runtime](https://hermes-agent.nousresearch.com/docs/developer-guide/tools-runtime), [plugins](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins), [profiles](https://hermes-agent.nousresearch.com/docs/user-guide/profiles), [skills](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills) and [memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory).
+- [Hermes Agent architecture](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture), [context compression/caching](https://hermes-agent.nousresearch.com/docs/developer-guide/context-compression-and-caching), [Tools Runtime](https://hermes-agent.nousresearch.com/docs/developer-guide/tools-runtime), [plugins](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins), [profiles](https://hermes-agent.nousresearch.com/docs/user-guide/profiles), [skills](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills) and [memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory).
 
 These links are evidence pointers, not frozen compatibility claims. Revalidate them before each adoption decision.
 
-## 5. Model provider profiles
+## 6. Model provider profiles
 
 The MVP preserves two explicit execution modes:
 
@@ -123,7 +152,8 @@ A provider profile is typed state, not arbitrary request metadata. It contains a
 - execution mode;
 - provider kind, normalized base URL and model identity;
 - secret reference, never literal key material;
-- capability snapshot: streaming, structured output/tool support and context limits;
+- capability snapshot: streaming, structured output/tool support and exact context limit;
+- compatible local tokenizer/estimator identity, version and validation class;
 - validation status, observed time and adapter version.
 
 Rules:
@@ -134,7 +164,7 @@ Rules:
 4. A profile/model/capability change invalidates any run/tool assumption that depended on the old snapshot.
 5. Provider adapters do not own run state, grants, budget reset or audit policy.
 
-## 6. MCP component and binding lifecycle
+## 7. MCP component and binding lifecycle
 
 `McpServerComponent` is catalog metadata. An `McpBinding` is runtime authority created for an exact installation/component/execution context. Listing or installing a package does not itself authorize any discovered tool.
 
@@ -175,7 +205,7 @@ Normative rules:
 9. Scheduled execution rejects interactive-only or changed grants.
 10. Audit records the resolved execution identity and receipt without secret payloads.
 
-## 7. Hosted MCP/runtime boundary
+## 8. Hosted MCP/runtime boundary
 
 Hosted execution is a conditional feasibility lane, not a prerequisite for the core three-Plugin demo. Catalog publication does not grant `SharedSafe`, warm-pool or arbitrary container execution.
 
@@ -194,17 +224,18 @@ Any hosted runtime that enters scope MUST satisfy:
 
 The public API has no orchestrator administration capability. A dedicated real-host spike must produce a GO/NO-GO decision before `demo-hosted` becomes committed scope. A NO-GO preserves case IDs as deferred; it does not weaken the core demo.
 
-## 8. Shared provider/tool safety
+## 9. Shared provider/tool safety
 
 - Provider URL, credentials and model identity are typed profile state; secrets use references and are redacted from normal evidence.
 - Unknown tool/schema or changed capability requires reapproval.
 - Tool output is bounded and treated as untrusted data, not higher-priority instruction.
 - No silent provider, model, tool, binding, runtime or same-name endpoint fallback.
 - Prompt/tool payload telemetry is off by default.
+- Every model request passes the pinned context-budget preflight; no profile/estimator means no call.
 - Public API code does not receive broad process/runtime administration capability.
 - Approval/policy/audit failure blocks the effect; it is not downgraded to a warning.
 
-## 9. Framework adoption gate
+## 10. Framework adoption gate
 
 Before adopting a runtime framework beyond a bounded adapter spike, verify:
 
@@ -218,10 +249,11 @@ Before adopting a runtime framework beyond a bounded adapter spike, verify:
 - no default content telemetry;
 - upgrade without domain/API schema changes;
 - platform-owned crash/resume semantics.
+- complete-request token measurement, bounded compaction and canonical-history preservation.
 
 If these cannot remain inside the adapter, retain the same domain contracts and implement a narrower provider loop. Do not fork a framework to make it the platform ontology.
 
-## 10. Current state and verification
+## 11. Current state and verification
 
 Implemented now:
 
@@ -233,6 +265,8 @@ Implemented now:
 
 This is an R0 domain kernel, not a production Agent run. No durable journal, model provider profile, MCP binding, hosted runtime, external tool execution or HTTP/SSE run surface is implemented. The Course Planning CLI still calls deterministic Rust domain code directly.
 
+The accepted finite harness, TaskGraph, clarification/review supervisor and context-budget/compaction contracts are H0 target architecture only; no production harness, tokenizer, compactor, subagent supervisor or plan panel exists yet.
+
 Active implemented proof:
 
 - `AGENT-001`: only legal, evidenced transitions replay;
@@ -240,6 +274,7 @@ Active implemented proof:
 
 Active planned proof:
 
+- `HARNESS-*`: finite phase/graph/review/context/supervision invariants;
 - `RUNTIME-001`: stream/non-stream final-state convergence;
 - `RUNTIME-002`: restart/resume without duplicate receipts/effects.
 

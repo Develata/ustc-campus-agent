@@ -2,13 +2,13 @@
 
 - `Status`: Accepted
 - `Date`: `2026-07-22`
-- `Amended`: `2026-07-23`
+- `Amended`: `2026-07-24`
 
 ## Decision
 
-Keep the Rust platform authority core. Treat Rig, LangGraph, Pi Agent, goose and Hermes Agent as mandatory capability-level design references whenever their relevant runtime surface is being designed. They remain references, benchmarks or bounded adapters rather than canonical platform authority.
+Keep the Rust platform authority core. Treat Rig, Claude Code, LangGraph/Deep Agents, Pi Agent, goose and Hermes Agent as mandatory capability-level design references whenever their relevant runtime surface is being designed. They remain references, benchmarks or bounded adapters rather than canonical platform authority.
 
-Reference does not mean combining five frameworks. For each new runtime capability, the design must inspect current official documentation/source, identify the exact invariant or mechanism worth borrowing, record what is deliberately rejected, and map the accepted pattern into platform-owned types and acceptance evidence.
+Reference does not mean combining all named frameworks. For each new runtime capability, the design must inspect current official documentation/source, identify the exact invariant or mechanism worth borrowing, record what is deliberately rejected, and map the accepted pattern into platform-owned types and acceptance evidence.
 
 ## Consequences
 

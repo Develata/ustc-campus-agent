@@ -4,14 +4,16 @@
 
 - `Status`: R0 kernel contract implemented; durable orchestration and external adapters planned
 - `Version`: `agent-run/v0`
-- `Last Review`: `2026-07-23`
+- `Last Review`: `2026-07-24`
 - `Owning Plan`: [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md)
 - `Acceptance`: active `AGENT-001`, `AGENT-002`; planned `RUNTIME-*` and remaining `AGENT-*`
 - `Primary Code`: `crates/agent-runtime/`
 
 ## 1. Scope
 
-The Agent runtime kernel owns immutable run identity, legal state transitions, event ordering, effect intent/receipt identity, budget accounting and deterministic replay. It is framework-neutral and contains no provider SDK, MCP transport, database, HTTP server or user interface.
+The Agent runtime kernel owns immutable identity, legal state transitions, event ordering, effect intent/receipt identity, budget accounting and deterministic replay for one bounded node execution. It is framework-neutral and contains no provider SDK, MCP transport, database, HTTP server or user interface.
+
+One `AgentRun` is not a conversation session or complete user-task orchestrator. The planned [`HarnessRun`](agent-harness.md) owns clarification, `TaskGraph`, node supervision, review/remediation, context projection and final reporting above one or more `AgentRun`s.
 
 The kernel does not decide that a package is installed or that a capability is granted. The implemented pure [`invocation-resolution/v0`](invocation-resolution.md) resolver supplies an already pinned in-memory installation/component/grant/schema projection; the kernel records and preserves those identities without widening them. Durable snapshot loading and application composition remain planned.
 
@@ -167,4 +169,5 @@ Still planned:
 - durable installation/grant resolver;
 - external tool execution and crash recovery;
 - HTTP/SSE routes;
+- finite HarnessRun/TaskGraph and context-budget preflight;
 - hosted runtime.
