@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"arguments-golden-v0.json","cases":["golden-bytes-digest","permutation-equality","duplicate-key","invalid-name","depth-limit","node-limit","member-limit","array-limit","string-limit","byte-limit","i64-min-max-overflow","negative-zero","subnormal-non-finite","integer-number-distinction"]}

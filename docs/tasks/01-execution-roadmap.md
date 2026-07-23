@@ -31,6 +31,7 @@ The Course Planning spike was completed out of order. It remains reusable eviden
 - exactly three default first-party identities and typed manifest skeletons;
 - Course Planning bounded spike: strict synthetic fixture, deterministic planner, CLI smoke, provenance and fail-closed tests;
 - R0 framework-neutral Agent runtime kernel: immutable run spec, legal transitions, replay, effect identity/order and budget accounting;
+- P0a pure typed invocation resolver: canonical schemas/arguments, exact authority projection, frozen dispatch and bounded `RunSpec` proof;
 - plan/feature/contract/acceptance documentation layering.
 
 ## R0 — Platform-owned Agent runtime kernel

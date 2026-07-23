@@ -10,8 +10,11 @@ homepage.workspace = true
 
 [dependencies]
 serde.workspace = true
+semver.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
+hex = "0.4.3"
 serde_json.workspace = true
 
 [lib]

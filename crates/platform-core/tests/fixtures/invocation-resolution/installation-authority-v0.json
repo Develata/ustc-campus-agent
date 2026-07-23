@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"installation-authority-v0.json","cases":["installation-missing","installation-disabled","installation-revoked","installation-revision-mismatch","catalog-revoked","emergency-blocked","authority-conflict"]}

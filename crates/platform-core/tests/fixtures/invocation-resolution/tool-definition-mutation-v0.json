@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"tool-definition-mutation-v0.json","cases":["name-mutation","description-mutation","schema-mutation","visible-name-collision"]}

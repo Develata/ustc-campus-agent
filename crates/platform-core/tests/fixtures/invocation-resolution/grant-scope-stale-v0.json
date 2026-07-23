@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"grant-scope-stale-v0.json","cases":["grant-stale","grant-expired","grant-revoked","grant-version-mismatch","grant-scope-mismatch"]}

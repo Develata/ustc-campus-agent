@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"call-precedence-v0.json","cases":["every-call-error","tool-before-deny","dispatch-before-deny","dispatch-before-arguments"]}

@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"projection-precedence-v0.json","cases":["every-projection-error","canonical-target-order","dual-fault-primary-order"]}

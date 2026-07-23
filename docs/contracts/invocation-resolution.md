@@ -2,13 +2,13 @@
 
 ## Metadata
 
-- `Status`: P0a planned contract; no resolver implementation or runnable package fixture exists yet
+- `Status`: P0a deterministic resolver and synthetic proof fixtures implemented; no durable or real application consumer exists yet
 - `Version`: `invocation-resolution/v0`
 - `Last Review`: `2026-07-23`
 - `Owning Plan`: [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for state ownership, [`agent-runtime.md`](agent-runtime.md) for run/effect state, and [`permissions.md`](permissions.md) for capability classes
-- `Acceptance`: planned P0a `MARKET-005`, `MARKET-006`; supporting evidence only for future cross-boundary `MARKET-007` and later durable `MARKET-002`, `MARKET-003`; downstream implemented `AGENT-002`
-- `Primary Code`: planned `crates/platform-core/src/invocation.rs`; bounded proof consumer planned in `crates/agent-runtime/tests/resolved_run_spec.rs`; no real application consumer exists yet
+- `Acceptance`: implemented P0a `MARKET-005`, `MARKET-006`; supporting evidence only for future cross-boundary `MARKET-007` and later durable `MARKET-002`, `MARKET-003`; downstream implemented `AGENT-002`
+- `Primary Code`: `crates/platform-core/src/invocation.rs`; bounded proof consumer in `crates/agent-runtime/tests/resolved_run_spec.rs`; no real application consumer exists yet
 
 ## 1. Scope and authority
 
@@ -292,4 +292,4 @@ P0a does not include:
 - autonomous multi-agent orchestration;
 - changes to the three current first-party manifest component/status claims.
 
-Current repository status remains: manifests and R0 runtime kernel are implemented; invocation resolver, typed operational snapshots, positive runnable package fixture and all `MARKET-002/003/005/006/007` bindings are planned. P0a may implement `MARKET-005/006`; `MARKET-007` requires the later real application composition seam described above. Passing documentation checks is not implementation evidence.
+Current repository status: manifests, R0 runtime kernel and the pure P0a invocation resolver with typed in-memory snapshots and synthetic fixtures are implemented. `MARKET-005/006` are bound to executable Rust tests. Durable `MARKET-002/003` and cross-boundary `MARKET-007` remain planned; `MARKET-007` still requires the later real application composition seam described above. No current first-party manifest is made runnable by these synthetic fixtures.

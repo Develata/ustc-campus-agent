@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"valid-synthetic-v0.json","cases":["resolved-identities","dispatch-digest","projection-digests","turn-bound-snapshot","run-spec-mapping"]}

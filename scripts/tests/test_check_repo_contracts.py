@@ -286,5 +286,55 @@ class DocsTopologyContractTests(unittest.TestCase):
         self.assertTrue(any("active case missing from long-horizon catalog" in issue for issue in issues))
 
 
+class InvocationFixtureContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        source = REPO_ROOT / "crates/platform-core/tests/fixtures/invocation-resolution"
+        shutil.copytree(
+            source,
+            self.root / "crates/platform-core/tests/fixtures/invocation-resolution",
+        )
+        acceptance = self.root / "docs/acceptance"
+        acceptance.mkdir(parents=True)
+        shutil.copy2(REPO_ROOT / "docs/acceptance/matrix.tsv", acceptance / "matrix.tsv")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def check_invocation(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_invocation_fixtures(issues)
+        return issues
+
+    def test_exact_invocation_fixture_set_and_bindings_pass(self) -> None:
+        self.assertEqual(self.check_invocation(), [])
+
+    def test_missing_invocation_fixture_fails_closed(self) -> None:
+        path = (
+            self.root
+            / "crates/platform-core/tests/fixtures/invocation-resolution/schema-golden-v0.json"
+        )
+        path.unlink()
+        self.assertTrue(
+            any("invocation-resolution fixture set drift" in issue for issue in self.check_invocation())
+        )
+
+    def test_non_synthetic_invocation_fixture_fails_closed(self) -> None:
+        path = (
+            self.root
+            / "crates/platform-core/tests/fixtures/invocation-resolution/valid-synthetic-v0.json"
+        )
+        fixture = json.loads(path.read_text(encoding="utf-8"))
+        fixture["synthetic"] = False
+        path.write_text(json.dumps(fixture), encoding="utf-8")
+        self.assertTrue(
+            any("must remain exactly synthetic" in issue for issue in self.check_invocation())
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

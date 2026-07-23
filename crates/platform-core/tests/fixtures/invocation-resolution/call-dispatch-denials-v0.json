@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"call-dispatch-denials-v0.json","cases":["tool-not-projected","dispatch-identity-mismatch","no-fallback"]}

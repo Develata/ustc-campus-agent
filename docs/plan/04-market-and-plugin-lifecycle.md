@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Layer`: Product authority
-- `Status`: Schema/identity baseline implemented; P0a resolver contract and runtime lifecycle planned
+- `Status`: Schema/identity baseline and pure P0a resolver implemented; durable runtime lifecycle planned
 - `Version`: `0.3.2`
 - `Last Review`: `2026-07-23`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
@@ -144,10 +144,10 @@ Implemented:
 - exact first-party IDs, versions, statuses, capabilities and install policies;
 - safe component path validation and Rust/catalog identity cross-check;
 - allowance for safe user-installed non-first-party packages.
+- pure typed invocation resolution, immutable per-turn projection and synthetic `RunSpec` proof (`MARKET-005/006`).
 
 Planned:
 
-- deterministic typed invocation resolver and immutable tool-projection snapshot (P0a);
 - read-only catalog browse/detail projection (P0b);
 - durable installations/grants;
 - enable/disable resolver;

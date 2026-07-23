@@ -59,4 +59,4 @@ The three default first-party packages appear as independent products and can be
 
 ## Verification
 
-Current automated evidence validates the exact three manifests and Rust identities. The deterministic resolver, installation, disable/re-enable and browser journeys remain planned; their contracts do not make any current package runnable.
+Current automated evidence validates the exact three manifests and Rust identities plus the pure deterministic invocation resolver over synthetic in-memory authority snapshots. Durable installation, disable/re-enable and browser journeys remain planned; the resolver fixtures do not make any current package runnable.

@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"tool-identity-mismatch-v0.json","cases":["tool-missing","tool-identity-mismatch"]}

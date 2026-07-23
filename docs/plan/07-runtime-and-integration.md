@@ -10,7 +10,7 @@
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
 - `Counterpart Features`: future bounded Agent journey; current Market and product features
 - `Counterpart Contracts`: `docs/contracts/agent-runtime.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: active `AGENT-001`, `AGENT-002`; planned `MARKET-005`–`MARKET-007` with P0a limited to `MARKET-005/006`, plus planned `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
+- `Counterpart Acceptance`: active `AGENT-001`, `AGENT-002` and implemented P0a `MARKET-005/006`; planned `MARKET-007` and `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
 - `Primary Code Areas`: `crates/agent-runtime/`, future orchestration modules and `crates/adapters/`
 
 ## 1. Principle

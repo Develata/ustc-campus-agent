@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"post-projection-revoke-v0.json","cases":["emergency-narrows","catalog-revoke-narrows","installation-narrows","grant-narrows","later-enable-cannot-widen"]}

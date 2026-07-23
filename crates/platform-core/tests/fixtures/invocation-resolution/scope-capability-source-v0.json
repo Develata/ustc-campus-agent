@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"scope-capability-source-v0.json","cases":["tenant-user-mismatch","capability-unknown","capability-not-declared","capability-manifest-mismatch","capability-not-granted","source-policy-missing","source-policy-mismatch"]}

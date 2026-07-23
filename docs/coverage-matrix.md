@@ -16,7 +16,7 @@ This matrix keeps the four live documentation layers aligned:
 | `04-market-and-plugin-lifecycle` | `00-market-browse-install` | `invocation-resolution.md`, `plugin-package.md`, `permissions.md`, Market JSON schema/registry/manifests | `MARKET-*`, `AGENT-002`, `FP-006`, `FP-015`, `FP-007` |
 | `05-campus-trust-kernel` | all three first-party feature docs | `source-import.md`, `data-models.md` | `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
 | `06-first-party-plugins` | three first-party feature docs | package manifests, `data-models.md`, `source-import.md` | `FP-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
-| `07-runtime-and-integration` | R0 owned kernel; future bounded Agent journey | `agent-runtime.md`, `invocation-resolution.md`, `interfaces.md`, `permissions.md` | `AGENT-001`, `AGENT-002`, planned `MARKET-005`–`MARKET-007`, `RUNTIME-*` |
+| `07-runtime-and-integration` | R0 owned kernel; P0a bounded resolver proof; future Agent journey | `agent-runtime.md`, `invocation-resolution.md`, `interfaces.md`, `permissions.md` | `AGENT-001`, `AGENT-002`, implemented `MARKET-005/006`, planned `MARKET-007`, `RUNTIME-*` |
 | `08-security-and-delivery` | publication and permission failure states across features | `permissions.md`, `source-import.md` | `PUBLIC-*`, release-gated security rows |
 
 ## Non-matrix documents

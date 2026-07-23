@@ -17,6 +17,21 @@ VALID_GATES = {"pr", "core-demo", "release", "public"}
 VALID_ACCEPTANCE_STATUSES = {"planned", "implemented"}
 STABLE_CATALOG_PREFIXES = {"AGENT", "FP", "PROC", "SRC"}
 MIN_LONG_HORIZON_CASES = 200
+INVOCATION_FIXTURES = {
+    "arguments-golden-v0.json",
+    "call-dispatch-denials-v0.json",
+    "call-precedence-v0.json",
+    "grant-scope-stale-v0.json",
+    "identity-mismatch-v0.json",
+    "installation-authority-v0.json",
+    "post-projection-revoke-v0.json",
+    "projection-precedence-v0.json",
+    "schema-golden-v0.json",
+    "scope-capability-source-v0.json",
+    "tool-definition-mutation-v0.json",
+    "tool-identity-mismatch-v0.json",
+    "valid-synthetic-v0.json",
+}
 EXPECTED_DOC_DIRECTORIES = {
     "acceptance",
     "adr",
@@ -503,6 +518,39 @@ def check_course_fixture(issues: list[str]) -> None:
     walk(fixture)
 
 
+def check_invocation_fixtures(issues: list[str]) -> None:
+    directory = ROOT / "crates/platform-core/tests/fixtures/invocation-resolution"
+    actual = {path.name for path in directory.glob("*.json")} if directory.is_dir() else set()
+    if actual != INVOCATION_FIXTURES:
+        fail(
+            "invocation-resolution fixture set drift: "
+            f"expected={sorted(INVOCATION_FIXTURES)} actual={sorted(actual)}",
+            issues,
+        )
+        return
+    for name in sorted(INVOCATION_FIXTURES):
+        fixture = load_json(
+            f"crates/platform-core/tests/fixtures/invocation-resolution/{name}", issues
+        )
+        if not isinstance(fixture, dict):
+            continue
+        if fixture.get("schema_version") != "invocation-resolution-fixture/v0":
+            fail(f"{name}: invocation fixture schema drift", issues)
+        if fixture.get("synthetic") is not True or fixture.get("fixture") != name:
+            fail(f"{name}: invocation fixture must remain exactly synthetic", issues)
+        cases = fixture.get("cases")
+        if not isinstance(cases, list) or not cases or not all(
+            isinstance(case, str) and case for case in cases
+        ):
+            fail(f"{name}: invocation fixture cases must be a non-empty string list", issues)
+
+    matrix = (ROOT / "docs/acceptance/matrix.tsv").read_text(encoding="utf-8")
+    for case_id in ("MARKET-005", "MARKET-006"):
+        rows = [row for row in matrix.splitlines() if row.startswith(f"{case_id}\t")]
+        if len(rows) != 1 or "\timplemented\t" not in rows[0]:
+            fail(f"{case_id}: implemented invocation binding/status drift", issues)
+
+
 def check_acceptance_matrix(issues: list[str]) -> None:
     path = ROOT / "docs/acceptance/matrix.tsv"
     rows = path.read_text(encoding="utf-8").splitlines()
@@ -575,6 +623,7 @@ def main() -> int:
     check_no_obvious_secrets(issues)
     check_market(issues)
     check_course_fixture(issues)
+    check_invocation_fixtures(issues)
     check_acceptance_matrix(issues)
     check_acceptance_catalog(issues)
     if issues:

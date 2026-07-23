@@ -1,0 +1,1 @@
+{"schema_version":"invocation-resolution-fixture/v0","synthetic":true,"fixture":"identity-mismatch-v0.json","cases":["package-missing","package-not-runnable","package-version-mismatch","package-digest-mismatch","component-missing","component-identity-mismatch","execution-unknown","execution-mismatch"]}
