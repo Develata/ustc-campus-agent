@@ -69,7 +69,7 @@ P0 is ordered `P0a → P0b → P0c`. Invocation authority comes first so catalog
 
 **Deliverables**
 
-- pure `platform-core` `InvocationResolver` types and `InvocationResolutionError` taxonomy;
+- pure `platform-core` schema/argument constructors, `InvocationResolver`, `ProjectionResolutionError` and `InvocationAuthorizationError` types;
 - exact resolution of tenant/user, installation, package version/digest, component/execution/tool identity, capability/grant/scope, source policy and bounded input-schema digest;
 - immutable, deterministically ordered `ToolProjectionSnapshot` whose digest binds the complete provider-visible tool definition and exact dispatch identity;
 - pure call-authorization semantics and deny-side recheck that support, but do not yet prove, later placement before effect intent or outbound I/O;

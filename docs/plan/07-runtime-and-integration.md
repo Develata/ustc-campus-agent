@@ -4,7 +4,7 @@
 
 - `Layer`: Runtime architecture
 - `Status`: R0 platform-owned transition kernel implemented; orchestration, persistence and production adapters planned
-- `Version`: `0.4.2`
+- `Version`: `0.4.3`
 - `Last Review`: `2026-07-23`
 - `Authority Owns`: platform run state, tool-effect ordering, framework/provider adapter boundary
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
@@ -73,7 +73,7 @@ Domain/run/authorization code MUST NOT import framework-specific state as author
 | LangGraph | checkpoint/store separation, interrupt/resume, observable state and idempotency discipline around resumed work | durable-journal, approval and restart benchmarks | canonical checkpoint, installation, grant or authorization truth |
 | Pi Agent | app-message to LLM-message projection, explicit event lifecycle, tool-preflight barrier, ordered sequential/parallel tool results, steering/follow-up queues and lossless session history behind lossy compaction | model-event projection, turn barriers, queue semantics and future branch/compaction evaluation | TypeScript hot-load, mutable session state or package extensions as platform authority |
 | goose | MCP extension lifecycle, session-scoped extension activation, diagnostics and per-tool allow/ask/deny controls | `McpBinding` lifecycle, capability-scoped tool projection and permission UX | autonomous-by-default execution or direct extension authority in the central plane |
-| Hermes Agent | platform-agnostic core with entry-point adapters, central registry plus toolsets/availability gates, progressive skills, bounded memory versus session recall, profile isolation and isolated delegation versus durable scheduling | interface adapters, grant-filtered toolsets, layered context, procedural knowledge and execution-class separation | chat memory, skills, registry state, subagent state or gateway session as campus authority |
+| Hermes Agent | platform-agnostic core, central registry plus toolsets/availability gates, explicit plugin-shadowing controls, progressive skills, bounded memory and operational profiles that are not filesystem sandboxes | interface adapters, grant-filtered toolsets, layered context and procedural knowledge | chat memory, skills, registry/profile state, subagent state or gateway session as campus authority |
 
 A framework checkpoint is adapter state keyed by `platform_run_id`. Conflict with platform state fails closed.
 
@@ -96,10 +96,10 @@ The comparison is a design gate, not a mandate to implement every feature. A sim
 The reference matrix above was revalidated on `2026-07-23` against:
 
 - [Rig official repository/docs](https://github.com/0xPlaygrounds/rig) and its provider/test guidance;
-- [LangGraph durable execution](https://docs.langchain.com/oss/python/langgraph/durable-execution) and [interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts);
+- [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence) and [interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts);
 - [Pi Agent core](https://github.com/earendil-works/pi/tree/main/packages/agent) and [coding-agent harness](https://github.com/earendil-works/pi/tree/main/packages/coding-agent);
 - [goose extensions](https://goose-docs.ai/docs/getting-started/using-extensions), [permission modes](https://goose-docs.ai/docs/guides/managing-tools/goose-permissions) and [tool permissions](https://goose-docs.ai/docs/guides/managing-tools/tool-permissions);
-- [Hermes Agent architecture](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture), [tools](https://hermes-agent.nousresearch.com/docs/user-guide/features/tools), [skills](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills) and [memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory).
+- [Hermes Agent architecture](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture), [Tools Runtime](https://hermes-agent.nousresearch.com/docs/developer-guide/tools-runtime), [plugins](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins), [profiles](https://hermes-agent.nousresearch.com/docs/user-guide/profiles), [skills](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills) and [memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory).
 
 These links are evidence pointers, not frozen compatibility claims. Revalidate them before each adoption decision.
 

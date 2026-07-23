@@ -190,8 +190,41 @@ class DocsTopologyContractTests(unittest.TestCase):
         checker.check_docs_topology(issues)
         return issues
 
+    def check_key_files(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_key_files_present_and_nonempty(issues)
+        return issues
+
     def test_current_docs_topology_passes(self) -> None:
         self.assertEqual(self.check_docs_topology(), [])
+
+    def test_invocation_contract_is_a_registered_nonempty_key_file(self) -> None:
+        issues = self.check_key_files()
+        self.assertFalse(any("invocation-resolution.md" in issue for issue in issues))
+
+    def test_missing_invocation_contract_fails_closed(self) -> None:
+        path = self.root / "docs/contracts/invocation-resolution.md"
+        path.unlink()
+        self.assertIn(
+            "key file missing: docs/contracts/invocation-resolution.md",
+            self.check_key_files(),
+        )
+
+    def test_empty_invocation_contract_fails_closed(self) -> None:
+        path = self.root / "docs/contracts/invocation-resolution.md"
+        path.write_text(" \n", encoding="utf-8")
+        self.assertIn(
+            "key file empty: docs/contracts/invocation-resolution.md",
+            self.check_key_files(),
+        )
+
+    def test_unregistered_current_contract_fails_closed(self) -> None:
+        path = self.root / "docs/contracts/example-current.md"
+        path.write_text("# Example current contract\n", encoding="utf-8")
+        self.assertIn(
+            "current contract not registered as key file: docs/contracts/example-current.md",
+            self.check_key_files(),
+        )
 
     def test_retired_operations_directory_is_rejected(self) -> None:
         (self.root / "docs/operations").mkdir()

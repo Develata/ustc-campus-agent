@@ -32,7 +32,7 @@ The implementation MUST use owned validated ID newtypes rather than passing inte
 `ToolProjectionRequest` binds:
 
 - tenant and user identity;
-- run/turn identity supplied by the caller;
+- typed run ID and typed turn ID supplied separately by the caller;
 - an optional activation allow-list that may only narrow the eligible tool set.
 
 Each requested `InvocationTarget` binds:
@@ -49,7 +49,7 @@ Each requested `InvocationTarget` binds:
 - exact component ID, kind, component version/digest and execution identity;
 - stable tool ID, collision-checked model-visible name and exact provider-visible description;
 - capability mapping and capability-manifest digest;
-- one owned `tool-input-schema/v0` value and its claimed lowercase `sha256:<64 hex>` digest;
+- one constructed `ValidatedToolInputSchemaV0` and its claimed lowercase `sha256:<64 hex>` digest;
 - source-policy identity/digest and catalog revoke state.
 
 `PluginInstallationSnapshot` binds:
@@ -61,31 +61,68 @@ Each requested `InvocationTarget` binds:
 
 `CapabilityGrantSnapshot` binds:
 
-- grant snapshot ID/version, tenant/user and installation identity;
+- immutable grant snapshot ID/version, tenant/user and installation identity; any capability, scope, confirmation-policy or state change mints a new version;
 - exact capability ID, bounded object scope and confirmation policy;
 - capability-manifest digest admitted by the grant;
 - active, stale, expired or revoked state.
 
-`InvocationPolicySnapshot` binds the capability-registry classification, execution/source admission decision and any operator emergency block. Unknown classification or absent policy evidence is denial, not a default.
+`InvocationPolicySnapshot` binds an immutable policy snapshot ID/revision, capability-registry classification, execution/source admission decision and any operator emergency block. Unknown classification or absent policy evidence is denial, not a default.
 
-At call time, `ProposedToolCall` binds the provider `tool_call_id`, frozen model-visible tool name and exact argument value/digest. The caller supplies fresh installation, grant, catalog-revoke and emergency-policy snapshots as `CurrentDenyState`; this state may only preserve or deny an entry already present in the projection.
+At call time, `ProposedToolCall` binds the provider `tool_call_id`, frozen model-visible tool name, opaque projection-issued dispatch key, one constructed `CanonicalArgumentValueV0` and its claimed digest. The application adapter derives the visible name and dispatch key from the same frozen per-turn projection entry; it cannot synthesize a name-only dispatch. The caller supplies fresh installation, grant, catalog-revoke and emergency-policy snapshots as `CurrentDenyState`; this state may only preserve or deny an entry already present in the projection.
 
 These inputs are deliberately synthetic/in-memory in P0a. Later repositories may load them, but storage types do not decide the result and must not be accepted as already authorized.
 
-### 2.1 Bounded input-schema dialect
+### 2.1 Schema loader and validated AST boundary
 
-P0a does not accept arbitrary JSON Schema. `tool-input-schema/v0` is an owned typed AST with exactly these forms:
+P0a does not accept arbitrary JSON Schema. A future catalog/provider adapter owns `load_source_schema(source_bytes) -> UnvalidatedToolInputSchemaV0` and MUST preserve duplicate object members while parsing. Unsupported source keywords or source syntax return loader-only `SchemaSourceUnsupported` or `SchemaSourceMalformed` and construct no P0a input; these errors do not belong to resolver acceptance.
 
-- root and nested objects with lexicographically keyed properties, a duplicate-free required-property set and `additional_properties = false`;
-- string, integer, finite number and boolean scalars;
-- homogeneous arrays containing one supported item schema;
-- optional string enums whose values are non-empty, unique and lexicographically ordered.
+P0a owns `ValidatedToolInputSchemaV0::try_from(unvalidated)`. The unvalidated value carries an exact dialect string plus ordered property/required/enum sequences so duplicate declarations remain observable. The constructor accepts only dialect `tool-input-schema/v0`, requires an object root, rejects duplicate or invalid names and validates every structural limit before sorting into the validated AST. Its disjoint errors are `SchemaDialectUnsupported`, `SchemaMalformed` and `SchemaLimitExceeded`.
 
-The schema has maximum depth `8`, maximum total nodes `256`, maximum object properties `64` and maximum string-enum entries `64`. `$ref`, definitions, unions/composition, conditionals, `format`, regex/pattern, coercion, defaults, arbitrary annotations and open/schema-valued additional properties are unsupported. A future catalog/provider adapter may translate a strict external JSON Schema subset into this AST; any unsupported source keyword MUST return a typed `SchemaSourceUnsupported` loader error and construct no authority snapshot.
+The validated AST has exactly six variants and tags:
 
-The canonical schema encoding starts with the UTF-8 domain separator `tool-input-schema/v0\0`. It then recursively emits one fixed `u8` variant tag; counts as `u64` big-endian; UTF-8 strings as `u64` big-endian byte length followed by bytes; object properties and required names in lexicographic order; enum values in lexicographic order; and option presence as `0` or `1`. No map iteration order, source JSON whitespace/key order, numeric text spelling or provider serialization participates. The resolver MUST recompute `input_schema_digest = sha256:<lowercase hex>` from this encoding and compare it with the claimed digest.
+| Tag | Variant | Canonical payload after the tag |
+|---|---|---|
+| `0x01` | object | property count; each property name and child node in name order; required-name count; each required name in name order |
+| `0x02` | string | enum-presence byte `0` or `1`; if `1`, value count and each value in bytewise UTF-8 order |
+| `0x03` | integer | none |
+| `0x04` | finite number | none |
+| `0x05` | boolean | none |
+| `0x06` | homogeneous array | one child item node |
 
-The exact provider-visible definition is `(model_visible_name, description, input_schema_digest)`. Its digest uses domain separator `provider-tool-definition/v0\0` followed by those three UTF-8 values, each encoded as `u64` big-endian byte length plus bytes. Any name, description or schema change therefore changes the provider-tool-definition digest.
+A count is `u64` big-endian. A string is `u64` big-endian byte length followed by its exact UTF-8 bytes; no Unicode normalization is performed. Property names match `^[A-Za-z_][A-Za-z0-9_.-]{0,63}$`. Required names are unique and must name declared properties. A present string enum has `1..=64` unique values, each `1..=256` UTF-8 bytes. The root counts as depth `1`; maximum depth is `8`, maximum total nodes `256`, maximum properties per object `64`, and maximum canonical schema bytes `65_536`. Objects are always closed: `additional_properties = false` is implicit and emits no byte.
+
+The canonical schema byte sequence is the UTF-8 domain separator `tool-input-schema/v0\0` followed by the root node encoding above. The constructor stores these bytes and `input_schema_digest = sha256:<lowercase hex>`. A `CatalogPackageRevision` separately carries the claimed digest; `resolve_projection` MUST compare it with the constructed digest and return `SchemaDigestMismatch` on inequality. Source JSON whitespace/key order, map iteration, numeric text and provider serialization never participate.
+
+The exact provider-visible definition is `(model_visible_name, description, input_schema_digest)`. The model-visible name matches `^[A-Za-z_][A-Za-z0-9_.-]{0,63}$`; description is at most `4_096` UTF-8 bytes. Its canonical bytes are domain separator `provider-tool-definition/v0\0`, then those three values in that order, each encoded as the length-prefixed UTF-8 string above. Any name, description or schema change therefore changes `provider_tool_definition_digest`.
+
+### 2.2 Canonical call arguments
+
+A provider adapter MUST parse raw JSON without losing duplicate object members into `UnvalidatedArgumentValueV0`; JSON object order is not authoritative. `CanonicalArgumentValueV0::try_from(unvalidated)` returns a canonical tree or one constructor-only `ArgumentConstructionError`: `ArgumentDuplicateKey`, `ArgumentInvalidName`, `ArgumentNumberOutOfRange` or `ArgumentLimitExceeded`.
+
+Canonical argument tags and payloads are:
+
+| Tag | Variant | Canonical payload after the tag |
+|---|---|---|
+| `0x00` | null | none; the v0 schema has no null type, so validation later rejects it |
+| `0x01` | boolean | one byte, `0` for false or `1` for true |
+| `0x02` | integer | one signed two's-complement `i64` in 8-byte big-endian order |
+| `0x03` | finite number | one IEEE-754 binary64 bit pattern in 8-byte big-endian order; `-0.0` is normalized to `+0.0` |
+| `0x04` | string | one length-prefixed exact UTF-8 string |
+| `0x05` | array | element count followed by each child in source order |
+| `0x06` | object | member count followed by each name and child in bytewise UTF-8 name order |
+
+A JSON token without decimal point or exponent must fit `i64` and becomes integer; a token with decimal point or exponent is correctly rounded to finite binary64 and becomes number. NaN, infinities and overflow are rejected. Object keys obey the property-name rule above. Maximum depth is `8`, total nodes `256`, members per object `64`, elements per array `256`, one string `4_096` UTF-8 bytes, and complete canonical argument bytes `65_536`.
+
+Canonical argument bytes are domain separator `tool-arguments/v0\0` followed by the root value encoding. The constructor stores `argument_digest = sha256:<lowercase hex>`. `authorize_call` recomputes/compares the claimed digest only after selecting and checking the frozen dispatch entry; mismatch returns `ArgumentDigestMismatch`, while schema incompatibility returns `ArgumentsInvalid`. No coercion occurs: integer and number are distinct, object extras fail because schemas are closed, and enum equality is exact UTF-8 byte equality.
+
+### 2.3 Golden canonical vectors
+
+`schema-golden-v0.json` and `arguments-golden-v0.json` MUST pin the complete canonical byte hex and lowercase SHA-256 values recorded here:
+
+- schema `{count: integer, query: string}`, required `{query}`: `80` bytes, hex `746f6f6c2d696e7075742d736368656d612f7630000100000000000000020000000000000005636f756e7403000000000000000571756572790200000000000000000100000000000000057175657279`, digest `sha256:8a91a2fdad047d1bcfc4ac0392778f7125afce4faf637ed3aac4fd535fd1db2e`;
+- arguments `{count: 2, query: "graph"}`: `76` bytes, hex `746f6f6c2d617267756d656e74732f7630000600000000000000020000000000000005636f756e74020000000000000002000000000000000571756572790400000000000000056772617068`, digest `sha256:8b881ec565f0aac688241061c398f199c8e0683604502f1e7538f09f33350451`.
+
+The fixtures also cover property/input permutations, duplicate names, every limit at and beyond its boundary, `i64::MIN/MAX`, integer overflow, `-0.0`, smallest finite/subnormal numbers, non-finite rejection and integer-versus-number mismatch. The literal vectors above are contract data; tests MUST compare independently constructed bytes and digests against them rather than regenerating expected values through the production encoder.
 
 ## 3. Deterministic outputs
 
@@ -105,25 +142,30 @@ A successful result contains the exact identities needed downstream:
 
 It does not mint a run ID, provider profile, budgets, platform call/effect/idempotency IDs or a grant. Those remain caller/runtime responsibilities.
 
+The opaque dispatch key is canonical and routing-only. Its bytes are domain separator `dispatch-identity/v0\0`, then canonical `package_id`, parsed-and-rendered SemVer `package_version`, `component_id` and `tool_id` in that order, each using the length-prefixed UTF-8 encoding from §2.1. The key is `dispatch:sha256:<lowercase hex>` of those bytes. No delimiter escaping, registration order, model-visible name or adapter handle participates; all remaining authority is checked from the frozen entry rather than inferred from this key.
+
 ### 3.2 `ToolProjectionSnapshot`
 
-A projection contains `tool-projection/v0`, the supplied run/turn identity, a deterministic snapshot ID, an ordered list of resolved entries and one `tool_schema_set_digest`.
+A projection contains `tool-projection/v0`, typed run ID, typed turn ID, deterministic `snapshot_id`, ordered resolved entries, `tool_schema_set_digest` and `projection_authority_set_digest`.
 
 Normative invariants:
 
-1. entries are ordered lexicographically by `(package_id, package_version, component_id, tool_id)`;
-2. the dispatch key binds that full identity; name-only dispatch is forbidden;
-3. every model-visible name is unique inside the projection; a collision is a typed denial, never last-wins or silent renaming;
-4. one snapshot controls both schemas exposed to the model and dispatch keys accepted for that turn;
-5. the schema-set digest input starts with the UTF-8 domain separator `tool-projection/v0\0`; for each ordered entry it appends the dispatch key and provider-tool-definition digest, each as `u64` big-endian byte length followed by UTF-8 bytes; `tool_schema_set_digest` is `sha256:<lowercase hex>` of that byte sequence;
-6. `snapshot_id` is `tool-projection:` followed by the complete `tool_schema_set_digest`; it does not depend on wall clock, random registration order or framework state;
-7. runtime registration changes cannot mutate a created snapshot; a later projection requires a new resolver call;
-8. activation/session state may remove entries but cannot install, grant, re-enable or bypass revoke.
-9. `tool-projection/v0` entries share one exact tenant/user, installation, package version, component and grant snapshot so they map without ambiguity into the singular identity fields of `agent-run/v0`; mixed-authority targets fail with `AuthorityConflict`.
+1. entries are ordered lexicographically by `(package_id, parsed package_version, component_id, tool_id)`;
+2. each opaque dispatch key uses the exact construction in §3.1; name-only dispatch is forbidden;
+3. every model-visible name is unique inside the projection; a collision is `ToolNameCollision`, never last-wins or silent renaming;
+4. one immutable snapshot controls both provider definitions exposed to the model and dispatch keys accepted for exactly one `(run_id, turn_id)`;
+5. `tool_schema_set_digest` hashes domain separator `tool-projection/v0\0`, followed for each ordered entry by dispatch key then provider-tool-definition digest, each length-prefixed as in §2.1;
+6. each `projection_authority_entry_digest` hashes domain separator `projection-authority-entry/v0\0` followed by these canonical strings in order: dispatch key, provider-tool-definition digest, tenant ID, user ID, installation ID, installation revision, package ID, package version, package digest, catalog revision, component ID, component version, component digest, execution identity, tool ID, capability ID, capability-manifest digest, grant snapshot ID, grant version, source-policy ID, source-policy digest, policy snapshot ID, policy revision and input-schema digest;
+7. `projection_authority_set_digest` hashes domain separator `projection-authority-set/v0\0` followed by each ordered entry digest as a length-prefixed string;
+8. `snapshot_id` is `tool-projection:sha256:<lowercase hex>`, where the hash input is domain separator `tool-projection-snapshot/v0\0` followed by run ID, turn ID, `tool_schema_set_digest` and `projection_authority_set_digest`, each length-prefixed as in §2.1;
+9. runtime registration changes cannot mutate a created snapshot; activation/session state may remove candidates before resolution but cannot mutate, widen, install, grant, re-enable or bypass revoke after construction;
+10. entries share one exact tenant/user, installation, package version, component and grant snapshot so they map unambiguously into the singular identity fields of `agent-run/v0`; mixed-authority targets fail with `AuthorityConflict`.
 
-The existing `RunSpec.tool_schema_set_digest` field name is retained for `agent-run/v0` compatibility. Under this contract its normative value is the `tool-projection/v0` digest over exact dispatch keys and complete provider-tool-definition digests; it MUST NOT be interpreted as hashing schema bytes alone.
+All IDs, revisions and digests above come from validated newtypes with one canonical UTF-8 representation; digest newtypes require lowercase `sha256:<64 hex>`. SemVer is encoded from the parsed `semver::Version` display form. An alternate textual spelling that parses to the same canonical value cannot survive the newtype constructor.
 
-For the bounded proof consumer, one successful projection supplies the existing `RunSpec` installation/package/component/grant fields and exact `tool_schema_set_digest`. Reusing it across turns is allowed only while the run continues to pin that same digest; widening requires a new run or a separately approved runtime-contract change.
+The existing `RunSpec.tool_schema_set_digest` field name is retained for `agent-run/v0` compatibility. Its normative value is the tool-definition-set digest above; it MUST NOT be interpreted as hashing input-schema bytes alone.
+
+A fresh `ToolProjectionSnapshot` is mandatory for every turn. Two turns may have the same `tool_schema_set_digest` when the exact provider definitions and dispatch identities are unchanged, but they have different turn-bound `snapshot_id` values and never reuse the same snapshot object. The bounded proof consumer maps the successful projection's singular identities and `tool_schema_set_digest` into `RunSpec`; a later turn whose fresh digest differs from the run-pinned digest fails closed or starts a separately approved new run.
 
 ### 3.3 `AuthorizedInvocation`
 
@@ -139,33 +181,55 @@ Equivalent input snapshots produce equal typed output and the same canonical dig
 
 ### 4.2 Call time
 
-`authorize_call(projection, current_deny_state, proposed_call)` MUST:
+`authorize_call(projection, current_deny_state, proposed_call)` MUST execute in this order:
 
-1. correlate the provider `tool_call_id` without treating it as a platform effect identity;
-2. select exactly one entry by the frozen model-visible name and bound dispatch key;
-3. validate arguments without coercion against the exact bounded `tool-input-schema/v0` AST represented by that entry;
-4. recheck current tenant/scope, installation enable/revoke, grant validity and emergency block; application composition must separately require the runtime-owned budget/phase decision before effect intent;
-5. allow current authority only to preserve or narrow the frozen projection—new installation/grant/enable state cannot widen it;
-6. return an authorized platform request from which the runtime/application mints and persists call/effect/idempotency identity.
+1. validate the call envelope and correlate provider `tool_call_id` without treating it as a platform effect identity;
+2. find exactly one frozen entry by model-visible name; absence returns `ToolNotProjected` before inspecting argument content or current deny-side state;
+3. compare the supplied opaque dispatch key with that entry's key; mismatch returns `DispatchIdentityMismatch` and never searches another entry;
+4. apply current emergency/conflict, tenant/user, catalog revoke, installation and grant deny-side checks in the call-time precedence below;
+5. recompute and compare the canonical argument digest;
+6. validate the canonical arguments without coercion against the selected entry's exact `ValidatedToolInputSchemaV0`;
+7. return an authorized platform request from which runtime/application composition mints and persists call/effect/idempotency identity.
 
-A committed effect intent and receipt remain `agent-runtime`/durable-orchestration concerns. Framework argument parsing or preflight hooks are defense in depth, never authorization.
+Current state may only preserve or narrow the frozen projection. A new installation, grant, enable state, visible name or dispatch key cannot widen it. A committed effect intent and receipt remain `agent-runtime`/durable-orchestration concerns. Framework argument parsing or preflight hooks are defense in depth, never authorization.
 
 ## 5. Fail-closed error taxonomy
 
-`InvocationResolutionError` MUST distinguish the following precedence groups. Targets are checked in canonical projection order and variants inside a group use the left-to-right order shown; when several conditions are invalid, the first group, first target and first variant win so the primary error is deterministic.
+Errors are phase-specific; a variant cannot be returned by a phase that cannot receive the corresponding invalid value.
 
-1. malformed: `InvalidRequest` or `InvalidAuthoritySnapshot`;
-2. global deny/conflict: `EmergencyBlocked` or `AuthorityConflict`;
-3. scope: `TenantOrUserScopeMismatch`;
-4. package/catalog: `PackageMissing`, `PackageNotRunnable`, `PackageVersionMismatch`, `PackageDigestMismatch` or `CatalogRevoked`;
-5. installation: `InstallationMissing`, `InstallationDisabled`, `InstallationRevoked` or `InstallationRevisionMismatch`;
-6. component/execution: `ComponentMissing`, `ComponentIdentityMismatch`, `ExecutionIdentityUnknown` or `ExecutionIdentityMismatch`;
-7. tool identity: `ToolMissing` or `ToolIdentityMismatch`;
-8. capability: `CapabilityUnknown`, `CapabilityNotDeclared`, `CapabilityManifestMismatch` or `CapabilityNotGranted`;
-9. grant: `GrantStale`, `GrantExpired`, `GrantRevoked`, `GrantVersionMismatch` or `GrantScopeMismatch`;
-10. source: `SourcePolicyMissing` or `SourcePolicyMismatch`;
-11. schema/arguments: `SchemaMissing`, `SchemaDialectUnsupported`, `SchemaMalformed`, `SchemaDigestMismatch` or `ArgumentsInvalid`;
-12. projection/dispatch: `ToolNameCollision`, `ToolNotProjected` or `DispatchIdentityMismatch`.
+- Source loading is future adapter work and returns only `SchemaSourceError::{SchemaSourceUnsupported, SchemaSourceMalformed}`; it constructs no P0a schema value and is not evidence for `MARKET-005/006`.
+- Validated-schema construction returns only `SchemaConstructionError::{SchemaDialectUnsupported, SchemaMalformed, SchemaLimitExceeded}`.
+- Canonical-argument construction returns only the `ArgumentConstructionError` variants in §2.2.
+
+`ProjectionResolutionError` is the `resolve_projection` error type. Targets are checked in canonical projection order; when multiple faults exist, the first group, first target and leftmost variant win:
+
+1. `InvalidRequest`, `InvalidAuthoritySnapshot`;
+2. `EmergencyBlocked`, `AuthorityConflict`;
+3. `TenantOrUserScopeMismatch`;
+4. `PackageMissing`, `PackageNotRunnable`, `PackageVersionMismatch`, `PackageDigestMismatch`, `CatalogRevoked`;
+5. `InstallationMissing`, `InstallationDisabled`, `InstallationRevoked`, `InstallationRevisionMismatch`;
+6. `ComponentMissing`, `ComponentIdentityMismatch`, `ExecutionIdentityUnknown`, `ExecutionIdentityMismatch`;
+7. `ToolMissing`, `ToolIdentityMismatch`;
+8. `CapabilityUnknown`, `CapabilityNotDeclared`, `CapabilityManifestMismatch`, `CapabilityNotGranted`;
+9. `GrantStale`, `GrantExpired`, `GrantRevoked`, `GrantVersionMismatch`, `GrantScopeMismatch`;
+10. `SourcePolicyMissing`, `SourcePolicyMismatch`;
+11. `SchemaMissing`, `SchemaDigestMismatch`;
+12. `ToolNameCollision`.
+
+`InvocationAuthorizationError` is the `authorize_call` error type. Its precedence is independent and follows the executable algorithm in §4.2:
+
+1. `InvalidCall`;
+2. `ToolNotProjected`;
+3. `DispatchIdentityMismatch`;
+4. `EmergencyBlocked`, `AuthorityConflict`;
+5. `TenantOrUserScopeMismatch`;
+6. `CatalogRevoked`;
+7. `InstallationMissing`, `InstallationDisabled`, `InstallationRevoked`, `InstallationRevisionMismatch`;
+8. `GrantStale`, `GrantExpired`, `GrantRevoked`, `GrantVersionMismatch`, `GrantScopeMismatch`;
+9. `ArgumentDigestMismatch`;
+10. `ArgumentsInvalid`.
+
+Thus an unknown visible name plus malformed/oversized raw JSON fails in the argument constructor before `authorize_call` exists, while an unknown visible name plus a valid canonical argument carrying a wrong digest returns `ToolNotProjected`. A known name with both a wrong dispatch key and invalid arguments returns `DispatchIdentityMismatch`. Dual-fault fixtures MUST pin these outcomes.
 
 Every error leaves inputs unchanged, returns no partial projection/dispatch handle and makes `RunSpec`/effect-intent construction impossible. Errors do not select a same-name component, older package, broader grant, alternate provider/runtime or previous successful snapshot.
 
@@ -186,20 +250,25 @@ Planned fixture directory: `crates/platform-core/tests/fixtures/invocation-resol
 
 | Fixture | Required proof | Acceptance |
 |---|---|---|
-| `valid-synthetic-v0.json` | exact deterministic output, digest and `RunSpec` mapping | `MARKET-005`, downstream `AGENT-002`; supports later `MARKET-002` |
-| `identity-mismatch-v0.json` | package/component/execution/digest mismatch returns exact error and no run | `MARKET-006` |
+| `schema-golden-v0.json` | exact schema bytes/digest; tag coverage; permutation equality; dialect, duplicate, required-subset, depth/node/property/enum/byte-limit denials | `MARKET-005`, `MARKET-006` |
+| `arguments-golden-v0.json` | exact argument bytes/digest; permutation equality; duplicate, limits, `i64` edges/overflow, `-0.0`, subnormal/non-finite and integer/number distinction | supports future `MARKET-007` |
+| `valid-synthetic-v0.json` | exact resolved identities, dispatch/projection/authority digests, per-turn snapshot identity and `RunSpec` mapping | `MARKET-005`, downstream `AGENT-002`; supports later `MARKET-002` |
+| `identity-mismatch-v0.json` | package missing/runnable/version/digest and component missing/identity/execution mismatches return exact projection error and no run | `MARKET-006` |
 | `tool-identity-mismatch-v0.json` | missing or mismatched requested tool ID returns the exact projection-time error | `MARKET-006` |
-| `disabled-revoked-v0.json` | disabled, catalog-revoked and emergency-blocked states deny | `MARKET-006`; supports later `MARKET-003` |
-| `grant-scope-stale-v0.json` | missing/stale/revoked/version/scope-mismatched grants deny | `MARKET-006`; supports future `MARKET-007` |
-| `tool-definition-mutation-v0.json` | name, description or schema mutation changes provider-definition and projection digests; visible-name collision never falls back | `MARKET-005`, `MARKET-006` |
-| `schema-bounded-v0.json` | supported AST validates deterministically; wrong dialect, malformed bounds/sets/depth, digest mismatch and invalid arguments deny exactly | `MARKET-005`, `MARKET-006`; supports future `MARKET-007` |
-| `post-projection-revoke-v0.json` | current deny state narrows a frozen projection; later grant cannot widen it | supports future `MARKET-007` and later `MARKET-003` |
+| `scope-capability-source-v0.json` | tenant/user mismatch; capability unknown/not-declared/manifest/not-granted; source-policy missing/mismatch | `MARKET-006` |
+| `installation-authority-v0.json` | installation missing/disabled/revoked/revision mismatch plus catalog revoke, emergency block and mixed-authority conflict | `MARKET-006`; supports later `MARKET-003` |
+| `grant-scope-stale-v0.json` | stale/expired/revoked/version/scope-mismatched grant denials | `MARKET-006`; supports future `MARKET-007` |
+| `tool-definition-mutation-v0.json` | name, description or schema mutation changes provider-definition/projection digests; visible-name collision fails | `MARKET-005`, `MARKET-006` |
+| `call-dispatch-denials-v0.json` | unknown visible name returns `ToolNotProjected`; wrong opaque key returns `DispatchIdentityMismatch`; neither searches a same-name alternative | `MARKET-005`; supports future `MARKET-007` |
+| `projection-precedence-v0.json` | one case per projection error variant plus canonical-target and dual-fault primary-error ordering | `MARKET-006` |
+| `call-precedence-v0.json` | `ToolNotProjected` and dispatch mismatch precede deny-state and argument faults; every call-time variant has an exact case | supports future `MARKET-007` |
+| `post-projection-revoke-v0.json` | current deny state narrows a frozen projection; later grant/enable state cannot widen it | supports future `MARKET-007` and later `MARKET-003` |
 
-Fixture JSON is test input, not a catalog schema or durable-state format.
+Fixture JSON is test input, not a catalog schema, source JSON Schema or durable-state format. Every negative case names the constructor/resolver/authorization API, exact error variant and expected primary-error precedence; a fixture file containing several cases is not evidence unless every listed case executes.
 
 ## 7. Framework evidence mapping
 
-Review date: `2026-07-23`. Facts and source links are preserved in [`plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md); the table below records only P0a's owned adaptation.
+Review date: `2026-07-23`. Claim-level links are retained in the table below; the broader dated baseline is preserved in [`plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md).
 
 | Reference | Borrow | Adapt into P0a | Reject |
 |---|---|---|---|
@@ -207,7 +276,7 @@ Review date: `2026-07-23`. Facts and source links are preserved in [`plan/07-run
 | [LangGraph interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts) and [persistence](https://docs.langchain.com/oss/python/langgraph/persistence) | correlation IDs; checkpoint/store distinction; explicit resume | framework thread/checkpoint is adapter state keyed by `platform_run_id`; approval maps to platform effect intent/receipt | checkpoint/store as grant, receipt, budget, audit or replay truth; effects before a restartable interrupt |
 | [Pi Agent](https://github.com/earendil-works/pi/tree/main/packages/agent) | validated preflight, call-ID lifecycle and deterministic result projection | preflight consumes a platform decision and frozen projection | mutable/hot-loaded tools, project trust or package config as authorization |
 | [goose permissions](https://goose-docs.ai/docs/guides/managing-tools/goose-permissions) and [extensions](https://goose-docs.ai/docs/getting-started/using-extensions) | durable install/default versus session activation; allow/ask/deny UX | map labels to typed capability/grant/confirmation policy; activation only narrows | autonomous default, LLM risk classification or auto-enable that widens authority |
-| [Hermes Agent tools runtime](https://hermes-agent.nousresearch.com/docs/developer-guide/tools-runtime) and [architecture](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture) | central schema projection, toolset filtering and fail-safe availability | registry becomes a read-only projection with namespaced identity and schema digest | last-wins names; registry/plugin/profile/session approval as campus authority; profile as tenant sandbox |
+| [Hermes Agent tools runtime](https://hermes-agent.nousresearch.com/docs/developer-guide/tools-runtime), [plugins](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins), [profiles](https://hermes-agent.nousresearch.com/docs/user-guide/profiles) and [architecture](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture) | central schema projection, toolset filtering and fail-safe availability; core registry docs describe later-wins while plugin registration rejects accidental shadowing unless explicit override | registry becomes a read-only projection with namespaced identity and canonical digests | implicit overwrite or explicit plugin override as campus authorization; registry/profile/session approval as campus authority; profile as tenant or filesystem sandbox |
 
 The audit did not pin releases/commits/licenses because no dependency or code adoption is proposed. Any later adoption must repeat the six-axis gate with exact source identity.
 

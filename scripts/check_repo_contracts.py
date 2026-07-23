@@ -79,6 +79,7 @@ KEY_FILES = [
     "docs/contracts/agent-runtime.md",
     "docs/contracts/data-models.md",
     "docs/contracts/interfaces.md",
+    "docs/contracts/invocation-resolution.md",
     "docs/contracts/permissions.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",
@@ -103,6 +104,14 @@ def check_key_files_present_and_nonempty(issues: list[str]) -> None:
             continue
         if not path.read_text(encoding="utf-8").strip():
             fail(f"key file empty: {rel}", issues)
+
+    registered = set(KEY_FILES)
+    contracts_directory = ROOT / "docs/contracts"
+    if contracts_directory.is_dir():
+        for path in sorted(contracts_directory.glob("*.md")):
+            rel = path.relative_to(ROOT).as_posix()
+            if rel not in registered:
+                fail(f"current contract not registered as key file: {rel}", issues)
 
 
 def check_docs_topology(issues: list[str]) -> None:

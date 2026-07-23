@@ -4,7 +4,7 @@
 
 - `Layer`: Product authority
 - `Status`: Schema/identity baseline implemented; P0a resolver contract and runtime lifecycle planned
-- `Version`: `0.3.1`
+- `Version`: `0.3.2`
 - `Last Review`: `2026-07-23`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
 - `Authority Defers To`: Market JSON schema/registries and package/permission contracts for exact fields
