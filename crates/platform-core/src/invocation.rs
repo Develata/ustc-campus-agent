@@ -1065,6 +1065,10 @@ fn same_catalog_authority_anchor(
     let (Some(left), Some(right)) = (left, right) else {
         return true;
     };
+    // Parity audit for two present package snapshots: catalog revision, package identity/digest,
+    // runnable/revoked status, capability manifest, and source policy are singular. For two
+    // present components, every field except the deliberately per-entry tool definition is
+    // singular; absent package/component/tool evidence remains target-local.
     let components_match = match (left.component.as_ref(), right.component.as_ref()) {
         (Some(left), Some(right)) => {
             left.id == right.id
@@ -1080,6 +1084,8 @@ fn same_catalog_authority_anchor(
         && left.package_id == right.package_id
         && left.package_version == right.package_version
         && left.package_digest == right.package_digest
+        && left.runnable == right.runnable
+        && left.revoked == right.revoked
         && left.capability_manifest_digest == right.capability_manifest_digest
         && left.source_policy == right.source_policy
         && components_match
@@ -1092,6 +1098,8 @@ fn same_installation_authority_anchor(
     let (Some(left), Some(right)) = (left, right) else {
         return true;
     };
+    // Parity audit: id, tenant/user, package identity, component identity, state, and revision
+    // cover every PluginInstallationSnapshot field.
     left.id == right.id
         && left.tenant_id == right.tenant_id
         && left.user_id == right.user_id
@@ -1099,6 +1107,7 @@ fn same_installation_authority_anchor(
         && left.package_version == right.package_version
         && left.package_digest == right.package_digest
         && left.component == right.component
+        && left.state == right.state
         && left.revision == right.revision
 }
 
@@ -1109,6 +1118,8 @@ fn same_grant_authority_anchor(
     let (Some(left), Some(right)) = (left, right) else {
         return true;
     };
+    // Parity audit: snapshot/version, tenant/user/installation, capability/scope/confirmation,
+    // manifest digest, and state cover every CapabilityGrantSnapshot field.
     left.snapshot_id == right.snapshot_id
         && left.version == right.version
         && left.tenant_id == right.tenant_id
@@ -1118,6 +1129,7 @@ fn same_grant_authority_anchor(
         && left.object_scope == right.object_scope
         && left.confirmation_policy == right.confirmation_policy
         && left.capability_manifest_digest == right.capability_manifest_digest
+        && left.state == right.state
 }
 
 fn same_singular_authority_anchor(

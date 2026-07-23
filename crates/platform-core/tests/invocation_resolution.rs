@@ -218,6 +218,32 @@ fn as_second_tool(mut candidate: InvocationAuthorityCandidate) -> InvocationAuth
     candidate
 }
 
+#[derive(Clone, Copy)]
+enum ConcreteAuthorityState {
+    Catalog { runnable: bool, revoked: bool },
+    Installation(InstallationState),
+    Grant(GrantState),
+}
+
+fn set_concrete_authority_state(
+    candidate: &mut InvocationAuthorityCandidate,
+    state: ConcreteAuthorityState,
+) {
+    match state {
+        ConcreteAuthorityState::Catalog { runnable, revoked } => {
+            let catalog = candidate.catalog.as_mut().expect("fixture");
+            catalog.runnable = runnable;
+            catalog.revoked = revoked;
+        }
+        ConcreteAuthorityState::Installation(state) => {
+            candidate.installation.as_mut().expect("fixture").state = state;
+        }
+        ConcreteAuthorityState::Grant(state) => {
+            candidate.grant.as_mut().expect("fixture").state = state;
+        }
+    }
+}
+
 #[test]
 fn valid_projection_is_deterministic_and_turn_bound() {
     let (request, candidate) = valid_authority();
@@ -629,6 +655,163 @@ fn projection_primary_precedence_and_collisions_fail_closed() {
         Err(ProjectionResolutionError::AuthorityConflict)
     );
 
+    use ConcreteAuthorityState::{Catalog, Grant, Installation};
+    use GrantState::{Active, Expired, Revoked as GrantRevoked, Stale};
+    use InstallationState::{Disabled, Enabled, Revoked as InstallationRevoked};
+    let state_cases = [
+        (
+            "mixed catalog runnable",
+            Catalog {
+                runnable: true,
+                revoked: false,
+            },
+            Catalog {
+                runnable: false,
+                revoked: false,
+            },
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "mixed catalog revoked",
+            Catalog {
+                runnable: true,
+                revoked: false,
+            },
+            Catalog {
+                runnable: true,
+                revoked: true,
+            },
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "mixed installation enabled-disabled",
+            Installation(Enabled),
+            Installation(Disabled),
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "mixed installation enabled-revoked",
+            Installation(Enabled),
+            Installation(InstallationRevoked),
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "mixed installation disabled-revoked",
+            Installation(Disabled),
+            Installation(InstallationRevoked),
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "mixed grant active-stale",
+            Grant(Active),
+            Grant(Stale),
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "mixed grant active-expired",
+            Grant(Active),
+            Grant(Expired),
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "mixed grant active-revoked",
+            Grant(Active),
+            Grant(GrantRevoked),
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "mixed grant stale-expired",
+            Grant(Stale),
+            Grant(Expired),
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "mixed grant stale-revoked",
+            Grant(Stale),
+            Grant(GrantRevoked),
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "mixed grant expired-revoked",
+            Grant(Expired),
+            Grant(GrantRevoked),
+            ProjectionResolutionError::AuthorityConflict,
+        ),
+        (
+            "uniform catalog not runnable",
+            Catalog {
+                runnable: false,
+                revoked: false,
+            },
+            Catalog {
+                runnable: false,
+                revoked: false,
+            },
+            ProjectionResolutionError::PackageNotRunnable,
+        ),
+        (
+            "uniform catalog revoked",
+            Catalog {
+                runnable: true,
+                revoked: true,
+            },
+            Catalog {
+                runnable: true,
+                revoked: true,
+            },
+            ProjectionResolutionError::CatalogRevoked,
+        ),
+        (
+            "uniform installation disabled",
+            Installation(Disabled),
+            Installation(Disabled),
+            ProjectionResolutionError::InstallationDisabled,
+        ),
+        (
+            "uniform installation revoked",
+            Installation(InstallationRevoked),
+            Installation(InstallationRevoked),
+            ProjectionResolutionError::InstallationRevoked,
+        ),
+        (
+            "uniform grant stale",
+            Grant(Stale),
+            Grant(Stale),
+            ProjectionResolutionError::GrantStale,
+        ),
+        (
+            "uniform grant expired",
+            Grant(Expired),
+            Grant(Expired),
+            ProjectionResolutionError::GrantExpired,
+        ),
+        (
+            "uniform grant revoked",
+            Grant(GrantRevoked),
+            Grant(GrantRevoked),
+            ProjectionResolutionError::GrantRevoked,
+        ),
+    ];
+    for (label, first_state, second_state, expected) in state_cases {
+        let (request, mut first) = valid_authority();
+        let mut second = as_second_tool(first.clone());
+        set_concrete_authority_state(&mut first, first_state);
+        set_concrete_authority_state(&mut second, second_state);
+        assert_eq!(
+            InvocationResolver::resolve_projection(request, vec![first, second]),
+            Err(expected),
+            "{label}"
+        );
+    }
+
+    let (emergency_request, mut emergency) = valid_authority();
+    let mut conflicting = as_second_tool(emergency.clone());
+    emergency.policy.emergency_blocked = true;
+    conflicting.grant.as_mut().expect("fixture").state = GrantState::Stale;
+    let result =
+        InvocationResolver::resolve_projection(emergency_request, vec![emergency, conflicting]);
+    assert_eq!(result, Err(ProjectionResolutionError::EmergencyBlocked));
+
     let mut collision = candidate.clone();
     collision.target.tool_id = parsed!(ToolId, "tool:second");
     collision
@@ -650,6 +833,11 @@ fn projection_primary_precedence_and_collisions_fail_closed() {
     let (request, mut canonical_first) = valid_authority();
     canonical_first.target.tool_id = parsed!(ToolId, "tool:a-first");
     canonical_first.catalog = None;
+    canonical_first
+        .installation
+        .as_mut()
+        .expect("fixture")
+        .state = InstallationState::Disabled;
     let (_, mut canonical_second) = valid_authority();
     canonical_second.target.tool_id = parsed!(ToolId, "tool:z-last");
     canonical_second
