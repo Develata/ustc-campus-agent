@@ -11,13 +11,15 @@ This task document schedules implementation; it does not override the owning pla
 
 ```text
 R0 platform-owned Agent runtime kernel
-  └→ P0 Market identity/read and invocation-resolution skeleton
-       └→ P1 ChangeRadar source/revision/diff foundation
-            ├→ P2 Affairs Navigator procedure entry
-            └→ P3 ChangeRadar board feed
-                 └→ P4 Opportunity Graph consent/profile integration
-                      └→ P5 productization and adversarial verification
-                           └→ P6 freeze/submission
+  └→ P0a deterministic typed invocation resolver
+       └→ P0b read-only Market catalog projection
+            └→ P0c durable installation/grant/enable state
+                 └→ P1 ChangeRadar source/revision/diff foundation
+                      ├→ P2 Affairs Navigator procedure entry
+                      └→ P3 ChangeRadar board feed
+                           └→ P4 Opportunity Graph consent/profile integration
+                                └→ P5 productization and adversarial verification
+                                     └→ P6 freeze/submission
 ```
 
 The Course Planning spike was completed out of order. It remains reusable evidence inside Opportunity Graph but does not move the mainline past P1/P2/P3.
@@ -36,7 +38,7 @@ The Course Planning spike was completed out of order. It remains reusable eviden
 **Inputs**
 
 - accepted platform authority and runtime boundary;
-- exact package/component/grant/schema identities already defined by current contracts;
+- accepted `RunSpec` identity fields, while package/install/grant existence remains intentionally unresolved;
 - ADR-0004 framework-neutral authority decision.
 
 **Deliverables**
@@ -52,25 +54,71 @@ The Course Planning spike was completed out of order. It remains reusable eviden
 
 `AGENT-001` and `AGENT-002` pass against the Rust kernel. Durable orchestration, provider/tool adapters, HTTP/SSE and external effects remain explicitly planned.
 
-## P0 — Market identity, read and invocation-resolution skeleton
+## P0 — Ordered Market authority foundation
+
+P0 is ordered `P0a → P0b → P0c`. Invocation authority comes first so catalog presentation and storage schemas project an owned decision instead of defining it accidentally.
+
+### P0a — Deterministic typed invocation resolver
 
 **Inputs**
 
-- accepted package/capability schema;
-- exact three first-party manifests and Rust identities.
+- accepted Market/platform/runtime authority boundaries;
+- `invocation-resolution/v0` and existing `agent-run/v0` contracts;
+- exact package/component/capability, installation, grant and policy snapshots supplied in memory;
+- clearly synthetic positive and fail-closed fixtures, because current first-party manifests have no executable components.
+
+**Deliverables**
+
+- pure `platform-core` `InvocationResolver` types and `InvocationResolutionError` taxonomy;
+- exact resolution of tenant/user, installation, package version/digest, component/execution identity, capability/grant/scope, source policy and input-schema digest;
+- immutable, deterministically ordered `ToolProjectionSnapshot` used for both model exposure and dispatch;
+- projection-time authority checks plus call-time argument/current-deny-state recheck before effect intent or outbound I/O;
+- no name-only dispatch, last-wins collision, silent fallback, partial output or authority widening by session/framework state;
+- first executable consumer mapping a successful result into the existing `RunSpec` and `AgentRun::new`; every denial proves no run is created.
+
+**Owned boundary**
+
+`platform-core` decides over supplied snapshots without I/O or durable state. Catalog/repository loaders supply facts; `agent-runtime` owns run/effect state; adapters only execute a platform-authorized request. P0a does not mint grants, provider profiles, budgets, run/effect/idempotency IDs or receipts.
+
+**Non-goals**
+
+Catalog persistence or browse UI, install mutation, database/HTTP/SSE, provider/network/MCP adapters, external effects and autonomous multi-agent orchestration.
+
+**Exit gate**
+
+Planned `MARKET-005`, `MARKET-006` and `MARKET-007` become implemented with the exact synthetic fixture matrix in `docs/contracts/invocation-resolution.md`; downstream `AGENT-002` remains green. P0a supplies supporting evidence but does not mark durable `MARKET-002` or `MARKET-003` implemented. Current first-party manifest status is unchanged.
+
+### P0b — Read-only Market catalog projection
+
+**Depends on**: P0a identity and collision rules.
 
 **Deliverables**
 
 - deterministic parse/validation of visible packages;
 - anonymous package browse/detail projection;
-- exact version/component/capability/source-policy display;
-- typed installation/enable/grant state design before persistence;
-- a minimal resolver boundary that can supply an exact installation/component/grant snapshot to the runtime kernel;
-- no runtime claim for planned manifests.
+- exact publisher/version/component/capability/source-policy display;
+- catalog availability remains distinct from installation, grant and runtime readiness;
+- no durable install/grant mutation and no runnable claim for planned manifests.
 
 **Exit gate**
 
-All three identities bootstrap at exact versions in validation; UI/HTTP evidence, if added, distinguishes catalog availability from installation/runtime state.
+`MARKET-001` has a concrete read-only binding. All three first-party identities appear at exact versions, while empty-component/status declarations remain honest and non-runnable.
+
+### P0c — Durable installation, grant and enable state
+
+**Depends on**: P0a resolver inputs/errors and P0b exact catalog revision identity.
+
+**Deliverables**
+
+- typed installation, enable/disable/revoke and grant state transitions;
+- exact default bootstrap without inferring runtime state from manifest `installPolicy`;
+- repository transaction boundary that closes resolution-to-run TOCTOU or fails closed;
+- permission expansion/reapproval and independent disable/re-enable behavior;
+- P0a remains the only invocation decision path over loaded authority snapshots.
+
+**Exit gate**
+
+`MARKET-002`, `MARKET-003` and `MARKET-004` have durable integration bindings; UI/HTTP evidence, if later added, distinguishes catalog availability, installed state, authorization and runtime availability.
 
 ## P1 — ChangeRadar source/revision/diff foundation
 

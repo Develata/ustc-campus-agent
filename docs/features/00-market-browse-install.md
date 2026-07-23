@@ -2,8 +2,8 @@
 
 - `Status`: Planned user journey; manifest validation exists
 - `Owning plan`: `docs/plan/04-market-and-plugin-lifecycle.md`
-- `Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/permissions.md`
-- `Acceptance`: `MARKET-*`, `FP-006`, `FP-015`, `FP-007`
+- `Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
+- `Acceptance`: `MARKET-*`, `AGENT-002`, `FP-006`, `FP-015`, `FP-007`
 
 ## Goal
 
@@ -46,6 +46,7 @@ The three default first-party packages appear as independent products and can be
 - Permission expansion: show exact diff and require reapproval; never auto-enable new access.
 - Disabled/revoked: explain that invocation is blocked and identify whether the user or operator can recover it.
 - Version/component mismatch: stop invocation and ask the user/operator to repair or reinstall; do not route to a same-name alternative.
+- Tool/schema/grant mismatch: expose a stable denial/recovery class; never dispatch a same-name alternative or continue with a stale projection.
 - Runtime unavailable: preserve installation state but show availability separately from permission state.
 
 ## Non-goals
@@ -58,4 +59,4 @@ The three default first-party packages appear as independent products and can be
 
 ## Verification
 
-Current automated evidence validates the exact three manifests and Rust identities. Installation, disable/re-enable and browser journeys remain planned until durable runtime state and a frontend exist.
+Current automated evidence validates the exact three manifests and Rust identities. The deterministic resolver, installation, disable/re-enable and browser journeys remain planned; their contracts do not make any current package runnable.

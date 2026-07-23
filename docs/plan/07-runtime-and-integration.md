@@ -4,13 +4,13 @@
 
 - `Layer`: Runtime architecture
 - `Status`: R0 platform-owned transition kernel implemented; orchestration, persistence and production adapters planned
-- `Version`: `0.4.0`
+- `Version`: `0.4.1`
 - `Last Review`: `2026-07-23`
 - `Authority Owns`: platform run state, tool-effect ordering, framework/provider adapter boundary
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
 - `Counterpart Features`: future bounded Agent journey; current Market and product features
-- `Counterpart Contracts`: `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: active `AGENT-001`, `AGENT-002` and planned `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
+- `Counterpart Contracts`: `docs/contracts/agent-runtime.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
+- `Counterpart Acceptance`: active `AGENT-001`, `AGENT-002`; planned P0a `MARKET-005`–`MARKET-007` and `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
 - `Primary Code Areas`: `crates/agent-runtime/`, future orchestration modules and `crates/adapters/`
 
 ## 1. Principle
@@ -30,7 +30,7 @@ A platform run has an immutable specification containing at least:
 - source/profile context references;
 - turn, token/cost, tool, time and retry budgets.
 
-The exact R0 shape, validation rules and event semantics are owned by [`docs/contracts/agent-runtime.md`](../contracts/agent-runtime.md) and `crates/agent-runtime/`. The kernel pins resolved identities; it does not itself claim that an installation or grant exists.
+The exact R0 shape, validation rules and event semantics are owned by [`docs/contracts/agent-runtime.md`](../contracts/agent-runtime.md) and `crates/agent-runtime/`. The kernel pins resolved identities; it does not itself claim that an installation or grant exists. The planned P0a producer of those identities is defined by [`docs/contracts/invocation-resolution.md`](../contracts/invocation-resolution.md).
 
 State machine target:
 

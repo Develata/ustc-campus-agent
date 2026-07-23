@@ -3,14 +3,14 @@
 ## Metadata
 
 - `Layer`: Product authority
-- `Status`: Schema/identity baseline implemented; runtime lifecycle planned
-- `Version`: `0.2.0`
-- `Last Review`: `2026-07-22`
+- `Status`: Schema/identity baseline implemented; P0a resolver contract and runtime lifecycle planned
+- `Version`: `0.3.0`
+- `Last Review`: `2026-07-23`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
 - `Authority Defers To`: Market JSON schema/registries and package/permission contracts for exact fields
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
-- `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: `MARKET-*`, `FP-006`, `FP-015`, `FP-007`
+- `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
+- `Counterpart Acceptance`: `MARKET-*`, `AGENT-002`, `FP-006`, `FP-015`, `FP-007`
 - `Primary Code Areas`: `market/`, `crates/platform-core/`, future installation/gateway modules
 
 ## 1. Scope and repository boundary
@@ -87,7 +87,9 @@ These states MUST remain distinct:
 
 ## 5. Effective invocation resolution
 
-Before an outbound call or native component dispatch, the server-side resolver MUST bind:
+Invocation authority is established before catalog browsing or durable lifecycle persistence is implemented. The first slice is a pure, deterministic server-side resolver over exact caller-supplied authority snapshots; storage and adapters may later supply those snapshots but cannot replace the decision.
+
+Before an outbound call or native component dispatch, the resolver MUST bind:
 
 ```text
 PluginInstallation
@@ -99,7 +101,11 @@ PluginInstallation
 → current enabled/revoked/emergency-block state
 ```
 
-Any missing package, digest/path mismatch, stale grant, disabled installation, revoked capability or unknown execution identity fails closed.
+It MUST additionally bind tenant/user scope, source-policy identity, exact canonical input-schema digest and one collision-free dispatch identity. The resulting immutable tool projection controls both schemas exposed to the model and dispatch entries accepted for the turn. Session activation may narrow that projection, never install, grant, re-enable or bypass revoke.
+
+At call time, exact arguments, scope, grant/revoke state and emergency block are checked again before effect intent or outbound I/O. Any missing package, digest/path mismatch, stale grant, disabled installation, revoked capability, schema mismatch, name collision, unknown execution identity or authority conflict fails closed. No error selects a same-name tool, alternate package/component/provider/runtime or previous successful snapshot.
+
+[`docs/contracts/invocation-resolution.md`](../contracts/invocation-resolution.md) owns the P0a input/output shapes, deterministic digest rules, error taxonomy, fixture matrix, framework borrow/adapt/reject evidence and the boundary into `RunSpec`/`AgentRun::new`.
 
 ## 6. Capability policy
 
@@ -141,6 +147,8 @@ Implemented:
 
 Planned:
 
+- deterministic typed invocation resolver and immutable tool-projection snapshot (P0a);
+- read-only catalog browse/detail projection (P0b);
 - durable installations/grants;
 - enable/disable resolver;
 - Market browse/detail UI;
@@ -149,7 +157,8 @@ Planned:
 Verification:
 
 - `docs/contracts/plugin-package.md`
+- `docs/contracts/invocation-resolution.md`
 - `market/schemas/plugin-package.schema.json`
 - `python3 scripts/check_repo_contracts.py`
 - `scripts/tests/test_check_repo_contracts.py`
-- `MARKET-*`, `FP-006`, `FP-015`, `FP-007`
+- `MARKET-*`, `AGENT-002`, `FP-006`, `FP-015`, `FP-007`

@@ -48,7 +48,7 @@ Implemented today:
 - offline Course Planning fixture validation and planner;
 - framework-neutral Agent run-spec, transition, replay, effect-ordering and budget kernel.
 
-The next platform slice is the minimal Market read/invocation resolver consumed by the R0 kernel; the next first-party product slice remains ChangeRadar source/revision/diff. Additional Course Planning productization is not the mainline.
+The next platform slice is the deterministic typed invocation resolver consumed by the R0 kernel, followed by read-only Market projection and durable installation/grant state; the next first-party product slice remains ChangeRadar source/revision/diff. Additional Course Planning productization is not the mainline.
 
 ## Navigation
 

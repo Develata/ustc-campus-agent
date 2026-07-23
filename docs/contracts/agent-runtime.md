@@ -13,7 +13,7 @@
 
 The Agent runtime kernel owns immutable run identity, legal state transitions, event ordering, effect intent/receipt identity, budget accounting and deterministic replay. It is framework-neutral and contains no provider SDK, MCP transport, database, HTTP server or user interface.
 
-The kernel does not decide that a package is installed or that a capability is granted. A future resolver supplies an already pinned installation/component/grant snapshot; the kernel records and preserves that snapshot without widening it.
+The kernel does not decide that a package is installed or that a capability is granted. The planned [`invocation-resolution/v0`](invocation-resolution.md) resolver supplies an already pinned installation/component/grant/schema projection; the kernel records and preserves those identities without widening them.
 
 ## 2. Immutable `RunSpec`
 
