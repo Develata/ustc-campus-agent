@@ -287,7 +287,7 @@ Implemented now:
 - `agent-runtime` production/test dependency independence from Market, Plugin and adapter crates, enforced by the repository checker;
 - P0a→`RunSpec` cross-boundary proof owned by `ustc-agentd`, the composition root.
 
-This is an R0 domain kernel, not a production Agent run. No concrete Agent tool protocol, ToolGateway, durable journal, model provider profile, MCP binding, hosted runtime, external tool execution or HTTP/SSE run surface is implemented. The Course Planning CLI still calls deterministic Rust domain code directly and is not Plugin integration evidence.
+This is an R0 domain kernel, not a production Agent run. Concrete `agent-tool-protocol/v0` value objects and composition-root fake gateway/executor conformance are implemented; production ToolGateway, durable journal composition, model provider profile, MCP binding, hosted runtime, external tool execution and HTTP/SSE run surface are not. The Course Planning CLI still calls deterministic Rust domain code directly and is not Plugin integration evidence.
 
 The accepted finite harness, TaskGraph, clarification/review supervisor and context-budget/compaction contracts are H0 target architecture only; no production harness, tokenizer, compactor, subagent supervisor or plan panel exists yet.
 

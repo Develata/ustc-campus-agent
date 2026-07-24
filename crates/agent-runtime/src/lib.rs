@@ -171,6 +171,16 @@ pub struct ToolCallProposal {
     pub arguments_digest: String,
 }
 
+impl From<&ustc_agent_tool_protocol::AgentToolCall> for ToolCallProposal {
+    fn from(call: &ustc_agent_tool_protocol::AgentToolCall) -> Self {
+        Self {
+            call_id: call.provider_tool_call_id().as_str().to_owned(),
+            tool_name: call.model_visible_name().to_owned(),
+            arguments_digest: call.arguments().digest().as_str().to_owned(),
+        }
+    }
+}
+
 /// Persisted authorization intent that must precede external execution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

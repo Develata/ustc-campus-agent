@@ -10,6 +10,7 @@ homepage.workspace = true
 
 [dependencies]
 serde.workspace = true
+ustc-agent-tool-protocol.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

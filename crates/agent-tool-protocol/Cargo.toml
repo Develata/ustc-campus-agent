@@ -1,5 +1,5 @@
 [package]
-name = "ustc-campus-agent-core"
+name = "ustc-agent-tool-protocol"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -7,18 +7,10 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+publish = false
 
 [dependencies]
-semver.workspace = true
-serde.workspace = true
-ustc-agent-tool-protocol.workspace = true
-
-[dev-dependencies]
-hex = "0.4.3"
-serde_json.workspace = true
-
-[lib]
-path = "src/lib.rs"
+sha2.workspace = true
 
 [lints]
 workspace = true

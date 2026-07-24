@@ -36,6 +36,7 @@ apps/                     # runnable binaries and future frontend shell
 crates/
   platform-core/          # canonical domain invariants and authority decisions
   agent-runtime/          # Plugin-neutral node AgentRun; future finite harness state, graph, context and review kernel
+  agent-tool-protocol/    # provider-neutral canonical tool values and sealed view/call/result envelopes
   adapters/               # replaceable provider/tool/executor adapters; no authority ownership
   course-planning/         # typed fixture validation and deterministic planner core
 market/                   # plugin catalog authority boundary inside this repo

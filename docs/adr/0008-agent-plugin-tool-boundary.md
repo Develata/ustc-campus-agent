@@ -35,7 +35,7 @@ Plugin executor selected from exact installed package/component identity
 
 Plugins extend capability primarily by packaging tool providers plus optional bounded skills/resources. They do not inject arbitrary code or lifecycle hooks into the Agent kernel. `NativeRustComponent` execution must cross a separately admitted out-of-process executor boundary; direct dynamic linkage into `agent-runtime` is forbidden.
 
-A concrete protocol crate is deferred until H0 supplies two real consumers—the Agent side and a fake gateway. This preserves modules-before-crates while reserving a high-value dependency boundary.
+H0 now supplies two real consumers—the Agent runtime and a composition-root fake gateway—so the framework-neutral value objects and sealed envelopes live in `crates/agent-tool-protocol`. Resolver/authorization remains in `platform-core`; production gateway transport and executor hosting remain deferred.
 
 ## Compatibility rule
 
@@ -75,6 +75,6 @@ Costs and risks:
 
 - Move the P0a→`RunSpec` cross-boundary proof to `ustc-agentd`, the existing composition root.
 - Mechanically reject Market/Plugin/adapter dependencies in `agent-runtime`.
-- H0 introduces fake Agent/tool/executor conformance without claiming production Plugin execution.
+- H0 fake Agent/tool/executor conformance is implemented without claiming production Plugin execution.
 - Later real Plugin execution must satisfy package, projection, authorization, intent/receipt and replacement acceptance cases.
 - Rollback is contract-preserving: the current R0/P0a semantics remain valid; no durable wire/state migration is performed by this ADR.

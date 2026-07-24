@@ -103,7 +103,7 @@ Planned `MARKET-005` and `MARKET-006` become implemented with the exact syntheti
 - bounded clarification, fresh reviewer, remediation graph-patch and explicit terminal non-success semantics;
 - `ContextBudgetSnapshot`, complete-request token preflight and checked fixed-point ceiling/target arithmetic;
 - deterministic compaction before non-recursive bounded lossy compression, non-compressible anchors, provenance-bearing summary artifacts and canonical-history preservation;
-- concrete `agent-tool-protocol/v0` types plus fake `ToolGateway`/Plugin executor conformance, with no Market or Plugin dependency in Agent/harness code;
+- concrete `agent-tool-protocol/v0` values plus fake `ToolGateway`/Plugin executor conformance are implemented; Agent runtime depends on the protocol but not Market/Plugin implementations;
 - fake executors/reviewers/supervisor and estimator fixtures proving the contract without external model, subagent process or network I/O.
 
 **Non-goals**

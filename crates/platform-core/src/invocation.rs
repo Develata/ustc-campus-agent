@@ -1,315 +1,17 @@
 //! Pure, deterministic invocation authority for `invocation-resolution/v0`.
 
-use sha2::{Digest as _, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
-
-const SCHEMA_DOMAIN: &[u8] = b"tool-input-schema/v0\0";
-const ARGUMENT_DOMAIN: &[u8] = b"tool-arguments/v0\0";
-const MAX_DEPTH: usize = 8;
-const MAX_NODES: usize = 256;
-const MAX_OBJECT_MEMBERS: usize = 64;
-const MAX_SCHEMA_BYTES: usize = 65_536;
-const MAX_ARGUMENT_BYTES: usize = 65_536;
-
-/// A validated lowercase SHA-256 identity.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Sha256Digest(String);
-
-impl Sha256Digest {
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let digest = Sha256::digest(bytes);
-        let mut rendered = String::with_capacity(71);
-        rendered.push_str("sha256:");
-        for byte in digest {
-            use fmt::Write as _;
-            let _ = write!(rendered, "{byte:02x}");
-        }
-        Self(rendered)
-    }
-
-    /// Parse an exact lowercase `sha256:<64 hex>` digest.
-    pub fn parse(value: impl Into<String>) -> Result<Self, InvalidValue> {
-        let value = value.into();
-        let valid = value.strip_prefix("sha256:").is_some_and(|hex| {
-            hex.len() == 64
-                && hex
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        });
-        if valid {
-            Ok(Self(value))
-        } else {
-            Err(InvalidValue::Digest)
-        }
-    }
-
-    /// Canonical string representation.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// Validation failure for an owned canonical value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InvalidValue {
-    /// Digest spelling was not canonical.
-    Digest,
-    /// Identity was empty, too long, or contained whitespace/control characters.
-    Identity,
-    /// A model-visible/property name did not match the v0 grammar.
-    Name,
-}
-
-impl fmt::Display for InvalidValue {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "invalid canonical value: {self:?}")
-    }
-}
-
-impl Error for InvalidValue {}
-
-/// Source-order-preserving input-schema node constructed by a future loader.
-#[derive(Debug, Clone, PartialEq)]
-pub enum UnvalidatedSchemaNodeV0 {
-    /// Closed object with ordered declarations.
-    Object {
-        /// Property declarations in source order; duplicates remain observable.
-        properties: Vec<(String, UnvalidatedSchemaNodeV0)>,
-        /// Required names in source order; duplicates remain observable.
-        required: Vec<String>,
-    },
-    /// String, optionally constrained to an exact enum.
-    String { enum_values: Option<Vec<String>> },
-    /// Signed integral value.
-    Integer,
-    /// Finite binary64 value.
-    Number,
-    /// Boolean value.
-    Boolean,
-    /// Homogeneous array.
-    Array { items: Box<UnvalidatedSchemaNodeV0> },
-}
-
-/// Loader-produced schema with an exact dialect identity.
-#[derive(Debug, Clone, PartialEq)]
-pub struct UnvalidatedToolInputSchemaV0 {
-    /// Exact dialect string.
-    pub dialect: String,
-    /// Root schema node.
-    pub root: UnvalidatedSchemaNodeV0,
-}
-
-/// Canonically ordered, bounded schema node.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ValidatedSchemaNodeV0 {
-    /// Closed object.
-    Object {
-        /// Properties in bytewise UTF-8 name order.
-        properties: BTreeMap<String, ValidatedSchemaNodeV0>,
-        /// Required names in bytewise UTF-8 order.
-        required: BTreeSet<String>,
-    },
-    /// Exact string enum, if present.
-    String {
-        enum_values: Option<BTreeSet<String>>,
-    },
-    /// Signed integral value.
-    Integer,
-    /// Finite binary64 value.
-    Number,
-    /// Boolean value.
-    Boolean,
-    /// Homogeneous array.
-    Array { items: Box<ValidatedSchemaNodeV0> },
-}
-
-/// Typed schema-construction failures.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SchemaConstructionError {
-    /// Dialect is not `tool-input-schema/v0`.
-    SchemaDialectUnsupported,
-    /// Structure, names, duplicates, or required subset is malformed.
-    SchemaMalformed,
-    /// A depth/count/string/canonical-byte limit was exceeded.
-    SchemaLimitExceeded,
-}
-
-impl fmt::Display for SchemaConstructionError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "schema construction failed: {self:?}")
-    }
-}
-
-impl Error for SchemaConstructionError {}
-
-/// Validated immutable v0 tool-input schema.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ValidatedToolInputSchemaV0 {
-    root: ValidatedSchemaNodeV0,
-    canonical_bytes: Vec<u8>,
-    digest: Sha256Digest,
-}
-
-impl ValidatedToolInputSchemaV0 {
-    /// Canonical bytes including the v0 domain separator.
-    #[must_use]
-    pub fn canonical_bytes(&self) -> &[u8] {
-        &self.canonical_bytes
-    }
-
-    /// Canonical input-schema digest.
-    #[must_use]
-    pub const fn digest(&self) -> &Sha256Digest {
-        &self.digest
-    }
-
-    /// Validated root node.
-    #[must_use]
-    pub const fn root(&self) -> &ValidatedSchemaNodeV0 {
-        &self.root
-    }
-}
-
-impl TryFrom<UnvalidatedToolInputSchemaV0> for ValidatedToolInputSchemaV0 {
-    type Error = SchemaConstructionError;
-
-    fn try_from(value: UnvalidatedToolInputSchemaV0) -> Result<Self, Self::Error> {
-        if value.dialect != "tool-input-schema/v0" {
-            return Err(SchemaConstructionError::SchemaDialectUnsupported);
-        }
-        if !matches!(value.root, UnvalidatedSchemaNodeV0::Object { .. }) {
-            return Err(SchemaConstructionError::SchemaMalformed);
-        }
-        let mut nodes = 0;
-        let root = validate_schema_node(value.root, 1, &mut nodes)?;
-        let mut canonical_bytes = SCHEMA_DOMAIN.to_vec();
-        encode_schema_node(&root, &mut canonical_bytes);
-        if canonical_bytes.len() > MAX_SCHEMA_BYTES {
-            return Err(SchemaConstructionError::SchemaLimitExceeded);
-        }
-        let digest = Sha256Digest::from_bytes(&canonical_bytes);
-        Ok(Self {
-            root,
-            canonical_bytes,
-            digest,
-        })
-    }
-}
-
-fn validate_schema_node(
-    node: UnvalidatedSchemaNodeV0,
-    depth: usize,
-    nodes: &mut usize,
-) -> Result<ValidatedSchemaNodeV0, SchemaConstructionError> {
-    if depth > MAX_DEPTH {
-        return Err(SchemaConstructionError::SchemaLimitExceeded);
-    }
-    *nodes += 1;
-    if *nodes > MAX_NODES {
-        return Err(SchemaConstructionError::SchemaLimitExceeded);
-    }
-    match node {
-        UnvalidatedSchemaNodeV0::Object {
-            properties,
-            required,
-        } => {
-            if properties.len() > MAX_OBJECT_MEMBERS {
-                return Err(SchemaConstructionError::SchemaLimitExceeded);
-            }
-            let mut validated = BTreeMap::new();
-            for (name, child) in properties {
-                if !is_valid_name(&name) || validated.contains_key(&name) {
-                    return Err(SchemaConstructionError::SchemaMalformed);
-                }
-                let child = validate_schema_node(child, depth + 1, nodes)?;
-                validated.insert(name, child);
-            }
-            let mut required_set = BTreeSet::new();
-            for name in required {
-                if !is_valid_name(&name)
-                    || !validated.contains_key(&name)
-                    || !required_set.insert(name)
-                {
-                    return Err(SchemaConstructionError::SchemaMalformed);
-                }
-            }
-            Ok(ValidatedSchemaNodeV0::Object {
-                properties: validated,
-                required: required_set,
-            })
-        }
-        UnvalidatedSchemaNodeV0::String { enum_values } => {
-            let enum_values = match enum_values {
-                None => None,
-                Some(values) => {
-                    if values.is_empty() || values.len() > 64 {
-                        return Err(SchemaConstructionError::SchemaLimitExceeded);
-                    }
-                    let mut unique = BTreeSet::new();
-                    for value in values {
-                        if value.is_empty() || value.len() > 256 {
-                            return Err(SchemaConstructionError::SchemaLimitExceeded);
-                        }
-                        if !unique.insert(value) {
-                            return Err(SchemaConstructionError::SchemaMalformed);
-                        }
-                    }
-                    Some(unique)
-                }
-            };
-            Ok(ValidatedSchemaNodeV0::String { enum_values })
-        }
-        UnvalidatedSchemaNodeV0::Integer => Ok(ValidatedSchemaNodeV0::Integer),
-        UnvalidatedSchemaNodeV0::Number => Ok(ValidatedSchemaNodeV0::Number),
-        UnvalidatedSchemaNodeV0::Boolean => Ok(ValidatedSchemaNodeV0::Boolean),
-        UnvalidatedSchemaNodeV0::Array { items } => Ok(ValidatedSchemaNodeV0::Array {
-            items: Box::new(validate_schema_node(*items, depth + 1, nodes)?),
-        }),
-    }
-}
-
-fn encode_schema_node(node: &ValidatedSchemaNodeV0, output: &mut Vec<u8>) {
-    match node {
-        ValidatedSchemaNodeV0::Object {
-            properties,
-            required,
-        } => {
-            output.push(0x01);
-            encode_count(properties.len(), output);
-            for (name, child) in properties {
-                encode_string(name, output);
-                encode_schema_node(child, output);
-            }
-            encode_count(required.len(), output);
-            for name in required {
-                encode_string(name, output);
-            }
-        }
-        ValidatedSchemaNodeV0::String { enum_values } => {
-            output.push(0x02);
-            match enum_values {
-                None => output.push(0),
-                Some(values) => {
-                    output.push(1);
-                    encode_count(values.len(), output);
-                    for value in values {
-                        encode_string(value, output);
-                    }
-                }
-            }
-        }
-        ValidatedSchemaNodeV0::Integer => output.push(0x03),
-        ValidatedSchemaNodeV0::Number => output.push(0x04),
-        ValidatedSchemaNodeV0::Boolean => output.push(0x05),
-        ValidatedSchemaNodeV0::Array { items } => {
-            output.push(0x06);
-            encode_schema_node(items, output);
-        }
-    }
-}
+use ustc_agent_tool_protocol::{
+    AgentTool, AgentToolDefinition, AgentToolsetView, ProjectionSnapshotId,
+    ProtocolConstructionError, ProtocolRunId, ProtocolTurnId, ToolRouteRef, is_valid_tool_name,
+};
+pub use ustc_agent_tool_protocol::{
+    ArgumentConstructionError, CanonicalArgumentNodeV0, CanonicalArgumentValueV0, InvalidValue,
+    SchemaConstructionError, Sha256Digest, UnvalidatedArgumentValueV0, UnvalidatedSchemaNodeV0,
+    UnvalidatedToolInputSchemaV0, ValidatedSchemaNodeV0, ValidatedToolInputSchemaV0,
+};
 
 fn encode_count(count: usize, output: &mut Vec<u8>) {
     output.extend_from_slice(&(count as u64).to_be_bytes());
@@ -318,207 +20,6 @@ fn encode_count(count: usize, output: &mut Vec<u8>) {
 fn encode_string(value: &str, output: &mut Vec<u8>) {
     encode_count(value.len(), output);
     output.extend_from_slice(value.as_bytes());
-}
-
-fn is_valid_name(value: &str) -> bool {
-    if value.is_empty() || value.len() > 64 {
-        return false;
-    }
-    let mut bytes = value.bytes();
-    let Some(first) = bytes.next() else {
-        return false;
-    };
-    (first.is_ascii_alphabetic() || first == b'_')
-        && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
-}
-
-/// Source-order-preserving parsed argument value. Numeric variants retain their token text.
-#[derive(Debug, Clone, PartialEq)]
-pub enum UnvalidatedArgumentValueV0 {
-    Null,
-    Boolean(bool),
-    Integer(String),
-    Number(String),
-    String(String),
-    Array(Vec<UnvalidatedArgumentValueV0>),
-    Object(Vec<(String, UnvalidatedArgumentValueV0)>),
-}
-
-/// Canonical argument tree; finite numbers are represented by normalized binary64 bits.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CanonicalArgumentNodeV0 {
-    Null,
-    Boolean(bool),
-    Integer(i64),
-    Number(u64),
-    String(String),
-    Array(Vec<CanonicalArgumentNodeV0>),
-    Object(BTreeMap<String, CanonicalArgumentNodeV0>),
-}
-
-/// Typed canonical-argument construction failures.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ArgumentConstructionError {
-    ArgumentDuplicateKey,
-    ArgumentInvalidName,
-    ArgumentNumberOutOfRange,
-    ArgumentLimitExceeded,
-}
-
-impl fmt::Display for ArgumentConstructionError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "argument construction failed: {self:?}")
-    }
-}
-
-impl Error for ArgumentConstructionError {}
-
-/// Bounded canonical argument value and its exact digest.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalArgumentValueV0 {
-    root: CanonicalArgumentNodeV0,
-    canonical_bytes: Vec<u8>,
-    digest: Sha256Digest,
-}
-
-impl CanonicalArgumentValueV0 {
-    #[must_use]
-    pub fn canonical_bytes(&self) -> &[u8] {
-        &self.canonical_bytes
-    }
-
-    #[must_use]
-    pub const fn digest(&self) -> &Sha256Digest {
-        &self.digest
-    }
-
-    #[must_use]
-    pub const fn root(&self) -> &CanonicalArgumentNodeV0 {
-        &self.root
-    }
-}
-
-impl TryFrom<UnvalidatedArgumentValueV0> for CanonicalArgumentValueV0 {
-    type Error = ArgumentConstructionError;
-
-    fn try_from(value: UnvalidatedArgumentValueV0) -> Result<Self, Self::Error> {
-        let mut nodes = 0;
-        let root = validate_argument_node(value, 1, &mut nodes)?;
-        let mut canonical_bytes = ARGUMENT_DOMAIN.to_vec();
-        encode_argument_node(&root, &mut canonical_bytes);
-        if canonical_bytes.len() > MAX_ARGUMENT_BYTES {
-            return Err(ArgumentConstructionError::ArgumentLimitExceeded);
-        }
-        let digest = Sha256Digest::from_bytes(&canonical_bytes);
-        Ok(Self {
-            root,
-            canonical_bytes,
-            digest,
-        })
-    }
-}
-
-fn validate_argument_node(
-    node: UnvalidatedArgumentValueV0,
-    depth: usize,
-    nodes: &mut usize,
-) -> Result<CanonicalArgumentNodeV0, ArgumentConstructionError> {
-    if depth > MAX_DEPTH {
-        return Err(ArgumentConstructionError::ArgumentLimitExceeded);
-    }
-    *nodes += 1;
-    if *nodes > MAX_NODES {
-        return Err(ArgumentConstructionError::ArgumentLimitExceeded);
-    }
-    match node {
-        UnvalidatedArgumentValueV0::Null => Ok(CanonicalArgumentNodeV0::Null),
-        UnvalidatedArgumentValueV0::Boolean(value) => Ok(CanonicalArgumentNodeV0::Boolean(value)),
-        UnvalidatedArgumentValueV0::Integer(token) => token
-            .parse::<i64>()
-            .map(CanonicalArgumentNodeV0::Integer)
-            .map_err(|_| ArgumentConstructionError::ArgumentNumberOutOfRange),
-        UnvalidatedArgumentValueV0::Number(token) => {
-            let number = token
-                .parse::<f64>()
-                .map_err(|_| ArgumentConstructionError::ArgumentNumberOutOfRange)?;
-            if !number.is_finite() {
-                return Err(ArgumentConstructionError::ArgumentNumberOutOfRange);
-            }
-            let bits = if number == 0.0 { 0 } else { number.to_bits() };
-            Ok(CanonicalArgumentNodeV0::Number(bits))
-        }
-        UnvalidatedArgumentValueV0::String(value) => {
-            if value.len() > 4_096 {
-                Err(ArgumentConstructionError::ArgumentLimitExceeded)
-            } else {
-                Ok(CanonicalArgumentNodeV0::String(value))
-            }
-        }
-        UnvalidatedArgumentValueV0::Array(values) => {
-            if values.len() > 256 {
-                return Err(ArgumentConstructionError::ArgumentLimitExceeded);
-            }
-            values
-                .into_iter()
-                .map(|value| validate_argument_node(value, depth + 1, nodes))
-                .collect::<Result<Vec<_>, _>>()
-                .map(CanonicalArgumentNodeV0::Array)
-        }
-        UnvalidatedArgumentValueV0::Object(members) => {
-            if members.len() > MAX_OBJECT_MEMBERS {
-                return Err(ArgumentConstructionError::ArgumentLimitExceeded);
-            }
-            let mut object = BTreeMap::new();
-            for (name, value) in members {
-                if !is_valid_name(&name) {
-                    return Err(ArgumentConstructionError::ArgumentInvalidName);
-                }
-                if object.contains_key(&name) {
-                    return Err(ArgumentConstructionError::ArgumentDuplicateKey);
-                }
-                let value = validate_argument_node(value, depth + 1, nodes)?;
-                object.insert(name, value);
-            }
-            Ok(CanonicalArgumentNodeV0::Object(object))
-        }
-    }
-}
-
-fn encode_argument_node(node: &CanonicalArgumentNodeV0, output: &mut Vec<u8>) {
-    match node {
-        CanonicalArgumentNodeV0::Null => output.push(0x00),
-        CanonicalArgumentNodeV0::Boolean(value) => {
-            output.push(0x01);
-            output.push(u8::from(*value));
-        }
-        CanonicalArgumentNodeV0::Integer(value) => {
-            output.push(0x02);
-            output.extend_from_slice(&value.to_be_bytes());
-        }
-        CanonicalArgumentNodeV0::Number(bits) => {
-            output.push(0x03);
-            output.extend_from_slice(&bits.to_be_bytes());
-        }
-        CanonicalArgumentNodeV0::String(value) => {
-            output.push(0x04);
-            encode_string(value, output);
-        }
-        CanonicalArgumentNodeV0::Array(values) => {
-            output.push(0x05);
-            encode_count(values.len(), output);
-            for value in values {
-                encode_argument_node(value, output);
-            }
-        }
-        CanonicalArgumentNodeV0::Object(members) => {
-            output.push(0x06);
-            encode_count(members.len(), output);
-            for (name, value) in members {
-                encode_string(name, output);
-                encode_argument_node(value, output);
-            }
-        }
-    }
 }
 
 macro_rules! authority_id {
@@ -996,6 +497,27 @@ impl ToolProjectionSnapshot {
     pub const fn projection_authority_set_digest(&self) -> &Sha256Digest {
         &self.projection_authority_set_digest
     }
+
+    /// Project resolver authority into the Plugin-neutral view consumed by Agent/provider code.
+    pub fn agent_toolset_view(&self) -> Result<AgentToolsetView, ProtocolConstructionError> {
+        let run_id = ProtocolRunId::parse(self.run_id.as_str())?;
+        let turn_id = ProtocolTurnId::parse(self.turn_id.as_str())?;
+        let snapshot_id = ProjectionSnapshotId::parse(self.snapshot_id.clone())?;
+        let tools = self
+            .entries
+            .iter()
+            .map(|entry| {
+                let definition = AgentToolDefinition::new(
+                    entry.model_visible_name(),
+                    entry.description(),
+                    entry.input_schema().clone(),
+                )?;
+                let route = ToolRouteRef::parse(entry.dispatch_key())?;
+                Ok(AgentTool::new(definition, route))
+            })
+            .collect::<Result<Vec<_>, ProtocolConstructionError>>()?;
+        AgentToolsetView::new(run_id, turn_id, snapshot_id, tools)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1053,7 +575,7 @@ fn authority_snapshot_shape_is_valid(candidate: &InvocationAuthorityCandidate) -
         .and_then(|component| component.tool.as_ref())
         .is_none_or(|tool| {
             tool.model_visible_name.len() <= 64
-                && is_valid_name(&tool.model_visible_name)
+                && is_valid_tool_name(&tool.model_visible_name)
                 && tool.description.len() <= 4_096
         })
 }
@@ -1443,7 +965,7 @@ fn resolve_candidate(
         return Err(ProjectionResolutionError::SourcePolicyMismatch);
     }
     if tool.model_visible_name.len() > 64
-        || !is_valid_name(&tool.model_visible_name)
+        || !is_valid_tool_name(&tool.model_visible_name)
         || tool.description.len() > 4_096
     {
         return Err(ProjectionResolutionError::InvalidAuthoritySnapshot);

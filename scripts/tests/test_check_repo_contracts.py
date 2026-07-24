@@ -501,6 +501,25 @@ class InvocationFixtureContractTests(unittest.TestCase):
             )
         )
 
+    def test_agent_runtime_protocol_workspace_redirect_fails_closed(self) -> None:
+        manifest_path = self.root / "Cargo.toml"
+        manifest = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(
+            manifest.replace(
+                'ustc-agent-tool-protocol = { path = "crates/agent-tool-protocol" }',
+                'ustc-agent-tool-protocol = { path = "crates/plugin-disguised-as-protocol" }',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "ustc-agent-tool-protocol->ustc-agent-tool-protocol@path:crates/plugin-disguised-as-protocol"
+                in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
     def test_agent_runtime_alternate_registry_fails_closed(self) -> None:
         manifest_path = self.root / "Cargo.toml"
         manifest = manifest_path.read_text(encoding="utf-8")
@@ -557,6 +576,29 @@ class InvocationFixtureContractTests(unittest.TestCase):
             ),
             issues,
         )
+
+    def test_agent_runtime_protocol_projection_construction_fails_closed(self) -> None:
+        library_path = self.root / "crates/agent-runtime/src/lib.rs"
+        with library_path.open("a", encoding="utf-8") as library:
+            library.write(
+                "\nuse ustc_agent_tool_protocol::{"
+                "AgentToolsetView as View, AgentToolDefinition as Definition, AgentTool as Tool};\n"
+                "fn illicit_projection() { View::new(()); Definition::new(()); Tool::new(()); }\n"
+            )
+        issues = self.check_agent_plugin_dependency_direction()
+        for description in (
+            "projection authority type AgentToolsetView",
+            "projection authority type AgentToolDefinition",
+            "projection authority type AgentTool",
+        ):
+            self.assertTrue(
+                any(
+                    "agent-runtime source crosses the compilation boundary" in issue
+                    and description in issue
+                    for issue in issues
+                ),
+                issues,
+            )
 
     def test_agent_runtime_external_library_target_fails_closed(self) -> None:
         manifest_path = self.root / "crates/agent-runtime/Cargo.toml"

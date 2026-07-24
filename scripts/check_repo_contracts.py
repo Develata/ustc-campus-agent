@@ -63,6 +63,10 @@ INVOCATION_COMPOSITION_FIXTURE_TEST_COMMAND = (
 AGENT_ALLOWED_DIRECT_DEPENDENCIES = {
     "serde": ("serde", "registry"),
     "serde_json": ("serde_json", "registry"),
+    "ustc-agent-tool-protocol": (
+        "ustc-agent-tool-protocol",
+        "path:crates/agent-tool-protocol",
+    ),
 }
 AGENT_FORBIDDEN_SOURCE_MARKERS = {
     "ustc_campus_agent_core",
@@ -74,6 +78,9 @@ AGENT_FORBIDDEN_SOURCE_MARKERS = {
     "NativeRustComponent",
 }
 AGENT_FORBIDDEN_SOURCE_PATTERNS = {
+    r"\bAgentToolDefinition\b": "projection authority type AgentToolDefinition",
+    r"\bAgentToolsetView\b": "projection authority type AgentToolsetView",
+    r"\bAgentTool\b": "projection authority type AgentTool",
     r"\bcfg_attr\b": "cfg_attr conditional compilation",
     r"\binclude(?:_bytes|_str)?\s*!\s*\(": "include macro",
 }
@@ -741,8 +748,6 @@ def check_agent_plugin_dependency_direction(issues: list[str]) -> None:
                     "1",
                     "--edges",
                     "normal,build,dev",
-                    "--target",
-                    "all",
                     "--prefix",
                     "depth",
                     "--format",
@@ -772,7 +777,17 @@ def check_agent_plugin_dependency_direction(issues: list[str]) -> None:
                         fail(f"cargo tree dependency line is malformed: {line}", issues)
                         continue
                     package_name, source_detail = match.groups()
-                    source = "registry" if source_detail is None else f"external:{source_detail}"
+                    if source_detail is None:
+                        source = "registry"
+                    else:
+                        try:
+                            relative_source = (
+                                Path(source_detail).resolve().relative_to(ROOT.resolve()).as_posix()
+                            )
+                        except (OSError, ValueError):
+                            source = f"external:{source_detail}"
+                        else:
+                            source = f"path:{relative_source}"
                     resolved_dependencies.add((package_name, source))
 
                 expected_resolved = set(AGENT_ALLOWED_DIRECT_DEPENDENCIES.values())

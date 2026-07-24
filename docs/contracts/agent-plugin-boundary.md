@@ -2,13 +2,13 @@
 
 ## Metadata
 
-- `Status`: Accepted target architecture; dependency direction enforced now, H0 ToolGateway implementation planned
+- `Status`: Accepted target architecture; protocol value objects and fake gateway/executor conformance implemented, production ToolGateway planned
 - `Version`: `agent-plugin-boundary/v0`
 - `Last Review`: `2026-07-24`
 - `Owning Plans`: [`04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) owns package lifecycle; [`07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md) owns Agent/tool execution
 - `Decisions`: [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md)
-- `Acceptance`: implemented `AGENT-017`; planned `AGENT-018`, `PKG-019`, `PKG-020`
-- `Primary Code`: `crates/agent-runtime/` dependency boundary, `crates/platform-core/src/invocation.rs`, composition tests under `apps/ustc-agentd/`; H0 protocol/gateway modules planned
+- `Acceptance`: implemented `AGENT-017`, `AGENT-019`; planned `AGENT-018`, `PKG-019`, `PKG-020`
+- `Primary Code`: `crates/agent-tool-protocol/`, `crates/agent-runtime/`, `crates/platform-core/src/invocation.rs`, `apps/ustc-agentd/tests/tool_gateway_conformance.rs`
 
 ## 1. Purpose
 
@@ -45,7 +45,7 @@ The Agent does not load manifests, link Plugin implementations, inspect componen
 
 ## 3. Agent-facing protocol
 
-The logical protocol version is `agent-tool-protocol/v0`. Exact Rust module/crate placement waits for the first H0 fake-gateway consumer; an empty speculative crate is forbidden.
+The logical protocol version is `agent-tool-protocol/v0`. Its framework-neutral canonical values and sealed view/call/result envelopes live in `crates/agent-tool-protocol`, now that Agent runtime and fake gateway are real consumers. Resolver, package authority, transport and executor implementation types remain outside this crate.
 
 ### 3.1 `AgentToolsetView`
 
@@ -61,7 +61,7 @@ ordered AgentToolDefinition[]
 
 Each `AgentToolDefinition` contains a unique model-visible name, exact description, complete validated input schema and schema digest, plus one opaque route reference unavailable to the model. Package, installation, grant, component kind, endpoint and executor configuration remain gateway-private.
 
-The view is derived from one accepted `ToolProjectionSnapshot`; the Agent cannot construct, widen or mutate it. Definitions are included whole or omitted whole. Name collision fails before provider I/O.
+The view is derived from one accepted `ToolProjectionSnapshot`; protocol constructors recompute all definition/set digests from canonical fields, while the current Agent-owned source boundary forbids projection-authority types and consumes only call/result values. The gateway still treats the view/call as untrusted and validates snapshot, route, schema and current authority. Definitions are included whole or omitted whole. Name collision fails before provider I/O.
 
 ### 3.2 Call envelope
 
@@ -137,7 +137,7 @@ Normative rules:
 3. The composition root is the only layer allowed to depend on both Agent and Plugin/resolver sides.
 4. Cross-boundary integration tests belong at the composition root, not inside either independent module.
 5. Package/component provenance may remain as opaque IDs/digests in audit-compatible `agent-run/v0`; Agent code MUST NOT parse them or branch on component kind.
-6. A dedicated protocol crate is created only when H0 has at least the Agent-side and fake-gateway consumers; that crate may contain wire/domain-neutral envelopes only.
+6. The dedicated protocol crate exists because H0 has Agent-side and fake-gateway consumers; it contains only wire/domain-neutral canonical values and envelopes.
 
 ## 7. Invocation ordering
 
@@ -191,15 +191,17 @@ This is design borrowing, not dependency adoption. No Pi or Claude Code runtime 
 
 Implemented now:
 
-- `agent-runtime` has no production dependency on Market, Plugin or adapter crates;
+- `agent-tool-protocol/v0` owns canonical schema/arguments, frozen toolset views, correlated calls and typed digest/code results without Agent, Market, Plugin, framework or transport dependencies;
+- `agent-runtime` depends only on that protocol seam plus registry value dependencies, with no Market, Plugin or adapter implementation dependency;
 - P0a produces immutable per-turn tool projections and fail-closed call authorization;
 - composition-root synthetic proof maps successful resolution into `RunSpec`, while denial creates no run;
-- repository checks enforce the current dependency direction.
+- composition-root fake gateway maps the frozen private route through current-state `authorize_call`; unknown tool, malformed arguments, route mismatch, current denial and projection mismatch reach no fake executor;
+- repository checks enforce the exact protocol path and current dependency direction.
 
-Planned in H0/later:
+Planned later:
 
-- concrete `agent-tool-protocol/v0` Rust types and fake ToolGateway;
-- provider call/result mapping through the protocol;
+- production ToolGateway/application service and provider adapter;
+- bounded content/artifact/receipt result expansion beyond the current digest/code H0 subset;
 - executable Plugin packaging/tool-host conformance;
 - durable intent/receipt composition and real invocation;
 - independent Agent/framework replacement conformance.

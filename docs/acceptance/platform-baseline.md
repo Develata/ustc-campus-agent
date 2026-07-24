@@ -266,6 +266,7 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AGENT-016` | restore validates runtime dependency IDs/versions and never auto-retries non-idempotent unfinished effects | rust-integration | release |
 | `AGENT-017` | Agent runtime compilation inputs and all direct Cargo dependency classes remain confined and allowlisted, free of Market Plugin component and adapter implementations; composition owns cross-boundary proof | rust-cli-smoke | PR |
 | `AGENT-018` | Agent framework/harness replacement passes the same tool-protocol fixtures without Plugin package or executor changes | external-conformance | integration |
+| `AGENT-019` | frozen provider definitions bind one private route; unknown tools, malformed arguments, route mismatch, current denial and projection mismatch reach no executor; successful fake execution returns one correlated protocol result | rust-integration | PR |
 
 ### Finite Agent harness — `HARNESS-*`
 

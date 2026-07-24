@@ -16,7 +16,7 @@ This matrix keeps the four live documentation layers aligned:
 | `04-market-and-plugin-lifecycle` | `00-market-browse-install` | `agent-plugin-boundary.md`, `invocation-resolution.md`, `plugin-package.md`, `permissions.md`, Market JSON schema/registry/manifests | `MARKET-*`, `PKG-*`, `AGENT-002`, `AGENT-017`, `FP-006`, `FP-015`, `FP-007` |
 | `05-campus-trust-kernel` | all three first-party feature docs | `source-import.md`, `data-models.md` | `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
 | `06-first-party-plugins` | three first-party feature docs | package manifests, `data-models.md`, `source-import.md` | `FP-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
-| `07-runtime-and-integration` | `04-bounded-agent-harness`; R0 owned kernel; P0a bounded resolver proof | `agent-harness.md`, `agent-plugin-boundary.md`, `agent-runtime.md`, `invocation-resolution.md`, `interfaces.md`, `permissions.md` | planned `HARNESS-*`; `AGENT-001/002/017`, planned `AGENT-018`; implemented `MARKET-005/006`; planned `PKG-019/020`, `MARKET-007`, `RUNTIME-*` |
+| `07-runtime-and-integration` | `04-bounded-agent-harness`; R0 owned kernel; P0a bounded resolver; H0 tool-protocol/fake-gateway proof | `agent-harness.md`, `agent-plugin-boundary.md`, `agent-runtime.md`, `invocation-resolution.md`, `interfaces.md`, `permissions.md` | planned `HARNESS-*`; implemented `AGENT-001/002/017/019`, planned `AGENT-018`; implemented `MARKET-005/006`; planned `PKG-019/020`, `MARKET-007`, `RUNTIME-*` |
 | `08-security-and-delivery` | publication and permission failure states across features | `permissions.md`, `source-import.md` | `PUBLIC-*`, release-gated security rows |
 
 ## Non-matrix documents

@@ -15,6 +15,7 @@ ustc-campus-agent-core = { path = "../../crates/platform-core" }
 [dev-dependencies]
 serde.workspace = true
 serde_json.workspace = true
+ustc-agent-tool-protocol.workspace = true
 
 [lints]
 workspace = true

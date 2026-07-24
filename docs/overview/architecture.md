@@ -27,7 +27,8 @@ ustc-agentd authority plane
 ├── installation/grant resolver         (planned)
 ├── finite HarnessRun + TaskGraph       (accepted H0 contract; implementation planned)
 ├── Plugin-neutral AgentRun             (R0 transition kernel implemented)
-├── Agent tool protocol + ToolGateway   (boundary accepted; H0 implementation planned)
+├── Agent tool protocol                 (H0 value objects + fake gateway/executor conformance implemented)
+├── production ToolGateway              (planned)
 ├── Campus Trust Kernel                 (contract; planner subset exists)
 ├── first-party product use cases       (mostly planned)
 └── audit/evidence                      (planned)
@@ -53,6 +54,7 @@ Implemented today:
 - framework-neutral Agent run-spec, transition, replay, effect-ordering and budget kernel;
 - pure deterministic typed invocation resolver with executable synthetic fixtures and bounded `RunSpec` mapping;
 - mechanically enforced Agent–Plugin dependency direction, with the cross-boundary proof owned by the composition root.
+- framework-neutral `agent-tool-protocol/v0` canonical values and sealed view/call/result envelopes, projected by the resolver and exercised through a composition-root fake gateway/executor.
 
 The next platform slices are the H0 finite harness kernel and the P0b/P0c Market authority branch; no real invocation application consumer or Dioxus client exists yet. They converge before the bounded user Agent journey. The next first-party product slice remains ChangeRadar source/revision/diff. Additional Course Planning productization is not the mainline.
 

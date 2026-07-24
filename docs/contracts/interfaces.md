@@ -21,7 +21,7 @@ The implemented single-node Agent state/event contract is defined in [`agent-run
 
 The Dioxus client consumes these explicit interfaces through a typed `ClientApi` port. Dioxus server functions, target-native bridges and local caches are not alternate API or authority surfaces.
 
-## Agent tool protocol — planned
+## Agent tool protocol — H0 values implemented, production execution planned
 
 | Object | Direction | Purpose |
 |---|---|---|
@@ -31,7 +31,7 @@ The Dioxus client consumes these explicit interfaces through a typed `ClientApi`
 | `PluginExecutionOutcome` | PluginExecutor → ToolGateway | non-authoritative bounded outcome for validation and receipt persistence |
 | `AgentToolResult` | ToolGateway → Agent | correlated bounded result/evidence/receipt projection for the next model turn |
 
-These are logical `agent-tool-protocol/v0` surfaces. Concrete Rust types land with the first H0 fake-gateway consumer; no HTTP/MCP wire format or generic extension ABI is implied yet.
+`AgentToolsetView`, `AgentToolCall` and the digest/code subset of `AgentToolResult` are concrete Rust types in `crates/agent-tool-protocol` and are exercised by a composition-root fake gateway/executor. `PluginExecutionRequest`, transport, durable receipt composition, bounded content/artifact result expansion and any HTTP/MCP wire format remain planned; no generic extension ABI is implied.
 
 ## MCP/tool surface — Course Planning draft
 
