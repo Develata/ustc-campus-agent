@@ -553,7 +553,7 @@ class InvocationFixtureContractTests(unittest.TestCase):
             )
         )
 
-    def test_agent_runtime_crates_io_patch_fails_closed(self) -> None:
+    def test_agent_runtime_workspace_source_redirects_fail_closed(self) -> None:
         plugin = self.root / "plugins/serde_json"
         (plugin / "src").mkdir(parents=True)
         (plugin / "Cargo.toml").write_text(
@@ -562,20 +562,23 @@ class InvocationFixtureContractTests(unittest.TestCase):
         )
         (plugin / "src/lib.rs").write_text("pub struct PluginCode;\n", encoding="utf-8")
         manifest_path = self.root / "Cargo.toml"
-        with manifest_path.open("a", encoding="utf-8") as manifest:
-            manifest.write(
-                '\n[patch.crates-io]\nserde_json = { path = "plugins/serde_json" }\n'
-            )
-
-        issues = self.check_agent_plugin_dependency_direction()
-        self.assertTrue(
-            any(
-                "cargo tree dependency resolution failed" in issue
-                or "agent-runtime resolved direct dependency is not allowlisted" in issue
-                for issue in issues
+        original_manifest = manifest_path.read_text(encoding="utf-8")
+        redirects = {
+            "patch": '\n[patch.crates-io]\nserde_json = { path = "plugins/serde_json" }\n',
+            "replace": (
+                '\n[replace]\n"serde_json:1.0.151" = { path = "plugins/serde_json" }\n'
             ),
-            issues,
-        )
+        }
+        for redirect_table, redirect in redirects.items():
+            manifest_path.write_text(original_manifest + redirect, encoding="utf-8")
+            issues = self.check_agent_plugin_dependency_direction()
+            self.assertTrue(
+                any(
+                    f"workspace Cargo {redirect_table} table is forbidden" in issue
+                    for issue in issues
+                ),
+                issues,
+            )
 
     def test_agent_runtime_protocol_projection_construction_fails_closed(self) -> None:
         library_path = self.root / "crates/agent-runtime/src/lib.rs"

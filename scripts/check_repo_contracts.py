@@ -667,6 +667,12 @@ def check_agent_plugin_dependency_direction(issues: list[str]) -> None:
     if not isinstance(workspace_dependencies, dict):
         fail("workspace dependency table is not an object", issues)
         return
+    for redirect_table in ("patch", "replace"):
+        if workspace_manifest.get(redirect_table):
+            fail(
+                f"workspace Cargo {redirect_table} table is forbidden for Agent dependency proof",
+                issues,
+            )
 
     package_table = agent_manifest.get("package", {})
     library_table = agent_manifest.get("lib", {})
@@ -739,19 +745,12 @@ def check_agent_plugin_dependency_direction(issues: list[str]) -> None:
             completed = subprocess.run(
                 [
                     "cargo",
-                    "tree",
+                    "metadata",
                     "--locked",
                     "--offline",
-                    "--package",
-                    "ustc-campus-agent-runtime",
-                    "--depth",
+                    "--no-deps",
+                    "--format-version",
                     "1",
-                    "--edges",
-                    "normal,build,dev",
-                    "--prefix",
-                    "depth",
-                    "--format",
-                    "{p}",
                 ],
                 cwd=ROOT,
                 capture_output=True,
@@ -760,53 +759,84 @@ def check_agent_plugin_dependency_direction(issues: list[str]) -> None:
                 timeout=30,
             )
         except (OSError, subprocess.TimeoutExpired) as error:
-            fail(f"cargo tree dependency resolution failed: {error}", issues)
+            fail(f"cargo metadata dependency resolution failed: {error}", issues)
         else:
             if completed.returncode != 0:
                 diagnostic = completed.stderr.strip().splitlines()
-                detail = diagnostic[-1] if diagnostic else "unknown cargo tree error"
-                fail(f"cargo tree dependency resolution failed: {detail}", issues)
+                detail = diagnostic[-1] if diagnostic else "unknown cargo metadata error"
+                fail(f"cargo metadata dependency resolution failed: {detail}", issues)
             else:
-                resolved_dependencies: set[tuple[str, str]] = set()
-                for line in completed.stdout.splitlines():
-                    if not line.startswith("1"):
-                        continue
-                    entry = line[1:].removesuffix(" (*)")
-                    match = re.fullmatch(r"([A-Za-z0-9_-]+) v[^ ]+(?: \((.+)\))?", entry)
-                    if match is None:
-                        fail(f"cargo tree dependency line is malformed: {line}", issues)
-                        continue
-                    package_name, source_detail = match.groups()
-                    if source_detail is None:
-                        source = "registry"
-                    else:
-                        try:
-                            relative_source = (
-                                Path(source_detail).resolve().relative_to(ROOT.resolve()).as_posix()
-                            )
-                        except (OSError, ValueError):
-                            source = f"external:{source_detail}"
-                        else:
-                            source = f"path:{relative_source}"
-                    resolved_dependencies.add((package_name, source))
+                try:
+                    metadata = json.loads(completed.stdout)
+                except json.JSONDecodeError as error:
+                    fail(f"cargo metadata output is malformed: {error}", issues)
+                else:
+                    packages = metadata.get("packages", [])
+                    matching_packages = [
+                        package
+                        for package in packages
+                        if isinstance(package, dict)
+                        and package.get("name") == "ustc-campus-agent-runtime"
+                        and Path(str(package.get("manifest_path", ""))).resolve()
+                        == agent_manifest_path.resolve()
+                    ]
+                    if len(matching_packages) != 1:
+                        fail(
+                            "cargo metadata must resolve exactly one agent-runtime package",
+                            issues,
+                        )
+                        matching_packages = []
 
-                expected_resolved = set(AGENT_ALLOWED_DIRECT_DEPENDENCIES.values())
-                unexpected_resolved = sorted(resolved_dependencies - expected_resolved)
-                if unexpected_resolved:
-                    fail(
-                        "agent-runtime resolved direct dependency is not allowlisted: "
-                        f"{unexpected_resolved}",
-                        issues,
-                    )
-                declared_packages = {package for _, package, _ in dependency_identities}
-                resolved_packages = {package for package, _ in resolved_dependencies}
-                if declared_packages != resolved_packages:
-                    fail(
-                        "agent-runtime declared/resolved direct dependency mismatch: "
-                        f"declared={sorted(declared_packages)} "
-                        f"resolved={sorted(resolved_packages)}",
-                        issues,
-                    )
+                    resolved_dependencies: set[tuple[str, str]] = set()
+                    if matching_packages:
+                        dependencies = matching_packages[0].get("dependencies", [])
+                        if not isinstance(dependencies, list):
+                            fail("cargo metadata dependencies are malformed", issues)
+                            dependencies = []
+                        for dependency in dependencies:
+                            if not isinstance(dependency, dict):
+                                fail("cargo metadata dependency entry is malformed", issues)
+                                continue
+                            package_name = str(dependency.get("name", ""))
+                            path_value = dependency.get("path")
+                            source_detail = dependency.get("source")
+                            if path_value is not None:
+                                try:
+                                    relative_source = (
+                                        Path(str(path_value))
+                                        .resolve()
+                                        .relative_to(ROOT.resolve())
+                                        .as_posix()
+                                    )
+                                except (OSError, ValueError):
+                                    source = f"external:{path_value}"
+                                else:
+                                    source = f"path:{relative_source}"
+                            elif isinstance(source_detail, str) and source_detail.startswith(
+                                "registry+"
+                            ):
+                                source = "registry"
+                            else:
+                                source = f"external:{source_detail}"
+                            resolved_dependencies.add((package_name, source))
+
+                    expected_resolved = set(AGENT_ALLOWED_DIRECT_DEPENDENCIES.values())
+                    unexpected_resolved = sorted(resolved_dependencies - expected_resolved)
+                    if unexpected_resolved:
+                        fail(
+                            "agent-runtime resolved direct dependency is not allowlisted: "
+                            f"{unexpected_resolved}",
+                            issues,
+                        )
+                    declared_packages = {package for _, package, _ in dependency_identities}
+                    resolved_packages = {package for package, _ in resolved_dependencies}
+                    if declared_packages != resolved_packages:
+                        fail(
+                            "agent-runtime declared/resolved direct dependency mismatch: "
+                            f"declared={sorted(declared_packages)} "
+                            f"resolved={sorted(resolved_packages)}",
+                            issues,
+                        )
 
     cargo_config_paths = [
         directory / filename
