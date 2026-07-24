@@ -71,6 +71,7 @@ Long-horizon suites remain planned until projected into `matrix.tsv`. New curren
 | [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md) | three equal first-party Plugins over one kernel | `SRC-*`, `PROC-*`, `GRAPH-*`, `EVAL-*`, `FP-*` |
 | [`ADR-0007`](../adr/0007-finite-agent-harness.md) | finite HarnessRun, typed TaskGraph, bounded review and pre-send context budget | `HARNESS-*`, `AGENT-*`, `AI-*` |
 | [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md) | Agent and Plugin evolve independently through a versioned ToolGateway protocol | `PKG-*`, `MCP-*`, `AGENT-*`, `HARNESS-*` |
+| [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md) | one thin Dioxus shell reuses explicit client API/event semantics across Web/PWA then desktop/mobile | `WEB-*`, `I18N-*`, `CLIENT-*` |
 
 [`../coverage-matrix.md`](../coverage-matrix.md) owns current plan/feature/contract/acceptance projection. This catalog preserves candidate and long-horizon cases without creating a second current authority map.
 
@@ -387,8 +388,8 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AI-002` | UserCloud profile stores encrypted secret ref and performs one call | rust-integration | demo |
 | `AI-003` | provider URL/credential validation prevents SSRF/token leakage | rust-integration | release |
 | `AI-004` | provider failure is structured; no silent identity/model fallback | rust-integration | release |
-| `CLIENT-001` | Web client completes login/chat/tool-status/Market launch journey | browser-automation | demo |
-| `CLIENT-002` | Android client uses shared API contract and external service Custom Tab | external-conformance | demo |
+| `CLIENT-001` | Dioxus Web/PWA client completes login/chat/tool-status/Market launch journey through the explicit API | browser-automation | demo |
+| `CLIENT-002` | Dioxus Android client reuses the shared API/reducer contract and external service Custom Tab | external-conformance | demo |
 | `CLIENT-003` | raw transcript local archive and central durable memory remain distinct | rust-integration | integration |
 | `CLIENT-004` | offline/relay unavailable state is explicit, no hidden execution switch | browser-automation | release |
 

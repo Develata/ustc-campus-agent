@@ -2,7 +2,7 @@
 
 This registry names draft public surfaces before implementation. Implementation PRs must update this document or create a more specific contract before changing surfaces.
 
-The implemented single-node Agent state/event contract is defined in [`agent-runtime.md`](agent-runtime.md). The planned finite user-task lifecycle is defined in [`agent-harness.md`](agent-harness.md). The Agent–Plugin seam is [`agent-plugin-boundary/v0`](agent-plugin-boundary.md). None makes the HTTP routes below operational.
+The implemented single-node Agent state/event contract is defined in [`agent-runtime.md`](agent-runtime.md). The planned finite user-task lifecycle is defined in [`agent-harness.md`](agent-harness.md). The Agent–Plugin seam is [`agent-plugin-boundary/v0`](agent-plugin-boundary.md). The future Dioxus presentation boundary is [`client-shell/v0`](client-shell.md). None makes the HTTP routes below operational.
 
 ## HTTP routes — draft
 
@@ -18,6 +18,8 @@ The implemented single-node Agent state/event contract is defined in [`agent-run
 | `/api/agent/runs/{id}/answers` | POST | submit answers to the current bounded clarification gate | planned |
 | `/api/agent/runs/{id}:cancel` | POST | request typed cancellation under current phase/effect semantics | planned |
 | `/api/agent/runs/{id}/events` | GET/SSE | stream harness/node/model/tool/review state projections | planned |
+
+The Dioxus client consumes these explicit interfaces through a typed `ClientApi` port. Dioxus server functions, target-native bridges and local caches are not alternate API or authority surfaces.
 
 ## Agent tool protocol — planned
 

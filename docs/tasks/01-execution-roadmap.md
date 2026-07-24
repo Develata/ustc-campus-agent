@@ -2,7 +2,7 @@
 
 - `Status`: Current delivery order
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
-- `Architecture decisions`: [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md), [`ADR-0007`](../adr/0007-finite-agent-harness.md), [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md)
+- `Architecture decisions`: [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md), [`ADR-0007`](../adr/0007-finite-agent-harness.md), [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md), [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md)
 - `Acceptance registry`: [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)
 
 This task document schedules implementation; it does not override the owning plan. The three-Plugin topology and implementation order remain fixed.
@@ -221,6 +221,7 @@ The offline planner becomes one installed-plugin journey without weakening hard 
 
 ## P5 — Productization and adversarial verification
 
+- Dioxus Web/PWA first client over explicit versioned HTTP/event APIs; no duplicated client authority;
 - package detail and independent disable/re-enable surfaces;
 - browser desktop/mobile, keyboard, focus, console and network checks;
 - tenant isolation, redaction, revoke, stale/conflict and recovery tests;
@@ -244,4 +245,4 @@ The offline planner becomes one installed-plugin journey without weakening hard 
 - generic workflow/graph engine beyond the bounded `agent-harness/v0` TaskGraph;
 - personalized private ChangeRadar feeds;
 - broad RAG or vector infrastructure;
-- Android-native full experience before Web/PWA lifecycle proof.
+- desktop/mobile full experience before Dioxus Web/PWA lifecycle proof.

@@ -18,7 +18,7 @@ All three products project the same trusted campus facts while retaining indepen
 ## Runtime topology
 
 ```text
-Web/PWA and future clients
+Dioxus Web/PWA first; future desktop/mobile shells
     │ typed HTTP/event API
     ▼
 ustc-agentd authority plane
@@ -38,7 +38,7 @@ ustc-agentd authority plane
     └── model/tool/source adapters and Plugin executors (replaceable)
 ```
 
-The Rust domain core owns legal transitions. A conversation may contain many finite `HarnessRun`s; each graph node may own one bounded `AgentRun`. `PluginPackage` components reach the Agent only after the resolver/gateway compiles them into the versioned Agent tool protocol. Agent code never loads Plugin manifests or implementations; Plugin code never imports the Agent state machine. `ustc-agentd` is the composition root. Clients, prompt projections, context summaries, model frameworks, databases, caches and adapters remain projections or infrastructure.
+The Rust domain core owns legal transitions. A conversation may contain many finite `HarnessRun`s; each graph node may own one bounded `AgentRun`. `PluginPackage` components reach the Agent only after the resolver/gateway compiles them into the versioned Agent tool protocol. Agent code never loads Plugin manifests or implementations; Plugin code never imports the Agent state machine. `ustc-agentd` is the composition root. The future Dioxus client renders typed API/event projections through target-specific shells; it never imports domain authority. Clients, prompt projections, context summaries, model frameworks, databases, caches and adapters remain projections or infrastructure.
 
 Every model request is measured before provider I/O against a pinned context-window policy. Deterministic offloading and bounded lossy compression may reduce the working prompt, but never rewrite canonical transcript, graph, receipts or evidence.
 
@@ -54,7 +54,7 @@ Implemented today:
 - pure deterministic typed invocation resolver with executable synthetic fixtures and bounded `RunSpec` mapping;
 - mechanically enforced Agent–Plugin dependency direction, with the cross-boundary proof owned by the composition root.
 
-The next platform slices are the H0 finite harness kernel and the P0b/P0c Market authority branch; no real invocation application consumer exists yet. They converge before the bounded user Agent journey. The next first-party product slice remains ChangeRadar source/revision/diff. Additional Course Planning productization is not the mainline.
+The next platform slices are the H0 finite harness kernel and the P0b/P0c Market authority branch; no real invocation application consumer or Dioxus client exists yet. They converge before the bounded user Agent journey. The next first-party product slice remains ChangeRadar source/revision/diff. Additional Course Planning productization is not the mainline.
 
 ## Navigation
 

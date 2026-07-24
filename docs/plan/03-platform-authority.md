@@ -4,23 +4,23 @@
 
 - `Layer`: Authority architecture
 - `Status`: Accepted architecture; R0 Agent transition kernel implemented, finite harness and authority plane largely planned
-- `Version`: `0.4.0`
+- `Version`: `0.5.0`
 - `Last Review`: `2026-07-24`
 - `Authority Owns`: authority partition, canonical state ownership, client/execution-plane boundary
 - `Authority Defers To`: product positioning for scope and contracts for exact external shapes
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/04-bounded-agent-harness.md`
-- `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
+- `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/client-shell.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
 - `Counterpart Acceptance`: `HARNESS-*`, `AGENT-*`, `MARKET-*`, `RUNTIME-*`, `PUBLIC-*`
 - `Primary Code Areas`: `crates/platform-core/`, `crates/agent-runtime/`, `apps/ustc-agentd/`, `apps/ustc-agentctl/`
 
 ## 1. Scope
 
-This chapter defines where authoritative decisions live. It does not freeze a production database, frontend framework or external Agent framework before a real slice proves the need.
+This chapter defines where authoritative decisions live. Dioxus is accepted as the future thin multi-client presentation shell, but no client dependency or crate lands before a real Web/PWA API consumer. Production database and external Agent framework choices remain unfrozen until a bounded slice proves the need.
 
 Long-term shape:
 
 ```text
-Web/PWA and future native clients
+Dioxus Web/PWA first; future desktop/mobile shells
     │ versioned HTTP JSON + event stream
     ▼
 USTC Campus Agent authority plane
@@ -41,7 +41,7 @@ USTC Campus Agent authority plane
     └── replaceable execution/provider adapters
 ```
 
-Clients render state and submit typed intent. Execution planes perform bounded work. Neither owns product authority.
+Clients render state and submit typed intent through [`client-shell/v0`](../contracts/client-shell.md). Execution planes perform bounded work. Neither owns product authority. Dioxus types and target-native handles terminate in the client app and never enter domain contracts.
 
 ## 2. Authority partition
 
@@ -129,6 +129,12 @@ The target architecture is one authority plane with replaceable execution locati
 
 A single-tenant local profile MAY run the same binaries for development, demo or private deployment. It is a deployment profile, not a second product or divergent state model.
 
+### 4.1 Multi-client presentation boundary
+
+The future client starts as one Dioxus application with target-neutral routes/components/view-model reduction and narrow `web`, `desktop` and `mobile` adapters. Web/PWA is the first proof surface. Desktop and mobile reuse the same versioned HTTP/event API after Web auth, reconnect and recovery semantics are executable.
+
+Dioxus Fullstack/server functions are not an alternate domain API. Shared UI code cannot access databases, Plugin executors, Agent checkpoints, filesystem/process APIs or platform secret stores directly. Platform capability is admitted through narrow client ports; unsupported capability remains explicit instead of silently changing execution location.
+
 ## 5. Current executable state
 
 Implemented now:
@@ -148,7 +154,7 @@ Not yet implemented:
 - finite HarnessRun/TaskGraph, clarification/review supervisor and context compaction;
 - source ingestion and publication state;
 - production database/evidence store;
-- Web/PWA journey.
+- Dioxus Web/PWA journey and later desktop/mobile target shells.
 
 These planned systems MUST NOT be described as operational merely because their contracts exist.
 

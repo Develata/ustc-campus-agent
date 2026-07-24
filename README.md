@@ -24,6 +24,7 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | Runtime strategy | Rust authority core；ADR-0004 reference systems remain references or bounded adapters, not platform authority |
 | Agent harness | finite HarnessRun over typed TaskGraph；model proposes, Rust validates；every model call passes context-budget preflight |
 | Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
+| Multi-client shell | Rust/Dioxus；Web/PWA first，desktop/mobile 复用同一 typed API/event contract；client 不拥有平台 authority |
 
 ## Repository layout
 
@@ -31,6 +32,7 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 apps/                     # runnable binaries and future frontend shell
   ustc-agentd/            # service daemon skeleton
   ustc-agentctl/          # operator/developer CLI skeleton
+  ustc-client/            # future Dioxus Web/PWA-first thin client; created with first real API consumer
 crates/
   platform-core/          # canonical domain invariants and authority decisions
   agent-runtime/          # Plugin-neutral node AgentRun; future finite harness state, graph, context and review kernel
