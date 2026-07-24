@@ -6,9 +6,9 @@
 - `Version`: `invocation-resolution/v0`
 - `Last Review`: `2026-07-23`
 - `Owning Plan`: [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)
-- `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for state ownership, [`agent-runtime.md`](agent-runtime.md) for run/effect state, and [`permissions.md`](permissions.md) for capability classes
+- `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for state ownership, [`agent-plugin-boundary.md`](agent-plugin-boundary.md) for Agent/gateway/executor separation, [`agent-runtime.md`](agent-runtime.md) for run/effect state, and [`permissions.md`](permissions.md) for capability classes
 - `Acceptance`: implemented P0a `MARKET-005`, `MARKET-006`; supporting evidence only for future cross-boundary `MARKET-007` and later durable `MARKET-002`, `MARKET-003`; downstream implemented `AGENT-002`
-- `Primary Code`: `crates/platform-core/src/invocation.rs`; bounded proof consumer in `crates/agent-runtime/tests/resolved_run_spec.rs`; no real application consumer exists yet
+- `Primary Code`: `crates/platform-core/src/invocation.rs`; bounded cross-boundary proof in `apps/ustc-agentd/tests/resolved_run_spec.rs`; no real application consumer exists yet
 
 ## 1. Scope and authority
 
@@ -23,7 +23,7 @@ Ownership remains split:
 - application composition obtains snapshots and maps a successful resolution into the existing runtime boundary;
 - framework/provider/MCP adapters consume platform decisions but own no package, grant, approval, receipt, budget, audit or replay authority.
 
-No framework is a P0a dependency. The contract adapts mechanisms from the five-reference audit under [`ADR-0004`](../adr/0004-runtime-reference-strategy.md); it does not import framework state or APIs.
+No framework is a P0a dependency. The contract adapts mechanisms from the reference audit under [`ADR-0004`](../adr/0004-runtime-reference-strategy.md); it does not import framework state or APIs.
 
 ## 2. Typed inputs
 
@@ -235,7 +235,7 @@ Every error leaves inputs unchanged, returns no partial projection/dispatch hand
 
 ## 6. Bounded proof consumer and fixtures
 
-The first bounded proof consumer is the cross-crate test in `crates/agent-runtime/tests/resolved_run_spec.rs`:
+The first bounded proof consumer is the cross-crate test in `apps/ustc-agentd/tests/resolved_run_spec.rs`, owned by the composition root rather than either independent module:
 
 1. resolve a synthetic implemented package/component in memory;
 2. combine only successful resolved fields with caller-supplied run ID, provider profile and budgets;
@@ -292,4 +292,4 @@ P0a does not include:
 - autonomous multi-agent orchestration;
 - changes to the three current first-party manifest component/status claims.
 
-Current repository status: manifests, R0 runtime kernel and the pure P0a invocation resolver with typed in-memory snapshots and synthetic fixtures are implemented. `MARKET-005/006` are bound to executable Rust tests. Durable `MARKET-002/003` and cross-boundary `MARKET-007` remain planned; `MARKET-007` still requires the later real application composition seam described above. No current first-party manifest is made runnable by these synthetic fixtures.
+Current repository status: manifests, R0 runtime kernel and the pure P0a invocation resolver with typed in-memory snapshots and synthetic fixtures are implemented. `MARKET-005/006` are bound to executable Rust tests at the resolver and composition-root proof layers. Agent runtime has no Market/Plugin dependency. Durable `MARKET-002/003`, concrete Agent tool protocol and cross-boundary `MARKET-007` remain planned; `MARKET-007` still requires the later real application composition seam described above. No current first-party manifest is made runnable by these synthetic fixtures.

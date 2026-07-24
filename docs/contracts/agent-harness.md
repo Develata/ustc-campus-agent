@@ -8,7 +8,7 @@
 - `Owning Plan`: [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md)
 - `Feature Projection`: [`../features/04-bounded-agent-harness.md`](../features/04-bounded-agent-harness.md)
 - `Acceptance`: `HARNESS-*`; existing node kernel remains `AGENT-*`
-- `Primary Code`: future platform-owned orchestration modules around `crates/agent-runtime/`
+- `Primary Code`: future platform-owned orchestration modules around `crates/agent-runtime/`, using [`agent-plugin-boundary/v0`](agent-plugin-boundary.md)
 
 ## 1. Scope and invariants
 
@@ -29,6 +29,7 @@ Normative invariants:
 4. Clarification, model turns, tool calls, retries, review and remediation are all bounded by immutable policy snapshots.
 5. A hook, model summary, UI state or framework checkpoint never proves task or effect completion.
 6. The same accepted specification and ordered events replay to the same checkpoint.
+7. Harness/Agent code sees only the Plugin-neutral tool protocol; package manifests, component kinds and Plugin implementations terminate at resolver/gateway composition.
 
 ## 2. Harness phase machine
 
@@ -118,6 +119,7 @@ Each `TaskNode` contains:
 node ID and dependency IDs
 immutable TaskContract
 executor and isolation policy
+Plugin-neutral toolset/protocol snapshot
 read/write/service resource claims
 node, review and remediation budgets
 verification policy
@@ -150,7 +152,7 @@ immutable TaskContract
 → fresh read-only reviewer
 ```
 
-The worker thread MAY resume across remediation attempts. Each reviewer invocation is fresh and receives only the immutable contract, current exact artifacts/state, evidence, unresolved findings and prior review receipts. It does not receive worker hidden reasoning.
+The worker thread MAY resume across remediation attempts. Its model/tool loop receives a per-turn `AgentToolsetView`; every tool effect crosses `ToolGateway`, never a direct Plugin callback. Each reviewer invocation is fresh and receives only the immutable contract, current exact artifacts/state, evidence, unresolved findings and prior review receipts. It does not receive worker hidden reasoning.
 
 A `ReviewReceipt` contains one disposition:
 
@@ -224,7 +226,7 @@ The non-compressible anchor set includes:
 - pending effect intents/receipts and unresolved review findings;
 - artifact/evidence references required by acceptance.
 
-Authorized tool definitions are included whole or omitted as a whole by a validated relevance/grant projection; schemas are never truncated.
+Authorized tool definitions come from one immutable `AgentToolsetView` and are included whole or omitted as a whole by a validated relevance/grant projection; schemas and opaque route bindings are never synthesized or truncated.
 
 Compression is compiled first into a finite, acyclic `CompressionPlan` whose level count, call count and source tokens per request satisfy the pinned snapshot. Each planned compression request includes its fixed prompt, input chunk, output reserve and safety reserve, then passes the same inequality exactly once. A compression call MUST NOT re-enter compaction or compression; if its prebuilt request does not fit, the whole plan fails with `ContextBudgetExceeded` before that provider call. Multi-level summaries are allowed only as explicit nodes of the already-bounded plan.
 
@@ -258,6 +260,7 @@ The main model reports only from verified graph state and evidence. If the run e
 - an unbounded autonomous loop;
 - a generic user-programmable workflow language;
 - arbitrary model-generated JavaScript or framework graph as platform authority;
+- arbitrary Plugin hooks, in-process extensions or component-specific branches inside the Agent/harness kernel;
 - shared raw context across coordinator, worker and reviewer;
 - lossy summary as memory, evidence or audit truth;
 - provider overflow as the normal compaction trigger;

@@ -10,13 +10,17 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shlex
+import subprocess
 import sys
+import tempfile
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VALID_GATES = {"pr", "core-demo", "release", "public"}
 VALID_ACCEPTANCE_STATUSES = {"planned", "implemented"}
-STABLE_CATALOG_PREFIXES = {"AGENT", "FP", "HARNESS", "PROC", "SRC"}
+STABLE_CATALOG_PREFIXES = {"AGENT", "FP", "HARNESS", "PKG", "PROC", "SRC"}
 MIN_LONG_HORIZON_CASES = 200
 INVOCATION_FIXTURES = {
     "arguments-golden-v0.json",
@@ -52,10 +56,28 @@ INVOCATION_FIXTURE_TEST_COMMAND = (
     "cargo test --locked -p ustc-campus-agent-core --test invocation_resolution "
     "executable_synthetic_fixture_matrix_is_complete -- --exact"
 )
-INVOCATION_RUNTIME_FIXTURE_TEST_COMMAND = (
-    "cargo test --locked -p ustc-campus-agent-runtime --test resolved_run_spec "
+INVOCATION_COMPOSITION_FIXTURE_TEST_COMMAND = (
+    "cargo test --locked -p ustc-agentd --test resolved_run_spec "
     "fixture_run_spec_mapping_constructs_run_and_denial_constructs_neither -- --exact"
 )
+AGENT_ALLOWED_DIRECT_DEPENDENCIES = {
+    "serde": ("serde", "registry"),
+    "serde_json": ("serde_json", "registry"),
+}
+AGENT_FORBIDDEN_SOURCE_MARKERS = {
+    "ustc_campus_agent_core",
+    "ustc_campus_agent_adapters",
+    "ustc_campus_agent_course_planning",
+    "PluginPackage",
+    "ComponentKind",
+    "McpServerComponent",
+    "NativeRustComponent",
+}
+AGENT_FORBIDDEN_SOURCE_PATTERNS = {
+    r"\bcfg_attr\b": "cfg_attr conditional compilation",
+    r"\binclude(?:_bytes|_str)?\s*!\s*\(": "include macro",
+}
+ALLOWED_AGENT_TEST_CFG = re.compile(r"#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]")
 EXPECTED_DOC_DIRECTORIES = {
     "acceptance",
     "adr",
@@ -111,6 +133,7 @@ KEY_FILES = [
     "docs/acceptance/public-readiness.md",
     "docs/adr/0006-three-default-first-party-plugins.md",
     "docs/adr/0007-finite-agent-harness.md",
+    "docs/adr/0008-agent-plugin-tool-boundary.md",
     "docs/overview/architecture.md",
     "docs/tasks/01-execution-roadmap.md",
     "docs/guides/contributing.md",
@@ -119,6 +142,7 @@ KEY_FILES = [
     "docs/contracts/cli.md",
     "docs/contracts/agent-runtime.md",
     "docs/contracts/agent-harness.md",
+    "docs/contracts/agent-plugin-boundary.md",
     "docs/contracts/data-models.md",
     "docs/contracts/interfaces.md",
     "docs/contracts/invocation-resolution.md",
@@ -607,9 +631,313 @@ def check_invocation_fixtures(issues: list[str]) -> None:
             len(rows) != 1
             or "\timplemented\t" not in rows[0]
             or INVOCATION_FIXTURE_TEST_COMMAND not in rows[0]
-            or INVOCATION_RUNTIME_FIXTURE_TEST_COMMAND not in rows[0]
+            or INVOCATION_COMPOSITION_FIXTURE_TEST_COMMAND not in rows[0]
         ):
             fail(f"{case_id}: implemented invocation binding/status drift", issues)
+
+
+def check_agent_plugin_dependency_direction(issues: list[str]) -> None:
+    agent_manifest_path = ROOT / "crates/agent-runtime/Cargo.toml"
+    composition_manifest_path = ROOT / "apps/ustc-agentd/Cargo.toml"
+    workspace_manifest_path = ROOT / "Cargo.toml"
+    composition_test = ROOT / "apps/ustc-agentd/tests/resolved_run_spec.rs"
+    misplaced_test = ROOT / "crates/agent-runtime/tests/resolved_run_spec.rs"
+
+    try:
+        agent_manifest = tomllib.loads(agent_manifest_path.read_text(encoding="utf-8"))
+        composition_manifest = tomllib.loads(
+            composition_manifest_path.read_text(encoding="utf-8")
+        )
+        workspace_manifest = tomllib.loads(workspace_manifest_path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        fail(f"Agent/Plugin dependency manifest unreadable: {error}", issues)
+        return
+
+    workspace = workspace_manifest.get("workspace", {})
+    workspace_dependencies = workspace.get("dependencies", {}) if isinstance(workspace, dict) else {}
+    if not isinstance(workspace_dependencies, dict):
+        fail("workspace dependency table is not an object", issues)
+        return
+
+    package_table = agent_manifest.get("package", {})
+    library_table = agent_manifest.get("lib", {})
+    if not isinstance(package_table, dict) or package_table.get("build") not in (None, False):
+        fail("agent-runtime build script is forbidden", issues)
+    if not isinstance(library_table, dict) or library_table.get("path") != "src/lib.rs":
+        fail("agent-runtime library target must remain exactly src/lib.rs", issues)
+    for target_kind in ("bin", "example", "bench", "test"):
+        if target_kind in agent_manifest and agent_manifest[target_kind]:
+            fail(f"agent-runtime explicit {target_kind} target is forbidden", issues)
+
+    dependency_identities: set[tuple[str, str, str]] = set()
+
+    def resolve_dependency(alias: str, specification: object) -> tuple[str, str]:
+        resolved = specification
+        if isinstance(specification, dict) and specification.get("workspace") is True:
+            if any(key in specification for key in ("package", "path", "git")):
+                return str(specification.get("package", alias)), "invalid-workspace-override"
+            if alias not in workspace_dependencies:
+                return alias, "missing-workspace-dependency"
+            resolved = workspace_dependencies[alias]
+
+        if isinstance(resolved, str):
+            return alias, "registry"
+        if not isinstance(resolved, dict):
+            return alias, "unknown"
+
+        package = str(resolved.get("package", alias))
+        if "path" in resolved:
+            return package, f"path:{resolved['path']}"
+        if "git" in resolved:
+            return package, "git"
+        if "registry" in resolved:
+            return package, f"registry:{resolved['registry']}"
+        if "version" in resolved:
+            return package, "registry"
+        return package, "unknown"
+
+    def collect_dependencies(values: object) -> None:
+        if not isinstance(values, dict):
+            return
+        for alias, specification in values.items():
+            alias = str(alias)
+            package, source = resolve_dependency(alias, specification)
+            dependency_identities.add((alias, package, source))
+
+    for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+        collect_dependencies(agent_manifest.get(section, {}))
+    target_sections = agent_manifest.get("target", {})
+    if isinstance(target_sections, dict):
+        for target in target_sections.values():
+            if not isinstance(target, dict):
+                continue
+            for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+                collect_dependencies(target.get(section, {}))
+
+    unapproved_dependencies = sorted(
+        f"{alias}->{package}@{source}"
+        for alias, package, source in dependency_identities
+        if AGENT_ALLOWED_DIRECT_DEPENDENCIES.get(alias) != (package, source)
+    )
+    if unapproved_dependencies:
+        fail(
+            "agent-runtime has unapproved direct dependencies: "
+            f"{unapproved_dependencies}",
+            issues,
+        )
+    else:
+        try:
+            completed = subprocess.run(
+                [
+                    "cargo",
+                    "tree",
+                    "--locked",
+                    "--offline",
+                    "--package",
+                    "ustc-campus-agent-runtime",
+                    "--depth",
+                    "1",
+                    "--edges",
+                    "normal,build,dev",
+                    "--target",
+                    "all",
+                    "--prefix",
+                    "depth",
+                    "--format",
+                    "{p}",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            fail(f"cargo tree dependency resolution failed: {error}", issues)
+        else:
+            if completed.returncode != 0:
+                diagnostic = completed.stderr.strip().splitlines()
+                detail = diagnostic[-1] if diagnostic else "unknown cargo tree error"
+                fail(f"cargo tree dependency resolution failed: {detail}", issues)
+            else:
+                resolved_dependencies: set[tuple[str, str]] = set()
+                for line in completed.stdout.splitlines():
+                    if not line.startswith("1"):
+                        continue
+                    entry = line[1:].removesuffix(" (*)")
+                    match = re.fullmatch(r"([A-Za-z0-9_-]+) v[^ ]+(?: \((.+)\))?", entry)
+                    if match is None:
+                        fail(f"cargo tree dependency line is malformed: {line}", issues)
+                        continue
+                    package_name, source_detail = match.groups()
+                    source = "registry" if source_detail is None else f"external:{source_detail}"
+                    resolved_dependencies.add((package_name, source))
+
+                expected_resolved = set(AGENT_ALLOWED_DIRECT_DEPENDENCIES.values())
+                unexpected_resolved = sorted(resolved_dependencies - expected_resolved)
+                if unexpected_resolved:
+                    fail(
+                        "agent-runtime resolved direct dependency is not allowlisted: "
+                        f"{unexpected_resolved}",
+                        issues,
+                    )
+                declared_packages = {package for _, package, _ in dependency_identities}
+                resolved_packages = {package for package, _ in resolved_dependencies}
+                if declared_packages != resolved_packages:
+                    fail(
+                        "agent-runtime declared/resolved direct dependency mismatch: "
+                        f"declared={sorted(declared_packages)} "
+                        f"resolved={sorted(resolved_packages)}",
+                        issues,
+                    )
+
+    cargo_config_paths = [
+        directory / filename
+        for directory in (ROOT, ROOT / "crates", ROOT / "crates/agent-runtime")
+        for filename in (Path(".cargo/config.toml"), Path(".cargo/config"))
+    ]
+    for config_path in cargo_config_paths:
+        if config_path.exists():
+            fail(
+                "repository Cargo config is forbidden for Agent dependency proof: "
+                f"{config_path.relative_to(ROOT).as_posix()}",
+                issues,
+            )
+
+    source_root = ROOT / "crates/agent-runtime"
+    if source_root.is_symlink():
+        fail("agent-runtime crate root must not be a symlink", issues)
+    if source_root.is_dir():
+        for path in sorted(source_root.rglob("*")):
+            if path.is_symlink():
+                fail(
+                    "agent-runtime source tree contains a symlink escape: "
+                    f"{path.relative_to(ROOT).as_posix()}",
+                    issues,
+                )
+        for forbidden_entry in (
+            source_root / "build.rs",
+            source_root / "src/main.rs",
+            source_root / "src/bin",
+            source_root / "examples",
+            source_root / "benches",
+        ):
+            if forbidden_entry.exists():
+                fail(
+                    "agent-runtime extra compilation target is forbidden: "
+                    f"{forbidden_entry.relative_to(ROOT).as_posix()}",
+                    issues,
+                )
+        for path in sorted(source_root.rglob("*.rs")):
+            text = path.read_text(encoding="utf-8")
+            for marker in sorted(AGENT_FORBIDDEN_SOURCE_MARKERS):
+                if marker in text:
+                    fail(
+                        "agent-runtime source crosses the Agent/Plugin boundary: "
+                        f"{path.relative_to(ROOT).as_posix()} contains {marker}",
+                        issues,
+                    )
+            for pattern, description in AGENT_FORBIDDEN_SOURCE_PATTERNS.items():
+                if re.search(pattern, text):
+                    fail(
+                        "agent-runtime source crosses the compilation boundary: "
+                        f"{path.relative_to(ROOT).as_posix()} uses {description}",
+                        issues,
+                    )
+            conditional_text = ALLOWED_AGENT_TEST_CFG.sub("", text)
+            if re.search(r"\bcfg\b", conditional_text):
+                fail(
+                    "agent-runtime source crosses the compilation boundary: "
+                    f"{path.relative_to(ROOT).as_posix()} uses unsupported cfg",
+                    issues,
+                )
+
+        with tempfile.TemporaryDirectory(prefix="agent-boundary-") as directory:
+            for probe_name, probe_arguments in (("library", []), ("test", ["--test"])):
+                dep_info_path = Path(directory) / f"agent-runtime-{probe_name}.d"
+                try:
+                    completed = subprocess.run(
+                        [
+                            "rustc",
+                            "--edition",
+                            "2024",
+                            "--crate-name",
+                            f"agent_boundary_{probe_name}_probe",
+                            "--crate-type",
+                            "lib",
+                            *probe_arguments,
+                            "--emit",
+                            f"dep-info={dep_info_path}",
+                            "crates/agent-runtime/src/lib.rs",
+                        ],
+                        cwd=ROOT,
+                        capture_output=True,
+                        check=False,
+                        text=True,
+                        timeout=30,
+                    )
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    fail(f"rustc {probe_name} dependency discovery failed: {error}", issues)
+                    continue
+                if not dep_info_path.is_file():
+                    diagnostic = completed.stderr.strip().splitlines()
+                    detail = diagnostic[-1] if diagnostic else "rustc emitted no dep-info"
+                    fail(f"rustc {probe_name} dependency discovery failed: {detail}", issues)
+                    continue
+
+                compilation_inputs: set[Path] = set()
+                for line in dep_info_path.read_text(encoding="utf-8").splitlines():
+                    if not line or line.startswith("#"):
+                        continue
+                    if ": " in line:
+                        dependencies = line.split(": ", 1)[1]
+                    elif line.endswith(":"):
+                        dependencies = line[:-1]
+                    else:
+                        fail(
+                            f"rustc {probe_name} dep-info contains an unparsed line: {line!r}",
+                            issues,
+                        )
+                        continue
+                    try:
+                        tokens = shlex.split(dependencies)
+                    except ValueError as error:
+                        fail(
+                            f"rustc {probe_name} dep-info path parsing failed: {error}",
+                            issues,
+                        )
+                        continue
+                    for token in tokens:
+                        path = Path(token.replace("$$", "$"))
+                        compilation_inputs.add(
+                            path.resolve() if path.is_absolute() else (ROOT / path).resolve()
+                        )
+                resolved_source_root = source_root.resolve()
+                escaped_inputs = sorted(
+                    path.as_posix()
+                    for path in compilation_inputs
+                    if not path.is_relative_to(resolved_source_root)
+                )
+                if escaped_inputs:
+                    fail(
+                        f"agent-runtime rustc {probe_name} dep-info escapes the owned crate tree: "
+                        f"{escaped_inputs}",
+                        issues,
+                    )
+                expected_entrypoint = (source_root / "src/lib.rs").resolve()
+                if expected_entrypoint not in compilation_inputs:
+                    fail(f"rustc {probe_name} dep-info omitted the Agent entrypoint", issues)
+
+    composition_dependencies = composition_manifest.get("dependencies", {})
+    if not isinstance(composition_dependencies, dict) or not {
+        "ustc-campus-agent-runtime",
+        "ustc-campus-agent-core",
+    }.issubset(composition_dependencies):
+        fail("ustc-agentd must remain the Agent/Plugin composition root", issues)
+    if misplaced_test.exists():
+        fail("cross-boundary proof must not be owned by agent-runtime", issues)
+    if not composition_test.is_file():
+        fail("composition-root resolved_run_spec proof is missing", issues)
 
 
 def check_acceptance_matrix(issues: list[str]) -> None:
@@ -685,6 +1013,7 @@ def main() -> int:
     check_market(issues)
     check_course_fixture(issues)
     check_invocation_fixtures(issues)
+    check_agent_plugin_dependency_direction(issues)
     check_acceptance_matrix(issues)
     check_acceptance_catalog(issues)
     if issues:

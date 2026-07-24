@@ -12,11 +12,11 @@ This matrix keeps the four live documentation layers aligned:
 | `00-engineering-constitution` | — | repository `AGENTS.md` | `docs/acceptance/gates.md`, repository checker |
 | `01-terminology` | all feature vocabulary | `market/` schema/capability IDs | matrix/checker vocabulary |
 | `02-product-positioning` | `00-market-browse-install`, `01-ustc-affairs-navigator`, `02-ustc-change-radar`, `03-campus-opportunity-graph` | `plugin-package.md` | `MARKET-*`, `FP-*` |
-| `03-platform-authority` | `00-market-browse-install`, `04-bounded-agent-harness` | `agent-harness.md`, `invocation-resolution.md`, `agent-runtime.md`, `interfaces.md`, `permissions.md`, Rust domain identities | `HARNESS-*`, `AGENT-*`, `MARKET-*`, `RUNTIME-*` |
-| `04-market-and-plugin-lifecycle` | `00-market-browse-install` | `invocation-resolution.md`, `plugin-package.md`, `permissions.md`, Market JSON schema/registry/manifests | `MARKET-*`, `AGENT-002`, `FP-006`, `FP-015`, `FP-007` |
+| `03-platform-authority` | `00-market-browse-install`, `04-bounded-agent-harness` | `agent-harness.md`, `agent-plugin-boundary.md`, `invocation-resolution.md`, `agent-runtime.md`, `interfaces.md`, `permissions.md`, Rust domain identities | `HARNESS-*`, `AGENT-*`, `MARKET-*`, `RUNTIME-*` |
+| `04-market-and-plugin-lifecycle` | `00-market-browse-install` | `agent-plugin-boundary.md`, `invocation-resolution.md`, `plugin-package.md`, `permissions.md`, Market JSON schema/registry/manifests | `MARKET-*`, `PKG-*`, `AGENT-002`, `AGENT-017`, `FP-006`, `FP-015`, `FP-007` |
 | `05-campus-trust-kernel` | all three first-party feature docs | `source-import.md`, `data-models.md` | `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
 | `06-first-party-plugins` | three first-party feature docs | package manifests, `data-models.md`, `source-import.md` | `FP-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
-| `07-runtime-and-integration` | `04-bounded-agent-harness`; R0 owned kernel; P0a bounded resolver proof | `agent-harness.md`, `agent-runtime.md`, `invocation-resolution.md`, `interfaces.md`, `permissions.md` | planned `HARNESS-*`; `AGENT-001`, `AGENT-002`; implemented `MARKET-005/006`; planned `MARKET-007`, `RUNTIME-*` |
+| `07-runtime-and-integration` | `04-bounded-agent-harness`; R0 owned kernel; P0a bounded resolver proof | `agent-harness.md`, `agent-plugin-boundary.md`, `agent-runtime.md`, `invocation-resolution.md`, `interfaces.md`, `permissions.md` | planned `HARNESS-*`; `AGENT-001/002/017`, planned `AGENT-018`; implemented `MARKET-005/006`; planned `PKG-019/020`, `MARKET-007`, `RUNTIME-*` |
 | `08-security-and-delivery` | publication and permission failure states across features | `permissions.md`, `source-import.md` | `PUBLIC-*`, release-gated security rows |
 
 ## Non-matrix documents

@@ -244,6 +244,8 @@ dependencies = [
 name = "ustc-agentd"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "ustc-campus-agent-core",
  "ustc-campus-agent-runtime",
 ]
@@ -282,7 +284,6 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "ustc-campus-agent-core",
 ]
 
 [[package]]

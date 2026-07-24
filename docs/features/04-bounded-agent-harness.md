@@ -2,8 +2,8 @@
 
 - `Status`: Planned user journey; no production orchestrator or UI exists
 - `Owning plan`: [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md)
-- `Contract`: [`../contracts/agent-harness.md`](../contracts/agent-harness.md)
-- `Acceptance`: `HARNESS-*`
+- `Contracts`: [`../contracts/agent-harness.md`](../contracts/agent-harness.md), [`../contracts/agent-plugin-boundary.md`](../contracts/agent-plugin-boundary.md)
+- `Acceptance`: `HARNESS-*`, `AGENT-017/018`, `PKG-019/020`
 
 ## Goal
 
@@ -33,12 +33,15 @@ user submits intent
 → user answers before the displayed deadline
 → platform accepts and displays a validated plan graph
 → ready nodes execute under bounded permissions and budgets
+→ Plugin capabilities are exposed only as frozen versioned tools through ToolGateway
 → each required node produces evidence and receives independent review when policy requires it
 → final verification passes
 → platform reports evidenced results
 ```
 
 The graph may degenerate to one direct node. Planner, delegation and model reviewer are conditional mechanisms, not mandatory ceremony for simple work.
+
+The user-visible Agent remains stable when a Plugin is installed, updated or disabled: only the approved tool projection changes. Conversely, changing the Agent framework/harness does not rebuild or rewrite Plugin packages while the major tool protocol remains compatible.
 
 ## Context behavior
 
@@ -61,4 +64,5 @@ Canonical history remains recoverable. If a safe request still cannot be built, 
 - mandatory multi-agent execution for every request;
 - user-visible chain-of-thought;
 - arbitrary workflow scripting;
+- arbitrary Plugin callbacks or package-specific state-machine branches inside the Agent;
 - reporting a model summary, process exit or hook callback as proof of completion.

@@ -13,7 +13,6 @@ serde.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
-ustc-campus-agent-core = { path = "../platform-core" }
 
 [lib]
 path = "src/lib.rs"

@@ -290,14 +290,13 @@ class InvocationFixtureContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary_directory.name)
-        source = REPO_ROOT / "crates/platform-core/tests/fixtures/invocation-resolution"
-        shutil.copytree(
-            source,
-            self.root / "crates/platform-core/tests/fixtures/invocation-resolution",
-        )
+        shutil.copytree(REPO_ROOT / "crates", self.root / "crates")
+        shutil.copytree(REPO_ROOT / "apps", self.root / "apps")
         acceptance = self.root / "docs/acceptance"
         acceptance.mkdir(parents=True)
         shutil.copy2(REPO_ROOT / "docs/acceptance/matrix.tsv", acceptance / "matrix.tsv")
+        shutil.copy2(REPO_ROOT / "Cargo.toml", self.root / "Cargo.toml")
+        shutil.copy2(REPO_ROOT / "Cargo.lock", self.root / "Cargo.lock")
         self.original_root = cast(Path, getattr(checker, "ROOT"))
         setattr(checker, "ROOT", self.root)
 
@@ -308,6 +307,11 @@ class InvocationFixtureContractTests(unittest.TestCase):
     def check_invocation(self) -> list[str]:
         issues: list[str] = []
         checker.check_invocation_fixtures(issues)
+        return issues
+
+    def check_agent_plugin_dependency_direction(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_agent_plugin_dependency_direction(issues)
         return issues
 
     def test_exact_invocation_fixture_set_and_bindings_pass(self) -> None:
@@ -393,7 +397,7 @@ class InvocationFixtureContractTests(unittest.TestCase):
         matrix = path.read_text(encoding="utf-8")
         commands = [
             checker.INVOCATION_FIXTURE_TEST_COMMAND,
-            checker.INVOCATION_RUNTIME_FIXTURE_TEST_COMMAND,
+            checker.INVOCATION_COMPOSITION_FIXTURE_TEST_COMMAND,
         ]
         for command in commands:
             path.write_text(matrix.replace(command + " && ", "", 1), encoding="utf-8")
@@ -404,6 +408,257 @@ class InvocationFixtureContractTests(unittest.TestCase):
                 ),
                 command,
             )
+
+    def test_agent_runtime_dependency_allowlist_fails_closed(self) -> None:
+        self.assertEqual(self.check_agent_plugin_dependency_direction(), [])
+
+        manifest_path = self.root / "crates/agent-runtime/Cargo.toml"
+        manifest = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(
+            manifest.replace(
+                "[dev-dependencies]",
+                "[dev-dependencies]\nustc-campus-agent-core = { path = \"../platform-core\" }",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "agent-runtime has unapproved direct dependencies" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_dependency_alias_fails_closed(self) -> None:
+        manifest_path = self.root / "crates/agent-runtime/Cargo.toml"
+        manifest = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(
+            manifest.replace(
+                "[dev-dependencies]",
+                "[dev-dependencies]\nplugin_api = { package = \"ustc-campus-agent-core\", path = \"../platform-core\" }",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "plugin_api->ustc-campus-agent-core" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_unknown_future_dependency_fails_closed(self) -> None:
+        manifest_path = self.root / "crates/agent-runtime/Cargo.toml"
+        manifest = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(
+            manifest.replace(
+                "[dev-dependencies]",
+                "[dev-dependencies]\nfuture-plugin = { path = \"../future-plugin\" }",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "future-plugin->future-plugin" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_workspace_dependency_redirect_fails_closed(self) -> None:
+        manifest_path = self.root / "Cargo.toml"
+        manifest = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(
+            manifest.replace(
+                'serde_json = "1.0.151"',
+                'serde_json = { package = "future-plugin", path = "crates/future-plugin" }',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "serde_json->future-plugin@path:crates/future-plugin" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_same_name_workspace_path_fails_closed(self) -> None:
+        manifest_path = self.root / "Cargo.toml"
+        manifest = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(
+            manifest.replace(
+                'serde_json = "1.0.151"',
+                'serde_json = { path = "crates/plugin-disguised-as-serde-json" }',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "serde_json->serde_json@path:crates/plugin-disguised-as-serde-json" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_alternate_registry_fails_closed(self) -> None:
+        manifest_path = self.root / "Cargo.toml"
+        manifest = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(
+            manifest.replace(
+                'serde_json = "1.0.151"',
+                'serde_json = { version = "1.0.151", registry = "plugin-registry" }',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "serde_json->serde_json@registry:plugin-registry" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_repository_source_replacement_fails_closed(self) -> None:
+        cargo_directory = self.root / ".cargo"
+        cargo_directory.mkdir()
+        (cargo_directory / "config.toml").write_text(
+            '[source.crates-io]\nreplace-with = "vendored-sources"\n\n'
+            '[source.vendored-sources]\ndirectory = "vendor"\n',
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "repository Cargo config is forbidden" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_crates_io_patch_fails_closed(self) -> None:
+        plugin = self.root / "plugins/serde_json"
+        (plugin / "src").mkdir(parents=True)
+        (plugin / "Cargo.toml").write_text(
+            '[package]\nname = "serde_json"\nversion = "1.0.151"\nedition = "2024"\n',
+            encoding="utf-8",
+        )
+        (plugin / "src/lib.rs").write_text("pub struct PluginCode;\n", encoding="utf-8")
+        manifest_path = self.root / "Cargo.toml"
+        with manifest_path.open("a", encoding="utf-8") as manifest:
+            manifest.write(
+                '\n[patch.crates-io]\nserde_json = { path = "plugins/serde_json" }\n'
+            )
+
+        issues = self.check_agent_plugin_dependency_direction()
+        self.assertTrue(
+            any(
+                "cargo tree dependency resolution failed" in issue
+                or "agent-runtime resolved direct dependency is not allowlisted" in issue
+                for issue in issues
+            ),
+            issues,
+        )
+
+    def test_agent_runtime_external_library_target_fails_closed(self) -> None:
+        manifest_path = self.root / "crates/agent-runtime/Cargo.toml"
+        manifest = manifest_path.read_text(encoding="utf-8")
+        manifest_path.write_text(
+            manifest.replace(
+                'path = "src/lib.rs"',
+                'path = "../../plugins/agent-runtime-wrapper.rs"',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "agent-runtime library target must remain exactly src/lib.rs" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_include_code_escape_fails_closed(self) -> None:
+        source_path = self.root / "crates/agent-runtime/src/escape.rs"
+        source_path.write_text(
+            'include!("../../../plugins/plugin-code.rs");\n',
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "agent-runtime source crosses the compilation boundary" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_cfg_attr_path_escape_fails_closed(self) -> None:
+        source_path = self.root / "crates/agent-runtime/src/escape.rs"
+        source_path.write_text(
+            '#[cfg_attr(all(), path /* bypass */ = "../../../plugins/plugin.rs")]\n'
+            "mod plugin_impl;\n",
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "agent-runtime source crosses the compilation boundary" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_rustc_dep_info_catches_obfuscated_path(self) -> None:
+        plugin_source = self.root / "plugins/plugin_impl.rs"
+        plugin_source.parent.mkdir(parents=True, exist_ok=True)
+        plugin_source.write_text("pub struct PluginImpl;\n", encoding="utf-8")
+        library_path = self.root / "crates/agent-runtime/src/lib.rs"
+        with library_path.open("a", encoding="utf-8") as library:
+            library.write(
+                '\n#[/* comment */ path = "../../../plugins/plugin_impl.rs"]\n'
+                "mod plugin_impl;\n"
+            )
+        self.assertTrue(
+            any(
+                "agent-runtime rustc library dep-info escapes the owned crate tree" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_test_dep_info_catches_test_only_path(self) -> None:
+        plugin_source = self.root / "plugins/test_plugin.rs"
+        plugin_source.parent.mkdir(parents=True, exist_ok=True)
+        plugin_source.write_text("pub struct TestPlugin;\n", encoding="utf-8")
+        library_path = self.root / "crates/agent-runtime/src/lib.rs"
+        with library_path.open("a", encoding="utf-8") as library:
+            library.write(
+                '\n#[cfg(test)]\n#[path = "../../../plugins/test_plugin.rs"]\n'
+                "mod test_plugin;\n"
+            )
+        self.assertTrue(
+            any(
+                "agent-runtime rustc test dep-info escapes the owned crate tree" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_source_symlink_fails_closed(self) -> None:
+        plugin_source = self.root / "plugins/plugin-code.rs"
+        plugin_source.parent.mkdir(parents=True, exist_ok=True)
+        plugin_source.write_text("pub struct PluginCode;\n", encoding="utf-8")
+        source_link = self.root / "crates/agent-runtime/src/plugin_code.rs"
+        source_link.symlink_to(plugin_source)
+        self.assertTrue(
+            any(
+                "agent-runtime source tree contains a symlink escape" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
+
+    def test_agent_runtime_source_boundary_fails_closed(self) -> None:
+        source_path = self.root / "crates/agent-runtime/src/forbidden.rs"
+        source_path.write_text("use ustc_campus_agent_core::invocation::*;\n", encoding="utf-8")
+        self.assertTrue(
+            any(
+                "agent-runtime source crosses the Agent/Plugin boundary" in issue
+                for issue in self.check_agent_plugin_dependency_direction()
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -6,16 +6,18 @@
 - `Version`: `agent-run/v0`
 - `Last Review`: `2026-07-24`
 - `Owning Plan`: [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md)
-- `Acceptance`: active `AGENT-001`, `AGENT-002`; planned `RUNTIME-*` and remaining `AGENT-*`
+- `Acceptance`: active `AGENT-001`, `AGENT-002`, `AGENT-017`; planned `RUNTIME-*` and remaining `AGENT-*`
 - `Primary Code`: `crates/agent-runtime/`
 
 ## 1. Scope
 
-The Agent runtime kernel owns immutable identity, legal state transitions, event ordering, effect intent/receipt identity, budget accounting and deterministic replay for one bounded node execution. It is framework-neutral and contains no provider SDK, MCP transport, database, HTTP server or user interface.
+The Agent runtime kernel owns immutable identity, legal state transitions, event ordering, effect intent/receipt identity, budget accounting and deterministic replay for one bounded node execution. It is framework- and Plugin-neutral and contains no provider SDK, MCP transport, Market manifest/type, Plugin implementation, adapter, database, HTTP server or user interface dependency.
 
 One `AgentRun` is not a conversation session or complete user-task orchestrator. The planned [`HarnessRun`](agent-harness.md) owns clarification, `TaskGraph`, node supervision, review/remediation, context projection and final reporting above one or more `AgentRun`s.
 
 The kernel does not decide that a package is installed or that a capability is granted. The implemented pure [`invocation-resolution/v0`](invocation-resolution.md) resolver supplies an already pinned in-memory installation/component/grant/schema projection; the kernel records and preserves those identities without widening them. Durable snapshot loading and application composition remain planned.
+
+Package, installation and component strings retained by `agent-run/v0` are opaque provenance bindings for replay/audit compatibility. Runtime code does not parse component kind, load Plugin configuration or branch on package identity. [`agent-plugin-boundary/v0`](agent-plugin-boundary.md) owns the future tool protocol and composition seam.
 
 ## 2. Immutable `RunSpec`
 
@@ -42,6 +44,7 @@ Invariants:
 - every budget is non-zero;
 - the spec is immutable after creation; every future durable checkpoint/export must include it exactly rather than reconstructing it from framework state;
 - provider/framework state may reference `run_id`, but cannot replace any spec field.
+- package/install/component fields are uninterpreted identities; adding a Plugin or executor kind cannot add an Agent transition or code path.
 
 ## 3. State machine
 
@@ -141,9 +144,9 @@ The kernel distinguishes at least:
 
 No failure silently changes provider, package, component, tool, grant, schema or runtime identity.
 
-## 8. Adapter boundary
+## 8. Tool and adapter boundary
 
-Provider, MCP and tool implementations belong outside this crate. They may consume platform-owned request/intent structures and return typed outcomes, but they do not own:
+Provider, MCP and tool/Plugin implementations belong outside this crate. The Agent side consumes only versioned Plugin-neutral tool definitions/calls/results. A composition-root `ToolGateway` maps opaque routes to authorized executor requests and typed outcomes, but neither gateway nor executor owns:
 
 - `RunSpec` or legal phase transitions;
 - grants or approval state;
@@ -153,12 +156,15 @@ Provider, MCP and tool implementations belong outside this crate. They may consu
 
 A concrete adapter trait is introduced only with its first bounded adapter consumer. R0 deliberately avoids freezing an async/runtime/provider API from a hypothetical implementation.
 
+The crate MUST build and test without Market, Plugin implementation or adapter dependencies. Cross-boundary resolver→`RunSpec` proofs belong to the application composition root. A future small protocol crate is allowed only when Agent and fake-gateway consumers both exist; it contains no package or state-machine implementation types.
+
 ## 9. Current evidence and non-goals
 
 Implemented evidence:
 
 - `AGENT-001`: legal transition and deterministic replay tests;
 - `AGENT-002`: immutable exact run-spec validation and round-trip tests;
+- `AGENT-017`: exact crate-target/source containment, rustc dep-info input confinement, conditional/include escape rejection, narrow declaration allowlist, repository Cargo-config rejection, locked/offline resolved dependency-tree check and composition-root cross-boundary proof;
 - effect ordering, receipt idempotency and budget fail-closed unit tests supporting—but not completing—later integration cases.
 
 Still planned:
@@ -170,4 +176,5 @@ Still planned:
 - external tool execution and crash recovery;
 - HTTP/SSE routes;
 - finite HarnessRun/TaskGraph and context-budget preflight;
+- concrete `agent-tool-protocol/v0`, ToolGateway and packaged Plugin executor;
 - hosted runtime.

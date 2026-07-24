@@ -4,6 +4,8 @@ PluginPackage is the unit users inspect, install, authorize, disable, and upgrad
 
 Required fields are defined by [`market/schemas/plugin-package.schema.json`](../../market/schemas/plugin-package.schema.json).
 
+Runtime compilation and Agent isolation are defined by [`agent-plugin-boundary/v0`](agent-plugin-boundary.md). Package installation never means direct linkage into the Agent kernel.
+
 ## Default first-party packages
 
 - [`ustc.affairs-navigator`](../../market/packages/ustc.affairs-navigator/package.json)
@@ -22,8 +24,9 @@ Browse
 → Install exact package version
 → Resolve grants
 → Enable
-→ Agent discovers tools
-→ Invoke through gateway
+→ Resolver/gateway compiles namespaced contributions
+→ Agent discovers Plugin-neutral tools
+→ Invoke through gateway and bounded executor
 → Disable/revoke
 → Invocation denied
 → Re-enable/upgrade/rollback under explicit policy
@@ -32,3 +35,11 @@ Browse
 Installation/grants are user runtime state and must not be encoded into market manifests.
 
 The manifest's `installPolicy` is catalog policy, not proof that runtime installation state exists. Actual pinned versions, grants, enabled state, and receipts remain runtime authority.
+
+## Agent integration boundary
+
+- `SkillComponent` and `DeclarativeResourcePack` contribute bounded context/resources only.
+- `McpServerComponent` and admitted `NativeRustComponent` may contribute tool definitions and private executor routes only after binding/schema/capability review.
+- Agent code sees versioned tool definitions/calls/results, not manifests, component kinds, endpoints or implementation handles.
+- `NativeRustComponent` does not permit dynamic linkage into `agent-runtime`; its runnable artifact/profile remains separately versioned and replaceable.
+- Package update/disable/revoke creates or removes future projections without mutating in-flight runs or historical receipts.

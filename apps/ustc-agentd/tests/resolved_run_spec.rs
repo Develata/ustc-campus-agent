@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use ustc_campus_agent_core::invocation::*;
 use ustc_campus_agent_runtime::{AgentRun, RUN_SPEC_SCHEMA_VERSION, RunBudgets, RunSpec};
 
-#[path = "../../platform-core/tests/support/invocation_fixture.rs"]
+#[path = "../../../crates/platform-core/tests/support/invocation_fixture.rs"]
 mod invocation_fixture;
 
 use invocation_fixture::{
@@ -207,7 +207,7 @@ fn denied_resolution_cannot_construct_run_spec_or_run() {
 #[test]
 fn fixture_run_spec_mapping_constructs_run_and_denial_constructs_neither() {
     let fixture = match serde_json::from_str::<InvocationFixture>(include_str!(
-        "../../platform-core/tests/fixtures/invocation-resolution/valid-synthetic-v0.json"
+        "../../../crates/platform-core/tests/fixtures/invocation-resolution/valid-synthetic-v0.json"
     )) {
         Ok(value) => value,
         Err(error) => panic!("valid synthetic fixture must parse: {error}"),

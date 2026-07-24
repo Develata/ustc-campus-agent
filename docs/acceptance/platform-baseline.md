@@ -4,7 +4,7 @@
 
 - `Layer`: `Acceptance / Coverage / Evidence`
 - `Status`: **Planning baseline; only `matrix.tsv` is the active competition gate registry**
-- `Version`: `0.4.0`
+- `Version`: `0.5.0`
 - `Last Review`: `2026-07-24`
 - `Authority Owns`: stable long-horizon case IDs, planned assertions and evidence-binding classes
 - `Authority Defers To`: `docs/plan/`, `docs/contracts/` and `docs/acceptance/matrix.tsv` for current scope/status
@@ -49,10 +49,10 @@ A manual or automated case cannot pass without a named owner, exact evidence and
 | --- | --- | --- | --- |
 | engineering/docs projection | [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md), [`../coverage-matrix.md`](../coverage-matrix.md) | `DOC-*` | repository checker + manual doc review |
 | typed config and CLI smoke | [`../contracts/cli.md`](../contracts/cli.md), [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `CFG-*` | `ustc-agentctl` smoke + typed loader tests |
-| catalog authority and Plugin lifecycle | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) | `CAT-*`, `PKG-*` | catalog validator + domain/integration tests |
+| catalog authority and Plugin lifecycle | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md), [`../contracts/agent-plugin-boundary.md`](../contracts/agent-plugin-boundary.md) | `CAT-*`, `PKG-*` | catalog validator + domain/integration tests |
 | identity/session/RBAC and capability isolation | [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md), [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `AUTH-*`, `SEC-*` | policy/integration/browser/security evidence |
 | community component validation | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) | `SKILL-*` | deterministic validator + security review |
-| finite Agent harness, MCP binding, hosted runtime, node AgentRun state and model providers | [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md) | `HARNESS-*`, `MCP-*`, `RUN-*`, `AGENT-*`, `AI-*` | owned state-machine/context/graph tests + protocol/real-host conformance |
+| finite Agent harness, Agent–Plugin tool protocol, MCP binding, hosted runtime, node AgentRun state and model providers | [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md), [`../contracts/agent-plugin-boundary.md`](../contracts/agent-plugin-boundary.md) | `HARNESS-*`, `MCP-*`, `RUN-*`, `AGENT-*`, `AI-*` | owned state-machine/context/graph tests + protocol/real-host conformance |
 | Market Web, i18n and clients | [`../features/00-market-browse-install.md`](../features/00-market-browse-install.md), [`../guides/github-pages-brief.md`](../guides/github-pages-brief.md) | `WEB-*`, `I18N-*`, `CLIENT-*` | browser/client conformance evidence |
 | Campus Trust Kernel, procedures, graph and evaluation | [`../plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md), [`../plan/06-first-party-plugins.md`](../plan/06-first-party-plugins.md) | `SRC-*`, `PROC-*`, `GRAPH-*`, `EVAL-*`, `FP-*` | source/procedure/graph invariants + evaluated journeys |
 | reliability, deployment and restore | [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `REL-*`, `DEP-*` | doctor/preflight/restore/remote read-back gates |
@@ -70,6 +70,7 @@ Long-horizon suites remain planned until projected into `matrix.tsv`. New curren
 | [`ADR-0005`](../adr/0005-public-transition-deferred.md) | publication only after explicit gate | `WEB-*`, `SEC-*`, `REL-*`, `DEP-*` |
 | [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md) | three equal first-party Plugins over one kernel | `SRC-*`, `PROC-*`, `GRAPH-*`, `EVAL-*`, `FP-*` |
 | [`ADR-0007`](../adr/0007-finite-agent-harness.md) | finite HarnessRun, typed TaskGraph, bounded review and pre-send context budget | `HARNESS-*`, `AGENT-*`, `AI-*` |
+| [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md) | Agent and Plugin evolve independently through a versioned ToolGateway protocol | `PKG-*`, `MCP-*`, `AGENT-*`, `HARNESS-*` |
 
 [`../coverage-matrix.md`](../coverage-matrix.md) owns current plan/feature/contract/acceptance projection. This catalog preserves candidate and long-horizon cases without creating a second current authority map.
 
@@ -154,6 +155,8 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `PKG-016` | shared service binding remains tenant-scoped and installation-owned | rust-integration | integration |
 | `PKG-017` | DeclarativeResourcePack resolves exact ID/version/digest/provenance | rust-unit | PR |
 | `PKG-018` | declarative resource cannot register executable/grant authority; duplicate/conflicting IDs fail closed | rust-integration | integration |
+| `PKG-019` | admitted executable components compile into namespaced tool definitions and private routes without Agent linkage | rust-integration | PR |
+| `PKG-020` | package update disable or revoke changes only new projections while in-flight Agent toolsets remain pinned | rust-integration | integration |
 
 ## 8. Identity, session and RBAC — `AUTH-*`
 
@@ -260,6 +263,8 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AGENT-014` | every transformed tool/procedure input is re-schema-validated and re-authorized before effect | rust-integration | integration |
 | `AGENT-015` | security/publish Gate error fails closed; Observer failure policy is explicit and evidenced | rust-integration | release |
 | `AGENT-016` | restore validates runtime dependency IDs/versions and never auto-retries non-idempotent unfinished effects | rust-integration | release |
+| `AGENT-017` | Agent runtime compilation inputs and all direct Cargo dependency classes remain confined and allowlisted, free of Market Plugin component and adapter implementations; composition owns cross-boundary proof | rust-cli-smoke | PR |
+| `AGENT-018` | Agent framework/harness replacement passes the same tool-protocol fixtures without Plugin package or executor changes | external-conformance | integration |
 
 ### Finite Agent harness — `HARNESS-*`
 

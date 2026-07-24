@@ -2,8 +2,8 @@
 
 - `Status`: Planned user journey; manifest validation exists
 - `Owning plan`: `docs/plan/04-market-and-plugin-lifecycle.md`
-- `Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
-- `Acceptance`: `MARKET-*`, `AGENT-002`, `FP-006`, `FP-015`, `FP-007`
+- `Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
+- `Acceptance`: `MARKET-*`, `PKG-019/020`, `AGENT-002`, `AGENT-017/018`, `FP-006`, `FP-015`, `FP-007`
 
 ## Goal
 
@@ -31,7 +31,8 @@ anonymous visitor browses package metadata
 → signs in before installation
 → confirms exact package and grants
 → installation becomes enabled
-→ Agent can discover approved capability
+→ resolver/gateway projects approved Plugin-neutral tools
+→ Agent can discover approved capability without loading Plugin code
 → user disables Plugin
 → discovery and invocation are denied
 → user re-enables Plugin
@@ -39,6 +40,8 @@ anonymous visitor browses package metadata
 ```
 
 The three default first-party packages appear as independent products and can be disabled/re-enabled independently.
+
+Package installation or update never updates the Agent framework. The Agent consumes the same versioned tool definitions/calls/results while package/component/executor identities remain gateway-private. In-flight runs keep their frozen projection; a new package version appears only in a later accepted projection.
 
 ## Failure and recovery copy
 
@@ -54,6 +57,7 @@ The three default first-party packages appear as independent products and can be
 - anonymous installation or execution;
 - hidden default grants;
 - arbitrary package code execution;
+- direct Plugin linkage or arbitrary extension hooks inside the Agent kernel;
 - treating a package card as proof of backend runtime;
 - public download links before verified releases.
 

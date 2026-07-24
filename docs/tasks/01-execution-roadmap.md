@@ -2,7 +2,7 @@
 
 - `Status`: Current delivery order
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
-- `Architecture decisions`: [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md), [`ADR-0007`](../adr/0007-finite-agent-harness.md)
+- `Architecture decisions`: [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md), [`ADR-0007`](../adr/0007-finite-agent-harness.md), [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md)
 - `Acceptance registry`: [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)
 
 This task document schedules implementation; it does not override the owning plan. The three-Plugin topology and implementation order remain fixed.
@@ -33,6 +33,7 @@ The Course Planning spike was completed out of order. It remains reusable eviden
 - Course Planning bounded spike: strict synthetic fixture, deterministic planner, CLI smoke, provenance and fail-closed tests;
 - R0 framework-neutral Agent runtime kernel: immutable run spec, legal transitions, replay, effect identity/order and budget accounting;
 - P0a pure typed invocation resolver: canonical schemas/arguments, exact authority projection, frozen dispatch and bounded `RunSpec` proof;
+- Agent–Plugin dependency inversion: `agent-runtime` is Plugin/Market-independent and composition owns the cross-boundary proof;
 - plan/feature/contract/acceptance documentation layering.
 
 ## R0 — Platform-owned Agent runtime kernel
@@ -51,6 +52,7 @@ The Course Planning spike was completed out of order. It remains reusable eviden
 - replay-stable budget accounting;
 - typed fail-closed errors with no silent provider/tool/runtime fallback;
 - adapter boundary retained without prematurely freezing a framework API.
+- no production or test dependency from `agent-runtime` to Market, Plugin implementations or adapter crates.
 
 **Exit gate**
 
@@ -76,7 +78,7 @@ P0 is ordered `P0a → P0b → P0c`. Invocation authority comes first so catalog
 - immutable, deterministically ordered `ToolProjectionSnapshot` whose digest binds the complete provider-visible tool definition and exact dispatch identity;
 - pure call-authorization semantics and deny-side recheck that support, but do not yet prove, later placement before effect intent or outbound I/O;
 - no name-only dispatch, last-wins collision, silent fallback, partial output or authority widening by session/framework state;
-- bounded cross-crate proof mapping a successful result into the existing `RunSpec` and `AgentRun::new`; every resolver denial proves no run is created, without claiming a real application consumer.
+- bounded composition-root proof mapping a successful result into the existing `RunSpec` and `AgentRun::new`; every resolver denial proves no run is created, without claiming a real application consumer.
 
 **Owned boundary**
 
@@ -101,6 +103,7 @@ Planned `MARKET-005` and `MARKET-006` become implemented with the exact syntheti
 - bounded clarification, fresh reviewer, remediation graph-patch and explicit terminal non-success semantics;
 - `ContextBudgetSnapshot`, complete-request token preflight and checked fixed-point ceiling/target arithmetic;
 - deterministic compaction before non-recursive bounded lossy compression, non-compressible anchors, provenance-bearing summary artifacts and canonical-history preservation;
+- concrete `agent-tool-protocol/v0` types plus fake `ToolGateway`/Plugin executor conformance, with no Market or Plugin dependency in Agent/harness code;
 - fake executors/reviewers/supervisor and estimator fixtures proving the contract without external model, subagent process or network I/O.
 
 **Non-goals**

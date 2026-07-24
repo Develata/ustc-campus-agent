@@ -4,7 +4,7 @@
 
 - `Layer`: Foundation
 - `Status`: Current MUST
-- `Version`: `0.2.0`
+- `Version`: `0.3.0`
 - `Last Review`: `2026-07-24`
 - `Authority Owns`: normative vocabulary used across plans, contracts and acceptance
 - `Authority Defers To`: typed schemas and Rust definitions for machine spelling
@@ -37,6 +37,7 @@ Requirements SHOULD be testable or observable. Words such as “better”, “in
 - **Capability Grant**: explicit runtime authorization for a stable capability ID in a bounded tenant/object scope.
 - **Enable state**: whether an installed Plugin may be discovered for invocation. Installation and enablement are distinct.
 - **Invocation**: one gateway-mediated tool/component call after current installation, version, enablement and grant resolution.
+- **Plugin contribution**: a validated package component projection such as a procedural asset, resource or tool-provider route. It is not installation, grant or Agent state.
 - **FirstPartySystemPlugin**: a reviewed default first-party package governed by the same exact-version, permission-expansion, disable and audit rules as other packages.
 
 ## 4. Campus Trust Kernel terms
@@ -57,6 +58,9 @@ Requirements SHOULD be testable or observable. Words such as “better”, “in
 - **TaskGraph**: validated finite DAG of task nodes, dependencies, resource claims and bounded executor/reviewer policies. It is not a generic workflow language.
 - **TaskContract**: immutable parent-owned goal, non-goals, policy, inputs, deliverables, acceptance and verification contract for one task node.
 - **Platform run / AgentRun**: platform-owned state machine for one bounded node execution and its model/tool/effect loop. Framework/session state is only an adapter projection keyed to it.
+- **Agent tool protocol**: versioned Plugin-neutral definitions/calls/results between Agent execution and `ToolGateway`; it carries no package lifecycle or Agent state-machine authority.
+- **ToolGateway**: composition service that maps one frozen tool call through current authorization, effect intent/receipt ordering and a bounded Plugin executor. It coordinates authorities but owns none.
+- **PluginExecutor**: replaceable bounded implementation selected from exact installed component/execution identity; it cannot register directly into or mutate the Agent loop.
 - **PromptProjection**: complete bounded provider-visible request derived from canonical run/session state; it is never canonical history or authority.
 - **Compaction**: deterministic reduction of a prompt projection by replacing eligible persisted/reproducible payloads with typed references.
 - **Compression**: lossy summarization of eligible history into a provenance-bearing context artifact while canonical history remains unchanged.
