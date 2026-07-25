@@ -68,7 +68,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 | `M70` ChangeRadar | `design-only` | design only | one semantic change + feed | unassigned | `RADAR-*` current-scope rows |
 | `M71` Affairs Navigator | `design-only` | design only | one reviewed procedure board | unassigned | `PROC-*` current-scope rows |
 | `M72` Opportunity Graph | `bounded-spike` | planner spike | honest source/profile/Market integration | unassigned | `COURSE-*` current-scope rows |
-| `M80` Dioxus Fullstack | `planned` | no code | Web/PWA first plus mandatory Android shared journey | unassigned | exact active Fullstack/API/`CLIENT-*`/`WEB-*` rows added, then Web and Android passing |
+| `M80` Dioxus Fullstack | `planned` | no code | Web/PWA first plus mandatory Android shared journey | Kimi K3 + Claude Opus 5 lead Windows UI/design; GPT review/local optimization | exact active Fullstack/API/`CLIENT-*`/`WEB-*` rows added, then Web and Android passing |
 | `M90` Infrastructure | `governance-baseline` | CI only | config/store/journal/evidence + Docker Compose Fullstack restore profile | unassigned | Compose Web/Android target profile restore/read-back |
 
 Team assignment updates only the `Owner` cells and issue links. It does not change module ownership semantics.
