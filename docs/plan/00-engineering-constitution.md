@@ -4,7 +4,7 @@
 
 - `Layer`: Foundation
 - `Status`: Governing rule
-- `Version`: `0.3.0`
+- `Version`: `0.3.1`
 - `Last Review`: `2026-07-25`
 - `Scope`: architecture, plan, contracts, tasks, implementation, review and delivery
 - `Authority Owns`: engineering priority, system skeleton, module discipline, work sequence and change governance
@@ -231,7 +231,7 @@ Every work item follows this exact loop:
 4. Read relevant contracts, features, acceptance rows, registries, overview and tasks and decide which projections must change.
 5. Implement the smallest cohesive code or documentation slice.
 6. Run a changed-file quick gate.
-7. Use at most three independent review subagents.
+7. Run no more than three independent review subagents concurrently; total reviewers and review rounds are not capped.
 8. The main agent verifies findings, fixes accepted blockers and closes all review lanes.
 9. Run final baseline checks, contract checks and bound acceptance-matrix commands.
 10. Exercise the real feature path when one exists; otherwise record not applicable.

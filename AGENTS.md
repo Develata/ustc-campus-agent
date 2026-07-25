@@ -44,7 +44,7 @@ Every work item MUST follow this order:
 4. Read the corresponding contracts, features, acceptance rows, registries, overview and task documents, and decide which projections must change.
 5. Implement the smallest cohesive code or documentation slice only after the governing documents are clear.
 6. Run a quick gate over every changed **and untracked** file in the slice; plain `git diff` is insufficient for new files.
-7. Use at most three independent review subagents; the main agent independently verifies every finding, fixes all accepted blockers and closes every review lane.
+7. Run no more than three independent review subagents concurrently; this is not a cap on total reviewers or review rounds. The main agent independently verifies every finding, fixes all accepted blockers and closes every review lane.
 8. Run final baseline checks, contract checks and the bound acceptance-matrix commands.
 9. Exercise the real feature path when the slice has a runnable client, CLI, API, runtime or integration surface; otherwise record the smoke as not applicable rather than inventing evidence.
 10. Loop to the next planned small module or make an exact-scope commit.

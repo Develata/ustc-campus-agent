@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Status`: Current delivery and task-splitting order
-- `Version`: `module-roadmap/v2`
+- `Version`: `module-roadmap/v2.1`
 - `Last Review`: `2026-07-25`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
@@ -16,7 +16,7 @@ This document schedules independent large modules and their small-module batches
 
 ## 1. Current stance
 
-Concrete product implementation is paused while the module skeleton is reviewed. Existing code is retained as executable evidence:
+The module skeleton review is complete. Concrete implementation remains contract- and acceptance-gated. Existing code is retained as executable evidence:
 
 - `M20`: pure invocation resolver and fixtures;
 - `M30`: node-local `AgentRun` kernel;
@@ -26,7 +26,7 @@ Concrete product implementation is paused while the module skeleton is reviewed.
 
 Before any of these grows, its owner compares current code with the new module blueprint and records `adopt | amend | retain as spike | remove`. Documentation alone does not promote any planned acceptance row.
 
-Contract/fixture-only root scaffolding may begin after team review. A minimal Dioxus initialization before active Fullstack/API/client/deployment acceptance rows exists only as an explicitly disposable, non-mergeable spike; retained server/Web/Android scaffold work starts only after exact planned rows and future bindings are added to `matrix.tsv`. Neither form may pre-implement product logic.
+Contract/fixture-only root scaffolding may begin after the completed S0 review, subject to the owning module's contract-ready gate. A minimal Dioxus initialization before active Fullstack/API/client/deployment acceptance rows exists only as an explicitly disposable, non-mergeable spike; retained server/Web/Android scaffold work starts only after exact planned rows and future bindings are added to `matrix.tsv`. Neither form may pre-implement product logic.
 
 ## 2. Assembly shape
 
@@ -75,7 +75,7 @@ Team assignment updates only the `Owner` cells and issue links. It does not chan
 
 ## 4. S0 — Architecture and interface freeze
 
-**Status**: in progress; no product code.
+**Status**: complete; implementation remains acceptance-gated.
 
 ### `S0-1` Constitution and module registry
 
@@ -98,15 +98,16 @@ Team assignment updates only the `Owner` cells and issue links. It does not chan
 
 ### `S0-3` Team review
 
-**Status**: pending.
+**Status**: complete.
 
 - distribute architecture brief;
 - record `Accept | ConditionalAccept | Reject` by module/skeleton decision;
 - conditional acceptance names owner, evidence and exit condition;
 - update formal docs for accepted corrections;
 - no false team consensus is inferred from one member's silence.
+- record the complete three-lane decision set in [`02-s0-architecture-review.md`](02-s0-architecture-review.md).
 
-**Exit gate**: no unresolved ownership cycle, second authority, UI computation path or cross-module private dependency in the accepted skeleton.
+**Exit gate**: satisfied; the recorded review found no unresolved ownership cycle, second authority, UI computation path or cross-module private dependency in the accepted skeleton.
 
 ## 5. M00 lane — Platform Control and Identity
 
