@@ -286,6 +286,185 @@ class DocsTopologyContractTests(unittest.TestCase):
         self.assertTrue(any("active case missing from long-horizon catalog" in issue for issue in issues))
 
 
+class ModuleRegistryContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def check_module_registry(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_module_registry(issues)
+        return issues
+
+    def remove_table_row(self, rel: str, prefix: str) -> None:
+        path = self.root / rel
+        rows = path.read_text(encoding="utf-8").splitlines()
+        path.write_text(
+            "\n".join(row for row in rows if not row.startswith(prefix)) + "\n",
+            encoding="utf-8",
+        )
+
+    def test_current_module_registry_passes(self) -> None:
+        self.assertEqual(self.check_module_registry(), [])
+
+    def test_missing_blueprint_fails_closed(self) -> None:
+        (self.root / checker.MODULE_BLUEPRINTS["M51"]).unlink()
+        issues = self.check_module_registry()
+        self.assertTrue(any("module blueprint path set drift" in issue for issue in issues), issues)
+
+    def test_unregistered_blueprint_fails_closed(self) -> None:
+        path = self.root / "docs/plan/modules/99-unregistered.md"
+        path.write_text(
+            "# Unregistered\n\n- `Module ID`: `M99`\n"
+            "- `Implementation State`: `planned`\n",
+            encoding="utf-8",
+        )
+        issues = self.check_module_registry()
+        self.assertTrue(any("module blueprint path set drift" in issue for issue in issues), issues)
+
+    def test_duplicate_module_map_id_fails_closed(self) -> None:
+        path = self.root / "docs/plan/modules/00-module-map.md"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace(
+                "| `M10` | Application Ingress Host",
+                "| `M00` | Application Ingress Host",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues = self.check_module_registry()
+        self.assertTrue(any("duplicate module ID in module map: M00" in issue for issue in issues), issues)
+
+    def test_blueprint_module_id_mismatch_fails_closed(self) -> None:
+        path = self.root / checker.MODULE_BLUEPRINTS["M10"]
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace("`Module ID`: `M10`", "`Module ID`: `M11`", 1),
+            encoding="utf-8",
+        )
+        issues = self.check_module_registry()
+        self.assertTrue(any("module blueprint ID drift" in issue for issue in issues), issues)
+
+    def test_unknown_module_state_key_fails_closed(self) -> None:
+        path = self.root / "docs/plan/modules/00-module-map.md"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace("| `M00` | Platform Control and Identity | `planned` |", "| `M00` | Platform Control and Identity | `complete` |", 1),
+            encoding="utf-8",
+        )
+        issues = self.check_module_registry()
+        self.assertTrue(any("unknown state key for M00" in issue for issue in issues), issues)
+
+    def test_module_state_mismatch_fails_closed(self) -> None:
+        path = self.root / checker.MODULE_BLUEPRINTS["M80"]
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace(
+                "`Implementation State`: `planned`",
+                "`Implementation State`: `skeleton`",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues = self.check_module_registry()
+        self.assertTrue(
+            any("module implementation state drift for M80" in issue for issue in issues),
+            issues,
+        )
+
+    def test_missing_roadmap_lane_fails_closed(self) -> None:
+        self.remove_table_row(
+            "docs/tasks/01-execution-roadmap.md", "| `M51` MCP Binding/Executor"
+        )
+        issues = self.check_module_registry()
+        self.assertTrue(any("module roadmap module ID set drift" in issue for issue in issues), issues)
+
+    def test_missing_coverage_row_fails_closed(self) -> None:
+        self.remove_table_row("docs/coverage-matrix.md", "| `M70 ChangeRadar`")
+        issues = self.check_module_registry()
+        self.assertTrue(
+            any("module coverage module ID set drift" in issue for issue in issues), issues
+        )
+
+    def test_catalog_only_family_cannot_be_claimed_active(self) -> None:
+        path = self.root / "docs/coverage-matrix.md"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace(
+                "`long-horizon:CLIENT-*`",
+                "`active:CLIENT-*`",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues = self.check_module_registry()
+        self.assertTrue(
+            any(
+                "active acceptance reference is not registered in matrix.tsv" in issue
+                for issue in issues
+            ),
+            issues,
+        )
+
+    def test_unknown_acceptance_family_fails_closed(self) -> None:
+        path = self.root / "docs/coverage-matrix.md"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace(
+                "`long-horizon:CLIENT-*`",
+                "`long-horizon:MOBILE-*`",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues = self.check_module_registry()
+        self.assertTrue(
+            any(
+                "long-horizon acceptance reference is not catalog-only" in issue
+                for issue in issues
+            ),
+            issues,
+        )
+
+    def test_active_family_cannot_be_claimed_long_horizon(self) -> None:
+        path = self.root / "docs/coverage-matrix.md"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace(
+                "`active:MARKET-*`",
+                "`long-horizon:MARKET-*`",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues = self.check_module_registry()
+        self.assertTrue(
+            any(
+                "long-horizon acceptance reference is not catalog-only" in issue
+                for issue in issues
+            ),
+            issues,
+        )
+
+    def test_unstructured_acceptance_projection_fails_closed(self) -> None:
+        path = self.root / "docs/coverage-matrix.md"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace("| `gap` |", "| active rows missing |", 1), encoding="utf-8")
+        issues = self.check_module_registry()
+        self.assertTrue(
+            any("acceptance projection has an unstructured token" in issue for issue in issues),
+            issues,
+        )
+
+
 class InvocationFixtureContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()

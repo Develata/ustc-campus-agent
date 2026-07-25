@@ -4,6 +4,7 @@
 
 - `Module ID`: `M80`
 - `Status`: Accepted blueprint; no Dioxus dependency, Fullstack app or target artifact implemented
+- `Implementation State`: `planned`
 - `Version`: `m80-dioxus-fullstack/v1`
 - `Last Review`: `2026-07-25`
 - `Decision`: [`../../adr/0009-dioxus-multi-client-shell.md`](../../adr/0009-dioxus-multi-client-shell.md)

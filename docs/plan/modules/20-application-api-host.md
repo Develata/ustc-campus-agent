@@ -4,6 +4,7 @@
 
 - `Module ID`: `M10`
 - `Status`: Accepted blueprint; daemon skeleton exists, Fullstack/application ingress implementation planned
+- `Implementation State`: `skeleton`
 - `Version`: `m10-application-ingress/v1`
 - `Last Review`: `2026-07-25`
 - `Composition`: `apps/ustc-agentd`

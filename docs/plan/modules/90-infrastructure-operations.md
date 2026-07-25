@@ -4,6 +4,7 @@
 
 - `Module ID`: `M90`
 - `Status`: Accepted blueprint; repository CI/checker baseline exists, production infrastructure planned
+- `Implementation State`: `governance-baseline`
 - `Version`: `m90-infrastructure/v1`
 - `Last Review`: `2026-07-25`
 - `Owning Governance`: [`../08-security-and-delivery.md`](../08-security-and-delivery.md)

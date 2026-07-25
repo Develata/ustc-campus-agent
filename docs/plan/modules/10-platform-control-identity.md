@@ -4,6 +4,7 @@
 
 - `Module ID`: `M00`
 - `Status`: Accepted blueprint; implementation planned
+- `Implementation State`: `planned`
 - `Version`: `m00-platform-control/v0`
 - `Last Review`: `2026-07-25`
 - `Composition`: `apps/ustc-agentd`

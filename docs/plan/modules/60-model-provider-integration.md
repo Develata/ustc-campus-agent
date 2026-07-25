@@ -4,6 +4,7 @@
 
 - `Module ID`: `M50`
 - `Status`: Accepted blueprint; implementation planned
+- `Implementation State`: `planned`
 - `Version`: `m50-model-provider/v0`
 - `Last Review`: `2026-07-25`
 - `Primary code area`: replaceable provider modules under `crates/adapters/` or a dedicated crate after two real consumers

@@ -4,6 +4,7 @@
 
 - `Module ID`: `M60`
 - `Status`: Accepted blueprint; implementation planned, limited synthetic planner evidence exists
+- `Implementation State`: `planned`
 - `Version`: `m60-campus-trust/v0`
 - `Last Review`: `2026-07-25`
 - `Owning Plan`: [`../05-campus-trust-kernel.md`](../05-campus-trust-kernel.md)

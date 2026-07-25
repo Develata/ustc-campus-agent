@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Status`: Current delivery and task-splitting order
-- `Version`: `module-roadmap/v1`
+- `Version`: `module-roadmap/v2`
 - `Last Review`: `2026-07-25`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
@@ -55,21 +55,21 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 
 ## 3. Module lane registry
 
-| Module | Current state | Current module target | Owner | Merge gate |
-|---|---|---|---|---|
-| `M00` Platform Control/Identity | planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
-| `M10` Application Ingress Host | skeleton | Dioxus server-function/public route/DTO/error/event/compatibility host | unassigned | black-box Fullstack/HTTP/stream conformance and no reach-through |
-| `M20` Market/Package | partial evidence | browse + durable install/grant/disable/revoke around audited resolver | unassigned | `MARKET-*` current-scope rows |
-| `M30` Agent Harness/Runtime | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |
-| `M40` Tool Gateway/Execution | protocol/fake proof | durable intent/executor/receipt composition | unassigned | `AGENT-018/019`, `MARKET-007` |
-| `M50` Model Provider | planned | typed profiles + one provider adapter | unassigned | provider conformance + real bounded turn |
-| `M51` MCP Binding/Executor | planned | one reviewed read-only remote binding | unassigned | MCP lifecycle/security/executor proof |
-| `M60` Campus Trust/Source | planned | one reviewed source/revision/baseline | unassigned | `SRC-*` current-scope rows |
-| `M70` ChangeRadar | design only | one semantic change + feed | unassigned | `RADAR-*` current-scope rows |
-| `M71` Affairs Navigator | design only | one reviewed procedure board | unassigned | `PROC-*` current-scope rows |
-| `M72` Opportunity Graph | planner spike | honest source/profile/Market integration | unassigned | `COURSE-*` current-scope rows |
-| `M80` Dioxus Fullstack | no code | Web/PWA first plus mandatory Android shared journey | unassigned | exact active Fullstack/API/`CLIENT-*`/`WEB-*` rows added, then Web and Android passing |
-| `M90` Infrastructure | CI only | config/store/journal/evidence + Docker Compose Fullstack restore profile | unassigned | Compose Web/Android target profile restore/read-back |
+| Module | State key | Current state | Current module target | Owner | Merge gate |
+|---|---|---|---|---|---|
+| `M00` Platform Control/Identity | `planned` | planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
+| `M10` Application Ingress Host | `skeleton` | skeleton | Dioxus server-function/public route/DTO/error/event/compatibility host | unassigned | black-box Fullstack/HTTP/stream conformance and no reach-through |
+| `M20` Market/Package | `partial-evidence` | partial evidence | browse + durable install/grant/disable/revoke around audited resolver | unassigned | `MARKET-*` current-scope rows |
+| `M30` Agent Harness/Runtime | `partial-evidence` | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |
+| `M40` Tool Gateway/Execution | `partial-evidence` | protocol/fake proof | durable intent/executor/receipt composition | unassigned | `AGENT-018/019`, `MARKET-007` |
+| `M50` Model Provider | `planned` | planned | typed profiles + one provider adapter | unassigned | provider conformance + real bounded turn |
+| `M51` MCP Binding/Executor | `planned` | planned | one reviewed read-only remote binding | unassigned | MCP lifecycle/security/executor proof |
+| `M60` Campus Trust/Source | `planned` | planned | one reviewed source/revision/baseline | unassigned | `SRC-*` current-scope rows |
+| `M70` ChangeRadar | `design-only` | design only | one semantic change + feed | unassigned | `RADAR-*` current-scope rows |
+| `M71` Affairs Navigator | `design-only` | design only | one reviewed procedure board | unassigned | `PROC-*` current-scope rows |
+| `M72` Opportunity Graph | `bounded-spike` | planner spike | honest source/profile/Market integration | unassigned | `COURSE-*` current-scope rows |
+| `M80` Dioxus Fullstack | `planned` | no code | Web/PWA first plus mandatory Android shared journey | Kimi K3 + Claude Opus 5 lead Windows UI/design; GPT review/local optimization | exact active Fullstack/API/`CLIENT-*`/`WEB-*` rows added, then Web and Android passing |
+| `M90` Infrastructure | `governance-baseline` | CI only | config/store/journal/evidence + Docker Compose Fullstack restore profile | unassigned | Compose Web/Android target profile restore/read-back |
 
 Team assignment updates only the `Owner` cells and issue links. It does not change module ownership semantics.
 
@@ -79,12 +79,16 @@ Team assignment updates only the `Owner` cells and issue links. It does not chan
 
 ### `S0-1` Constitution and module registry
 
+**Status**: complete.
+
 - adopt full engineering constitution and mandatory work loop;
 - define large-module ownership and dependency direction;
 - define Dioxus Fullstack Web/Android shell, admitted server-function ingress and explicit optional public API boundary;
 - classify existing code as partial evidence.
 
 ### `S0-2` Boundary and task contracts
+
+**Status**: complete.
 
 - register every cross-module public boundary;
 - bind fakes/conformance expectations;
@@ -93,6 +97,8 @@ Team assignment updates only the `Owner` cells and issue links. It does not chan
 - add a checker that verifies module-map ID/status ↔ blueprint metadata ↔ coverage row ↔ roadmap lane ↔ active/long-horizon acceptance wording.
 
 ### `S0-3` Team review
+
+**Status**: pending.
 
 - distribute architecture brief;
 - record `Accept | ConditionalAccept | Reject` by module/skeleton decision;

@@ -36,6 +36,7 @@ Each chapter SHOULD declare:
 
 Each large-module blueprint under `modules/` MUST additionally declare:
 
+- a machine-readable `Implementation State` metadata value from the controlled module-state vocabulary in `modules/00-module-map.md`;
 - purpose and non-goals;
 - owned objects/state and public inputs/outputs;
 - allowed callers, allowed dependencies and forbidden dependencies;

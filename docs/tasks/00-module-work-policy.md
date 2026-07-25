@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Status`: Current task policy
-- `Version`: `module-work-policy/v0`
+- `Version`: `module-work-policy/v1`
 - `Last Review`: `2026-07-25`
 - `Owning Constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module Registry`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
@@ -22,6 +22,13 @@ A human/agent owner takes one large module or one declared small module inside i
 - not edit another module's private implementation to make integration convenient.
 
 A large-module owner is responsible for interface consistency and final standalone exit gate. Small-module owners are responsible only for their bounded slice and public fit.
+
+### M80 frontend design assignment
+
+- Kimi K3 and Claude Opus 5 jointly lead actual M80 interface, interaction and visual-style design on Develata's Windows host.
+- GPT-family agents do not originate the actual frontend design. Their role is independent review and explicitly bounded local code optimization, including architecture/contract, accessibility, performance and maintainability checks.
+- This assignment covers presentation work such as routes, components, design-system choices and target-specific UX. It does not move product/domain authority into M80 or into any model-generated artifact.
+- Changes from either lead still pass the same thin-client boundary, active acceptance rows, browser/device evidence, review and protected-main PR gates.
 
 ## 2. Mandatory work loop
 

@@ -24,24 +24,30 @@ This matrix keeps the live documentation layers aligned:
 
 ## Large-module blueprints
 
-| Module blueprint | Primary public boundary | Feature projection | Current acceptance binding |
+| Module blueprint | Primary public boundary | Feature projection | Acceptance projection |
 |---|---|---|---|
 | `modules/00-module-map` | `module-boundaries.md` | all | every module must bind before implementation |
-| `M00 Platform Control/Identity` | `B-M00-M10-ACTOR`, request/session/causation values | cross-feature admission only | dedicated active rows must be added before implementation; current policies are cross-covered by security/harness cases only |
-| `M10 Application Ingress Host` | `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT`, `B-M10-APP-CALL`, `B-APP-M10-RESULT`; server-function/public endpoint registry in `interfaces.md` | all real Web/Android/integration journeys | dedicated Fullstack/API/compatibility rows must be active before retained implementation; long-horizon client/web cases remain non-active |
-| `M20 Market/Package` | package/install/grant/resolver contracts | `00-market-browse-install` | `MARKET-*`, `PKG-*`, selected `AGENT-*`, `FP-*` |
-| `M30 Agent Harness/Runtime` | `agent-harness.md`, `agent-runtime.md`, `B-M30-M50-MODEL`, `B-M20-M30-TOOLSET`, `B-M30-M40-CALL`, `B-COMP-M30-EFFECT`, `B-M40-M30-RESULT` | `04-bounded-agent-harness` | planned `HARNESS-*`; implemented/remaining `AGENT-*` as declared in matrix |
-| `M40 Tool Gateway/Execution` | `agent-plugin-boundary.md`, `invocation-resolution.md`, directional call/result/executor boundaries | tool/review states in harness journey | selected `AGENT-*`, `MARKET-*`, `PKG-*` |
-| `M50 Model Provider` | `B-M30-M50-MODEL` | model-turn states inside harness journey | active provider rows must be added before implementation; long-horizon `AI-*` retained in `platform-baseline.md` |
-| `M51 MCP Binding/Executor` | `B-M40-M51-EXEC` | future MCP-backed tool journey | active MCP rows must be added before implementation; long-horizon `MCP-*` retained in `platform-baseline.md` |
-| `M60 Campus Trust/Source` | `source-import.md`, `B-M60-M70/71/72-*` | all first-party features | `SRC-*` plus product rows |
-| `M70 ChangeRadar` | typed semantic candidate/event/feed | `02-ustc-change-radar` | `RADAR-*`, relevant `FP-*` |
-| `M71 Affairs Navigator` | procedure draft/artifact/search contracts | `01-ustc-affairs-navigator` | `PROC-*`, relevant `FP-*` |
-| `M72 Opportunity Graph` | opportunity/profile/planner values | `03-campus-opportunity-graph` | `COURSE-*`, relevant `FP-*` |
-| `M80 Dioxus Fullstack Multi-client` | `client-shell.md`, `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT` | required Web/PWA and Android presentation; later iOS/desktop | active client/web/Android compatibility rows must be added before retained implementation; long-horizon `CLIENT-*`/`WEB-*` remain in `platform-baseline.md` |
-| `M90 Infrastructure/Operations` | module-owned ports plus Docker Compose Fullstack deployment/recovery contracts | no independent product behavior | long-horizon `CFG-*`, `REL-*`, `DEP-*` include required Compose Web/Android read-back and must be activated with exact bindings as M90 scope enters implementation; active `RUNTIME-*` applies only to shared restart/receipt behavior and `PUBLIC-*` to public delivery |
+| `M00 Platform Control/Identity` | `B-M00-M10-ACTOR`, request/session/causation values | cross-feature admission only | `gap` |
+| `M10 Application Ingress Host` | `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT`, `B-M10-APP-CALL`, `B-APP-M10-RESULT`; server-function/public endpoint registry in `interfaces.md` | all real Web/Android/integration journeys | `gap`; `long-horizon:CLIENT-*`; `long-horizon:WEB-*` |
+| `M20 Market/Package` | package/install/grant/resolver contracts | `00-market-browse-install` | `active:MARKET-*`; `active:PKG-*`; `active:AGENT-*`; `active:FP-*` |
+| `M30 Agent Harness/Runtime` | `agent-harness.md`, `agent-runtime.md`, `B-M30-M50-MODEL`, `B-M20-M30-TOOLSET`, `B-M30-M40-CALL`, `B-COMP-M30-EFFECT`, `B-M40-M30-RESULT` | `04-bounded-agent-harness` | `active:HARNESS-*`; `active:AGENT-*` |
+| `M40 Tool Gateway/Execution` | `agent-plugin-boundary.md`, `invocation-resolution.md`, directional call/result/executor boundaries | tool/review states in harness journey | `active:AGENT-*`; `active:MARKET-*`; `active:PKG-*` |
+| `M50 Model Provider` | `B-M30-M50-MODEL` | model-turn states inside harness journey | `gap`; `long-horizon:AI-*` |
+| `M51 MCP Binding/Executor` | `B-M40-M51-EXEC` | future MCP-backed tool journey | `gap`; `long-horizon:MCP-*` |
+| `M60 Campus Trust/Source` | `source-import.md`, `B-M60-M70/71/72-*` | all first-party features | `active:SRC-*`; `active:PROC-*`; `active:RADAR-*`; `active:COURSE-*`; `active:FP-*` |
+| `M70 ChangeRadar` | typed semantic candidate/event/feed | `02-ustc-change-radar` | `active:RADAR-*`; `active:FP-*` |
+| `M71 Affairs Navigator` | procedure draft/artifact/search contracts | `01-ustc-affairs-navigator` | `active:PROC-*`; `active:FP-*` |
+| `M72 Opportunity Graph` | opportunity/profile/planner values | `03-campus-opportunity-graph` | `active:COURSE-*`; `active:FP-*` |
+| `M80 Dioxus Fullstack Multi-client` | `client-shell.md`, `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT` | required Web/PWA and Android presentation; later iOS/desktop | `gap`; `long-horizon:CLIENT-*`; `long-horizon:WEB-*` |
+| `M90 Infrastructure/Operations` | module-owned ports plus Docker Compose Fullstack deployment/recovery contracts | no independent product behavior | `active:RUNTIME-*`; `active:PUBLIC-*`; `long-horizon:CFG-*`; `long-horizon:REL-*`; `long-horizon:DEP-*` |
 
-“Must be added before implementation” is an explicit gap, not a pass. A module may write contract/fixture scaffolding first, but cannot claim `StandaloneReady` until its active rows and bindings exist.
+The machine-checked acceptance projection uses only these code-formatted tokens:
+
+- `gap` — dedicated active rows are still missing; this is not a pass;
+- `active:<CASE-ID-or-FAMILY-*>` — the exact case or at least one case in the family exists in `matrix.tsv`;
+- `long-horizon:<CASE-ID-or-FAMILY-*>` — the exact case or family exists only in `platform-baseline.md` and is not an active gate.
+
+Tokens are checked independently; one `long-horizon:` token cannot mask an invalid `active:` claim for another reference. A module may write contract/fixture scaffolding while it has `gap`, but cannot claim `StandaloneReady` until the required active rows and bindings exist.
 
 ## Non-matrix documents
 

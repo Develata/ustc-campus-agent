@@ -4,6 +4,7 @@
 
 - `Module ID`: `M30`
 - `Status`: Accepted blueprint; node-local runtime kernel implemented, finite harness planned
+- `Implementation State`: `partial-evidence`
 - `Version`: `m30-agent-runtime/v0`
 - `Last Review`: `2026-07-25`
 - `Owning Plan`: [`../07-runtime-and-integration.md`](../07-runtime-and-integration.md)
