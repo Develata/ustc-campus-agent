@@ -1,4 +1,5 @@
 use ustc_campus_agent_core::{DEFAULT_FIRST_PARTY_PLUGIN_IDENTITIES, PRODUCT_NAME};
+use ustc_campus_agent_runtime::RUN_SPEC_SCHEMA_VERSION;
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -8,6 +9,7 @@ fn main() {
         }
         Some("--help") | Some("help") | None => {
             println!("{PRODUCT_NAME} daemon skeleton");
+            println!("agent_runtime_kernel_schema={RUN_SPEC_SCHEMA_VERSION}");
             for plugin in DEFAULT_FIRST_PARTY_PLUGIN_IDENTITIES {
                 println!(
                     "default_first_party_plugin={}@{}",

@@ -1,6 +1,6 @@
 # GitHub Pages brief
 
-This guide is a future frontend handoff. The site is not the application runtime and must not claim official USTC status or unimplemented product behavior.
+This guide is a future public-site handoff. The site is not the Dioxus application client or application runtime and must not claim official USTC status or unimplemented product behavior.
 
 ## Purpose
 

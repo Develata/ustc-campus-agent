@@ -9,9 +9,12 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+semver.workspace = true
 serde.workspace = true
+ustc-agent-tool-protocol.workspace = true
 
 [dev-dependencies]
+hex = "0.4.3"
 serde_json.workspace = true
 
 [lib]

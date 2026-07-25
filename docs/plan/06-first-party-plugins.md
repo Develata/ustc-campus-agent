@@ -4,14 +4,15 @@
 
 - `Layer`: First-party product contracts
 - `Status`: Identities/manifests accepted; product journeys mostly planned
-- `Version`: `0.2.0`
-- `Last Review`: `2026-07-22`
+- `Version`: `0.3.0`
+- `Last Review`: `2026-07-25`
 - `Authority Owns`: first-party product split, shared semantics, independent lifecycles and implementation order
 - `Authority Defers To`: Campus Trust Kernel for shared authority and typed contracts/manifests for exact fields
 - `Counterpart Features`: `docs/features/01-ustc-affairs-navigator.md`, `docs/features/02-ustc-change-radar.md`, `docs/features/03-campus-opportunity-graph.md`
 - `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/source-import.md`, `docs/contracts/data-models.md`
 - `Counterpart Acceptance`: `FP-*`, `PROC-*`, `RADAR-*`, `COURSE-*`
 - `Primary Code Areas`: `plugins/first-party/`, `market/packages/`, current `crates/course-planning/`
+- `Large-module Blueprints`: [`M70 ChangeRadar`](modules/71-change-radar.md), [`M71 Affairs Navigator`](modules/72-affairs-navigator.md), [`M72 Opportunity Graph`](modules/73-opportunity-graph.md)
 
 ## 1. Product split and shared authority
 
@@ -39,7 +40,7 @@ approved sources
    └── reviewed opportunity graph facts + tenant-private profile projection
 ```
 
-They MUST NOT build three crawler authorities or three incompatible source identities. They remain independent packages with separate versions, installation, enablement and acceptance.
+They MUST NOT build three crawler authorities or three incompatible source identities. They remain independent large modules and packages with separate versions, branches/owners, installation, enablement and acceptance. Each can be completed and attached through its public boundary without requiring the other two product implementations to finish.
 
 ## 2. USTC Affairs Navigator
 

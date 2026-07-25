@@ -4,8 +4,8 @@
 
 - `Layer`: `Acceptance / Coverage / Evidence`
 - `Status`: **Planning baseline; only `matrix.tsv` is the active competition gate registry**
-- `Version`: `0.3.0`
-- `Last Review`: `2026-07-22`
+- `Version`: `0.5.0`
+- `Last Review`: `2026-07-24`
 - `Authority Owns`: stable long-horizon case IDs, planned assertions and evidence-binding classes
 - `Authority Defers To`: `docs/plan/`, `docs/contracts/` and `docs/acceptance/matrix.tsv` for current scope/status
 
@@ -49,10 +49,10 @@ A manual or automated case cannot pass without a named owner, exact evidence and
 | --- | --- | --- | --- |
 | engineering/docs projection | [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md), [`../coverage-matrix.md`](../coverage-matrix.md) | `DOC-*` | repository checker + manual doc review |
 | typed config and CLI smoke | [`../contracts/cli.md`](../contracts/cli.md), [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `CFG-*` | `ustc-agentctl` smoke + typed loader tests |
-| catalog authority and Plugin lifecycle | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) | `CAT-*`, `PKG-*` | catalog validator + domain/integration tests |
+| catalog authority and Plugin lifecycle | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md), [`../contracts/agent-plugin-boundary.md`](../contracts/agent-plugin-boundary.md) | `CAT-*`, `PKG-*` | catalog validator + domain/integration tests |
 | identity/session/RBAC and capability isolation | [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md), [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `AUTH-*`, `SEC-*` | policy/integration/browser/security evidence |
 | community component validation | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) | `SKILL-*` | deterministic validator + security review |
-| MCP binding, hosted runtime, Agent run state and model providers | [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md) | `MCP-*`, `RUN-*`, `AGENT-*`, `AI-*` | owned state-machine tests + protocol/real-host conformance |
+| finite Agent harness, Agent–Plugin tool protocol, MCP binding, hosted runtime, node AgentRun state and model providers | [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md), [`../contracts/agent-plugin-boundary.md`](../contracts/agent-plugin-boundary.md) | `HARNESS-*`, `MCP-*`, `RUN-*`, `AGENT-*`, `AI-*` | owned state-machine/context/graph tests + protocol/real-host conformance |
 | Market Web, i18n and clients | [`../features/00-market-browse-install.md`](../features/00-market-browse-install.md), [`../guides/github-pages-brief.md`](../guides/github-pages-brief.md) | `WEB-*`, `I18N-*`, `CLIENT-*` | browser/client conformance evidence |
 | Campus Trust Kernel, procedures, graph and evaluation | [`../plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md), [`../plan/06-first-party-plugins.md`](../plan/06-first-party-plugins.md) | `SRC-*`, `PROC-*`, `GRAPH-*`, `EVAL-*`, `FP-*` | source/procedure/graph invariants + evaluated journeys |
 | reliability, deployment and restore | [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `REL-*`, `DEP-*` | doctor/preflight/restore/remote read-back gates |
@@ -69,6 +69,9 @@ Long-horizon suites remain planned until projected into `matrix.tsv`. New curren
 | [`ADR-0004`](../adr/0004-runtime-reference-strategy.md) | owned Rust runtime semantics; bounded adapters | `MCP-*`, `RUN-*`, `AGENT-*`, `AI-*` |
 | [`ADR-0005`](../adr/0005-public-transition-deferred.md) | publication only after explicit gate | `WEB-*`, `SEC-*`, `REL-*`, `DEP-*` |
 | [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md) | three equal first-party Plugins over one kernel | `SRC-*`, `PROC-*`, `GRAPH-*`, `EVAL-*`, `FP-*` |
+| [`ADR-0007`](../adr/0007-finite-agent-harness.md) | finite HarnessRun, typed TaskGraph, bounded review and pre-send context budget | `HARNESS-*`, `AGENT-*`, `AI-*` |
+| [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md) | Agent and Plugin evolve independently through a versioned ToolGateway protocol | `PKG-*`, `MCP-*`, `AGENT-*`, `HARNESS-*` |
+| [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md) | one Dioxus Fullstack source serves required Web/PWA and Android through admitted typed ingress; Compose hosts the server; iOS/desktop are later | `WEB-*`, `I18N-*`, `CLIENT-*`, `DEP-*` |
 
 [`../coverage-matrix.md`](../coverage-matrix.md) owns current plan/feature/contract/acceptance projection. This catalog preserves candidate and long-horizon cases without creating a second current authority map.
 
@@ -153,6 +156,8 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `PKG-016` | shared service binding remains tenant-scoped and installation-owned | rust-integration | integration |
 | `PKG-017` | DeclarativeResourcePack resolves exact ID/version/digest/provenance | rust-unit | PR |
 | `PKG-018` | declarative resource cannot register executable/grant authority; duplicate/conflicting IDs fail closed | rust-integration | integration |
+| `PKG-019` | admitted executable components compile into namespaced tool definitions and private routes without Agent linkage | rust-integration | PR |
+| `PKG-020` | package update disable or revoke changes only new projections while in-flight Agent toolsets remain pinned | rust-integration | integration |
 
 ## 8. Identity, session and RBAC — `AUTH-*`
 
@@ -259,6 +264,24 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AGENT-014` | every transformed tool/procedure input is re-schema-validated and re-authorized before effect | rust-integration | integration |
 | `AGENT-015` | security/publish Gate error fails closed; Observer failure policy is explicit and evidenced | rust-integration | release |
 | `AGENT-016` | restore validates runtime dependency IDs/versions and never auto-retries non-idempotent unfinished effects | rust-integration | release |
+| `AGENT-017` | Agent runtime compilation inputs and all direct Cargo dependency classes remain confined and allowlisted, free of Market Plugin component and adapter implementations; composition owns cross-boundary proof | rust-cli-smoke | PR |
+| `AGENT-018` | Agent framework/harness replacement passes the same tool-protocol fixtures without Plugin package or executor changes | external-conformance | integration |
+| `AGENT-019` | frozen provider definitions bind one private route; unknown tools, malformed arguments, route mismatch, current denial and projection mismatch reach no executor; successful fake execution returns one correlated protocol result | rust-integration | PR |
+
+### Finite Agent harness — `HARNESS-*`
+
+| Case ID | Assertion | Binding | Required gate |
+| --- | --- | --- | --- |
+| `HARNESS-001` | every HarnessRun follows legal finite evidenced transitions and reaches an explicit terminal phase | rust-unit | PR |
+| `HARNESS-002` | clarification asks only material blocking uncertainty under bounded rounds and deadline | rust-unit | PR |
+| `HARNESS-003` | accepted TaskGraph is finite acyclic authority-valid and resource-compatible | rust-unit | PR |
+| `HARNESS-004` | child planning cannot rewrite parent goal prohibitions deliverables or acceptance | rust-unit | PR |
+| `HARNESS-005` | every complete model request including each compression-plan call satisfies the pinned context inequality before provider I/O | rust-integration | PR |
+| `HARNESS-006` | compaction/compression preserves canonical history and emits provenance-bearing summary artifacts | rust-integration | PR |
+| `HARNESS-007` | anchors and whole tool schemas survive rebuild; compression is finite/non-recursive and failure to fit fails closed | rust-integration | release |
+| `HARNESS-008` | worker context may resume while each reviewer is fresh read-only and remediation bounded | rust-integration | integration |
+| `HARNESS-009` | final rejection appends a validated remediation graph revision without restarting the session/task | rust-integration | integration |
+| `HARNESS-010` | hooks or process exit cannot complete a node without structured outcome artifacts evidence and required review | rust-integration | release |
 
 ## 14. Market Web and i18n — `WEB-*`, `I18N-*`
 
@@ -366,10 +389,12 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AI-002` | UserCloud profile stores encrypted secret ref and performs one call | rust-integration | demo |
 | `AI-003` | provider URL/credential validation prevents SSRF/token leakage | rust-integration | release |
 | `AI-004` | provider failure is structured; no silent identity/model fallback | rust-integration | release |
-| `CLIENT-001` | Web client completes login/chat/tool-status/Market launch journey | browser-automation | demo |
-| `CLIENT-002` | Android client uses shared API contract and external service Custom Tab | external-conformance | demo |
+| `CLIENT-001` | Dioxus Web/PWA completes login/chat/tool-status/Market launch through admitted typed server-function calls/events with the selected SSR-plus-hydration or explicit CSR path | browser-automation | demo |
+| `CLIENT-002` | Dioxus Android launches on emulator and real device, uses the shared ingress/reducer contract against the HTTPS server, survives lifecycle/reconnect and opens external service in Custom Tab | external-conformance | demo |
 | `CLIENT-003` | raw transcript local archive and central durable memory remain distinct | rust-integration | integration |
 | `CLIENT-004` | offline/relay unavailable state is explicit, no hidden execution switch | browser-automation | release |
+| `CLIENT-005` | current server remains compatible with the declared supported older Android protocol and returns typed `UpgradeRequired` before dispatch for an unsupported client | rust-integration | release |
+| `CLIENT-006` | every Dioxus server function passes M00/M10 admission and one application port; dependency/conformance checks prevent repository, executor, provider SDK or journal reach-through | rust-integration | release |
 
 ## 18. Reliability, deployment and recovery — `REL-*`, `DEP-*`
 
@@ -393,6 +418,7 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `DEP-008` | remote release/download surface read-back verifies checksum/version/smoke | external-conformance | release |
 | `DEP-009` | self-hosted stack applies same authority/config/acceptance contracts | rust-cli-real-host | release |
 | `DEP-010` | disk/cache/log/image/backup retention prevents uncontrolled exhaustion | rust-cli-real-host | release |
+| `DEP-011` | clean Docker Compose deployment serves Dioxus Web assets/SSR and admitted Fullstack endpoints, accepts Android remote access, then passes restart/restore/read-back | external-conformance | release |
 
 ## 19. Long-horizon suite profiles
 

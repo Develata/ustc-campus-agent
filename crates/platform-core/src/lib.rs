@@ -4,6 +4,8 @@
 //! executable surfaces can depend on one shared source of truth instead of copying
 //! product identifiers, package ids, and source-authority ordering.
 
+pub mod invocation;
+
 /// Human-facing product name.
 pub const PRODUCT_NAME: &str = "USTC Campus Agent";
 

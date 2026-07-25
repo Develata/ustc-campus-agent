@@ -3,19 +3,20 @@
 ## Metadata
 
 - `Layer`: Product authority
-- `Status`: Schema/identity baseline implemented; runtime lifecycle planned
-- `Version`: `0.2.0`
-- `Last Review`: `2026-07-22`
+- `Status`: Schema/identity baseline and pure P0a resolver implemented; durable runtime lifecycle planned
+- `Version`: `0.5.0`
+- `Last Review`: `2026-07-25`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
 - `Authority Defers To`: Market JSON schema/registries and package/permission contracts for exact fields
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
-- `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: `MARKET-*`, `FP-006`, `FP-015`, `FP-007`
+- `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
+- `Counterpart Acceptance`: `MARKET-*`, `PKG-*`, `AGENT-002`, `AGENT-017`, `AGENT-018`, `FP-006`, `FP-015`, `FP-007`
 - `Primary Code Areas`: `market/`, `crates/platform-core/`, future installation/gateway modules
+- `Large-module Blueprint`: [`modules/30-market-package-lifecycle.md`](modules/30-market-package-lifecycle.md)
 
 ## 1. Scope and repository boundary
 
-`market/` is a logical Catalog Authority boundary from day one. It remains inside this monorepo for the competition MVP because a physical split would add cross-repository versioning, review, CI and release coordination before independent package lifecycles are proven.
+`market/` is a logical Catalog Authority boundary from day one. This chapter owns its cross-system policy; the `M20` blueprint owns the independently deliverable implementation decomposition. It remains inside this monorepo for the competition MVP because a physical split would add cross-repository versioning, review, CI and release coordination before independent package lifecycles are proven.
 
 A future `ustc-campus-agent-market` repository is justified only when external contribution, independent maintainership, public/private separation, release cadence or signing/rollback requires a separate repository identity.
 
@@ -39,6 +40,8 @@ Current component kinds are:
 - `NativeRustComponent`.
 
 Components are package-owned declarations, not a second installation lifecycle. A future new component kind requires schema, admission, permission and rollback analysis before it appears in a manifest.
+
+Components do not register directly into the Agent. After exact install/enable/grant resolution, admitted components compile into bounded contributions: skills/resources become context assets, while MCP/native execution becomes tool definitions plus gateway-private executor routes. The Agent receives only the versioned Plugin-neutral tool view. `NativeRustComponent` never means dynamic linkage into `agent-runtime`; its first runnable package requires a separately versioned admitted executor artifact/profile.
 
 `planned` packages MUST declare no executable components. `development` states that implementation work exists but does not prove install, grant, discovery or invocation. `implemented` requires at least one valid component and its corresponding lifecycle evidence.
 
@@ -71,8 +74,9 @@ Submit
 → Configure non-secret values and secret references
 → Resolve grants
 → Enable
-→ Discover
-→ Invoke through gateway
+→ Compile a namespaced contribution/tool projection
+→ Discover Plugin-neutral tools
+→ Invoke through gateway and bounded executor
 → Update | Disable | Revoke | Roll back
 ```
 
@@ -87,7 +91,9 @@ These states MUST remain distinct:
 
 ## 5. Effective invocation resolution
 
-Before an outbound call or native component dispatch, the server-side resolver MUST bind:
+Invocation authority is established before catalog browsing or durable lifecycle persistence is implemented. The first slice is a pure, deterministic server-side resolver over exact caller-supplied authority snapshots; storage and adapters may later supply those snapshots but cannot replace the decision.
+
+Before an outbound call or native component dispatch, the resolver MUST bind:
 
 ```text
 PluginInstallation
@@ -99,7 +105,13 @@ PluginInstallation
 → current enabled/revoked/emergency-block state
 ```
 
-Any missing package, digest/path mismatch, stale grant, disabled installation, revoked capability or unknown execution identity fails closed.
+It MUST additionally bind tenant/user scope, source-policy identity, exact canonical input-schema digest and one collision-free dispatch identity. The resulting immutable tool projection controls both schemas exposed to the model and dispatch entries accepted for the turn. Session activation may narrow that projection, never install, grant, re-enable or bypass revoke.
+
+The full projection remains gateway-private. The Agent receives only `AgentToolsetView` definitions plus opaque route references and returns/receives versioned tool call/result envelopes. Package, installation, component kind, endpoint, grant and executor configuration never enter Agent branching logic. [`agent-plugin-boundary/v0`](../contracts/agent-plugin-boundary.md) owns this seam.
+
+At call time, exact arguments, scope, grant/revoke state and emergency block are checked again before effect intent or outbound I/O. Any missing package, digest/path mismatch, stale grant, disabled installation, revoked capability, schema mismatch, name collision, unknown execution identity or authority conflict fails closed. No error selects a same-name tool, alternate package/component/provider/runtime or previous successful snapshot. P0a defines and unit-tests the pure decision only; `MARKET-007` remains planned until application composition proves that denial prevents both effect-intent creation and adapter I/O.
+
+[`docs/contracts/invocation-resolution.md`](../contracts/invocation-resolution.md) owns the P0a input/output shapes, deterministic digest rules, error taxonomy, fixture matrix, framework borrow/adapt/reject evidence and the boundary into `RunSpec`/`AgentRun::new`.
 
 ## 6. Capability policy
 
@@ -138,18 +150,23 @@ Implemented:
 - exact first-party IDs, versions, statuses, capabilities and install policies;
 - safe component path validation and Rust/catalog identity cross-check;
 - allowance for safe user-installed non-first-party packages.
+- pure typed invocation resolution, immutable per-turn projection and synthetic `RunSpec` proof (`MARKET-005/006`).
+- Agent–Plugin dependency direction and composition-root cross-boundary proof (`AGENT-017`).
 
 Planned:
 
+- read-only catalog browse/detail projection (P0b);
 - durable installations/grants;
 - enable/disable resolver;
 - Market browse/detail UI;
 - upgrade/revoke/rollback runtime.
+- production ToolGateway and executable Plugin tool-host packaging; the framework-neutral Agent tool protocol value subset is implemented.
 
 Verification:
 
 - `docs/contracts/plugin-package.md`
+- `docs/contracts/invocation-resolution.md`
 - `market/schemas/plugin-package.schema.json`
 - `python3 scripts/check_repo_contracts.py`
 - `scripts/tests/test_check_repo_contracts.py`
-- `MARKET-*`, `FP-006`, `FP-015`, `FP-007`
+- `MARKET-*`, `AGENT-002`, `FP-006`, `FP-015`, `FP-007`

@@ -5,6 +5,7 @@ use ustc_campus_agent_core::{
     PRODUCT_NAME,
 };
 use ustc_campus_agent_course_planning::{PlanningConfig, load_fixture, plan_fixture};
+use ustc_campus_agent_runtime::RUN_SPEC_SCHEMA_VERSION;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -38,6 +39,7 @@ fn run(args: &[String]) -> Result<(), String> {
             }
             println!("bounded_spike_plugin={OPPORTUNITY_GRAPH_PLUGIN_ID}");
             println!("bounded_spike_slice={COURSE_PLANNING_SLICE}");
+            println!("agent_runtime_kernel_schema={RUN_SPEC_SCHEMA_VERSION}");
             println!("{}", adapter_health());
             Ok(())
         }

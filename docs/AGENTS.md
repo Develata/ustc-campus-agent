@@ -6,12 +6,12 @@
 
 `docs/` is split by semantic role. The repository is intentionally smaller than Deve-Notebook, so it copies the layering discipline without creating empty registries or speculative chapters.
 
-- `plan/`: current engineering blueprint—authority, state, boundaries, failure and verification.
+- `plan/`: current engineering blueprint—foundation/cross-system policy plus one independently owned blueprint per large module under `plan/modules/`.
 - `features/`: user-visible behavior and honest journeys.
-- `contracts/`: typed CLI, schema, permission, interface and data contracts.
+- `contracts/`: typed module boundaries, CLI, schema, permission, interface and data contracts.
 - `acceptance/`: active proof bindings plus the retained long-horizon case catalog. `matrix.tsv` is the current gate registry; catalog-only cases are non-pass and non-active.
 - `overview/`: cross-layer maps; never a second source of authority.
-- `tasks/`: implementation order and scoped delivery slices; tasks do not override plans.
+- `tasks/`: large-module work policy, small-module batches and assembly order; tasks do not override plans.
 - `guides/`: contributor, local-development and publication handoffs.
 - `adr/`: time-ordered architecture decisions; ADRs explain why, while current plans define how.
 - `coverage-matrix.md`: explicit mapping across blueprint, feature, contract and acceptance layers.
@@ -24,9 +24,10 @@ Before changing product or runtime behavior:
 
 1. read `plan/00-engineering-constitution.md`;
 2. read `plan/01-terminology.md`;
-3. read the matching plan chapter;
-4. read its feature and contract projections through `coverage-matrix.md`;
-5. read the matching acceptance cases and current task slice.
+3. read `plan/modules/00-module-map.md` and the matching large-module blueprint;
+4. read the matching cross-system plan chapter;
+5. read `contracts/module-boundaries.md` and matching specific contracts through `coverage-matrix.md`;
+6. read the matching feature, acceptance cases, `tasks/00-module-work-policy.md` and current roadmap batch.
 
 ## Authority rules
 
@@ -42,6 +43,6 @@ Before changing product or runtime behavior:
 
 - Keep chapters cohesive and proportionate; do not create empty placeholder trees.
 - Every new public behavior needs a feature projection and an acceptance binding.
-- Every plan chapter MUST state scope, authority, failure/recovery and verification entrypoints.
+- Every cross-system plan MUST state scope, authority, failure/recovery and verification entrypoints. Every large-module blueprint MUST additionally satisfy the complete blueprint contract in `plan/AGENTS.md`.
 - Move dated evidence to a future `report/` directory only when real evidence exists; do not create the directory pre-emptively.
 - Run `python3 scripts/check_repo_contracts.py` and `git diff --check` after docs-only changes.
