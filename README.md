@@ -1,6 +1,6 @@
 # USTC Campus Agent
 
-> 面向科大学生的插件化校园智能体。当前为学生竞赛项目，**不是中国科学技术大学官方服务**。
+> 面向科大学生、比赛后仍长期维护使用的插件化校园智能体。项目源于学生竞赛，**不是中国科学技术大学官方服务**。
 
 USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是做一个有清晰边界的校园 Agent 平台：用户从 Market 安装可信插件，Agent 在来源、权限、版本和审计约束下完成校园任务。
 
@@ -24,15 +24,16 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | Runtime strategy | Rust authority core；ADR-0004 reference systems remain references or bounded adapters, not platform authority |
 | Agent harness | finite HarnessRun over typed TaskGraph；model proposes, Rust validates；every model call passes context-budget preflight |
 | Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
-| Multi-client shell | Rust/Dioxus；Web/PWA first；可负责 SSR/page host；desktop/mobile 复用同一 typed API/event contract；client 不拥有平台 authority |
+| Required delivery targets | Web/PWA + Docker Compose Fullstack server + Android；iOS 后续；desktop 按真实需求后续加入 |
+| Multi-client shell | Dioxus Fullstack；Web first、Android mandatory next；共享 server-function/API/event/reducer contract；client/server adapter 不拥有平台 authority |
 
 ## Repository layout
 
 ```text
-apps/                     # runnable binaries and future frontend shell
+apps/                     # runnable binaries and future Fullstack application source
   ustc-agentd/            # service daemon skeleton
   ustc-agentctl/          # operator/developer CLI skeleton
-  ustc-client/            # future Dioxus Web/PWA-first thin client; created with first real API consumer
+  ustc-client/            # future shared Dioxus Web/Android Fullstack source; created with first accepted Fullstack slice
 crates/
   platform-core/          # canonical domain invariants and authority decisions
   agent-runtime/          # Plugin-neutral node AgentRun; future finite harness state, graph, context and review kernel

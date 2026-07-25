@@ -26,7 +26,7 @@ This file governs all work in this repository. Read this file, then `README.md`,
 - Correctness and safety precede UX, compatibility, maintainability, and performance.
 - Define contracts before implementation for public APIs, CLI commands, schemas, permissions, source import, and Agent run state.
 - Keep Platform authority in Rust domain code. Framework checkpoints, model transcripts, adapters, and browser/UI state cannot overwrite grants, approvals, receipts, audit, or source revisions.
-- Keep clients thin. Dioxus/Web/Desktop/Mobile code renders server-owned state and submits typed user intent; it MUST NOT own domain calculation, mutation, grant, Agent, Market, Plugin, source, audit, or completion logic. Product computation and mutation execute through explicit backend/application infrastructure.
+- Keep the Dioxus Fullstack boundary thin. Web/PWA, Docker Compose server and Android are required targets; iOS/desktop are later. Client code renders server-owned state and submits typed intent. An admitted Dioxus server function MAY call one public application command/query port, but neither client nor server-function adapters may own domain calculation/mutation or reach concrete repositories, executors, providers or journals. Product authority remains in explicit backend/application modules.
 - Remote `main` remains protected. Large modules normally use a dedicated branch and PR. During the current solo skeleton phase, Develata MAY explicitly allow local `main` work for root interfaces and composition scaffolding, but this does not bypass remote branch protection, review, or current-operation push approval.
 - Do not push, tag, publish, or change GitHub visibility without explicit Develata approval.
 - Do not use `git add -A`; stage exact files only.

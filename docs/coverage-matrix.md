@@ -28,7 +28,7 @@ This matrix keeps the live documentation layers aligned:
 |---|---|---|---|
 | `modules/00-module-map` | `module-boundaries.md` | all | every module must bind before implementation |
 | `M00 Platform Control/Identity` | `B-M00-M10-ACTOR`, request/session/causation values | cross-feature admission only | dedicated active rows must be added before implementation; current policies are cross-covered by security/harness cases only |
-| `M10 Application API Host` | versioned HTTP JSON/SSE in `interfaces.md` | all real client journeys | dedicated API active rows must be added before implementation; long-horizon client/web cases remain non-active |
+| `M10 Application Ingress Host` | `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT`, `B-M10-APP-CALL`, `B-APP-M10-RESULT`; server-function/public endpoint registry in `interfaces.md` | all real Web/Android/integration journeys | dedicated Fullstack/API/compatibility rows must be active before retained implementation; long-horizon client/web cases remain non-active |
 | `M20 Market/Package` | package/install/grant/resolver contracts | `00-market-browse-install` | `MARKET-*`, `PKG-*`, selected `AGENT-*`, `FP-*` |
 | `M30 Agent Harness/Runtime` | `agent-harness.md`, `agent-runtime.md`, `B-M30-M50-MODEL`, `B-M20-M30-TOOLSET`, `B-M30-M40-CALL`, `B-COMP-M30-EFFECT`, `B-M40-M30-RESULT` | `04-bounded-agent-harness` | planned `HARNESS-*`; implemented/remaining `AGENT-*` as declared in matrix |
 | `M40 Tool Gateway/Execution` | `agent-plugin-boundary.md`, `invocation-resolution.md`, directional call/result/executor boundaries | tool/review states in harness journey | selected `AGENT-*`, `MARKET-*`, `PKG-*` |
@@ -38,8 +38,8 @@ This matrix keeps the live documentation layers aligned:
 | `M70 ChangeRadar` | typed semantic candidate/event/feed | `02-ustc-change-radar` | `RADAR-*`, relevant `FP-*` |
 | `M71 Affairs Navigator` | procedure draft/artifact/search contracts | `01-ustc-affairs-navigator` | `PROC-*`, relevant `FP-*` |
 | `M72 Opportunity Graph` | opportunity/profile/planner values | `03-campus-opportunity-graph` | `COURSE-*`, relevant `FP-*` |
-| `M80 Dioxus Multi-client` | `client-shell.md`, `B-M10-M80-API` | all Web/PWA/client presentation | active client/web rows must be added before implementation; long-horizon `CLIENT-*`/`WEB-*` remain in `platform-baseline.md` |
-| `M90 Infrastructure/Operations` | module-owned ports and deployment/recovery contracts | no independent product behavior | long-horizon `CFG-*`, `REL-*`, `DEP-*` are the primary families and must be activated with exact bindings as M90 scope enters implementation; active `RUNTIME-*` applies only to shared restart/receipt behavior and `PUBLIC-*` to public delivery |
+| `M80 Dioxus Fullstack Multi-client` | `client-shell.md`, `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT` | required Web/PWA and Android presentation; later iOS/desktop | active client/web/Android compatibility rows must be added before retained implementation; long-horizon `CLIENT-*`/`WEB-*` remain in `platform-baseline.md` |
+| `M90 Infrastructure/Operations` | module-owned ports plus Docker Compose Fullstack deployment/recovery contracts | no independent product behavior | long-horizon `CFG-*`, `REL-*`, `DEP-*` include required Compose Web/Android read-back and must be activated with exact bindings as M90 scope enters implementation; active `RUNTIME-*` applies only to shared restart/receipt behavior and `PUBLIC-*` to public delivery |
 
 “Must be added before implementation” is an explicit gap, not a pass. A module may write contract/fixture scaffolding first, but cannot claim `StandaloneReady` until its active rows and bindings exist.
 

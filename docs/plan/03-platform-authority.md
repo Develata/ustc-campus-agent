@@ -4,25 +4,25 @@
 
 - `Layer`: Authority architecture
 - `Status`: Accepted architecture; R0 Agent transition kernel implemented, finite harness and authority plane largely planned
-- `Version`: `0.6.0`
+- `Version`: `0.7.0`
 - `Last Review`: `2026-07-25`
 - `Authority Owns`: authority partition, canonical state ownership, client/execution-plane boundary
 - `Authority Defers To`: product positioning for scope and contracts for exact external shapes
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/04-bounded-agent-harness.md`
 - `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/client-shell.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: `HARNESS-*`, `AGENT-*`, `MARKET-*`, `RUNTIME-*`, `PUBLIC-*`
-- `Primary Code Areas`: `crates/platform-core/`, `crates/agent-runtime/`, `apps/ustc-agentd/`, `apps/ustc-agentctl/`
+- `Counterpart Acceptance`: `HARNESS-*`, `AGENT-*`, `MARKET-*`, `CLIENT-*`, `WEB-*`, `DEP-*`, `RUNTIME-*`, `PUBLIC-*`
+- `Primary Code Areas`: `crates/platform-core/`, `crates/agent-runtime/`, `apps/ustc-agentd/`, `apps/ustc-agentctl/`, future `apps/ustc-client/`
 - `Large-module Map`: [`modules/00-module-map.md`](modules/00-module-map.md); this chapter owns cross-module authority, while module blueprints own implementation detail
 
 ## 1. Scope
 
-This chapter defines where authoritative decisions live across the whole system. [`modules/00-module-map.md`](modules/00-module-map.md) divides that system into independently deliverable large modules. Dioxus is accepted as the future thin multi-client presentation shell, but no client dependency or crate lands beyond a simple initialization before a real Web/PWA API consumer contract. Production database and external Agent framework choices remain unfrozen until a bounded slice proves the need.
+This chapter defines where authoritative decisions live across the whole system. [`modules/00-module-map.md`](modules/00-module-map.md) divides that system into independently deliverable large modules. Dioxus Fullstack is accepted as the long-lived first-party application stack for required Web/PWA, Docker Compose server and Android targets. No Dioxus dependency or retained scaffold lands before exact Fullstack/client/deployment acceptance rows exist. Production database and external Agent framework choices remain unfrozen until a bounded slice proves the need.
 
 Long-term shape:
 
 ```text
-Dioxus Web/PWA first; future desktop/mobile shells
-    │ versioned HTTP JSON + event stream
+Dioxus Web/PWA first, then mandatory Android; later iOS/desktop
+    │ versioned server functions / HTTP / typed event stream
     ▼
 USTC Campus Agent authority plane
 ├── identity/session
@@ -42,7 +42,7 @@ USTC Campus Agent authority plane
     └── replaceable execution/provider adapters
 ```
 
-Clients render state and submit typed intent through [`client-shell/v0`](../contracts/client-shell.md). Execution planes perform bounded work. Neither owns product authority. Dioxus types and target-native handles terminate in the client app and never enter domain contracts.
+Clients render state and submit typed intent through [`client-shell/v1`](../contracts/client-shell.md). Execution planes perform bounded work. Neither owns product authority. Dioxus component/router/signal and target-native handles terminate in the Fullstack application boundary and never enter domain contracts; Dioxus/Axum transport types terminate in M10 ingress adapters.
 
 ## 2. Authority partition
 
@@ -130,11 +130,13 @@ The target architecture is one authority plane with replaceable execution locati
 
 A single-tenant local profile MAY run the same binaries for development, demo or private deployment. It is a deployment profile, not a second product or divergent state model.
 
+The required Docker Compose profile runs the native Fullstack server, durable dependencies and reviewed reverse-proxy/TLS/readiness/recovery wiring. It serves Web assets/SSR and admitted server-function/stream endpoints. Android is a separately built/signed client artifact that points to the deployed HTTPS server; it is not a process inside Compose.
+
 ### 4.1 Multi-client presentation boundary
 
-The future client starts as one Dioxus application with target-neutral routes/components/view-model reduction and narrow `web`, `desktop` and `mobile` adapters. Web/PWA is the first proof surface. Desktop and mobile reuse the same versioned HTTP/event API after Web auth, reconnect and recovery semantics are executable.
+The future client starts as one Dioxus Fullstack application with target-neutral routes/components/view-model reduction, shared server-function/client contract values and narrow `web` and `android` adapters. Web/PWA is the first proof surface. Android is the mandatory next target and reuses the same semantic ingress/event/reducer contract after Web auth, reconnect and recovery are executable. iOS and desktop are later peers.
 
-Dioxus Fullstack/server functions are not an alternate domain API. Shared UI code cannot access databases, Plugin executors, Agent checkpoints, filesystem/process APIs or platform secret stores directly. Platform capability is admitted through narrow client ports; unsupported capability remains explicit instead of silently changing execution location.
+Dioxus server functions are valid first-party M10 ingress adapters. They may call admitted application command/query ports, but cannot access concrete databases/repositories, Plugin executors, provider SDKs, Agent checkpoints, journals, filesystem/process APIs or platform secret stores directly. Platform capability is admitted through narrow client ports; unsupported capability remains explicit instead of silently changing execution location. Independently deployed Android clients carry build/protocol identity and receive typed compatibility or upgrade outcomes before unsafe dispatch.
 
 ## 5. Current executable state
 
@@ -155,7 +157,7 @@ Not yet implemented:
 - finite HarnessRun/TaskGraph, clarification/review supervisor and context compaction;
 - source ingestion and publication state;
 - production database/evidence store;
-- Dioxus Web/PWA journey and later desktop/mobile target shells.
+- Dioxus Fullstack Web journey, Docker Compose server profile and mandatory Android target; later iOS/desktop peers.
 
 These planned systems MUST NOT be described as operational merely because their contracts exist.
 

@@ -4,7 +4,7 @@
 
 - `Layer`: Large-module architecture
 - `Status`: Accepted current skeleton
-- `Version`: `module-map/v0`
+- `Version`: `module-map/v1`
 - `Last Review`: `2026-07-25`
 - `Owning Constitution`: [`../00-engineering-constitution.md`](../00-engineering-constitution.md)
 - `Counterpart Contract`: [`../../contracts/module-boundaries.md`](../../contracts/module-boundaries.md)
@@ -17,7 +17,7 @@ A large module is an independently owned and independently testable part. “Lar
 | ID | Large module | Owns | Must not own | Current state |
 |---|---|---|---|---|
 | `M00` | Platform Control and Identity | tenant/user/session identity, request causation, application command envelope, platform-wide policy references | package internals, Agent loop, source parsing, UI | planned |
-| `M10` | Application API Host | versioned HTTP JSON/SSE transport, auth/session admission, DTO mapping, application-service invocation | domain decisions, direct database rules, UI | skeleton only |
+| `M10` | Application Ingress Host | Dioxus/Axum server-function ingress, versioned public HTTP/typed streams where needed, auth/session/client-compatibility admission, mapping to application ports | domain decisions, direct database/executor rules, UI | skeleton only |
 | `M20` | Market and Package Lifecycle | catalog package/component identity, install/configure/enable/disable/update/revoke/grant lifecycle, invocation authority snapshots | model loop, Plugin execution, client state | manifest baseline + pure resolver evidence |
 | `M30` | Agent Harness and Runtime | finite user-task/run phases, graph, budgets, context projection, provider/tool ports, replay and review | package lifecycle, executor implementation, transport/UI | node runtime kernel implemented; harness planned |
 | `M40` | Tool Gateway and Execution | Agent tool protocol mapping, call correlation, current authorization ordering, intent/executor/receipt/result sequence | grants, Agent phases, package declarations | protocol values + fake conformance implemented |
@@ -27,19 +27,22 @@ A large module is an independently owned and independently testable part. “Lar
 | `M70` | USTC ChangeRadar | semantic change candidates/events, board scope, approval and feed behavior | generic source authority, other product state | manifest/design only |
 | `M71` | USTC Affairs Navigator | reviewed tree/procedure artifacts, lookup, supersession and publication journey | generic source authority, full-corpus RAG as truth | manifest/design only |
 | `M72` | Campus Opportunity Graph | opportunity facts, qualification/dependency/conflict, tenant profile projection and planning journeys | public source authority, cross-user profile state | offline Course Planning spike only |
-| `M80` | Dioxus Multi-client | Web/PWA/Desktop/Mobile routes, components, presentation state, SSR/page host and typed API client | domain calculation/mutation, database, Agent/Market/Plugin/source authority | architecture accepted; no client crate |
-| `M90` | Platform Infrastructure and Operations | repository implementations for storage, journal, evidence, clock, queue, config, secrets, telemetry and deployment wiring | domain transition rules and product policy | CI/checker baseline only |
+| `M80` | Dioxus Fullstack Multi-client | mandatory Web/PWA and Android routes/components/presentation state, SSR/hydration, generated first-party client facade and target adapters; later iOS/desktop | domain calculation/mutation, direct repository/executor access, Agent/Market/Plugin/source authority | architecture accepted; no Fullstack app |
+| `M90` | Platform Infrastructure and Operations | repository implementations for storage, journal, evidence, clock, queue, config, secrets, telemetry and Docker Compose deployment/recovery wiring | domain transition rules and product policy | CI/checker baseline only |
 
 The registry is the current large-module ownership boundary. New top-level modules or ownership moves are skeleton changes and require the analysis/approval process in the engineering constitution.
 
 ## 2. Dependency direction
 
 ```text
-M80 Dioxus client
-  └── versioned HTTP JSON/SSE ──► M10 Application API Host
+M80 Dioxus Web/Android clients
+  └── versioned server-function/HTTP call ──► M10 Application Ingress Host
 
-M10 Application API Host
-  └── typed application calls ──► M00 / M20 / M30 / M60 / M70 / M71 / M72
+M10 Application Ingress Host
+  └── typed result/error/event ──► M80 presentation reducer
+
+M10 Application Ingress Host
+  └── admitted typed application calls ──► M00 / M20 / M30 / M60 / M70 / M71 / M72
 
 M30 Agent Harness and Runtime
   ├── model port ──► M50 Model Provider Integration
@@ -63,8 +66,8 @@ M90 Platform Infrastructure and Operations
 
 Dependency rules:
 
-1. `M80` never imports domain crates or storage/executor clients.
-2. `M10` maps transport to application commands; it does not reimplement module decisions.
+1. `M80` client target code never imports domain crates or storage/executor/provider clients.
+2. `M10` maps Dioxus server-function/public transport to application commands; it does not reimplement module decisions or force a loopback HTTP hop.
 3. `M30` and `M40` depend on the Plugin-neutral tool protocol, not on each other's implementation; `ustc-agentd` orders their public operations.
 4. `M40` coordinates existing decisions but does not mint grants, run phases or receipts by itself.
 5. `M50` and `M51` normalize external protocols and never own platform state transitions.
@@ -77,9 +80,9 @@ Dependency rules:
 
 | Surface | Purpose | Allowed knowledge |
 |---|---|---|
-| `apps/ustc-agentd` | production composition root and HTTP/SSE host | public contracts of all attached backend modules |
+| `apps/ustc-agentd` | production composition root, Dioxus SSR/assets/server-function and public HTTP/stream host | public contracts of all attached backend modules plus M10 transport adapters |
 | `apps/ustc-agentctl` | operator/development commands and deterministic smoke | public application/domain commands only |
-| `apps/ustc-client` (future) | Dioxus client and SSR/page host | client DTO/API/event contracts only |
+| `apps/ustc-client` (future) | shared Dioxus Fullstack source and Web/Android target builds | client DTO/error/event/compatibility contracts and target ports only; server-only dispatch supplied through M10 |
 | module standalone tests | independent acceptance against fakes | owning module internals plus fake public counterparts |
 | `apps/ustc-agentd/tests` | cross-module ordering and wiring proof | public contracts, never private fields |
 
@@ -145,7 +148,7 @@ These implementations do not freeze unfinished module APIs. Before further imple
 
 ## 7. MVP and later boundary
 
-The competition MVP needs one honest attached path through selected parts of `M10`, `M20`, `M30`, `M40`, `M50`, `M60`, one or more first-party product modules and `M80`, supported by `M90`.
+The initial product needs one honest attached path through selected parts of `M10`, `M20`, `M30`, `M40`, `M50`, `M60`, one or more first-party product modules and `M80`, supported by `M90`. Web proves the path first; the required target set is not accepted until the Docker Compose Fullstack server and Android peer pass their own gates.
 
 The long-term skeleton reserves all registered modules, but later scope does not become MVP work merely because a module plan mentions it. Each module plan separately marks:
 

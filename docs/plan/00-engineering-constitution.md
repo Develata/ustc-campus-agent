@@ -4,7 +4,7 @@
 
 - `Layer`: Foundation
 - `Status`: Governing rule
-- `Version`: `0.2.0`
+- `Version`: `0.3.0`
 - `Last Review`: `2026-07-25`
 - `Scope`: architecture, plan, contracts, tasks, implementation, review and delivery
 - `Authority Owns`: engineering priority, system skeleton, module discipline, work sequence and change governance
@@ -48,12 +48,12 @@ The main call path is four layers plus an object plane:
 
 ```text
 1. Interaction shell
-   Dioxus Web/PWA/Desktop/Mobile or operator CLI
+   Dioxus Fullstack Web/PWA + Android; later iOS/desktop; or operator CLI
         │ display server-owned state; submit typed intent
         ▼
 2. Application interface
-   ustc-agentd HTTP JSON / SSE / command boundary
-        │ authenticate, validate envelope, map DTOs, call owned services
+   ustc-agentd Dioxus server functions / HTTP / typed streams / command boundary
+        │ authenticate, validate compatibility/envelope, map DTOs, call owned services
         ▼
 3. Flow coordination
    platform application services, finite HarnessRun, product use cases
@@ -130,21 +130,24 @@ Before substantial implementation, every large-module plan must answer all of th
 
 A chapter that only names layers and desired properties is a concept sketch, not an engineering blueprint.
 
-## 7. Thin-client rule
+## 7. Dioxus Fullstack thin-client rule
 
-Dioxus is the chosen multi-target Rust presentation framework.
+Dioxus Fullstack is the chosen long-lived first-party Rust application stack. Web/PWA, a native Linux server deployed through Docker Compose and Android are required product targets. Web is the first proof surface; Android follows as a mandatory peer target. iOS and desktop are later scope.
 
 The target arrangement is:
 
 ```text
-Dioxus shared UI + Web/PWA/Desktop/Mobile adapters
+Dioxus shared UI + Web/PWA + Android adapters
         │
         ├── may own routes, components, presentation state, forms and accessibility
-        ├── may host SSR and page delivery
-        └── calls explicit versioned HTTP JSON / SSE APIs
+        ├── may own SSR/page delivery and generated first-party client calls
+        └── calls versioned Dioxus server functions / HTTP / typed streams
                          │
                          ▼
-                    ustc-agentd
+             M10 ingress in ustc-agentd
+                         │ admitted application command/query
+                         ▼
+             backend application/domain modules
 ```
 
 The client must not own:
@@ -155,7 +158,11 @@ The client must not own:
 - database mutation or direct executor access;
 - task completion, receipts or audit truth.
 
-A client may perform display-only reduction, input validation for user feedback and local formatting. Every calculation or mutation that affects product truth executes through backend/application infrastructure. Dioxus server functions may support SSR/page plumbing, but they are not a second canonical business API.
+A client may perform display-only reduction, input validation for user feedback and local formatting. Every calculation or mutation that affects product truth executes through backend/application infrastructure.
+
+A Dioxus server function is an Axum-compatible M10 ingress adapter, not merely page plumbing. After M00/M10 version, identity, authorization, bounds, idempotency/precondition and audit admission, its server-only body may call one public application command/query port. It may not call concrete repositories, databases, Plugin executors, provider SDKs or journals directly. Public REST/SSE endpoints, when required, are peer adapters over the same application ports rather than a second business implementation.
+
+Shared Rust source does not remove deployed compatibility obligations. Web may deploy atomically with the server; Android packages may lag. First-party request/response/error/event contracts therefore remain versioned and define a supported window plus typed `UpgradeRequired` behavior before unsafe dispatch.
 
 ## 8. One owner for every fact
 

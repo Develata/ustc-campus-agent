@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Status`: Current contract
-- `Version`: `module-boundaries/v0`
+- `Version`: `module-boundaries/v1`
 - `Last Review`: `2026-07-25`
 - `Owning Plan`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
 - `Task Policy`: [`../tasks/00-module-work-policy.md`](../tasks/00-module-work-policy.md)
@@ -26,8 +26,11 @@ This registry defines what may cross each large-module boundary. It does not pre
 | Boundary ID | Producer/owner | Consumer | Values/operation | Status |
 |---|---|---|---|---|
 | `B-M00-M10-ACTOR` | `M00` | `M10` | `AuthenticatedActor`, `PlatformRequestContext`, session denial | planned |
-| `B-M10-M80-API` | `M10` | `M80` | versioned HTTP JSON request/response/error and SSE event/cursor | accepted contract; implementation planned |
-| `B-M10-APP-COMMAND` | owning backend modules | `M10` | typed application commands/queries/results; transport mapping only | planned per route |
+| `B-M80-M10-CALL` | `M80` | `M10` | versioned Dioxus server-function/HTTP request, client build/target/protocol, user intent, precondition and correlation/idempotency identity | accepted contract; implementation planned |
+| `B-M10-M80-RESULT` | `M10` | `M80` | versioned response/error/projection plus compatibility or `UpgradeRequired` outcome | accepted contract; implementation planned |
+| `B-M10-M80-EVENT` | `M10` | `M80` | typed server event/stream value, monotone cursor and reconnect/resync outcome | accepted contract; implementation planned |
+| `B-M10-APP-CALL` | `M10` | owning backend application module | one admitted typed application command/query; no transport or Dioxus type | planned per ingress |
+| `B-APP-M10-RESULT` | owning backend application module | `M10` | typed application result/error/event projection; no concrete adapter handle | planned per ingress |
 | `B-M20-M40-PROJECTION` | `M20` | `M40` | immutable tool projection, private route and current authorization result | partial implementation |
 | `B-M30-M50-MODEL` | `M30` | `M50` | complete model request, ordered events, usage and typed provider errors | planned |
 | `B-M20-M30-TOOLSET` | `M20` resolver via composition | `M30`/provider | frozen `AgentToolsetView` only; no private route/package/grant internals | partial implementation |
@@ -41,13 +44,14 @@ This registry defines what may cross each large-module boundary. It does not pre
 | `B-M00-M72-PROFILE` | `M00` | `M72` | exact tenant/user/request context for private profile operations | planned |
 | `B-DOMAIN-M90-PORTS` | each domain module | `M90` | repository, journal, artifact, clock, scheduler, secret-ref, HTTP and telemetry ports | mostly planned |
 
-`B-M10-APP-COMMAND` is a boundary family, not one universal command bag. Each route/use case declares its owning module and exact value contract.
+`B-M10-APP-CALL` and `B-APP-M10-RESULT` are boundary families, not universal command/result bags. Each server function or public route declares one owning application module and exact value contract. Dioxus/Axum transport types terminate in the M10 adapter.
 
 ## 3. Client boundary
 
 `M80` may receive:
 
 - API/version/build information;
+- server/client compatibility and minimum-supported-version outcomes;
 - safe Market/install/run/product projections;
 - stable error codes and user-safe messages;
 - monotone event sequence/cursor;
@@ -59,9 +63,12 @@ This registry defines what may cross each large-module boundary. It does not pre
 - one typed user intent;
 - current projection/precondition identity;
 - correlation/idempotency identity;
+- client build/target/protocol identity;
 - reconnect cursor.
 
 It must not receive or send domain repositories, grant internals, executor routes/config, provider secrets, raw audit payloads or mutable server objects. Client-side calculations may support display only; backend/application modules recompute every truth-affecting decision.
+
+A Dioxus server function is a valid M10 HTTP ingress adapter. After M00/M10 admission it may issue `B-M10-APP-CALL` and map `B-APP-M10-RESULT`; it may not reach a concrete repository, executor, provider SDK or journal. Independently deployed Android clients require compatibility fixtures and typed rejection before an unsupported request reaches `B-M10-APP-CALL`.
 
 ## 4. Agent–Plugin boundary
 
@@ -134,6 +141,8 @@ Compatible additive changes still require:
 - client/provider/executor unknown-variant behavior;
 - fixture and registry update;
 - acceptance evidence for old and new peers where both remain supported.
+
+Web may deploy atomically with the server. Android does not; its installed-version compatibility window is therefore an explicit boundary obligation even when both sides share Rust source types.
 
 In-flight runs/calls keep their pinned contract/snapshot. New versions affect new calls/turns/runs under explicit policy.
 

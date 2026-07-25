@@ -1,84 +1,107 @@
-# ADR-0009: Use Dioxus for a thin multi-client shell
+# ADR-0009: Use Dioxus Fullstack for the long-lived Web and Android application
 
-- `Status`: Accepted; full-stack Rust deployment shape clarified
+- `Status`: Accepted; amended for mandatory Android and first-party Fullstack ingress
 - `Date`: `2026-07-24`
-- `Last Clarification`: `2026-07-25`
+- `Last Amendment`: `2026-07-25`
 - `Depends on`: [`ADR-0004`](0004-runtime-reference-strategy.md), [`ADR-0007`](0007-finite-agent-harness.md), [`ADR-0008`](0008-agent-plugin-tool-boundary.md)
 
 ## Context
 
-The product needs a Web/PWA client and may later add desktop and mobile shells. Separate frontend stacks would duplicate routes, event reduction, Agent status semantics, accessibility fixes and typed API mappings. Conversely, sharing server/domain crates directly with a client renderer would leak authority into UI code and make every backend change a client framework concern.
+USTC Campus Agent is intended to remain a useful school-level Agent platform after the competition, not a disposable submission. It must support a Web/PWA client, a server deployment managed through Docker Compose, and an Android client. iOS is later scope; desktop may be added later when a real native-desktop need exists.
 
-Dioxus provides a Rust component model across Web, Desktop and Mobile. The official `0.7` documentation describes Web as the best-supported target, Desktop as a system-WebView renderer with native Rust execution, and Mobile as a first-class WebView target. The latest official release observed for this decision is `v0.7.9` (`2026-05-08`). Platform support still has different toolchains and runtime capabilities; “one framework” does not make targets behaviorally identical.
+Maintaining independent Rust backend and TypeScript/JavaScript frontend stacks would duplicate language/toolchain upkeep, request/response types, error mapping, event reduction and Web/Android presentation logic. Dioxus provides one Rust component model across Web, Desktop and Mobile, while Dioxus Fullstack provides Axum-compatible typed server functions, SSR/hydration, routing, assets, forms, SSE, streams and WebSockets.
 
-Successful Agent products also separate interaction surfaces from the core loop. Claude Code exposes the same harness through terminal, desktop, IDE, web and remote interfaces. Pi emits ordered message/tool lifecycle events for UI projection. goose presents tool permission choices without making the UI the tool authority.
+The official `0.7` documentation describes Web as the best-supported target and Mobile as a first-class WebView target. Mobile still has separate Android/iOS toolchains and no current native Android widget/animation model. The latest official release observed for this decision is `v0.7.9` (`2026-05-08`). One Rust workspace therefore reduces maintained stacks and duplicated presentation code; it does not make server, Web and Android one artifact or remove target-specific QA.
 
 ## Decision
 
-Adopt [`client-shell/v0`](../contracts/client-shell.md):
+Adopt [`client-shell/v1`](../contracts/client-shell.md):
 
 ```text
-one Dioxus app and shared reducer
-      │ optional SSR/page host
-      │ typed ClientApi
-      ▼
-versioned HTTP JSON + SSE
-      ▼
-ustc-agentd authority plane
+shared Dioxus Fullstack application and presentation model
+        ├── Web: SSR/CSR + hydration + PWA
+        ├── Android: packaged Dioxus/WebView client
+        ├── iOS: later peer target
+        └── desktop: optional later peer target
+                 │
+                 │ versioned Dioxus server functions / HTTP / typed events
+                 ▼
+M10 ingress in ustc-agentd
+        │ authentication, authorization, bounds,
+        │ idempotency, compatibility and audit
+        ▼
+application command/query ports
+        ▼
+platform-owned domain/runtime authorities
 ```
 
-Roll out Web/PWA first. The Dioxus application MAY own SSR and page delivery so the presentation stack remains full-stack Rust. Desktop follows as packaging plus narrow native ports; mobile follows after the Web lifecycle is proven. Start with one app crate and internal modules. Do not create separate web/desktop/mobile domain crates or add Dioxus to backend/domain crates.
+The Dioxus application is Fullstack infrastructure, not merely a renderer. Its first-party Web and Android clients MAY use versioned Dioxus server functions as their canonical typed ingress. A server function is an Axum-compatible HTTP endpoint and MAY call one admitted application command/query port after `M00`/`M10` authentication, authorization, request bounds, idempotency/precondition and audit rules pass.
 
-Dioxus is presentation infrastructure only. Dioxus signals, hooks, router types, server functions and WebView handles cannot own or redefine identity, Market/install/grant state, HarnessRun/AgentRun transitions, Agent tool protocol, Plugin execution, source truth, receipts or audit.
+A server function MUST NOT call concrete repositories, databases, Plugin executors, provider SDKs or domain/runtime internals directly. It cannot own or redefine identity, Market/install/grant state, HarnessRun/AgentRun transitions, Agent tool protocol, Plugin execution, source truth, receipts or audit. Public REST/SSE endpoints, when needed for CLI or heterogeneous integrations, are peer transport adapters over the same application ports rather than a second implementation of business semantics.
 
-The canonical client/server seam remains explicit versioned HTTP JSON and event streaming owned by `M10`/`ustc-agentd`. Dioxus fullstack server functions MAY assist SSR, page bootstrap or deployment, but every business read or mutation—including SSR data loading—MUST use the same explicit `M10` API through `ClientApi`. They MUST NOT call application services, repositories or executors directly, become an alternate business API, or bypass `M00`/`M10` admission. Browser, desktop and mobile behavior remains testable against the same public API/event contract.
+One source/workspace produces separate artifacts:
 
-No Dioxus dependency or empty client crate is added by this ADR. The first `M80` implementation batches will revalidate and pin the exact release/features, create `apps/ustc-client`, and prove one real API/event consumer without changing another module's private implementation.
+- a native Linux server build hosted by the Docker Compose profile;
+- Web assets/WASM plus optional SSR/hydration served by that server;
+- an Android package that points to the deployed HTTPS server;
+- later iOS/desktop packages when their target gates enter scope.
+
+Web is the first proof surface because it validates authentication, typed ingress, event reduction and recovery fastest. Android is a mandatory product target and follows immediately after the shared Web contract is executable; it is not an optional later idea. iOS and desktop remain later scope.
+
+Independently deployed Android clients create server/client version skew even when source types are shared. Server-function routes, DTOs, errors and events therefore carry explicit compatibility policy, stable versions and unknown-variant behavior. A server upgrade MUST either remain compatible with supported installed Android versions or return a typed minimum-version/upgrade outcome before unsafe dispatch.
+
+No Dioxus dependency or empty app crate is added by this ADR alone. The first implementation batch revalidates and exact-pins the Dioxus/DX release and features, then proves one Fullstack Web journey and one Android build/launch/remote-call path without changing backend domain internals.
 
 ## Rejected alternatives
 
-- independent React/desktop/mobile implementations with duplicated product semantics;
-- make Dioxus Fullstack or server functions the platform domain boundary or a direct repository/executor path;
-- import `platform-core`, `agent-runtime` or Plugin implementation types directly into UI components;
+- independent Rust backend plus unrelated Web and Android presentation implementations;
+- Leptos plus Tauri as two framework layers when Android and one Rust Fullstack stack are hard requirements;
+- make Dioxus signals/hooks/server-function state the platform domain authority;
+- force an admitted server function through a redundant loopback HTTP call before it may reach the same application port;
+- let server functions reach repositories, executors, provider SDKs or durable journals directly;
 - expose arbitrary filesystem/process/WebView eval to shared components;
-- create one crate per target before any target has a real consumer;
-- claim Android/iOS support from compilation alone;
-- implement desktop/mobile before Web/PWA auth, event and recovery semantics are proven.
+- create one domain/client implementation per target before target-specific behavior requires it;
+- claim Android support from compilation alone;
+- assume shared Rust source removes deployed mobile/server compatibility obligations.
 
 ## Consequences
 
 Benefits:
 
-- Rust language/tooling and component reuse across target shells;
-- one view-model/reducer interpretation of server events;
-- Dioxus replacement remains confined to the client application;
-- target-specific privileges are visible behind narrow ports;
-- Agent/Plugin/backend evolution stays independent of the renderer.
+- one primary Rust language/toolchain across server, Web and Android;
+- shared routes, components, presentation reducer, request/response/event types and typed errors;
+- generated client calls for Axum-compatible server-function endpoints instead of a separately maintained TypeScript API client;
+- Web SSR/hydration and Android reuse without duplicating platform authority;
+- optional public HTTP adapters remain possible over the same application ports;
+- Dioxus remains confined to the Fullstack application boundary, so domain/runtime evolution stays independent.
 
 Costs and risks:
 
-- WebAssembly compatibility constrains reusable client dependencies;
-- Desktop and Mobile WebView behavior still requires target-specific QA;
-- Android/iOS toolchains and packaging remain separate work;
-- Dioxus is fast-moving, so exact versions/features must be pinned and periodically revalidated;
-- shared UI can become a lowest-common-denominator design unless platform adaptation remains explicit.
+- Dioxus is pre-1.0 and fast-moving, requiring exact pins, controlled upgrades and rollback evidence;
+- WebAssembly and WebView constraints limit reusable dependencies and require browser/device QA;
+- Android SDK/NDK/CMake, signing, packaging and real-device lifecycle remain separate obligations;
+- mobile authentication/session storage and server URL configuration require narrow target adapters;
+- installed Android versions can lag the server and require an explicit compatibility window;
+- Dioxus does not supply databases, caches, sessions or mailers; those remain explicit Axum/infrastructure choices;
+- shared UI can become lowest-common-denominator design unless target adaptation remains deliberate.
 
 ## Verification and rollback
 
-- Web/PWA is the first implementation and acceptance surface.
-- Every later target must replay common API/event fixtures and pass target-specific launch/navigation/security checks.
-- Repository dependency checks must keep Dioxus out of authority/domain crates.
-- Rollback before implementation is documentation-only. After implementation, replacing Dioxus is an app-shell migration that preserves `client-shell/v0` and server contracts.
+- Web Fullstack proof covers SSR or initial page delivery, hydration/CSR, one typed server-function query/command and one typed event stream.
+- Android proof covers a real emulator/device launch, configured HTTPS server URL, authentication/session adapter, the same semantic journey, reconnect and external-service Custom Tab behavior.
+- Docker Compose proof covers clean server startup, health/readiness, Web asset/SSR delivery, server-function endpoint access, Android remote access and restart/read-back.
+- Compatibility fixtures exercise a supported older Android protocol against the current server plus typed rejection of an unsupported version.
+- Dependency checks keep Dioxus out of domain/runtime/Plugin crates and forbid server-function adapters from importing concrete repositories/executors.
+- Before implementation, rollback is documentation-only. After implementation, replacement preserves application command/query contracts and persisted domain state; client/server transport migration is explicit rather than hidden.
 
 ## Official source baseline
 
-Reviewed on `2026-07-24`:
+Reviewed on `2026-07-25`:
 
 - Dioxus latest release: <https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.9>
-- Getting started/toolchain: <https://dioxuslabs.com/learn/0.7/getting_started/>
+- Fullstack overview: <https://dioxuslabs.com/learn/0.7/essentials/fullstack/>
+- Server functions: <https://dioxuslabs.com/learn/0.7/essentials/fullstack/server_functions/>
 - Web: <https://dioxuslabs.com/learn/0.7/guides/platforms/web/>
-- Desktop: <https://dioxuslabs.com/learn/0.7/guides/platforms/desktop/>
 - Mobile: <https://dioxuslabs.com/learn/0.7/guides/platforms/mobile/>
-- Claude Code loop/interfaces: <https://code.claude.com/docs/en/how-claude-code-works>
-- Pi Agent core events/tools: <https://github.com/badlogic/pi-mono/tree/main/packages/agent>
-- goose tool permissions: <https://goose-docs.ai/docs/guides/managing-tools/tool-permissions>
+- Getting started/toolchains: <https://dioxuslabs.com/learn/0.7/getting_started/>
+- Fullstack examples, including desktop remote server URL and typed SSE: <https://github.com/DioxusLabs/dioxus/tree/v0.7.9/examples/07-fullstack>

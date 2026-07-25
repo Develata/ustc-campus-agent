@@ -4,10 +4,10 @@
 
 - `Module ID`: `M90`
 - `Status`: Accepted blueprint; repository CI/checker baseline exists, production infrastructure planned
-- `Version`: `m90-infrastructure/v0`
+- `Version`: `m90-infrastructure/v1`
 - `Last Review`: `2026-07-25`
 - `Owning Governance`: [`../08-security-and-delivery.md`](../08-security-and-delivery.md)
-- `Primary code areas`: `crates/adapters/`, deployment/config modules, `.github/`, `scripts/`
+- `Primary code areas`: `crates/adapters/`, deployment/config modules and Docker Compose profile, `.github/`, `scripts/`
 
 ## 1. Purpose
 
@@ -34,7 +34,8 @@ EvidenceObject/ArtifactLocation and retention state
 QueueJob/Lease implementation state
 SecretRef metadata and rotation/deletion state
 Telemetry schema and retention
-DeploymentProfile / Migration / Backup / Restore evidence
+DeploymentProfile / FullstackServerArtifact / ComposeServiceGraph
+Migration / Backup / Restore / Web-Android read-back evidence
 ```
 
 The semantic meaning of stored rows/events belongs to the module that declared the port/schema.
@@ -77,6 +78,7 @@ config parse
 → read-only preflight/doctor
 → dependency readiness
 → migration under exact version and rollback policy
+→ attach exact Fullstack server artifact, Web assets/SSR and admitted endpoints
 → service start/readiness
 → bounded operation and telemetry
 → graceful drain/shutdown
@@ -101,7 +103,7 @@ A deployment profile may change scale or adapter placement, not domain authority
 
 ## 8. Configuration and secrets
 
-Configuration is typed, versioned and divided by module/adapter. Startup preflight validates paths, URLs, limits, ownership and secret references without performing product mutations. Secrets are resolved at the narrowest adapter and redacted from config dumps, logs, events and receipts.
+Configuration is typed, versioned and divided by module/adapter. Startup preflight validates paths, listener/public origins, Android HTTPS server origin policy, Compose services/volumes, limits, ownership and secret references without performing product mutations. Secrets are resolved at the narrowest adapter and redacted from config dumps, logs, events and receipts.
 
 ## 9. Observability
 
@@ -125,7 +127,8 @@ Critical paths are transactional authority reads/writes, append-only journals, e
 - immutable local or reviewed evidence/artifact store;
 - secret references and redaction;
 - safe HTTP client for admitted external origins;
-- CI/contracts, backup and real restore smoke for the chosen demo profile.
+- CI/contracts, backup and real restore smoke;
+- one Docker Compose profile that runs the exact native Dioxus Fullstack server and durable dependencies, serves Web assets/SSR, exposes admitted HTTPS server-function/stream endpoints and passes Android remote read-back.
 
 **Later**
 
@@ -154,11 +157,11 @@ Critical paths are transactional authority reads/writes, append-only journals, e
 9. `telemetry` — stable metrics/log/trace schema and payload exclusions.
 10. `migration` — schema version, forward/rollback compatibility.
 11. `backup-restore` — real read-back and recovery proof.
-12. `deployment-profile` — demo/staging/central/single-tenant wiring.
+12. `deployment-profile` — Docker Compose Fullstack server/Web/Android endpoint wiring plus later staging/central/single-tenant peers.
 13. `ci-contracts` — build/test/docs/schema/dependency gates.
 
 Do not place all items in one source file or dependency-heavy crate. Keep adapter dependencies local to the small module that uses them.
 
 ## 14. Exit gate
 
-`M90` is integration-ready when each selected production adapter passes the same port conformance as its fake, including failure injection, duplicate/restart and redaction. The demo/production profile is accepted only after clean startup, migration, bounded operation, backup, restore, restart and read-back smoke on the actual target surface.
+`M90` is integration-ready when each selected production adapter passes the same port conformance as its fake, including failure injection, duplicate/restart and redaction. The required Docker Compose Fullstack profile is accepted only after clean startup, migration, Web asset/SSR and server-function readiness, Android remote access, bounded operation, backup, restore, restart and read-back smoke on the actual target surface.

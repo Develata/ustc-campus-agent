@@ -26,12 +26,12 @@ They share `M60` Campus Trust/Source facts. They do not share package version, i
 
 ```text
 Interaction shell
-  M80 Dioxus Web/PWA → desktop/mobile later
+  M80 Dioxus Fullstack Web/PWA → mandatory Android → later iOS/desktop
   CLI/integration callers
           │ typed intent / safe projection
           ▼
 Application interface
-  M10 ustc-agentd HTTP JSON + SSE
+  M10 ustc-agentd Dioxus server functions + HTTP + typed streams
           │ admitted typed command/query/event
           ▼
 Flow coordination
@@ -60,7 +60,7 @@ The thin client displays and submits intent. Backend modules perform every truth
 | ID | Module | Owns | Current evidence |
 |---|---|---|---|
 | `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | planned |
-| `M10` | Application API Host | versioned HTTP/SSE transport and application mapping | daemon help/version skeleton |
+| `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | daemon help/version skeleton |
 | `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | manifests + pure resolver/fixtures |
 | `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel |
 | `M40` | Tool Gateway/Execution | exact tool correlation, authorization order, intent/executor/receipt/result | protocol values + fake conformance |
@@ -70,8 +70,8 @@ The thin client displays and submits intent. Backend modules perform every truth
 | `M70` | ChangeRadar | semantic change review/event/feed | manifest/design only |
 | `M71` | Affairs Navigator | reviewed procedure tree/artifacts/search | manifest/design only |
 | `M72` | Opportunity Graph | reviewed opportunities, private profiles, qualification/planning | offline Course Planning spike |
-| `M80` | Dioxus Multi-client | UI/routes/view state/SSR/page host/typed API-event client | accepted design, no crate/dependency |
-| `M90` | Infrastructure/Operations | ports for storage/journal/evidence/config/secrets/HTTP/telemetry/deployment | CI/checker only |
+| `M80` | Dioxus Fullstack Multi-client | required Web/Android UI/routes/view state/SSR/hydration/generated client facade; later iOS/desktop | accepted design, no crate/dependency |
+| `M90` | Infrastructure/Operations | ports for storage/journal/evidence/config/secrets/HTTP/telemetry and Docker Compose deployment | CI/checker only |
 
 “Current evidence” is not module completion. See the module blueprint exit gate and acceptance matrix.
 
@@ -82,19 +82,22 @@ Accepted topology:
 ```text
 one shared Dioxus application
   ├── Web/PWA first
-  ├── SSR/page hosting allowed
-  ├── desktop target adapter later
-  └── mobile target adapter later
+  ├── SSR/hydration/page hosting
+  ├── Android mandatory next target
+  ├── iOS target adapter later
+  └── desktop target adapter later
           │
-          │ versioned HTTP JSON + SSE
+          │ versioned server functions / HTTP / typed streams
           ▼
-M10 / ustc-agentd
+M10 ingress / ustc-agentd
           │
           ▼
 backend module application interfaces
 ```
 
-Dioxus server functions may assist SSR/page bootstrap, but every business read or mutation—including SSR data loading—uses the same `ClientApi` over the explicit `M10` API. They cannot call application services/repositories/executors directly and are not a second business API.
+Dioxus server functions are Axum-compatible M10 ingress adapters and SHOULD back the generated first-party `ClientApi` facade. After compatibility, identity, authorization, bounds, idempotency/precondition and audit admission, they may call one public application command/query port. They cannot call concrete repositories/databases, executors, provider SDKs or journals directly. Optional public HTTP adapters call the same application ports and do not duplicate business logic.
+
+The Docker Compose profile runs the native server and dependencies, serves Web assets/SSR and exposes admitted HTTPS endpoints. Android is a separate signed artifact that reuses the client contract but may lag server deployments, so compatibility/upgrade behavior is explicit.
 
 ## 5. Agent/tool path
 
@@ -181,8 +184,8 @@ Implemented evidence:
 
 Not implemented:
 
-- Dioxus app or dependency;
-- HTTP/SSE API or auth/session service;
+- Dioxus Fullstack app or dependency, Compose Fullstack server profile, Web journey or Android artifact;
+- Fullstack/public ingress, typed stream or auth/session service;
 - durable Market installations/grants;
 - finite HarnessRun/TaskGraph/context/review supervisor;
 - real model provider/MCP/Plugin executor;
