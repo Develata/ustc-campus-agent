@@ -61,6 +61,22 @@ VALID_S0_REVIEW_STATUSES = {"InReview", "Complete"}
 VALID_S0_REVIEW_OUTCOMES = {"Pending", "Pass", "Conditional", "Reject"}
 VALID_S0_REVIEW_DISPOSITIONS = {"Pending", "Accept", "ConditionalAccept", "Reject"}
 S0_COMPLETE_REVIEW_LANES_CELL = "`architecture`; `authority`; `delivery`"
+S0_REVIEW_AUTHORITY_LINKS = (
+    "../../AGENTS.md",
+    "../plan/00-engineering-constitution.md",
+    "../plan/01-terminology.md",
+    "../plan/modules/00-module-map.md",
+    "../contracts/module-boundaries.md",
+    "00-module-work-policy.md",
+    "01-execution-roadmap.md",
+)
+S0_REVIEW_READING_CHAIN = """repository AGENTS, engineering constitution and terminology
+→ module map and all 13 module blueprints
+→ module-boundary registry and specific contracts
+→ coverage matrix
+→ active acceptance matrix and long-horizon catalog
+→ module work policy and execution roadmap
+→ retained code/tests claimed as bounded evidence"""
 INVOCATION_FIXTURES = {
     "arguments-golden-v0.json",
     "call-dispatch-denials-v0.json",
@@ -533,6 +549,46 @@ def check_s0_architecture_review(issues: list[str]) -> None:
 
     review_text = review_path.read_text(encoding="utf-8")
     roadmap_text = roadmap_path.read_text(encoding="utf-8")
+    authority_lines = re.findall(
+        r"^- `Authority Defers To`: (.+)$", review_text, flags=re.MULTILINE
+    )
+    if len(authority_lines) != 1:
+        fail(
+            "S0 architecture review authority chain is missing or duplicated: "
+            f"found {len(authority_lines)}",
+            issues,
+        )
+    else:
+        authority_links = tuple(
+            re.findall(r"\[[^\]]+\]\(([^)]+)\)", authority_lines[0])
+        )
+        if authority_links != S0_REVIEW_AUTHORITY_LINKS:
+            fail(
+                "S0 architecture review authority chain drift: "
+                f"expected={S0_REVIEW_AUTHORITY_LINKS!r} actual={authority_links!r}",
+                issues,
+            )
+    reading_chain_blocks = re.findall(
+        r"^### Authority reading chain\n\n```text\n(.*?)\n```$",
+        review_text,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if len(reading_chain_blocks) != 1:
+        fail(
+            "S0 architecture review reading chain is missing or duplicated: "
+            f"found {len(reading_chain_blocks)}",
+            issues,
+        )
+    elif reading_chain_blocks[0] != S0_REVIEW_READING_CHAIN:
+        fail("S0 architecture review reading chain drift", issues)
+    reading_chain_occurrences = review_text.count(S0_REVIEW_READING_CHAIN)
+    if reading_chain_occurrences != 1:
+        fail(
+            "S0 architecture review reading chain occurrence drift: "
+            f"expected 1 actual {reading_chain_occurrences}",
+            issues,
+        )
+
     status_values = re.findall(
         r"^- `Status`: `([^`]+)`$", review_text, flags=re.MULTILINE
     )

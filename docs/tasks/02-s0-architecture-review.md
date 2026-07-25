@@ -7,7 +7,7 @@
 - `Version`: `s0-architecture-review/v1`
 - `Last Review`: `2026-07-25`
 - `Authority Owns`: explicit S0 reviewer dispositions, conditions and closure evidence
-- `Authority Defers To`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md), [`../plan/01-terminology.md`](../plan/01-terminology.md), [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md), [`../contracts/module-boundaries.md`](../contracts/module-boundaries.md), [`00-module-work-policy.md`](00-module-work-policy.md) and [`01-execution-roadmap.md`](01-execution-roadmap.md)
+- `Authority Defers To`: [`../../AGENTS.md`](../../AGENTS.md), [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md), [`../plan/01-terminology.md`](../plan/01-terminology.md), [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md), [`../contracts/module-boundaries.md`](../contracts/module-boundaries.md), [`00-module-work-policy.md`](00-module-work-policy.md) and [`01-execution-roadmap.md`](01-execution-roadmap.md)
 
 This record is a review ledger, not a second architecture authority. Accepted corrections are applied to their owning plan, contract, acceptance or task document; raw chat and reviewer transcripts remain outside the repository.
 
@@ -41,8 +41,10 @@ Disposition rules:
 
 Reviewers read the authoritative chain rather than treating this summary as authority:
 
+### Authority reading chain
+
 ```text
-engineering constitution and terminology
+repository AGENTS, engineering constitution and terminology
 → module map and all 13 module blueprints
 → module-boundary registry and specific contracts
 → coverage matrix
@@ -50,6 +52,8 @@ engineering constitution and terminology
 → module work policy and execution roadmap
 → retained code/tests claimed as bounded evidence
 ```
+
+### Reviewed skeleton
 
 The proposed frozen skeleton is:
 

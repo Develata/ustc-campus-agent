@@ -532,6 +532,40 @@ class S0ArchitectureReviewContractTests(unittest.TestCase):
     def test_current_s0_review_passes(self) -> None:
         self.assertEqual(self.check_review(), [])
 
+    def test_missing_root_agents_authority_deferral_fails_closed(self) -> None:
+        text = self.review_path.read_text(encoding="utf-8")
+        self.review_path.write_text(
+            text.replace("[`../../AGENTS.md`](../../AGENTS.md), ", "", 1),
+            encoding="utf-8",
+        )
+        issues = self.check_review()
+        self.assertTrue(any("authority chain drift" in issue for issue in issues), issues)
+
+    def test_missing_root_agents_reading_chain_fails_closed(self) -> None:
+        text = self.review_path.read_text(encoding="utf-8")
+        self.review_path.write_text(
+            text.replace(
+                "repository AGENTS, engineering constitution and terminology",
+                "engineering constitution and terminology",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues = self.check_review()
+        self.assertTrue(any("reading chain drift" in issue for issue in issues), issues)
+
+    def test_stale_duplicate_reading_chain_cannot_mask_drift(self) -> None:
+        text = self.review_path.read_text(encoding="utf-8")
+        text = text.replace(
+            "repository AGENTS, engineering constitution and terminology",
+            "engineering constitution and terminology",
+            1,
+        )
+        text += f"\n```text\n{checker.S0_REVIEW_READING_CHAIN}\n```\n"
+        self.review_path.write_text(text, encoding="utf-8")
+        issues = self.check_review()
+        self.assertTrue(any("reading chain" in issue for issue in issues), issues)
+
     def test_complete_s0_review_passes(self) -> None:
         self.make_complete()
         self.assertEqual(self.check_review(), [])
