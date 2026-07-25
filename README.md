@@ -6,7 +6,7 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 
 平台有三个正式的 default first-party Plugins：**USTC Affairs Navigator**、**USTC ChangeRadar** 与 **Campus Opportunity Graph**。三者共享 Campus Trust Kernel，但保持独立的 package identity、版本、安装与启停边界。
 
-平台主线已建立 framework-neutral Agent runtime kernel 与 typed invocation resolver，并固定 `Agent ↔ ToolGateway ↔ PluginExecutor` 为唯一扩展边界：Agent 只消费 versioned tool definitions/calls/results，Plugin 通过独立 package/component 提供能力。下一步并行补齐 `finite HarnessRun/TaskGraph kernel` 与 `read-only Market projection → durable installation/grant state`，再收敛为有 clarification、context budget、verification 与 bounded review 的用户 Agent journey。first-party 产品仍按 `ChangeRadar source/revision/diff foundation → Affairs Navigator structured procedure entry → ChangeRadar per-board feed → Opportunity Graph consent/profile integration` 推进。已完成的 **Course Planning** 是 Opportunity Graph 内提前落地的 bounded offline spike；它不把 Opportunity Graph 提升为唯一旗舰，也不代表 Market/runtime 闭环已完成。
+平台主线已建立 framework-neutral Agent runtime kernel、typed invocation resolver 与 `agent-tool-protocol/v0` 的 executable evidence，并固定 `Agent ↔ ToolGateway ↔ PluginExecutor` 为唯一扩展边界。具体业务实现当前暂停：先按 [`docs/plan/modules/00-module-map.md`](docs/plan/modules/00-module-map.md) 冻结 13 个可独立开发/验收/组装的大型模块，再按 [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md) 逐模块推进。现有 runtime/resolver/protocol 与 **Course Planning** 均是 bounded evidence，不代表完整 Market/runtime/product 闭环。
 
 ## Current decisions
 
@@ -24,7 +24,7 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | Runtime strategy | Rust authority core；ADR-0004 reference systems remain references or bounded adapters, not platform authority |
 | Agent harness | finite HarnessRun over typed TaskGraph；model proposes, Rust validates；every model call passes context-budget preflight |
 | Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
-| Multi-client shell | Rust/Dioxus；Web/PWA first，desktop/mobile 复用同一 typed API/event contract；client 不拥有平台 authority |
+| Multi-client shell | Rust/Dioxus；Web/PWA first；可负责 SSR/page host；desktop/mobile 复用同一 typed API/event contract；client 不拥有平台 authority |
 
 ## Repository layout
 
@@ -42,6 +42,7 @@ crates/
 market/                   # plugin catalog authority boundary inside this repo
 plugins/                  # three first-party plugin implementation/doc boundaries
 docs/                     # layered plans, features, contracts, acceptance, tasks, guides and ADRs
+  plan/modules/           # 13 independent large-module blueprints and assembly map
 scripts/                  # local and CI validation scripts
 .github/                  # CI, PR template, issue templates, CODEOWNERS
 ```
@@ -81,11 +82,14 @@ cargo run --locked -p ustc-agentd -- --version
 
 - Documentation entry and authority rules: [`docs/README.md`](docs/README.md)
 - Engineering blueprint: [`docs/plan/`](docs/plan/)
+- Large-module map: [`docs/plan/modules/00-module-map.md`](docs/plan/modules/00-module-map.md)
 - User-visible journeys: [`docs/features/`](docs/features/)
 - Typed public/package/data contracts: [`docs/contracts/`](docs/contracts/)
+- Cross-module boundary registry: [`docs/contracts/module-boundaries.md`](docs/contracts/module-boundaries.md)
 - Acceptance matrix and gates: [`docs/acceptance/`](docs/acceptance/)
 - Cross-layer architecture map: [`docs/overview/architecture.md`](docs/overview/architecture.md)
-- Dependency-aware execution roadmap: [`docs/tasks/01-execution-roadmap.md`](docs/tasks/01-execution-roadmap.md)
+- Module work/commit/assembly policy: [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md)
+- Module assembly roadmap: [`docs/tasks/01-execution-roadmap.md`](docs/tasks/01-execution-roadmap.md)
 - Collaboration, development and publication handoffs: [`docs/guides/`](docs/guides/)
 - Architecture decision history: [`docs/adr/`](docs/adr/)
 

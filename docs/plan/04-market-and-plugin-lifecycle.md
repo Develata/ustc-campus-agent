@@ -4,18 +4,19 @@
 
 - `Layer`: Product authority
 - `Status`: Schema/identity baseline and pure P0a resolver implemented; durable runtime lifecycle planned
-- `Version`: `0.4.0`
-- `Last Review`: `2026-07-24`
+- `Version`: `0.5.0`
+- `Last Review`: `2026-07-25`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
 - `Authority Defers To`: Market JSON schema/registries and package/permission contracts for exact fields
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
 - `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
 - `Counterpart Acceptance`: `MARKET-*`, `PKG-*`, `AGENT-002`, `AGENT-017`, `AGENT-018`, `FP-006`, `FP-015`, `FP-007`
 - `Primary Code Areas`: `market/`, `crates/platform-core/`, future installation/gateway modules
+- `Large-module Blueprint`: [`modules/30-market-package-lifecycle.md`](modules/30-market-package-lifecycle.md)
 
 ## 1. Scope and repository boundary
 
-`market/` is a logical Catalog Authority boundary from day one. It remains inside this monorepo for the competition MVP because a physical split would add cross-repository versioning, review, CI and release coordination before independent package lifecycles are proven.
+`market/` is a logical Catalog Authority boundary from day one. This chapter owns its cross-system policy; the `M20` blueprint owns the independently deliverable implementation decomposition. It remains inside this monorepo for the competition MVP because a physical split would add cross-repository versioning, review, CI and release coordination before independent package lifecycles are proven.
 
 A future `ustc-campus-agent-market` repository is justified only when external contribution, independent maintainership, public/private separation, release cadence or signing/rollback requires a separate repository identity.
 
@@ -159,7 +160,7 @@ Planned:
 - enable/disable resolver;
 - Market browse/detail UI;
 - upgrade/revoke/rollback runtime.
-- concrete Agent tool protocol, ToolGateway and executable Plugin tool-host packaging.
+- production ToolGateway and executable Plugin tool-host packaging; the framework-neutral Agent tool protocol value subset is implemented.
 
 Verification:
 

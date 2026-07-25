@@ -1,248 +1,322 @@
-# Execution roadmap
+# Module assembly roadmap
 
-- `Status`: Current delivery order
+## Metadata
+
+- `Status`: Current delivery and task-splitting order
+- `Version`: `module-roadmap/v0`
+- `Last Review`: `2026-07-25`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
-- `Architecture decisions`: [`ADR-0006`](../adr/0006-three-default-first-party-plugins.md), [`ADR-0007`](../adr/0007-finite-agent-harness.md), [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md), [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md)
+- `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
+- `Module map`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
+- `Work policy`: [`00-module-work-policy.md`](00-module-work-policy.md)
+- `Boundary registry`: [`../contracts/module-boundaries.md`](../contracts/module-boundaries.md)
 - `Acceptance registry`: [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)
 
-This task document schedules implementation; it does not override the owning plan. The three-Plugin topology and implementation order remain fixed.
+This document schedules independent large modules and their small-module batches. It does not override the owning plans or contracts.
 
-## Dependency spine
+## 1. Current stance
+
+Concrete product implementation is paused while the module skeleton is reviewed. Existing code is retained as executable evidence:
+
+- `M20`: pure invocation resolver and fixtures;
+- `M30`: node-local `AgentRun` kernel;
+- `M40`: Agent tool protocol and fake gateway/executor proof;
+- `M72`: offline Course Planning spike;
+- `M90`: CI and repository contract checker.
+
+Before any of these grows, its owner compares current code with the new module blueprint and records `adopt | amend | retain as spike | remove`. Documentation alone does not promote any planned acceptance row.
+
+Contract/fixture-only root scaffolding may begin after team review. A minimal Dioxus initialization before active API/client acceptance rows exists only as an explicitly disposable, non-mergeable spike; production scaffold work starts only after exact planned rows and future bindings are added to `matrix.tsv`. Neither form may pre-implement product logic.
+
+## 2. Assembly shape
 
 ```text
-R0 platform-owned Agent runtime kernel
-  └→ P0a deterministic typed invocation resolver
-       ├→ H0 finite Agent harness kernel ───────────────────────────┐
-       └→ P0b read-only Market catalog projection                  │
-            └→ P0c durable installation/grant/enable state        │
-                 └→ P1 ChangeRadar source/revision/diff foundation │
-                      ├→ P2 Affairs Navigator procedure entry      │
-                      └→ P3 ChangeRadar board feed                 │
-                           └→ P4 Opportunity Graph integration     │
-                                └→ P5 productization/verification ←┘
-                                     └→ P6 freeze/submission
+Foundation contracts
+├── M00 Platform Control/Identity
+├── M10 Application API Host
+├── M90 Infrastructure/Operations
+└── M80 Dioxus client may develop against fake M10
+
+Independent runtime/market lanes
+├── M20 Market/Package Lifecycle
+├── M30 Agent Harness/Runtime
+├── M40 Tool Gateway/Execution
+├── M50 Model Provider
+└── M51 MCP Binding/Executor
+
+Shared campus fact lane
+└── M60 Campus Trust/Source Pipeline
+      ├── M70 ChangeRadar
+      ├── M71 Affairs Navigator
+      └── M72 Opportunity Graph
 ```
 
-The Course Planning spike was completed out of order. It remains reusable evidence inside Opportunity Graph but does not move the mainline past P1/P2/P3.
+A missing dependency is replaced by an equal-contract fake during standalone work. Real attachment happens only at the declared assembly gate.
+
+## 3. Module lane registry
 
-## Completed foundation
+| Module | Current state | Current module target | Owner | Merge gate |
+|---|---|---|---|---|
+| `M00` Platform Control/Identity | planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
+| `M10` Application API Host | skeleton | versioned route/DTO/error/event host | unassigned | black-box HTTP/SSE conformance |
+| `M20` Market/Package | partial evidence | browse + durable install/grant/disable/revoke around audited resolver | unassigned | `MARKET-*` current-scope rows |
+| `M30` Agent Harness/Runtime | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |
+| `M40` Tool Gateway/Execution | protocol/fake proof | durable intent/executor/receipt composition | unassigned | `AGENT-018/019`, `MARKET-007` |
+| `M50` Model Provider | planned | typed profiles + one provider adapter | unassigned | provider conformance + real bounded turn |
+| `M51` MCP Binding/Executor | planned | one reviewed read-only remote binding | unassigned | MCP lifecycle/security/executor proof |
+| `M60` Campus Trust/Source | planned | one reviewed source/revision/baseline | unassigned | `SRC-*` current-scope rows |
+| `M70` ChangeRadar | design only | one semantic change + feed | unassigned | `RADAR-*` current-scope rows |
+| `M71` Affairs Navigator | design only | one reviewed procedure board | unassigned | `PROC-*` current-scope rows |
+| `M72` Opportunity Graph | planner spike | honest source/profile/Market integration | unassigned | `COURSE-*` current-scope rows |
+| `M80` Dioxus client | no code | Web/PWA shell + one API/event journey | unassigned | exact active API/`CLIENT-*`/`WEB-*` rows added, then passing |
+| `M90` Infrastructure | CI only | config/store/journal/evidence/restore profile | unassigned | target profile restore/read-back |
+
+Team assignment updates only the `Owner` cells and issue links. It does not change module ownership semantics.
+
+## 4. S0 — Architecture and interface freeze
+
+**Status**: in progress; no product code.
+
+### `S0-1` Constitution and module registry
 
-- Rust monorepo, logical Market boundary, CI and repository contract checker;
-- GitHub collaboration baseline and protected `main`;
-- exactly three default first-party identities and typed manifest skeletons;
-- Course Planning bounded spike: strict synthetic fixture, deterministic planner, CLI smoke, provenance and fail-closed tests;
-- R0 framework-neutral Agent runtime kernel: immutable run spec, legal transitions, replay, effect identity/order and budget accounting;
-- P0a pure typed invocation resolver: canonical schemas/arguments, exact authority projection, frozen dispatch and bounded `RunSpec` proof;
-- Agent–Plugin dependency inversion: `agent-runtime` is Plugin/Market-independent and composition owns the cross-boundary proof;
-- plan/feature/contract/acceptance documentation layering.
+- adopt full engineering constitution and mandatory work loop;
+- define large-module ownership and dependency direction;
+- define thin Dioxus client and explicit `ustc-agentd` API boundary;
+- classify existing code as partial evidence.
+
+### `S0-2` Boundary and task contracts
+
+- register every cross-module public boundary;
+- bind fakes/conformance expectations;
+- split large modules into small-module batches;
+- map plans/contracts/features/acceptance/tasks;
+- add a checker that verifies module-map ID/status ↔ blueprint metadata ↔ coverage row ↔ roadmap lane ↔ active/long-horizon acceptance wording.
 
-## R0 — Platform-owned Agent runtime kernel
+### `S0-3` Team review
 
-**Inputs**
+- distribute architecture brief;
+- record `Accept | ConditionalAccept | Reject` by module/skeleton decision;
+- conditional acceptance names owner, evidence and exit condition;
+- update formal docs for accepted corrections;
+- no false team consensus is inferred from one member's silence.
+
+**Exit gate**: no unresolved ownership cycle, second authority, UI computation path or cross-module private dependency in the accepted skeleton.
+
+## 5. M00 lane — Platform Control and Identity
+
+- `M00-B1 identity-types`: bounded tenant/user/session/request/command/correlation values and errors.
+- `M00-B2 session-domain`: open/refresh/expire/revoke transitions and replay.
+- `M00-B3 request-context`: immutable admitted actor/context and duplicate/conflict semantics.
+- `M00-B4 ports-and-fakes`: clock/session/audit/secret-ref ports with failure fixtures.
+- `M00-B5 api-admission-integration`: attach to `M10`; one denied request reaches no downstream fake.
 
-- accepted platform authority and runtime boundary;
-- accepted `RunSpec` identity fields, while package/install/grant existence remains intentionally unresolved;
-- ADR-0004 framework-neutral authority decision.
+Current completion scope excludes production USTC/CAS login. A labelled demo/auth adapter is sufficient if the boundary is honest.
 
-**Deliverables**
+## 6. M10 lane — Application API Host
+
+- `M10-B1 api-registry`: route/version/error/event registry and DTO rules.
+- `M10-B2 request-admission`: bounds, `M00` actor mapping and preconditions.
+- `M10-B3 dispatch-and-errors`: one route maps to one owned application operation.
+- `M10-B4 event-stream`: monotone SSE cursor, reconnect and backpressure.
+- `M10-B5 server-lifecycle`: preflight, readiness, graceful drain and black-box tests.
+- `M10-B6 client-contract`: freeze the subset required by `M80` MVP.
+
+Handlers contain mapping and coordination only. Domain validation remains in owning modules.
+
+## 7. M20 lane — Market and Package Lifecycle
+
+- `M20-B0 existing-resolver-audit`: compare `invocation.rs`/fixtures with the module blueprint; adopt/amend/spike decision.
+- `M20-B1 package-catalog`: schema, catalog publication and anonymous read model.
+- `M20-B2 capability-registry`: risk/data class and auto-grant eligibility.
+- `M20-B3 installation-domain`: exact install/configure/enable/disable/revoke/uninstall.
+- `M20-B4 grant-domain`: scope/version/reapproval and tenant checks.
+- `M20-B5 invocation-authority`: integrate audited projection/recheck with repository transaction/preconditions.
+- `M20-B6 update-rollback`: staged update, permission expansion and exact rollback.
+- `M20-B7 composition`: attach read/mutation APIs and fake `M40` consumer.
+
+`M20` merge scope is complete only when browse and current lifecycle state are distinct and disable/revoke blocks discovery/calls.
 
-- immutable validated `RunSpec`;
-- legal phase/command/event transitions and deterministic replay;
-- effect intent/receipt identity and ordering;
-- replay-stable budget accounting;
-- typed fail-closed errors with no silent provider/tool/runtime fallback;
-- adapter boundary retained without prematurely freezing a framework API.
-- no production or test dependency from `agent-runtime` to Market, Plugin implementations or adapter crates.
+## 8. M30 lane — Agent Harness and Runtime
+
+- `M30-B0 existing-kernel-audit`: map `agent-runtime` to `run-spec`/`agent-run`; do not extend before decision.
+- `M30-B1 harness-run`: finite user-task phases, suspension and terminal reconciliation.
+- `M30-B2 task-contract`: immutable goal/non-goals/deliverables/acceptance.
+- `M30-B3 task-graph`: finite graph validation, resources and revisions.
+- `M30-B4 context-budget`: complete-request integer preflight.
+- `M30-B5 context-projection`: bounded deterministic offload/compaction/compression artifacts.
+- `M30-B6 scheduler-supervisor`: event-driven ready nodes and crash/restart identity.
+- `M30-B7 evidence-review`: fresh review, dispositions and bounded remediation.
+- `M30-B8 ports-fakes`: fake `M50`, `M40`, journal, artifact and clock.
+- `M30-B9 run-projection`: safe `M10`/`M80` state and events.
+
+`M30` standalone acceptance uses only fakes. Real provider/tool integration is a later assembly commit, not a reason to couple implementations.
 
-**Exit gate**
+## 9. M40 lane — Tool Gateway and Execution
+
+- `M40-B0 protocol-audit`: compare current protocol/conformance with the module blueprint.
+- `M40-B1 private-route`: exact route table and frozen call normalization.
+- `M40-B2 current-authorization`: `M20` recheck mapping and denial ordering.
+- `M40-B3 execution-stages`: prepare/execute/result stages; composition interleaves separate public `M30` intent/receipt commands without a module dependency cycle.
+- `M40-B4 executor-port`: bounded request/outcome and fake executor.
+- `M40-B5 output-boundary`: untrusted content/artifact/schema/size/redaction.
+- `M40-B6 recovery`: duplicate, conflicting duplicate, timeout, cancel and receipt reconciliation.
+- `M40-B7 composition`: durable fake/real read-only executor path at `ustc-agentd`.
+
+No denied call reaches an executor. No executor success becomes an Agent result before receipt evidence.
+
+## 10. M50 lane — Model Provider Integration
+
+- `M50-B1 provider-profile`: `OfficialCentral`/`UserCloud`, fixed origin/model/secret-ref/capability snapshot.
+- `M50-B2 model-port`: complete request, ordered events, final/usage/error contract.
+- `M50-B3 estimator`: validated context limit and compatible complete-request estimator.
+- `M50-B4 stream-normalizer`: stream/final parity, timeout/cancel/error mapping.
+- `M50-B5 safety-redaction`: endpoint/redirect/DNS/TLS and secret/log rules.
+- `M50-B6 provider-peer`: first reviewed provider adapter and cassette/fake conformance.
+- `M50-B7 M30-integration`: one bounded model turn, no fallback.
+
+A second provider is a peer adapter, not branches inside `M30`.
+
+## 11. M51 lane — MCP Binding and Executor
+
+- `M51-B1 binding-domain`: identity/owner/component and legal lifecycle.
+- `M51-B2 endpoint-policy`: URL/DNS/IP/redirect/auth-discovery SSRF checks.
+- `M51-B3 transport`: released Streamable HTTP initialization/session.
+- `M51-B4 discovery-schema`: bounded pagination, inventory and schema digests.
+- `M51-B5 review-drift`: approve/active/quarantine and tool/schema change handling.
+- `M51-B6 executor-output`: `M40` request/outcome, timeout/cancel/content bounds.
+- `M51-B7 conformance`: fake hostile server fixtures.
+- `M51-B8 M40-integration`: one reviewed read-only tool with exact grant/receipt.
 
-`AGENT-001` and `AGENT-002` pass against the Rust kernel. Durable orchestration, provider/tool adapters, HTTP/SSE and external effects remain explicitly planned.
+Arbitrary central `stdio` command execution is outside this lane.
 
-## P0 — Ordered Market authority foundation
+## 12. M60 lane — Campus Trust and Source Pipeline
 
-P0 is ordered `P0a → P0b → P0c`. Invocation authority comes first so catalog presentation and storage schemas project an owned decision instead of defining it accidentally.
+**Prerequisite**: one concrete public source receives owner, URL/retrieval, permission/rate and parser-fixture review.
 
-### P0a — Deterministic typed invocation resolver
+- `M60-B1 source-registry`: stable identity, owner, policy and status.
+- `M60-B2 retrieval-policy`: safe exact host/path, redirects, content/time/size/rate.
+- `M60-B3 lease-snapshot`: deterministic lease and immutable raw evidence.
+- `M60-B4 normalize-parser`: deterministic peers with exact identity/fixtures.
+- `M60-B5 source-revision`: observed/published/effective time, digests and provenance.
+- `M60-B6 conflict-freshness`: authority, stale and highest-authority conflict.
+- `M60-B7 baseline`: atomic accepted baseline and failure injection.
+- `M60-B8 publication-port`: typed product candidate/evidence boundary.
 
-**Inputs**
+This lane precedes real product source integration, but each product can develop against exact M60 fixtures.
 
-- accepted Market/platform/runtime authority boundaries;
-- `invocation-resolution/v0` and existing `agent-run/v0` contracts;
-- exact package/component/capability, installation, grant and policy snapshots supplied in memory;
-- clearly synthetic positive and fail-closed fixtures, because current first-party manifests have no executable components.
+## 13. First-party product lanes
 
-**Deliverables**
+The product implementation order remains:
 
-- pure `platform-core` schema/argument constructors, `InvocationResolver`, `ProjectionResolutionError` and `InvocationAuthorizationError` types;
-- exact resolution of tenant/user, installation, package version/digest, component/execution/tool identity, capability/grant/scope, source policy and bounded input-schema digest;
-- immutable, deterministically ordered `ToolProjectionSnapshot` whose digest binds the complete provider-visible tool definition and exact dispatch identity;
-- pure call-authorization semantics and deny-side recheck that support, but do not yet prove, later placement before effect intent or outbound I/O;
-- no name-only dispatch, last-wins collision, silent fallback, partial output or authority widening by session/framework state;
-- bounded composition-root proof mapping a successful result into the existing `RunSpec` and `AgentRun::new`; every resolver denial proves no run is created, without claiming a real application consumer.
+```text
+M70 ChangeRadar source/revision/diff foundation
+→ M71 Affairs Navigator structured procedure entry
+→ M70 ChangeRadar board feed completion
+→ M72 Opportunity Graph consent/profile integration
+```
 
-**Owned boundary**
+### M70 — ChangeRadar
 
-`platform-core` decides over supplied snapshots without I/O or durable state. Catalog/repository loaders supply facts; `agent-runtime` owns run/effect state; adapters only execute a platform-authorized request. P0a does not mint grants, provider profiles, budgets, run/effect/idempotency IDs or receipts.
+- `M70-B1 board-policy`;
+- `M70-B2 semantic-diff`;
+- `M70-B3 candidate-evidence`;
+- `M70-B4 review-event`;
+- `M70-B5 deterministic-feed`;
+- `M70-B6 M60/M10/M80 integration`.
 
-**Non-goals**
+### M71 — Affairs Navigator
 
-Catalog persistence or browse UI, install mutation, database/HTTP/SSE, provider/network/MCP adapters, external effects and autonomous multi-agent orchestration.
+- `M71-B1 tree-and-stable-ids`;
+- `M71-B2 board-policy-and-draft`;
+- `M71-B3 validation-and-supersession`;
+- `M71-B4 review-publish-render`;
+- `M71-B5 exact-structured-search`;
+- `M71-B6 M60/M10/M80 integration`.
 
-**Exit gate**
+### M72 — Opportunity Graph
 
-Planned `MARKET-005` and `MARKET-006` become implemented with the exact synthetic fixture matrix in `docs/contracts/invocation-resolution.md`; downstream `AGENT-002` remains green. P0a supplies supporting evidence but does not mark cross-boundary `MARKET-007` or durable `MARKET-002/003` implemented. Current first-party manifest status is unchanged.
+- `M72-B0 planner-spike-audit`;
+- `M72-B1 opportunity-types-validation`;
+- `M72-B2 tenant-profile-consent-delete`;
+- `M72-B3 qualification-dependency-conflict`;
+- `M72-B4 bounded-candidate-and-independent-validation`;
+- `M72-B5 course-pack-adapter`;
+- `M72-B6 evidence-explanation`;
+- `M72-B7 M20/M60/M10/M80 integration`.
 
-## H0 — Finite Agent harness kernel
+The three packages keep independent versions, enable/disable and acceptance even when they share M60 facts.
 
-**Depends on**: R0 `AgentRun` semantics and P0a exact per-turn tool projection.
+## 14. M80 lane — Dioxus Multi-client
 
-**Deliverables**
+`M80-B1` may begin against a fake `M10` after `B-M10-M80-API` freezes only as a disposable, non-mergeable initialization spike. Before `M80-B1` becomes retained scaffold or `M80-B2+` starts, exact planned API/`CLIENT-*`/`WEB-*` rows with future bindings must be active in `matrix.tsv`.
 
-- immutable `HarnessRunSpec` with root `TaskContract`, legal finite phases, typed commands/events and deterministic replay;
-- validated finite `TaskGraph` with immutable `TaskContract`, dependencies, resource claims, executor/isolation and bounded review policy;
-- bounded clarification, fresh reviewer, remediation graph-patch and explicit terminal non-success semantics;
-- `ContextBudgetSnapshot`, complete-request token preflight and checked fixed-point ceiling/target arithmetic;
-- deterministic compaction before non-recursive bounded lossy compression, non-compressible anchors, provenance-bearing summary artifacts and canonical-history preservation;
-- concrete `agent-tool-protocol/v0` values plus fake `ToolGateway`/Plugin executor conformance are implemented; Agent runtime depends on the protocol but not Market/Plugin implementations;
-- fake executors/reviewers/supervisor and estimator fixtures proving the contract without external model, subagent process or network I/O.
+- `M80-B1 initialization`: minimal `apps/ustc-client`, pinned Dioxus release/features and Web target smoke; no domain code.
+- `M80-B2 client-contract`: DTO/error/event mapping with unknown-version behavior.
+- `M80-B3 api-event-client`: HTTP commands, correlation, SSE cursor/reconnect.
+- `M80-B4 app-state`: deterministic thin presentation reducer.
+- `M80-B5 design-system`: accessible shared UI/form/display components.
+- `M80-B6 market-run-journey`: one complete fake then real M10 journey.
+- `M80-B7 web-pwa`: responsive/accessibility/console/network/SSR proof.
+- `M80-B8 desktop`: later peer target adapter and packaging proof.
+- `M80-B9 mobile`: later peer target adapter and real-device lifecycle proof.
 
-**Non-goals**
+Every product calculation/mutation is re-evaluated by backend modules. Client code only displays and submits intent.
 
-Production provider/tokenizer integration, model-generated orchestration code, durable database, HTTP/SSE/UI, real subagents and a generic workflow/graph language.
+## 15. M90 lane — Infrastructure and Operations
 
-**Exit gate**
+- `M90-B1 typed-config-doctor`;
+- `M90-B2 operational-store-transactions`;
+- `M90-B3 journal-and-events`;
+- `M90-B4 evidence-artifact-store`;
+- `M90-B5 clock-scheduler-lease-queue`;
+- `M90-B6 secret-ref-and-redaction`;
+- `M90-B7 safe-http`;
+- `M90-B8 telemetry-and-retention`;
+- `M90-B9 migration-backup-restore`;
+- `M90-B10 deployment-profile-and-real-readback`;
+- `M90-B11 CI/contracts/dependency gates`.
 
-The active planned `HARNESS-*` rows have exact Rust unit/integration bindings. Every model-call fixture either satisfies the pinned inequality after bounded compaction or produces `ContextBudgetExceeded` before fake provider I/O.
+Start with one restorable demo deployment. Do not add multi-cloud/container orchestration symmetry first.
 
-### P0b — Read-only Market catalog projection
+## 16. Cross-module assembly gates
 
-**Depends on**: P0a identity and collision rules.
+### A0 — Root skeleton
 
-**Deliverables**
+`M00` admitted context + `M10` route/event host + fake application modules + `M80` fake client journey.
 
-- deterministic parse/validation of visible packages;
-- anonymous package browse/detail projection;
-- exact publisher/version/component/capability/source-policy display;
-- catalog availability remains distinct from installation, grant and runtime readiness;
-- no durable install/grant mutation and no runnable claim for planned manifests.
+Prerequisite: exact active acceptance rows and future bindings exist for every retained M00/M10/M80 scaffold. A disposable initialization spike cannot satisfy A0 or enter the module merge packet.
 
-**Exit gate**
+### A1 — Market/tool skeleton
 
-`MARKET-001` has a concrete read-only binding. All three first-party identities appear at exact versions, while empty-component/status declarations remain honest and non-runnable.
+`M20` exact projection/current denial + `M30` fake Agent proposal + `M40` fake executor ordering.
 
-### P0c — Durable installation, grant and enable state
+### A2 — Real bounded Agent path
 
-**Depends on**: P0a resolver inputs/errors and P0b exact catalog revision identity.
+`M30` finite run + `M50` first provider + `M40` one admitted read-only executor + durable `M90` journal/evidence.
 
-**Deliverables**
+### A3 — Shared source/product path
 
-- typed installation, enable/disable/revoke and grant state transitions;
-- exact default bootstrap without inferring runtime state from manifest `installPolicy`;
-- repository transaction boundary that closes resolution-to-run TOCTOU or fails closed;
-- permission expansion/reapproval and independent disable/re-enable behavior;
-- P0a remains the only invocation decision path over loaded authority snapshots.
+`M60` one reviewed source + one current first-party product candidate + `M10` API + `M80` display.
 
-**Exit gate**
+### A4 — Market-installed product path
 
-`MARKET-002`, `MARKET-003` and `MARKET-004` have durable integration bindings; UI/HTTP evidence, if later added, distinguishes catalog availability, installed state, authorization and runtime availability.
+One first-party package browses, installs, grants, enables, exposes an exact tool/use case, executes or queries through the correct module and can be disabled without breaking other modules.
 
-## P1 — ChangeRadar source/revision/diff foundation
+### A5 — Three-product demonstration
 
-**Prerequisite**: one concrete public USTC source pair receives owner, URL/retrieval, permission/rate and parser-fixture review.
+All three exact package identities exist independently, use shared M60 facts, expose provenance/uncertainty and can be disabled/re-enabled independently.
 
-**Deliverables**
+### A6 — Delivery freeze
 
-- reviewed SourceDefinition;
-- stable source and revision identities;
-- conditional retrieval with SSRF/content/time/size boundaries;
-- immutable raw and normalized snapshots;
-- deterministic parser/normalizer and semantic diff;
-- durable candidate evidence and accepted-baseline state;
-- idempotent retry/restart.
+Security/privacy/source permission/license, adversarial failure, clean restore/read-back, real clients and submission evidence pass. New scope stops.
 
-**Failure gate**
+## 17. Deferred
 
-Fetch, snapshot, parse, normalize, diff, candidate or evidence failure cannot advance the accepted baseline.
-
-**Exit gate**
-
-One historical source change replays into one exact semantic-diff candidate with provenance; arbitrary URL fetch is rejected.
-
-## P2 — Affairs Navigator structured procedure entry
-
-**Depends on**: P1 source/revision semantics; may begin tree/policy/schema work in parallel once those identities are stable.
-
-**Deliverables**
-
-- stable tree/node/procedure/artifact IDs;
-- versioned board policy;
-- reviewed Git Markdown/YAML canonical artifacts;
-- typed `ProcedureDraft` and direct supersession edges;
-- Rust schema/cross-field/policy/citation validation;
-- deterministic Markdown rendering;
-- administrator plan/apply publication and projection refresh;
-- exact lookup + structured search path.
-
-**Exit gate**
-
-One administrator-maintained board answers one real procedure with conditions, steps, time, sources and explicit uncertainty. Full-corpus RAG is not required.
-
-## P3 — ChangeRadar per-board feed
-
-**Depends on**: P1 accepted revisions and P2 stable board/node/procedure identities.
-
-**Deliverables**
-
-- shared source/change ledger reused by Affairs and Radar;
-- node/source/policy-scoped maintainer candidates;
-- leases, deterministic IDs and idempotent publish receipts;
-- approved semantic `ChangeEvent` lifecycle;
-- per-board RSS/Atom with stable GUID, affected scope, before/after and provenance.
-
-**Exit gate**
-
-One approved semantic change publishes exactly once. Layout/hash noise, parser failure and unreviewed inference never enter the feed.
-
-## P4 — Opportunity Graph consent/profile integration
-
-**Depends on**: shared source/temporal/provenance foundation and explicit profile consent/deletion contract.
-
-**Deliverables**
-
-- reviewed opportunity ontology and source projection;
-- tenant-isolated, viewable/deletable profile facts;
-- qualification, dependency, temporal-window and conflict explanation;
-- existing Course Planning core behind honest install/grant/discovery boundaries;
-- iCourse link-out-only behavior unless explicit permission changes.
-
-**Exit gate**
-
-The offline planner becomes one installed-plugin journey without weakening hard constraints, source authority or profile isolation.
-
-## P5 — Productization and adversarial verification
-
-- Dioxus Web/PWA first client over explicit versioned HTTP/event APIs; no duplicated client authority;
-- package detail and independent disable/re-enable surfaces;
-- browser desktop/mobile, keyboard, focus, console and network checks;
-- tenant isolation, redaction, revoke, stale/conflict and recovery tests;
-- exact config/doctor/acceptance evidence;
-- deployment/restore and resource-bound verification;
-- compact user trial with no fabricated metrics.
-
-## P6 — Freeze and submission
-
-- freeze new scope; fix blockers only;
-- record the three-Plugin narrative and failure/recovery demo;
-- complete architecture/framework influence/source/license evidence;
-- clean-host restore/read-back where applicable;
-- verify delivery-surface checksum/version/smoke;
-- submit only after required gates and independent blocker review pass.
-
-## Deferred until a contract consumer exists
-
-- separate Market repository;
 - arbitrary third-party hosted execution;
-- generic workflow/graph engine beyond the bounded `agent-harness/v0` TaskGraph;
-- personalized private ChangeRadar feeds;
-- broad RAG or vector infrastructure;
-- desktop/mobile full experience before Dioxus Web/PWA lifecycle proof.
+- generic federation or peer state authorities;
+- universal workflow/graph platform;
+- full-corpus RAG as a first-party truth path;
+- private personalized ChangeRadar feeds;
+- desktop/mobile completion before Web/PWA proof;
+- physical Market repository split before independent release need;
+- public repository/download claims before release/public-readiness gates.

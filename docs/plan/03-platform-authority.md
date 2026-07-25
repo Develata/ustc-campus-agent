@@ -4,18 +4,19 @@
 
 - `Layer`: Authority architecture
 - `Status`: Accepted architecture; R0 Agent transition kernel implemented, finite harness and authority plane largely planned
-- `Version`: `0.5.0`
-- `Last Review`: `2026-07-24`
+- `Version`: `0.6.0`
+- `Last Review`: `2026-07-25`
 - `Authority Owns`: authority partition, canonical state ownership, client/execution-plane boundary
 - `Authority Defers To`: product positioning for scope and contracts for exact external shapes
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/04-bounded-agent-harness.md`
 - `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/client-shell.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
 - `Counterpart Acceptance`: `HARNESS-*`, `AGENT-*`, `MARKET-*`, `RUNTIME-*`, `PUBLIC-*`
 - `Primary Code Areas`: `crates/platform-core/`, `crates/agent-runtime/`, `apps/ustc-agentd/`, `apps/ustc-agentctl/`
+- `Large-module Map`: [`modules/00-module-map.md`](modules/00-module-map.md); this chapter owns cross-module authority, while module blueprints own implementation detail
 
 ## 1. Scope
 
-This chapter defines where authoritative decisions live. Dioxus is accepted as the future thin multi-client presentation shell, but no client dependency or crate lands before a real Web/PWA API consumer. Production database and external Agent framework choices remain unfrozen until a bounded slice proves the need.
+This chapter defines where authoritative decisions live across the whole system. [`modules/00-module-map.md`](modules/00-module-map.md) divides that system into independently deliverable large modules. Dioxus is accepted as the future thin multi-client presentation shell, but no client dependency or crate lands beyond a simple initialization before a real Web/PWA API consumer contract. Production database and external Agent framework choices remain unfrozen until a bounded slice proves the need.
 
 Long-term shape:
 
@@ -150,7 +151,7 @@ Not yet implemented:
 
 - production identity/session;
 - durable installations and grants;
-- durable Agent orchestration, journal, concrete tool protocol and ToolGateway;
+- durable Agent orchestration/journal and production ToolGateway; the framework-neutral tool-protocol value subset is implemented;
 - finite HarnessRun/TaskGraph, clarification/review supervisor and context compaction;
 - source ingestion and publication state;
 - production database/evidence store;

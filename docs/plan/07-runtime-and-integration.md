@@ -4,18 +4,19 @@
 
 - `Layer`: Runtime architecture
 - `Status`: R0 platform-owned transition kernel implemented; finite harness, orchestration, persistence and production adapters planned
-- `Version`: `0.6.0`
-- `Last Review`: `2026-07-24`
+- `Version`: `0.7.0`
+- `Last Review`: `2026-07-25`
 - `Authority Owns`: finite HarnessRun/TaskGraph, Plugin-neutral node AgentRun state, context budget, versioned Agent tool protocol, tool-effect ordering and framework/provider adapter boundary
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
 - `Counterpart Features`: `docs/features/04-bounded-agent-harness.md`; current Market and product features
 - `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
 - `Counterpart Acceptance`: planned `HARNESS-*`; active `AGENT-001`, `AGENT-002`, `AGENT-017` and implemented P0a `MARKET-005/006`; planned `AGENT-018`, `PKG-019/020`, `MARKET-007` and `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
 - `Primary Code Areas`: `crates/agent-runtime/`, future orchestration modules and `crates/adapters/`
+- `Large-module Blueprints`: [`M30 Agent`](modules/40-agent-harness-runtime.md), [`M40 Tool Gateway`](modules/50-tool-gateway-execution.md), [`M50 Model Provider`](modules/60-model-provider-integration.md), [`M51 MCP`](modules/61-mcp-binding-executor.md)
 
 ## 1. Principle
 
-Own campus semantics and authority. Reuse stable protocols and low-differentiation plumbing. Do not merge several Agent frameworks into one canonical runtime.
+Own campus semantics and authority. Reuse stable protocols and low-differentiation plumbing. Do not merge Agent orchestration, tool execution, model providers and MCP bindings into one runtime module, and do not merge several Agent frameworks into one canonical runtime.
 
 Framework choice follows the domain boundary; it does not define package identity, grants, approvals, source revisions, receipts or audit.
 
@@ -294,7 +295,11 @@ The accepted finite harness, TaskGraph, clarification/review supervisor and cont
 Active implemented proof:
 
 - `AGENT-001`: only legal, evidenced transitions replay;
-- `AGENT-002`: immutable run spec pins exact platform identities and budgets.
+- `AGENT-002`: immutable run spec pins exact platform identities and budgets;
+- `AGENT-017`: runtime dependencies remain confined while composition owns cross-boundary proof;
+- `AGENT-019`: frozen tool definitions, private routes and fake gateway/executor calls fail closed and correlate results;
+- `MARKET-005`: one deterministic per-turn projection binds model exposure and no-fallback dispatch;
+- `MARKET-006`: projection-time authority mismatches return typed denial with no partial run.
 
 Active planned proof:
 

@@ -1,7 +1,8 @@
 # ADR-0009: Use Dioxus for a thin multi-client shell
 
-- `Status`: Accepted
+- `Status`: Accepted; full-stack Rust deployment shape clarified
 - `Date`: `2026-07-24`
+- `Last Clarification`: `2026-07-25`
 - `Depends on`: [`ADR-0004`](0004-runtime-reference-strategy.md), [`ADR-0007`](0007-finite-agent-harness.md), [`ADR-0008`](0008-agent-plugin-tool-boundary.md)
 
 ## Context
@@ -18,6 +19,7 @@ Adopt [`client-shell/v0`](../contracts/client-shell.md):
 
 ```text
 one Dioxus app and shared reducer
+      │ optional SSR/page host
       │ typed ClientApi
       ▼
 versioned HTTP JSON + SSE
@@ -25,18 +27,18 @@ versioned HTTP JSON + SSE
 ustc-agentd authority plane
 ```
 
-Roll out Web/PWA first. Desktop follows as packaging plus narrow native ports; mobile follows after the Web lifecycle is proven. Start with one app crate and internal modules. Do not create separate web/desktop/mobile domain crates or add Dioxus to backend/domain crates.
+Roll out Web/PWA first. The Dioxus application MAY own SSR and page delivery so the presentation stack remains full-stack Rust. Desktop follows as packaging plus narrow native ports; mobile follows after the Web lifecycle is proven. Start with one app crate and internal modules. Do not create separate web/desktop/mobile domain crates or add Dioxus to backend/domain crates.
 
 Dioxus is presentation infrastructure only. Dioxus signals, hooks, router types, server functions and WebView handles cannot own or redefine identity, Market/install/grant state, HarnessRun/AgentRun transitions, Agent tool protocol, Plugin execution, source truth, receipts or audit.
 
-The canonical client/server seam remains explicit versioned HTTP JSON and event streaming. Dioxus fullstack server functions may later assist rendering/deployment only if they call the same application service and preserve the same public contract; they are not an alternate authority path.
+The canonical client/server seam remains explicit versioned HTTP JSON and event streaming owned by `M10`/`ustc-agentd`. Dioxus fullstack server functions MAY assist SSR, page bootstrap or deployment, but every business read or mutation—including SSR data loading—MUST use the same explicit `M10` API through `ClientApi`. They MUST NOT call application services, repositories or executors directly, become an alternate business API, or bypass `M00`/`M10` admission. Browser, desktop and mobile behavior remains testable against the same public API/event contract.
 
-No Dioxus dependency or empty client crate is added by this ADR. The first Web/PWA vertical slice will revalidate and pin the exact release/features, create `apps/ustc-client`, and prove one real API/event consumer.
+No Dioxus dependency or empty client crate is added by this ADR. The first `M80` implementation batches will revalidate and pin the exact release/features, create `apps/ustc-client`, and prove one real API/event consumer without changing another module's private implementation.
 
 ## Rejected alternatives
 
 - independent React/desktop/mobile implementations with duplicated product semantics;
-- make Dioxus Fullstack or server functions the platform domain boundary;
+- make Dioxus Fullstack or server functions the platform domain boundary or a direct repository/executor path;
 - import `platform-core`, `agent-runtime` or Plugin implementation types directly into UI components;
 - expose arbitrary filesystem/process/WebView eval to shared components;
 - create one crate per target before any target has a real consumer;

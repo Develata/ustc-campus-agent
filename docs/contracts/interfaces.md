@@ -1,6 +1,6 @@
 # Interface registry
 
-This registry names draft public surfaces before implementation. Implementation PRs must update this document or create a more specific contract before changing surfaces.
+This registry names draft public surfaces before implementation. [`module-boundaries.md`](module-boundaries.md) owns the large-module crossing rules; this file owns the concrete application/API/tool surface registry. Implementation PRs must update this document or create a more specific contract before changing surfaces.
 
 The implemented single-node Agent state/event contract is defined in [`agent-runtime.md`](agent-runtime.md). The planned finite user-task lifecycle is defined in [`agent-harness.md`](agent-harness.md). The Agent–Plugin seam is [`agent-plugin-boundary/v0`](agent-plugin-boundary.md). The future Dioxus presentation boundary is [`client-shell/v0`](client-shell.md). None makes the HTTP routes below operational.
 
@@ -19,7 +19,7 @@ The implemented single-node Agent state/event contract is defined in [`agent-run
 | `/api/agent/runs/{id}:cancel` | POST | request typed cancellation under current phase/effect semantics | planned |
 | `/api/agent/runs/{id}/events` | GET/SSE | stream harness/node/model/tool/review state projections | planned |
 
-The Dioxus client consumes these explicit interfaces through a typed `ClientApi` port. Dioxus server functions, target-native bridges and local caches are not alternate API or authority surfaces.
+The Dioxus client consumes these explicit interfaces through a typed `ClientApi` port. Dioxus MAY host SSR/pages, but every business read or mutation—including SSR data loading—uses this same explicit `M10` API. Dioxus server functions, target-native bridges and local caches cannot call application services/repositories/executors directly and are not alternate business API or authority surfaces.
 
 ## Agent tool protocol — H0 values implemented, production execution planned
 

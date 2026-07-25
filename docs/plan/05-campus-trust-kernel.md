@@ -5,17 +5,18 @@
 - `Layer`: Shared campus authority
 - `Status`: Contract accepted; Source Registry implementation and concrete source approval planned
 - `Version`: `0.1.0`
-- `Last Review`: `2026-07-22`
+- `Last Review`: `2026-07-25`
 - `Authority Owns`: source identity, immutable revision, authority order, temporal/conflict/provenance state, baseline advancement and publication gates
 - `Authority Defers To`: source-import/data-model contracts for exact shapes and package sourcePolicy for requested scope
 - `Counterpart Features`: all documents under `docs/features/`
 - `Counterpart Contracts`: `docs/contracts/source-import.md`, `docs/contracts/data-models.md`
 - `Counterpart Acceptance`: `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*`
 - `Primary Code Areas`: future source/knowledge modules; current `crates/course-planning/`
+- `Large-module Blueprint`: [`modules/70-campus-trust-source-pipeline.md`](modules/70-campus-trust-source-pipeline.md)
 
 ## 1. Purpose and non-goals
 
-The Campus Trust Kernel is the shared semantic foundation for Affairs Navigator, ChangeRadar and Opportunity Graph. It answers:
+The Campus Trust Kernel is the shared semantic foundation for Affairs Navigator, ChangeRadar and Opportunity Graph. This chapter owns shared trust policy; the `M60` blueprint owns its independent implementation decomposition. It answers:
 
 - which source is approved and who owns it;
 - which immutable revision supports a fact;

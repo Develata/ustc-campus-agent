@@ -4,8 +4,8 @@
 
 - `Layer`: Foundation
 - `Status`: Current MUST
-- `Version`: `0.3.0`
-- `Last Review`: `2026-07-24`
+- `Version`: `0.4.0`
+- `Last Review`: `2026-07-25`
 - `Authority Owns`: normative vocabulary used across plans, contracts and acceptance
 - `Authority Defers To`: typed schemas and Rust definitions for machine spelling
 - `Counterpart Acceptance`: `docs/acceptance/matrix.tsv`
@@ -27,7 +27,19 @@ Requirements SHOULD be testable or observable. Words such as “better”, “in
 - **Bounded spike**: an implementation that proves a narrow contract while explicitly not claiming the surrounding lifecycle or platform integration.
 - **Feature projection**: user-visible behavior derived from a plan and typed contracts.
 
-## 3. Market terms
+## 3. Engineering module terms
+
+- **Large module**: one independently owned, independently testable responsibility and state family with narrow public inputs/outputs and its own exit gate. "Large" describes independence, not line count.
+- **Small module**: one high-cohesion implementation unit inside a large module that can be reviewed and committed as one semantic slice.
+- **Public module boundary**: the only named commands, queries, events, values and errors another large module may use. Private structs/storage/implementation details do not cross it.
+- **Composition surface**: declared assembly code, normally `ustc-agentd`, that maps and orders public module calls without copying their domain rules.
+- **Fake counterpart**: deterministic test implementation of one public boundary used to develop and accept a module before other large modules are complete.
+- **StandaloneReady**: the module's current small modules, public contracts, fakes and failure tests pass without requiring real peer modules.
+- **IntegrationReady**: the module additionally exposes its production-facing adapter and exact cross-module fixtures.
+- **Thin client**: a Dioxus/CLI shell that displays server-owned state and submits typed user intent. It does not perform truth-affecting calculation or mutation.
+- **Backend/application infrastructure**: explicit `ustc-agentd` application services and domain/execution modules that perform all product calculations and mutations. It does not mean a generic infrastructure layer may own domain rules.
+
+## 4. Market terms
 
 - **Catalog Authority**: the reviewed Git-resident package schema, publisher, capability and manifest declarations that determine which public package revision exists.
 - **Catalog Projection**: a query-optimized view of Catalog Authority. It is rebuildable and cannot approve or un-revoke a package.
@@ -40,7 +52,7 @@ Requirements SHOULD be testable or observable. Words such as “better”, “in
 - **Plugin contribution**: a validated package component projection such as a procedural asset, resource or tool-provider route. It is not installation, grant or Agent state.
 - **FirstPartySystemPlugin**: a reviewed default first-party package governed by the same exact-version, permission-expansion, disable and audit rules as other packages.
 
-## 4. Campus Trust Kernel terms
+## 5. Campus Trust Kernel terms
 
 - **SourceDefinition**: reviewed declaration of one source identity, authority, owner, URL/retrieval policy, parser policy and status.
 - **SourceRevision**: immutable observation of a source, binding canonical/retrieved URL, time, digests, parser identity and snapshot references.
@@ -51,7 +63,7 @@ Requirements SHOULD be testable or observable. Words such as “better”, “in
 - **Campus Trust Kernel**: shared source identity, immutable revision, authority ordering, temporal, conflict, provenance, grant and audit semantics used by all three first-party Plugins.
 - **Tenant-private profile fact**: user-provided or user-derived data visible only in its authorized tenant/user scope; it never enters the public campus fact projection.
 
-## 5. Runtime and proof terms
+## 6. Runtime and proof terms
 
 - **ConversationSession**: durable ordered conversation scope that may contain many finite `HarnessRun`s; it is not itself one execution run.
 - **HarnessRun**: platform-owned finite state machine for one accepted user task, from context/clarification through graph execution, verification and report.

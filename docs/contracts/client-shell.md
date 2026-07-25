@@ -4,18 +4,20 @@
 
 - `Status`: Accepted target architecture; no client crate or Dioxus dependency implemented yet
 - `Version`: `client-shell/v0`
-- `Last Review`: `2026-07-24`
+- `Last Review`: `2026-07-25`
 - `Owning Plan`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md)
+- `Large-module Blueprint`: [`../plan/modules/80-dioxus-multi-client.md`](../plan/modules/80-dioxus-multi-client.md)
 - `Decision`: [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md)
 - `Counterpart Interfaces`: [`interfaces.md`](interfaces.md)
 - `Acceptance`: planned `WEB-*`, `I18N-*`, `CLIENT-*`
 
 ## 1. Purpose
 
-USTC Campus Agent uses one Rust/Dioxus presentation shell for Web/PWA first and later desktop/mobile targets. The shell renders server-owned projections and submits typed user intent. It does not own Agent, Market, grant, Plugin, source or audit authority.
+USTC Campus Agent uses one Rust/Dioxus presentation shell for Web/PWA first and later desktop/mobile targets. The shell MAY own SSR and page hosting so the presentation path remains full-stack Rust. It renders server-owned projections and submits typed user intent. It does not own Agent, Market, grant, Plugin, source or audit authority.
 
 ```text
 shared Dioxus app / view models
+          │ SSR/page hosting
           │
           ▼
       typed ClientApi port
@@ -32,13 +34,13 @@ Changing the client renderer must not change platform domain contracts. Changing
 
 The accepted baseline is Dioxus `0.7`; the latest official release observed on `2026-07-24` is `v0.7.9`. Official documentation identifies Web as the best-supported target, Desktop as a system-WebView renderer with native Rust code, and Mobile as a first-class WebView target with Android/iOS toolchain requirements.
 
-Dioxus is selected for presentation reuse, Rust type safety and one component model across targets. It is not selected as a backend authority framework. Before the first client implementation, the exact Dioxus release/features and `dx` toolchain are revalidated and pinned.
+Dioxus is selected for presentation reuse, Rust type safety, SSR/page delivery and one component model across targets. It is not selected as a backend authority framework. Before the first client implementation, the exact Dioxus release/features and `dx` toolchain are revalidated and pinned.
 
 ## 3. Ownership
 
 | Owner | Owns | Must not own |
 |---|---|---|
-| shared Dioxus app | routes, layout, accessible components, view-model reduction, form drafts and intent capture | domain transitions, grant decisions, Plugin routing, run completion or audit truth |
+| shared Dioxus app | routes, layout, SSR/page delivery, accessible components, view-model reduction, form drafts and intent capture | domain transitions, grant decisions, Plugin routing, run completion or audit truth |
 | typed `ClientApi` port | versioned requests, responses, event decoding, cancellation and retry classification | server policy, hidden fallback or local authority |
 | target adapter | browser/native transport, external navigation, notifications, secure local integration and packaging | reusable product semantics or direct database/Plugin access |
 | `ustc-agentd` | identity, Market/install/grant, HarnessRun/AgentRun, tool gateway, source and audit decisions | target-specific UI state |
@@ -64,7 +66,7 @@ Dioxus types, hooks, signals, router objects and renderer handles terminate insi
 
 ## 5. Client API boundary
 
-The client consumes explicit versioned HTTP JSON and server event streams declared in [`interfaces.md`](interfaces.md). Dioxus fullstack server functions, SSR actions or renderer callbacks must not become an alternate canonical API or bypass authentication, authorization, idempotency and audit.
+The client consumes explicit versioned HTTP JSON and server event streams declared in [`interfaces.md`](interfaces.md). Dioxus fullstack server functions or SSR actions may assist page rendering/bootstrap, but every business read or mutation—including SSR data loading—must use the same `ClientApi` over the explicit `M10` API. They must not call application services, domain repositories or executors directly, become an alternate canonical API, or bypass authentication, authorization, idempotency and audit.
 
 A client intent contains only the user action and current API preconditions. The server returns one typed accepted/denied result and authoritative projection. Stable error codes cross the boundary; localized prose does not define protocol behavior.
 
@@ -134,6 +136,6 @@ The boundary is accepted when:
 
 Implemented now: none of the application client, Dioxus dependency, HTTP/SSE service, auth flow or browser journey.
 
-Accepted now: Dioxus as the preferred multi-target presentation shell; Web/PWA-first rollout; explicit API/event boundary; target-specific ports; authority and dependency constraints.
+Accepted now: Dioxus as the multi-target presentation and SSR/page-hosting shell; Web/PWA-first rollout; explicit `M10` API/event boundary; target-specific ports; authority and dependency constraints.
 
 This contract does not claim a runnable client and does not move P5 productization ahead of H0/P0b/P0c.

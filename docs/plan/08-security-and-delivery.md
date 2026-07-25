@@ -4,14 +4,15 @@
 
 - `Layer`: Cross-cutting governance
 - `Status`: Current security/publication rules; production deployment planned
-- `Version`: `0.1.0`
-- `Last Review`: `2026-07-22`
+- `Version`: `0.2.0`
+- `Last Review`: `2026-07-25`
 - `Authority Owns`: credential/data boundaries, release/publication gates, deployment-profile invariants
 - `Authority Defers To`: owning product/source/runtime plans and explicit Develata publication approval
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
 - `Counterpart Contracts`: `docs/contracts/permissions.md`, `docs/contracts/source-import.md`
 - `Counterpart Acceptance`: `PUBLIC-*`, release-gated security cases
 - `Primary Code Areas`: repository-wide, future deployment/auth/runtime modules
+- `Large-module Counterpart`: [`M90 Platform Infrastructure and Operations`](modules/90-infrastructure-operations.md); security remains a cross-cutting gate rather than one module that absorbs all security rules
 
 ## 1. Security baseline
 
