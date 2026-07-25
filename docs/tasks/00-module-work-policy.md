@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Status`: Current task policy
-- `Version`: `module-work-policy/v1`
+- `Version`: `module-work-policy/v1.2`
 - `Last Review`: `2026-07-25`
 - `Owning Constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module Registry`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
@@ -41,7 +41,7 @@ read plan/00
 → read relevant contracts/features/acceptance/registry/overview/tasks and decide updates
 → implement one cohesive slice
 → changed-file quick gate
-→ at most three independent review subagents
+→ no more than three concurrent review subagents; total rounds uncapped
 → main agent verifies/fixes and closes every review lane
 → final baseline/contract/acceptance checks
 → real feature smoke when applicable
@@ -109,7 +109,7 @@ Prefer small internal Rust modules before creating new crates. Extract only for 
 
 ## 6. Review contract
 
-After the quick gate, use at most three independent review subagents. Recommended independent axes for a large-module batch are:
+After the quick gate, run no more than three independent review subagents concurrently. This is a concurrency limit, not a cap on total reviewers or review rounds. Recommended independent axes for a large-module batch are:
 
 1. contract/architecture and dependency direction;
 2. correctness/failure/recovery and acceptance evidence;
@@ -158,12 +158,12 @@ A large module is merge-ready when:
 
 Merge does not imply every future/later item in the blueprint is implemented.
 
-## 10. Current freeze
+## 10. Architecture review state
 
-Until the current architecture/module documentation review converges:
+The S0 architecture/module documentation review is complete. The global review freeze is lifted, but implementation remains governed by the contract-ready, small-batch and active-acceptance gates:
 
-- no new product/business implementation begins;
+- no retained product/business implementation begins before its owning module has exact active planned acceptance rows with future evidence bindings;
 - existing Agent runtime, resolver, protocol and Course Planning code is retained as executable design evidence;
-- simple client/backend skeleton initialization may begin only after its module contract is current;
+- simple client/backend skeleton initialization may begin only after its module contract is current and the roadmap's acceptance prerequisites are met;
 - root interfaces/composition scaffolding may be refined without committing to unfinished concrete adapters;
 - no current `planned` acceptance row is promoted from documentation alone.

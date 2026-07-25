@@ -45,6 +45,38 @@ MODULE_BLUEPRINTS = {
     "M80": "docs/plan/modules/80-dioxus-multi-client.md",
     "M90": "docs/plan/modules/90-infrastructure-operations.md",
 }
+S0_REVIEW_PATH = "docs/tasks/02-s0-architecture-review.md"
+S0_REVIEW_LANES = {"architecture", "authority", "delivery"}
+S0_REVIEW_DECISION_IDS = {
+    "S0-A01",
+    "S0-A02",
+    "S0-A03",
+    "S0-A04",
+    "S0-A05",
+    "S0-A06",
+    "S0-A07",
+    "S0-A08",
+} | {f"S0-{module_id}" for module_id in MODULE_BLUEPRINTS}
+VALID_S0_REVIEW_STATUSES = {"InReview", "Complete"}
+VALID_S0_REVIEW_OUTCOMES = {"Pending", "Pass", "Conditional", "Reject"}
+VALID_S0_REVIEW_DISPOSITIONS = {"Pending", "Accept", "ConditionalAccept", "Reject"}
+S0_COMPLETE_REVIEW_LANES_CELL = "`architecture`; `authority`; `delivery`"
+S0_REVIEW_AUTHORITY_LINKS = (
+    "../../AGENTS.md",
+    "../plan/00-engineering-constitution.md",
+    "../plan/01-terminology.md",
+    "../plan/modules/00-module-map.md",
+    "../contracts/module-boundaries.md",
+    "00-module-work-policy.md",
+    "01-execution-roadmap.md",
+)
+S0_REVIEW_READING_CHAIN = """repository AGENTS, engineering constitution and terminology
+→ module map and all 13 module blueprints
+→ module-boundary registry and specific contracts
+→ coverage matrix
+→ active acceptance matrix and long-horizon catalog
+→ module work policy and execution roadmap
+→ retained code/tests claimed as bounded evidence"""
 INVOCATION_FIXTURES = {
     "arguments-golden-v0.json",
     "call-dispatch-denials-v0.json",
@@ -182,6 +214,7 @@ KEY_FILES = [
     "docs/overview/architecture.md",
     "docs/tasks/00-module-work-policy.md",
     "docs/tasks/01-execution-roadmap.md",
+    "docs/tasks/02-s0-architecture-review.md",
     "docs/guides/contributing.md",
     "docs/guides/development.md",
     "docs/guides/github-pages-brief.md",
@@ -505,6 +538,244 @@ def check_module_registry(issues: list[str]) -> None:
                     f"{module_id}: {reference}",
                     issues,
                 )
+
+
+def check_s0_architecture_review(issues: list[str]) -> None:
+    review_path = ROOT / S0_REVIEW_PATH
+    roadmap_path = ROOT / "docs/tasks/01-execution-roadmap.md"
+    if not review_path.is_file() or not roadmap_path.is_file():
+        fail("S0 architecture review sources are missing", issues)
+        return
+
+    review_text = review_path.read_text(encoding="utf-8")
+    roadmap_text = roadmap_path.read_text(encoding="utf-8")
+    authority_lines = re.findall(
+        r"^- `Authority Defers To`: (.+)$", review_text, flags=re.MULTILINE
+    )
+    if len(authority_lines) != 1:
+        fail(
+            "S0 architecture review authority chain is missing or duplicated: "
+            f"found {len(authority_lines)}",
+            issues,
+        )
+    else:
+        authority_links = tuple(
+            re.findall(r"\[[^\]]+\]\(([^)]+)\)", authority_lines[0])
+        )
+        if authority_links != S0_REVIEW_AUTHORITY_LINKS:
+            fail(
+                "S0 architecture review authority chain drift: "
+                f"expected={S0_REVIEW_AUTHORITY_LINKS!r} actual={authority_links!r}",
+                issues,
+            )
+    reading_chain_blocks = re.findall(
+        r"^### Authority reading chain\n\n```text\n(.*?)\n```$",
+        review_text,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if len(reading_chain_blocks) != 1:
+        fail(
+            "S0 architecture review reading chain is missing or duplicated: "
+            f"found {len(reading_chain_blocks)}",
+            issues,
+        )
+    elif reading_chain_blocks[0] != S0_REVIEW_READING_CHAIN:
+        fail("S0 architecture review reading chain drift", issues)
+    reading_chain_occurrences = review_text.count(S0_REVIEW_READING_CHAIN)
+    if reading_chain_occurrences != 1:
+        fail(
+            "S0 architecture review reading chain occurrence drift: "
+            f"expected 1 actual {reading_chain_occurrences}",
+            issues,
+        )
+
+    status_values = re.findall(
+        r"^- `Status`: `([^`]+)`$", review_text, flags=re.MULTILINE
+    )
+    if len(status_values) != 1 or status_values[0] not in VALID_S0_REVIEW_STATUSES:
+        fail(f"S0 architecture review status is invalid: {status_values!r}", issues)
+        return
+    packet_status = status_values[0]
+
+    roadmap_status_match = re.search(
+        r"^### `S0-3` Team review\n\n\*\*Status\*\*: (pending|complete)\.$",
+        roadmap_text,
+        flags=re.MULTILINE,
+    )
+    if roadmap_status_match is None:
+        fail("S0-3 roadmap status is missing or malformed", issues)
+        return
+    roadmap_status = roadmap_status_match.group(1)
+    expected_roadmap_status = "complete" if packet_status == "Complete" else "pending"
+    if roadmap_status != expected_roadmap_status:
+        fail(
+            "S0 architecture review packet/roadmap status drift: "
+            f"packet={packet_status!r} roadmap={roadmap_status!r}",
+            issues,
+        )
+
+    lane_rows = parse_markdown_table(
+        S0_REVIEW_PATH,
+        ["Lane ID", "Scope", "Outcome", "Blocking conditions"],
+        "S0 architecture review lanes",
+        issues,
+    )
+    lane_outcomes: dict[str, str] = {}
+    for line_no, cells in lane_rows:
+        lane_id = markdown_code_value(cells[0])
+        outcome = markdown_code_value(cells[2])
+        if lane_id is None or lane_id not in S0_REVIEW_LANES:
+            fail(f"S0 review lane row {line_no} has unknown lane ID: {cells[0]!r}", issues)
+            continue
+        if lane_id in lane_outcomes:
+            fail(f"duplicate S0 review lane: {lane_id}", issues)
+            continue
+        if outcome is None or outcome not in VALID_S0_REVIEW_OUTCOMES:
+            fail(
+                f"S0 review lane {lane_id} has invalid outcome: {cells[2]!r}",
+                issues,
+            )
+            continue
+        blockers_are_empty = cells[3].strip() == "—"
+        if outcome in {"Pending", "Pass"} and not blockers_are_empty:
+            fail(
+                f"S0 review lane {lane_id} outcome {outcome} must not carry "
+                "blocking conditions",
+                issues,
+            )
+        if outcome in {"Conditional", "Reject"} and blockers_are_empty:
+            fail(
+                f"S0 review lane {lane_id} outcome {outcome} requires "
+                "blocking conditions",
+                issues,
+            )
+        lane_outcomes[lane_id] = outcome
+
+    actual_lanes = set(lane_outcomes)
+    if actual_lanes != S0_REVIEW_LANES:
+        fail(
+            "S0 review lane set drift: "
+            f"missing={sorted(S0_REVIEW_LANES - actual_lanes)} "
+            f"unexpected={sorted(actual_lanes - S0_REVIEW_LANES)}",
+            issues,
+        )
+
+    decision_rows = parse_markdown_table(
+        S0_REVIEW_PATH,
+        [
+            "Decision ID",
+            "Scope",
+            "Disposition",
+            "Review lanes",
+            "Basis",
+            "Condition owner",
+            "Required evidence",
+            "Exit condition",
+            "Resolution",
+        ],
+        "S0 architecture decision ledger",
+        issues,
+    )
+    decisions: dict[str, tuple[str, str]] = {}
+    for line_no, cells in decision_rows:
+        decision_id = markdown_code_value(cells[0])
+        disposition = markdown_code_value(cells[2])
+        resolution = markdown_code_value(cells[8])
+        if decision_id is None or decision_id not in S0_REVIEW_DECISION_IDS:
+            fail(
+                f"S0 decision row {line_no} has unknown decision ID: {cells[0]!r}",
+                issues,
+            )
+            continue
+        if decision_id in decisions:
+            fail(f"duplicate S0 architecture decision: {decision_id}", issues)
+            continue
+        if disposition is None or disposition not in VALID_S0_REVIEW_DISPOSITIONS:
+            fail(
+                f"S0 decision {decision_id} has invalid disposition: {cells[2]!r}",
+                issues,
+            )
+            continue
+        if resolution not in {"open", "closed"}:
+            fail(
+                f"S0 decision {decision_id} has invalid resolution: {cells[8]!r}",
+                issues,
+            )
+            continue
+        if cells[1].strip() in {"", "—"} or cells[4].strip() in {"", "—"}:
+            fail(f"S0 decision {decision_id} requires scope and basis", issues)
+
+        condition_cells_are_empty = all(
+            cells[index].strip() == "—" for index in (5, 6, 7)
+        )
+        condition_cells_are_complete = all(
+            cells[index].strip() not in {"", "—"} for index in (5, 6, 7)
+        )
+        if disposition == "Pending":
+            if (
+                cells[3].strip() != "—"
+                or not condition_cells_are_empty
+                or resolution != "open"
+            ):
+                fail(
+                    f"pending S0 decision {decision_id} must have no review lanes or "
+                    "conditions and must remain open",
+                    issues,
+                )
+        else:
+            if cells[3].strip() != S0_COMPLETE_REVIEW_LANES_CELL:
+                fail(
+                    f"resolved S0 decision {decision_id} must record all review lanes",
+                    issues,
+                )
+            if disposition == "Accept":
+                if not condition_cells_are_empty or resolution != "closed":
+                    fail(
+                        f"accepted S0 decision {decision_id} must have no condition and "
+                        "must be closed",
+                        issues,
+                    )
+            elif disposition == "ConditionalAccept":
+                if not condition_cells_are_complete:
+                    fail(
+                        f"conditional S0 decision {decision_id} requires owner, evidence "
+                        "and exit condition",
+                        issues,
+                    )
+            elif disposition == "Reject":
+                if not condition_cells_are_complete or resolution != "open":
+                    fail(
+                        f"rejected S0 decision {decision_id} requires owner, evidence and "
+                        "exit condition and must remain open",
+                        issues,
+                    )
+        decisions[decision_id] = (disposition, resolution)
+
+    actual_decisions = set(decisions)
+    if actual_decisions != S0_REVIEW_DECISION_IDS:
+        fail(
+            "S0 architecture decision set drift: "
+            f"missing={sorted(S0_REVIEW_DECISION_IDS - actual_decisions)} "
+            f"unexpected={sorted(actual_decisions - S0_REVIEW_DECISION_IDS)}",
+            issues,
+        )
+
+    if packet_status == "Complete":
+        non_pass_lanes = sorted(
+            lane_id for lane_id, outcome in lane_outcomes.items() if outcome != "Pass"
+        )
+        if non_pass_lanes:
+            fail(f"complete S0 review has non-pass lanes: {non_pass_lanes}", issues)
+        unresolved_decisions = sorted(
+            decision_id
+            for decision_id, (disposition, resolution) in decisions.items()
+            if disposition not in {"Accept", "ConditionalAccept"} or resolution != "closed"
+        )
+        if unresolved_decisions:
+            fail(
+                f"complete S0 review has unresolved decisions: {unresolved_decisions}",
+                issues,
+            )
 
 
 def check_key_files_present_and_nonempty(issues: list[str]) -> None:
@@ -1403,6 +1674,7 @@ def main() -> int:
     check_acceptance_matrix(issues)
     check_acceptance_catalog(issues)
     check_module_registry(issues)
+    check_s0_architecture_review(issues)
     if issues:
         print("contract-check: FAIL")
         for issue in issues:

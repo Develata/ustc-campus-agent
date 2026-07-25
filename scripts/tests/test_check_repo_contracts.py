@@ -5,6 +5,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -463,6 +464,266 @@ class ModuleRegistryContractTests(unittest.TestCase):
             any("acceptance projection has an unstructured token" in issue for issue in issues),
             issues,
         )
+
+
+class S0ArchitectureReviewContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    @property
+    def review_path(self) -> Path:
+        return self.root / checker.S0_REVIEW_PATH
+
+    @property
+    def roadmap_path(self) -> Path:
+        return self.root / "docs/tasks/01-execution-roadmap.md"
+
+    def check_review(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_s0_architecture_review(issues)
+        return issues
+
+    def make_complete(self) -> None:
+        text = self.review_path.read_text(encoding="utf-8")
+        text = text.replace("- `Status`: `InReview`", "- `Status`: `Complete`", 1)
+        completed_lines: list[str] = []
+        for line in text.splitlines():
+            if line.startswith(("| `architecture` |", "| `authority` |", "| `delivery` |")):
+                line = line.replace("| `Pending` |", "| `Pass` |", 1)
+            elif line.startswith("| `S0-"):
+                line = line.replace(
+                    "| `Pending` | — |",
+                    "| `Accept` | `architecture`; `authority`; `delivery` |",
+                    1,
+                )
+                line = line.replace("| `open` |", "| `closed` |", 1)
+            completed_lines.append(line)
+        self.review_path.write_text("\n".join(completed_lines) + "\n", encoding="utf-8")
+
+        roadmap = self.roadmap_path.read_text(encoding="utf-8")
+        roadmap = roadmap.replace(
+            "### `S0-3` Team review\n\n**Status**: pending.",
+            "### `S0-3` Team review\n\n**Status**: complete.",
+            1,
+        )
+        self.roadmap_path.write_text(roadmap, encoding="utf-8")
+
+    def mutate_decision(self, decision_id: str, transform: Callable[[str], str]) -> None:
+        path = self.review_path
+        lines = path.read_text(encoding="utf-8").splitlines()
+        changed = False
+        output: list[str] = []
+        for line in lines:
+            if line.startswith(f"| `{decision_id}` |"):
+                line = transform(line)
+                changed = True
+            output.append(line)
+        self.assertTrue(changed, decision_id)
+        path.write_text("\n".join(output) + "\n", encoding="utf-8")
+
+    def test_current_s0_review_passes(self) -> None:
+        self.assertEqual(self.check_review(), [])
+
+    def test_missing_root_agents_authority_deferral_fails_closed(self) -> None:
+        text = self.review_path.read_text(encoding="utf-8")
+        self.review_path.write_text(
+            text.replace("[`../../AGENTS.md`](../../AGENTS.md), ", "", 1),
+            encoding="utf-8",
+        )
+        issues = self.check_review()
+        self.assertTrue(any("authority chain drift" in issue for issue in issues), issues)
+
+    def test_missing_root_agents_reading_chain_fails_closed(self) -> None:
+        text = self.review_path.read_text(encoding="utf-8")
+        self.review_path.write_text(
+            text.replace(
+                "repository AGENTS, engineering constitution and terminology",
+                "engineering constitution and terminology",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues = self.check_review()
+        self.assertTrue(any("reading chain drift" in issue for issue in issues), issues)
+
+    def test_stale_duplicate_reading_chain_cannot_mask_drift(self) -> None:
+        text = self.review_path.read_text(encoding="utf-8")
+        text = text.replace(
+            "repository AGENTS, engineering constitution and terminology",
+            "engineering constitution and terminology",
+            1,
+        )
+        text += f"\n```text\n{checker.S0_REVIEW_READING_CHAIN}\n```\n"
+        self.review_path.write_text(text, encoding="utf-8")
+        issues = self.check_review()
+        self.assertTrue(any("reading chain" in issue for issue in issues), issues)
+
+    def test_complete_s0_review_passes(self) -> None:
+        self.make_complete()
+        self.assertEqual(self.check_review(), [])
+
+    def test_missing_decision_fails_closed(self) -> None:
+        self.make_complete()
+        lines = self.review_path.read_text(encoding="utf-8").splitlines()
+        self.review_path.write_text(
+            "\n".join(line for line in lines if not line.startswith("| `S0-M51` |"))
+            + "\n",
+            encoding="utf-8",
+        )
+        issues = self.check_review()
+        self.assertTrue(any("S0 architecture decision set drift" in issue for issue in issues), issues)
+
+    def test_duplicate_decision_fails_closed(self) -> None:
+        self.make_complete()
+        text = self.review_path.read_text(encoding="utf-8")
+        self.review_path.write_text(
+            text.replace("| `S0-M51` |", "| `S0-M50` |", 1), encoding="utf-8"
+        )
+        issues = self.check_review()
+        self.assertTrue(any("duplicate S0 architecture decision" in issue for issue in issues), issues)
+
+    def test_invalid_disposition_fails_closed(self) -> None:
+        self.make_complete()
+        self.mutate_decision(
+            "S0-A01", lambda line: line.replace("`Accept`", "`Approved`", 1)
+        )
+        issues = self.check_review()
+        self.assertTrue(any("invalid disposition" in issue for issue in issues), issues)
+
+    def test_complete_review_rejects_pending_lane(self) -> None:
+        self.make_complete()
+        text = self.review_path.read_text(encoding="utf-8")
+        self.review_path.write_text(
+            text.replace(
+                "| `architecture` | module ownership, acyclic dependencies, composition and replacement seams | `Pass` | — |",
+                "| `architecture` | module ownership, acyclic dependencies, composition and replacement seams | `Pending` | — |",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues = self.check_review()
+        self.assertTrue(any("complete S0 review has non-pass lanes" in issue for issue in issues), issues)
+
+    def test_missing_review_lane_fails_closed(self) -> None:
+        self.make_complete()
+        lines = self.review_path.read_text(encoding="utf-8").splitlines()
+        self.review_path.write_text(
+            "\n".join(line for line in lines if not line.startswith("| `delivery` |"))
+            + "\n",
+            encoding="utf-8",
+        )
+        issues = self.check_review()
+        self.assertTrue(any("S0 review lane set drift" in issue for issue in issues), issues)
+
+    def test_duplicate_review_lane_fails_closed(self) -> None:
+        self.make_complete()
+        text = self.review_path.read_text(encoding="utf-8")
+        self.review_path.write_text(
+            text.replace("| `delivery` |", "| `authority` |", 1), encoding="utf-8"
+        )
+        issues = self.check_review()
+        self.assertTrue(any("duplicate S0 review lane" in issue for issue in issues), issues)
+
+    def test_complete_review_rejects_pending_decision(self) -> None:
+        self.make_complete()
+
+        def make_pending(line: str) -> str:
+            line = line.replace("`Accept`", "`Pending`", 1)
+            line = line.replace(checker.S0_COMPLETE_REVIEW_LANES_CELL, "—", 1)
+            return line.replace("`closed`", "`open`", 1)
+
+        self.mutate_decision("S0-A01", make_pending)
+        issues = self.check_review()
+        self.assertTrue(any("complete S0 review has unresolved decisions" in issue for issue in issues), issues)
+
+    def test_conditional_decision_requires_every_condition_field(self) -> None:
+        self.make_complete()
+
+        def make_partial_condition(line: str) -> str:
+            line = line.replace("`Accept`", "`ConditionalAccept`", 1)
+            return line.replace("| — | — | — | `closed` |", "| platform | — | checker PASS | `closed` |", 1)
+
+        self.mutate_decision("S0-A01", make_partial_condition)
+        issues = self.check_review()
+        self.assertTrue(
+            any("requires owner, evidence and exit condition" in issue for issue in issues),
+            issues,
+        )
+
+    def test_complete_closed_conditional_decision_passes(self) -> None:
+        self.make_complete()
+
+        def make_closed_condition(line: str) -> str:
+            line = line.replace("`Accept`", "`ConditionalAccept`", 1)
+            return line.replace(
+                "| — | — | — | `closed` |",
+                "| platform | checker and review evidence | exact gate PASS | `closed` |",
+                1,
+            )
+
+        self.mutate_decision("S0-A01", make_closed_condition)
+        self.assertEqual(self.check_review(), [])
+
+    def test_complete_review_rejects_rejected_decision(self) -> None:
+        self.make_complete()
+
+        def make_rejected(line: str) -> str:
+            line = line.replace("`Accept`", "`Reject`", 1)
+            line = line.replace(
+                "| — | — | — | `closed` |",
+                "| platform | owning contract correction | fresh lane PASS | `open` |",
+                1,
+            )
+            return line
+
+        self.mutate_decision("S0-A01", make_rejected)
+        issues = self.check_review()
+        self.assertTrue(any("complete S0 review has unresolved decisions" in issue for issue in issues), issues)
+
+    def test_incomplete_review_lane_projection_fails_closed(self) -> None:
+        self.make_complete()
+        self.mutate_decision(
+            "S0-A01",
+            lambda line: line.replace(
+                checker.S0_COMPLETE_REVIEW_LANES_CELL,
+                "`architecture`; `authority`",
+                1,
+            ),
+        )
+        issues = self.check_review()
+        self.assertTrue(any("must record all review lanes" in issue for issue in issues), issues)
+
+    def test_packet_roadmap_status_drift_fails_closed(self) -> None:
+        self.make_complete()
+        roadmap = self.roadmap_path.read_text(encoding="utf-8")
+        self.roadmap_path.write_text(
+            roadmap.replace(
+                "### `S0-3` Team review\n\n**Status**: complete.",
+                "### `S0-3` Team review\n\n**Status**: pending.",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues = self.check_review()
+        self.assertTrue(any("packet/roadmap status drift" in issue for issue in issues), issues)
+
+    def test_invalid_packet_status_fails_closed(self) -> None:
+        self.make_complete()
+        text = self.review_path.read_text(encoding="utf-8")
+        self.review_path.write_text(
+            text.replace("- `Status`: `Complete`", "- `Status`: `Accepted`", 1),
+            encoding="utf-8",
+        )
+        issues = self.check_review()
+        self.assertTrue(any("S0 architecture review status is invalid" in issue for issue in issues), issues)
 
 
 class InvocationFixtureContractTests(unittest.TestCase):
