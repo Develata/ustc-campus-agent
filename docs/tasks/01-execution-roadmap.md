@@ -111,11 +111,13 @@ Team assignment updates only the `Owner` cells and issue links. It does not chan
 
 ## 5. M00 lane — Platform Control and Identity
 
-- `M00-B1 identity-types`: bounded tenant/user/session/request/command/correlation values and errors.
+- `M00-B1 identity-types`: the six bounded tenant/user/session/request/command/correlation values and their shared construction error under `platform-identity/v0`; converge the invocation resolver onto the M00 tenant/user definitions only.
 - `M00-B2 session-domain`: open/refresh/expire/revoke transitions and replay.
-- `M00-B3 request-context`: immutable admitted actor/context and duplicate/conflict semantics.
-- `M00-B4 ports-and-fakes`: clock/session/audit/secret-ref ports with failure fixtures.
+- `M00-B3 request-context`: land `policy-reference` first, then immutable admitted actor/request/command/causation context and duplicate/conflict semantics as separate reviewable commits.
+- `M00-B4 ports-and-fakes`: land `session-port` and `control-evidence` as separate reviewable commits, then clock/session/audit/secret-ref fakes with failure fixtures.
 - `M00-B5 api-admission-integration`: attach to `M10`; one denied request reaches no downstream fake.
+
+These five roadmap batches schedule the six small modules in the M00 blueprint; they are not alternate module names. `identity-types` maps to B1, `session-domain` to B2, `policy-reference` plus `request-context` to B3, and `session-port` plus `control-evidence` to B4. Each small module still receives its own commit and standalone evidence before B5 composition.
 
 Current completion scope excludes production USTC/CAS login. A labelled demo/auth adapter is sufficient if the boundary is honest.
 

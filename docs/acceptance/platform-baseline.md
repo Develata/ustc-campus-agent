@@ -4,8 +4,8 @@
 
 - `Layer`: `Acceptance / Coverage / Evidence`
 - `Status`: **Planning baseline; only `matrix.tsv` is the active competition gate registry**
-- `Version`: `0.5.0`
-- `Last Review`: `2026-07-24`
+- `Version`: `0.6.0`
+- `Last Review`: `2026-07-26`
 - `Authority Owns`: stable long-horizon case IDs, planned assertions and evidence-binding classes
 - `Authority Defers To`: `docs/plan/`, `docs/contracts/` and `docs/acceptance/matrix.tsv` for current scope/status
 
@@ -28,6 +28,7 @@ A catalog case becomes an active required case only when its owning feature ente
 | --- | --- |
 | `rust-unit` | pure/domain Rust unit or property test |
 | `rust-integration` | isolated Rust integration test with real dependency adapter |
+| `rust-doc-test` | compile-fail or executable Rust doctest run by `cargo test --doc` |
 | `rust-cli-smoke` | exact `ustc-agentctl` command path |
 | `rust-cli-real-host` | CLI against explicit test namespace on target host |
 | `browser-automation` | real browser journey with screenshot/console/network evidence |
@@ -173,6 +174,12 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AUTH-008` | session idle/absolute expiry and logout invalidation work | rust-integration | demo |
 | `AUTH-009` | CSRF/cookie/origin protections hold on Market mutation routes | manual-security | release |
 | `AUTH-010` | platform never stores or logs raw USTC password/token | manual-security | release |
+| `AUTH-011` | each of the six M00 ID kinds enforces the exact bounded grammar deterministic error precedence and validating Serde path through that kind's inherent parse constructor | rust-unit | PR |
+| `AUTH-012` | M00 identity values are byte exact in string Serde ordering and hashing while compile-fail API checks reject private-field construction Default unchecked construction mutable backing access cross-kind conversion and identifier-shape parsing | rust-unit + rust-doc-test | PR |
+| `AUTH-013` | the request-context batch defines a tenant-scoped actor key that exposes exactly tenant plus user remains distinct across tenants for equal user text and rejects incomplete or unknown-field Serde input | rust-integration | PR |
+| `AUTH-014` | identity construction errors expose only the value kind failure class fixed bound and byte index while Display and Debug contain no complete rejected input input-derived fragment or offending-byte rendering | rust-unit | PR |
+| `AUTH-015` | the M00 identity module mints no identifier and declares no clock random transport database framework or auth-adapter dependency | rust-unit | PR |
+| `AUTH-016` | Market invocation authority consumes the M00 owned tenant and user types so no duplicate public tenant or user identity remains in platform-core and invocation policy snapshot identity stays M20 owned | rust-unit | PR |
 
 ## 9. Capability registry and ControlledCLI — `SEC-*`
 

@@ -4,13 +4,13 @@
 
 - `Layer`: Authority architecture
 - `Status`: Accepted architecture; R0 Agent transition kernel implemented, finite harness and authority plane largely planned
-- `Version`: `0.7.0`
-- `Last Review`: `2026-07-25`
+- `Version`: `0.7.1`
+- `Last Review`: `2026-07-26`
 - `Authority Owns`: authority partition, canonical state ownership, client/execution-plane boundary
 - `Authority Defers To`: product positioning for scope and contracts for exact external shapes
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/04-bounded-agent-harness.md`
-- `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/client-shell.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: `HARNESS-*`, `AGENT-*`, `MARKET-*`, `CLIENT-*`, `WEB-*`, `DEP-*`, `RUNTIME-*`, `PUBLIC-*`
+- `Counterpart Contracts`: `docs/contracts/platform-identity.md`, `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/client-shell.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
+- `Counterpart Acceptance`: `AUTH-*`, `HARNESS-*`, `AGENT-*`, `MARKET-*`, `CLIENT-*`, `WEB-*`, `DEP-*`, `RUNTIME-*`, `PUBLIC-*`
 - `Primary Code Areas`: `crates/platform-core/`, `crates/agent-runtime/`, `apps/ustc-agentd/`, `apps/ustc-agentctl/`, future `apps/ustc-client/`
 - `Large-module Map`: [`modules/00-module-map.md`](modules/00-module-map.md); this chapter owns cross-module authority, while module blueprints own implementation detail
 

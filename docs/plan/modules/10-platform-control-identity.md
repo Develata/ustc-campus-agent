@@ -5,10 +5,12 @@
 - `Module ID`: `M00`
 - `Status`: Accepted blueprint; implementation planned
 - `Implementation State`: `planned`
-- `Version`: `m00-platform-control/v0`
-- `Last Review`: `2026-07-25`
+- `Version`: `m00-platform-control/v1`
+- `Last Review`: `2026-07-26`
 - `Composition`: `apps/ustc-agentd`
 - `Primary code area`: future cohesive modules under `crates/platform-core/`; adapter implementations under `M90`
+- `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md) for `M00-B1`; [`module-boundaries.md`](../../contracts/module-boundaries.md) for later cross-module actor/context values
+- `Acceptance`: active planned `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015`, `AUTH-016`; catalog-only `AUTH-013` and later session/admission cases remain deferred
 
 ## 1. Purpose
 
@@ -155,7 +157,7 @@ The hot path is request-context admission: session lookup, expiry/revoke check, 
 
 ## 13. Small-module decomposition
 
-1. `identity-types` — bounded IDs and actor classes.
+1. `identity-types` — the six bounded tenant/user/session/request/command/correlation IDs and their shared validation error.
 2. `session-domain` — legal session transitions.
 3. `request-context` — immutable request/command/causation envelope.
 4. `policy-reference` — pinned platform policy identity.
@@ -164,6 +166,14 @@ The hot path is request-context admission: session lookup, expiry/revoke check, 
 
 Each small module receives a separate reviewable commit with unit tests before the composition adapter.
 
-## 14. Exit gate
+## 14. First approved batch — `M00-B1 identity-types`
+
+[`platform-identity/v0`](../../contracts/platform-identity.md) is the exact construction contract for the first small module. It freezes six opaque nominal ID kinds, a shared bounded grammar, deterministic non-echoing errors, Serde behavior and convergence of the existing invocation-local tenant/user values.
+
+`CausationId` and any tenant-scoped actor key remain with `request-context`; `PlatformPolicySnapshotId` remains with `policy-reference`. The M20-owned invocation `PolicySnapshotId` identifies a different fact and must not alias the future platform-policy identity.
+
+`M00-B1` deliberately does not create an authenticated actor, session lifecycle, request context, policy decision, ID generator or storage port. Those claims remain blocked behind later batches. The active `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` rows are `planned`; `AUTH-013` stays catalog-only until request-context work. This contract-ready slice does not promote the module from `planned` and is not implementation evidence.
+
+## 15. Exit gate
 
 `M00` is integration-ready when standalone tests prove tenant/session scope, expire/revoke, duplicate/conflicting command behavior, redaction and deterministic replay through fake ports. It is accepted only after `M10` proves one admitted and one denied request without invoking a downstream fake on denial.

@@ -8,12 +8,13 @@ Repository CI runs:
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-targets --all-features
+cargo test --locked --all-features --doc
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 python3 scripts/check_repo_contracts.py
 git diff --check
 ```
 
-For a local docs-only iteration, `python3 scripts/check_repo_contracts.py` and `git diff --check` are the minimum quick gate; final PR readiness still uses the complete CI command set.
+For a local docs-only iteration, `python3 scripts/check_repo_contracts.py` and `git diff --check` are the minimum quick gate; final PR readiness still uses the complete CI command set. The doctest command remains an unconditional, blocking `Doc tests` step in the `rust` job on `pull_request`; moving, conditioning, making it non-blocking or changing it to a multiline carrier requires an explicit checker-contract update.
 
 ## Core demo gate
 

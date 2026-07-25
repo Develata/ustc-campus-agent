@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VALID_GATES = {"pr", "core-demo", "release", "public"}
 VALID_ACCEPTANCE_STATUSES = {"planned", "implemented"}
-STABLE_CATALOG_PREFIXES = {"AGENT", "FP", "HARNESS", "PKG", "PROC", "SRC"}
+STABLE_CATALOG_PREFIXES = {"AGENT", "AUTH", "FP", "HARNESS", "PKG", "PROC", "SRC"}
 MIN_LONG_HORIZON_CASES = 200
 VALID_MODULE_STATES = {
     "planned",
@@ -228,6 +228,7 @@ KEY_FILES = [
     "docs/contracts/invocation-resolution.md",
     "docs/contracts/module-boundaries.md",
     "docs/contracts/permissions.md",
+    "docs/contracts/platform-identity.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",
     "market/review-policy/first-party.md",
@@ -1660,6 +1661,76 @@ def check_acceptance_catalog(issues: list[str]) -> None:
             fail(f"active case missing from long-horizon catalog: {case_id}", issues)
 
 
+RUST_DOCTEST_GATE_COMMAND = "cargo test --locked --all-features --doc"
+
+
+def _yaml_block(lines: list[str], header: str, indent: int) -> list[str] | None:
+    exact_header = f"{' ' * indent}{header}"
+    matches = [index for index, line in enumerate(lines) if line == exact_header]
+    if len(matches) != 1:
+        return None
+    start = matches[0] + 1
+    end = len(lines)
+    for index in range(start, len(lines)):
+        line = lines[index]
+        if not line.strip():
+            continue
+        leading_spaces = len(line) - len(line.lstrip(" "))
+        if leading_spaces <= indent:
+            end = index
+            break
+    return lines[start:end]
+
+
+def check_rust_doctest_gate(issues: list[str]) -> None:
+    gates_rel = "docs/acceptance/gates.md"
+    gates_path = ROOT / gates_rel
+    if not gates_path.is_file():
+        fail(f"Rust doctest gate carrier missing: {gates_rel}", issues)
+    elif RUST_DOCTEST_GATE_COMMAND not in {
+        line.strip() for line in gates_path.read_text(encoding="utf-8").splitlines()
+    }:
+        fail(f"Rust doctest gate missing from {gates_rel}", issues)
+
+    ci_rel = ".github/workflows/ci.yml"
+    ci_path = ROOT / ci_rel
+    if not ci_path.is_file():
+        fail(f"Rust doctest gate carrier missing: {ci_rel}", issues)
+        return
+
+    ci_lines = ci_path.read_text(encoding="utf-8").splitlines()
+    trigger_block = _yaml_block(ci_lines, "on:", 0)
+    if trigger_block is None or _yaml_block(trigger_block, "pull_request:", 2) is None:
+        fail("Rust doctest CI pull_request trigger missing or ambiguous", issues)
+
+    jobs_block = _yaml_block(ci_lines, "jobs:", 0)
+    rust_job = None if jobs_block is None else _yaml_block(jobs_block, "rust:", 2)
+    if rust_job is None:
+        fail("Rust doctest CI rust job missing or ambiguous", issues)
+        return
+    if any(line.startswith("    if:") for line in rust_job):
+        fail("Rust doctest CI rust job must not be conditional", issues)
+
+    steps_block = _yaml_block(rust_job, "steps:", 4)
+    if steps_block is None:
+        fail("Rust doctest CI rust steps block missing or ambiguous", issues)
+        return
+
+    doc_step = _yaml_block(steps_block, "- name: Doc tests", 6)
+    if doc_step is None:
+        fail("Rust doctest CI step missing or ambiguous in rust steps", issues)
+        return
+
+    exact_run = f"        run: {RUST_DOCTEST_GATE_COMMAND}"
+    if doc_step.count(exact_run) != 1:
+        fail("Rust doctest CI step must use the exact run command", issues)
+    if any(
+        line.startswith("        if:") or line.startswith("        continue-on-error:")
+        for line in doc_step
+    ):
+        fail("Rust doctest CI step must be unconditional and blocking", issues)
+
+
 def main() -> int:
     issues: list[str] = []
     check_key_files_present_and_nonempty(issues)
@@ -1673,6 +1744,7 @@ def main() -> int:
     check_agent_plugin_dependency_direction(issues)
     check_acceptance_matrix(issues)
     check_acceptance_catalog(issues)
+    check_rust_doctest_gate(issues)
     check_module_registry(issues)
     check_s0_architecture_review(issues)
     if issues:
