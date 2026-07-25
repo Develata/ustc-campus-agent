@@ -5,6 +5,7 @@
 - `Module ID`: `M71`
 - `Package ID`: `ustc.affairs-navigator`
 - `Status`: Accepted blueprint; manifest/design only
+- `Implementation State`: `design-only`
 - `Version`: `m71-affairs-navigator/v0`
 - `Last Review`: `2026-07-25`
 - `Primary code area`: `plugins/first-party/affairs-navigator/` plus a cohesive Rust domain module when implementation begins

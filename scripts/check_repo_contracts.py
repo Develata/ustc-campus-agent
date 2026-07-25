@@ -22,6 +22,29 @@ VALID_GATES = {"pr", "core-demo", "release", "public"}
 VALID_ACCEPTANCE_STATUSES = {"planned", "implemented"}
 STABLE_CATALOG_PREFIXES = {"AGENT", "FP", "HARNESS", "PKG", "PROC", "SRC"}
 MIN_LONG_HORIZON_CASES = 200
+VALID_MODULE_STATES = {
+    "planned",
+    "skeleton",
+    "partial-evidence",
+    "design-only",
+    "bounded-spike",
+    "governance-baseline",
+}
+MODULE_BLUEPRINTS = {
+    "M00": "docs/plan/modules/10-platform-control-identity.md",
+    "M10": "docs/plan/modules/20-application-api-host.md",
+    "M20": "docs/plan/modules/30-market-package-lifecycle.md",
+    "M30": "docs/plan/modules/40-agent-harness-runtime.md",
+    "M40": "docs/plan/modules/50-tool-gateway-execution.md",
+    "M50": "docs/plan/modules/60-model-provider-integration.md",
+    "M51": "docs/plan/modules/61-mcp-binding-executor.md",
+    "M60": "docs/plan/modules/70-campus-trust-source-pipeline.md",
+    "M70": "docs/plan/modules/71-change-radar.md",
+    "M71": "docs/plan/modules/72-affairs-navigator.md",
+    "M72": "docs/plan/modules/73-opportunity-graph.md",
+    "M80": "docs/plan/modules/80-dioxus-multi-client.md",
+    "M90": "docs/plan/modules/90-infrastructure-operations.md",
+}
 INVOCATION_FIXTURES = {
     "arguments-golden-v0.json",
     "call-dispatch-denials-v0.json",
@@ -182,6 +205,306 @@ KEY_FILES = [
 
 def fail(msg: str, issues: list[str]) -> None:
     issues.append(msg)
+
+
+def markdown_cells(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def parse_markdown_table(
+    rel: str,
+    expected_header: list[str],
+    label: str,
+    issues: list[str],
+) -> list[tuple[int, list[str]]]:
+    path = ROOT / rel
+    if not path.is_file():
+        fail(f"{label} missing: {rel}", issues)
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header_indexes = [
+        index
+        for index, line in enumerate(lines)
+        if line.startswith("|") and markdown_cells(line) == expected_header
+    ]
+    if len(header_indexes) != 1:
+        fail(
+            f"{label} header drift: expected one {expected_header!r}, found {len(header_indexes)}",
+            issues,
+        )
+        return []
+    header_index = header_indexes[0]
+    if header_index + 1 >= len(lines):
+        fail(f"{label} separator missing", issues)
+        return []
+    separator = markdown_cells(lines[header_index + 1])
+    if len(separator) != len(expected_header) or not all(
+        re.fullmatch(r":?-{3,}:?", cell) for cell in separator
+    ):
+        fail(f"{label} separator drift: {separator!r}", issues)
+        return []
+
+    rows: list[tuple[int, list[str]]] = []
+    for index in range(header_index + 2, len(lines)):
+        line = lines[index]
+        if not line.startswith("|"):
+            break
+        cells = markdown_cells(line)
+        if len(cells) != len(expected_header):
+            fail(
+                f"{label} row {index + 1} has {len(cells)} columns; "
+                f"expected {len(expected_header)}",
+                issues,
+            )
+            continue
+        rows.append((index + 1, cells))
+    if not rows:
+        fail(f"{label} has no rows", issues)
+    return rows
+
+
+def markdown_code_value(cell: str) -> str | None:
+    match = re.fullmatch(r"`([^`]+)`", cell)
+    return match.group(1) if match else None
+
+
+def module_id_from_cell(cell: str) -> str | None:
+    value = markdown_code_value(cell) or cell
+    match = re.match(r"^`?(M\d{2})`?(?:\s|$)", value)
+    return match.group(1) if match else None
+
+
+def collect_module_rows(
+    rows: list[tuple[int, list[str]]],
+    id_column: int,
+    state_column: int | None,
+    label: str,
+    issues: list[str],
+) -> tuple[dict[str, str], dict[str, list[str]]]:
+    states: dict[str, str] = {}
+    values: dict[str, list[str]] = {}
+    for line_no, cells in rows:
+        module_id = module_id_from_cell(cells[id_column])
+        if module_id is None:
+            fail(f"{label} row {line_no} has invalid module ID cell: {cells[id_column]!r}", issues)
+            continue
+        if module_id in values:
+            fail(f"duplicate module ID in {label}: {module_id}", issues)
+            continue
+        values[module_id] = cells
+        if state_column is not None:
+            state = markdown_code_value(cells[state_column])
+            if state is None or state not in VALID_MODULE_STATES:
+                fail(
+                    f"{label} row {line_no} has unknown state key for {module_id}: "
+                    f"{cells[state_column]!r}",
+                    issues,
+                )
+                continue
+            states[module_id] = state
+    return states, values
+
+
+def check_exact_module_ids(label: str, actual: set[str], issues: list[str]) -> None:
+    expected = set(MODULE_BLUEPRINTS)
+    if actual != expected:
+        fail(
+            f"{label} module ID set drift: missing={sorted(expected - actual)} "
+            f"unexpected={sorted(actual - expected)}",
+            issues,
+        )
+
+
+def parse_acceptance_projection(
+    cell: str, module_id: str, issues: list[str]
+) -> list[tuple[str, str | None]]:
+    entries: list[tuple[str, str | None]] = []
+    seen_references: set[str] = set()
+    seen_gap = False
+    for raw_token in cell.split(";"):
+        token = markdown_code_value(raw_token.strip())
+        if token is None:
+            fail(
+                f"module coverage acceptance projection has an unstructured token for "
+                f"{module_id}: {raw_token.strip()!r}",
+                issues,
+            )
+            continue
+        if token == "gap":
+            if seen_gap:
+                fail(f"duplicate acceptance gap token for {module_id}", issues)
+            seen_gap = True
+            entries.append(("gap", None))
+            continue
+        match = re.fullmatch(
+            r"(active|long-horizon):([A-Z][A-Z0-9]+)-(\*|[0-9]+)", token
+        )
+        if match is None:
+            fail(
+                f"module coverage acceptance projection has an invalid token for "
+                f"{module_id}: {token!r}",
+                issues,
+            )
+            continue
+        posture, prefix, suffix = match.groups()
+        reference = f"{prefix}-{suffix}"
+        if reference in seen_references:
+            fail(
+                f"duplicate acceptance reference in module coverage for "
+                f"{module_id}: {reference}",
+                issues,
+            )
+            continue
+        seen_references.add(reference)
+        entries.append((posture, reference))
+    if not entries:
+        fail(f"module coverage acceptance projection is empty for {module_id}", issues)
+    return entries
+
+
+def check_module_registry(issues: list[str]) -> None:
+    map_rows = parse_markdown_table(
+        "docs/plan/modules/00-module-map.md",
+        ["ID", "Large module", "State key", "Owns", "Must not own", "Current state"],
+        "module map registry",
+        issues,
+    )
+    map_states, map_values = collect_module_rows(map_rows, 0, 2, "module map", issues)
+    check_exact_module_ids("module map", set(map_values), issues)
+
+    roadmap_rows = parse_markdown_table(
+        "docs/tasks/01-execution-roadmap.md",
+        ["Module", "State key", "Current state", "Current module target", "Owner", "Merge gate"],
+        "module roadmap lane registry",
+        issues,
+    )
+    roadmap_states, roadmap_values = collect_module_rows(
+        roadmap_rows, 0, 1, "module roadmap", issues
+    )
+    check_exact_module_ids("module roadmap", set(roadmap_values), issues)
+
+    coverage_rows = parse_markdown_table(
+        "docs/coverage-matrix.md",
+        [
+            "Module blueprint",
+            "Primary public boundary",
+            "Feature projection",
+            "Acceptance projection",
+        ],
+        "module coverage matrix",
+        issues,
+    )
+    coverage_module_rows: list[tuple[int, list[str]]] = []
+    for line_no, cells in coverage_rows:
+        if module_id_from_cell(cells[0]) is not None:
+            coverage_module_rows.append((line_no, cells))
+        elif markdown_code_value(cells[0]) != "modules/00-module-map":
+            fail(
+                f"module coverage row {line_no} has unknown non-module blueprint cell: "
+                f"{cells[0]!r}",
+                issues,
+            )
+    _, coverage_values = collect_module_rows(
+        coverage_module_rows, 0, None, "module coverage", issues
+    )
+    check_exact_module_ids("module coverage", set(coverage_values), issues)
+
+    blueprint_states: dict[str, str] = {}
+    expected_paths = set(MODULE_BLUEPRINTS.values())
+    modules_root = ROOT / "docs/plan/modules"
+    actual_paths = {
+        path.relative_to(ROOT).as_posix()
+        for path in modules_root.glob("*.md")
+        if path.name != "00-module-map.md"
+    }
+    if actual_paths != expected_paths:
+        fail(
+            "module blueprint path set drift: "
+            f"missing={sorted(expected_paths - actual_paths)} "
+            f"unexpected={sorted(actual_paths - expected_paths)}",
+            issues,
+        )
+
+    for expected_id, rel in MODULE_BLUEPRINTS.items():
+        path = ROOT / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        id_values = re.findall(r"^- `Module ID`: `([^`]+)`$", text, flags=re.MULTILINE)
+        state_values = re.findall(
+            r"^- `Implementation State`: `([^`]+)`$", text, flags=re.MULTILINE
+        )
+        if id_values != [expected_id]:
+            fail(
+                f"module blueprint ID drift in {rel}: expected={expected_id!r} "
+                f"actual={id_values!r}",
+                issues,
+            )
+        if len(state_values) != 1 or state_values[0] not in VALID_MODULE_STATES:
+            fail(
+                f"module blueprint state drift in {rel}: actual={state_values!r}",
+                issues,
+            )
+        else:
+            blueprint_states[expected_id] = state_values[0]
+
+    for module_id in MODULE_BLUEPRINTS:
+        states = {
+            "map": map_states.get(module_id),
+            "blueprint": blueprint_states.get(module_id),
+            "roadmap": roadmap_states.get(module_id),
+        }
+        present_states = {state for state in states.values() if state is not None}
+        if len(present_states) > 1:
+            fail(
+                f"module implementation state drift for {module_id}: "
+                + " ".join(f"{source}={state!r}" for source, state in states.items()),
+                issues,
+            )
+
+    matrix_path = ROOT / "docs/acceptance/matrix.tsv"
+    catalog_path = ROOT / "docs/acceptance/platform-baseline.md"
+    if not matrix_path.is_file() or not catalog_path.is_file():
+        fail("module acceptance sources are missing", issues)
+        return
+    active_ids = {
+        row.split("\t", 1)[0]
+        for row in matrix_path.read_text(encoding="utf-8").splitlines()[1:]
+        if row.strip()
+    }
+    catalog_ids = set(
+        re.findall(
+            r"^\| `([A-Z0-9]+-[0-9]+)` \|",
+            catalog_path.read_text(encoding="utf-8"),
+            flags=re.MULTILINE,
+        )
+    )
+    active_prefixes = {case_id.split("-", 1)[0] for case_id in active_ids}
+    catalog_prefixes = {case_id.split("-", 1)[0] for case_id in catalog_ids}
+    for module_id, cells in coverage_values.items():
+        for posture, reference in parse_acceptance_projection(cells[3], module_id, issues):
+            if posture == "gap":
+                continue
+            assert reference is not None
+            prefix, suffix = reference.split("-", 1)
+            if suffix == "*":
+                in_active = prefix in active_prefixes
+                in_catalog = prefix in catalog_prefixes
+            else:
+                in_active = reference in active_ids
+                in_catalog = reference in catalog_ids
+            if posture == "active" and not in_active:
+                fail(
+                    f"active acceptance reference is not registered in matrix.tsv for "
+                    f"{module_id}: {reference}",
+                    issues,
+                )
+            elif posture == "long-horizon" and (not in_catalog or in_active):
+                fail(
+                    f"long-horizon acceptance reference is not catalog-only for "
+                    f"{module_id}: {reference}",
+                    issues,
+                )
 
 
 def check_key_files_present_and_nonempty(issues: list[str]) -> None:
@@ -1079,6 +1402,7 @@ def main() -> int:
     check_agent_plugin_dependency_direction(issues)
     check_acceptance_matrix(issues)
     check_acceptance_catalog(issues)
+    check_module_registry(issues)
     if issues:
         print("contract-check: FAIL")
         for issue in issues:

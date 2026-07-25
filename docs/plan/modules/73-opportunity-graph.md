@@ -5,6 +5,7 @@
 - `Module ID`: `M72`
 - `Package ID`: `ustc.opportunity-graph`
 - `Status`: Accepted blueprint; offline Course Planning spike exists
+- `Implementation State`: `bounded-spike`
 - `Version`: `m72-opportunity-graph/v0`
 - `Last Review`: `2026-07-25`
 - `Primary code areas`: `plugins/first-party/opportunity-graph/`, current `crates/course-planning/`, future cohesive opportunity/profile modules

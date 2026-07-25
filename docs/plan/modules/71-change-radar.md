@@ -5,6 +5,7 @@
 - `Module ID`: `M70`
 - `Package ID`: `ustc.change-radar`
 - `Status`: Accepted blueprint; manifest/design only
+- `Implementation State`: `design-only`
 - `Version`: `m70-change-radar/v0`
 - `Last Review`: `2026-07-25`
 - `Primary code area`: `plugins/first-party/change-radar/` plus a cohesive Rust domain module when implementation begins

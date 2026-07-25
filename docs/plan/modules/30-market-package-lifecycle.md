@@ -4,6 +4,7 @@
 
 - `Module ID`: `M20`
 - `Status`: Accepted blueprint; manifest baseline and pure invocation resolver evidence exist
+- `Implementation State`: `partial-evidence`
 - `Version`: `m20-market-package/v0`
 - `Last Review`: `2026-07-25`
 - `Owning Plan`: [`../04-market-and-plugin-lifecycle.md`](../04-market-and-plugin-lifecycle.md)

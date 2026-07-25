@@ -4,7 +4,7 @@
 
 - `Layer`: Large-module architecture
 - `Status`: Accepted current skeleton
-- `Version`: `module-map/v1`
+- `Version`: `module-map/v2`
 - `Last Review`: `2026-07-25`
 - `Owning Constitution`: [`../00-engineering-constitution.md`](../00-engineering-constitution.md)
 - `Counterpart Contract`: [`../../contracts/module-boundaries.md`](../../contracts/module-boundaries.md)
@@ -14,21 +14,32 @@ A large module is an independently owned and independently testable part. “Lar
 
 ## 1. Module registry
 
-| ID | Large module | Owns | Must not own | Current state |
-|---|---|---|---|---|
-| `M00` | Platform Control and Identity | tenant/user/session identity, request causation, application command envelope, platform-wide policy references | package internals, Agent loop, source parsing, UI | planned |
-| `M10` | Application Ingress Host | Dioxus/Axum server-function ingress, versioned public HTTP/typed streams where needed, auth/session/client-compatibility admission, mapping to application ports | domain decisions, direct database/executor rules, UI | skeleton only |
-| `M20` | Market and Package Lifecycle | catalog package/component identity, install/configure/enable/disable/update/revoke/grant lifecycle, invocation authority snapshots | model loop, Plugin execution, client state | manifest baseline + pure resolver evidence |
-| `M30` | Agent Harness and Runtime | finite user-task/run phases, graph, budgets, context projection, provider/tool ports, replay and review | package lifecycle, executor implementation, transport/UI | node runtime kernel implemented; harness planned |
-| `M40` | Tool Gateway and Execution | Agent tool protocol mapping, call correlation, current authorization ordering, intent/executor/receipt/result sequence | grants, Agent phases, package declarations | protocol values + fake conformance implemented |
-| `M50` | Model Provider Integration | typed provider profiles, request/stream normalization, token estimation, timeout/cancel/error mapping | run authority, tool grants, prompt truth | planned |
-| `M51` | MCP Binding and Executor | reviewed MCP endpoint/component binding, discovery/schema snapshot, protocol session, bounded tool execution | Market publication, grant decisions, Agent loop | planned |
-| `M60` | Campus Trust and Source Pipeline | source registry, retrieval policy, immutable revision, normalization, provenance, accepted baseline and publication gate | product-specific rendering, arbitrary crawling, UI | contract only; planner fixtures provide limited evidence |
-| `M70` | USTC ChangeRadar | semantic change candidates/events, board scope, approval and feed behavior | generic source authority, other product state | manifest/design only |
-| `M71` | USTC Affairs Navigator | reviewed tree/procedure artifacts, lookup, supersession and publication journey | generic source authority, full-corpus RAG as truth | manifest/design only |
-| `M72` | Campus Opportunity Graph | opportunity facts, qualification/dependency/conflict, tenant profile projection and planning journeys | public source authority, cross-user profile state | offline Course Planning spike only |
-| `M80` | Dioxus Fullstack Multi-client | mandatory Web/PWA and Android routes/components/presentation state, SSR/hydration, generated first-party client facade and target adapters; later iOS/desktop | domain calculation/mutation, direct repository/executor access, Agent/Market/Plugin/source authority | architecture accepted; no Fullstack app |
-| `M90` | Platform Infrastructure and Operations | repository implementations for storage, journal, evidence, clock, queue, config, secrets, telemetry and Docker Compose deployment/recovery wiring | domain transition rules and product policy | CI/checker baseline only |
+| ID | Large module | State key | Owns | Must not own | Current state |
+|---|---|---|---|---|---|
+| `M00` | Platform Control and Identity | `planned` | tenant/user/session identity, request causation, application command envelope, platform-wide policy references | package internals, Agent loop, source parsing, UI | planned |
+| `M10` | Application Ingress Host | `skeleton` | Dioxus/Axum server-function ingress, versioned public HTTP/typed streams where needed, auth/session/client-compatibility admission, mapping to application ports | domain decisions, direct database/executor rules, UI | skeleton only |
+| `M20` | Market and Package Lifecycle | `partial-evidence` | catalog package/component identity, install/configure/enable/disable/update/revoke/grant lifecycle, invocation authority snapshots | model loop, Plugin execution, client state | manifest baseline + pure resolver evidence |
+| `M30` | Agent Harness and Runtime | `partial-evidence` | finite user-task/run phases, graph, budgets, context projection, provider/tool ports, replay and review | package lifecycle, executor implementation, transport/UI | node runtime kernel implemented; harness planned |
+| `M40` | Tool Gateway and Execution | `partial-evidence` | Agent tool protocol mapping, call correlation, current authorization ordering, intent/executor/receipt/result sequence | grants, Agent phases, package declarations | protocol values + fake conformance implemented |
+| `M50` | Model Provider Integration | `planned` | typed provider profiles, request/stream normalization, token estimation, timeout/cancel/error mapping | run authority, tool grants, prompt truth | planned |
+| `M51` | MCP Binding and Executor | `planned` | reviewed MCP endpoint/component binding, discovery/schema snapshot, protocol session, bounded tool execution | Market publication, grant decisions, Agent loop | planned |
+| `M60` | Campus Trust and Source Pipeline | `planned` | source registry, retrieval policy, immutable revision, normalization, provenance, accepted baseline and publication gate | product-specific rendering, arbitrary crawling, UI | contract only; planner fixtures provide limited evidence |
+| `M70` | USTC ChangeRadar | `design-only` | semantic change candidates/events, board scope, approval and feed behavior | generic source authority, other product state | manifest/design only |
+| `M71` | USTC Affairs Navigator | `design-only` | reviewed tree/procedure artifacts, lookup, supersession and publication journey | generic source authority, full-corpus RAG as truth | manifest/design only |
+| `M72` | Campus Opportunity Graph | `bounded-spike` | opportunity facts, qualification/dependency/conflict, tenant profile projection and planning journeys | public source authority, cross-user profile state | offline Course Planning spike only |
+| `M80` | Dioxus Fullstack Multi-client | `planned` | mandatory Web/PWA and Android routes/components/presentation state, SSR/hydration, generated first-party client facade and target adapters; later iOS/desktop | domain calculation/mutation, direct repository/executor access, Agent/Market/Plugin/source authority | architecture accepted; no Fullstack app |
+| `M90` | Platform Infrastructure and Operations | `governance-baseline` | repository implementations for storage, journal, evidence, clock, queue, config, secrets, telemetry and Docker Compose deployment/recovery wiring | domain transition rules and product policy | CI/checker baseline only |
+
+`State key` is the machine-checked implementation-evidence posture shared with every module blueprint and the roadmap lane registry:
+
+- `planned` — no retained implementation owned by this module;
+- `skeleton` — a runnable/composition shell exists but the module behavior is not implemented;
+- `partial-evidence` — bounded executable evidence exists for only part of the module;
+- `design-only` — package/design declarations exist without module implementation;
+- `bounded-spike` — explicitly non-authoritative exploratory implementation exists;
+- `governance-baseline` — repository/CI governance evidence exists without the planned production module.
+
+The prose `Current state` explains the exact evidence and non-claims. It MUST NOT contradict or silently replace the controlled key.
 
 The registry is the current large-module ownership boundary. New top-level modules or ownership moves are skeleton changes and require the analysis/approval process in the engineering constitution.
 

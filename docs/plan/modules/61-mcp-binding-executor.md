@@ -4,6 +4,7 @@
 
 - `Module ID`: `M51`
 - `Status`: Accepted blueprint; implementation planned
+- `Implementation State`: `planned`
 - `Version`: `m51-mcp-binding/v0`
 - `Last Review`: `2026-07-25`
 - `Primary code area`: replaceable MCP modules under `crates/adapters/` or a dedicated crate after real consumers justify it

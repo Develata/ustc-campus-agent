@@ -4,6 +4,7 @@
 
 - `Module ID`: `M40`
 - `Status`: Accepted blueprint; protocol values and fake gateway/executor conformance implemented
+- `Implementation State`: `partial-evidence`
 - `Version`: `m40-tool-gateway/v0`
 - `Last Review`: `2026-07-25`
 - `Owning Contract`: [`../../contracts/agent-plugin-boundary.md`](../../contracts/agent-plugin-boundary.md)
