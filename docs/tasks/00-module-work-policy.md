@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current task policy
-- `Version`: `module-work-policy/v1.2`
-- `Last Review`: `2026-07-25`
+- `Version`: `module-work-policy/v1.3`
+- `Last Review`: `2026-07-26`
 - `Owning Constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module Registry`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
 - `Boundary Registry`: [`../contracts/module-boundaries.md`](../contracts/module-boundaries.md)
@@ -52,7 +52,9 @@ No issue/task text bypasses the owning plan.
 
 ## 3. Branch and commit shape
 
-Normal multi-member work:
+Two paths are admitted. Path A is the default. Path B is a bounded exception with a fail-closed admission test; it is permission for independently gated slices, not permission to fragment arbitrary work or to bypass the large-module architecture.
+
+### Path A — default, coupled large-module path
 
 ```text
 one large module
@@ -66,13 +68,50 @@ one large module
 → authorized merge to protected main
 ```
 
-Rules:
+Use Path A when batches are coupled, the public boundary is unresolved, integration must be reviewed atomically, or any Path B criterion below is unmet. Under Path A a small module may be committed before the large module is complete, and remote push/merge waits for the large module's exit gate and current Develata authorization.
+
+### Path B — independently gated small-module path
+
+```text
+one declared small-module batch
+→ one exact-scope feature branch
+→ accepted owning contract + active planned acceptance bindings
+→ implementation and independent standalone evidence
+→ truthful plan/contract/acceptance/status projections
+→ final gate and independent review
+→ current-operation authorized push
+→ protected-main PR
+→ authorized merge as bounded/partial evidence
+```
+
+#### Path B admission criteria
+
+A small module is admitted to Path B only when **all** of the following are true:
+
+1. it is named in the owning blueprint/roadmap small-module decomposition;
+2. its large module already passes the contract-ready gate in §4;
+3. it has an accepted exact owning contract, and active `planned` acceptance rows with non-vacuous future evidence bindings existed before implementation started;
+4. it has one semantic intent, narrow owned paths and explicit non-goals;
+5. its public inputs/outputs and dependency direction are settled — its standalone proof requires no unresolved sibling implementation and no hidden cross-module integration;
+6. every bound test, checker, fake or negative-space proof for that slice passes independently;
+7. every implementation and status projection it affects is updated honestly in the same slice;
+8. the large-module state is not inflated — normally at most `partial-evidence` after the first retained small module, and never `StandaloneReady` until §7 passes;
+9. final independent review has no unresolved blocker;
+10. Develata authorizes the current push and merge operations; authorization is never standing;
+11. remote `main` protection, exact-path staging and PR CI are unchanged.
+
+Failure of any single criterion falls back to Path A. A task brief, issue or agent instruction cannot self-declare an exception.
+
+#### What a Path B merge does and does not prove
+
+A Path B merge records bounded partial evidence for exactly the declared slice. It normally moves a `planned` large module no further than an honest `partial-evidence` in the module registry. It never establishes `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted`; `StandaloneReady` remains bound to the full standalone gate in §7, and later readiness remains bound to §8 and §9.
+
+### Rules for both paths
 
 - one commit has one semantic intent;
 - stage exact files only;
 - do not mix unrelated cleanup or another large module's implementation;
-- a small module may be committed before the large module is complete;
-- remote push/merge waits for the large module's exit gate and current Develata authorization;
+- cross-module integration code stays in a declared composition surface, never hidden inside the small module;
 - review evidence includes status, specs, changed/untracked files and real gate output.
 
 During the current solo skeleton phase, Develata may explicitly allow local `main` work for root interfaces/composition scaffolding. Remote main protection and all review/gate/authorization rules still apply.
