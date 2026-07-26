@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current contract
-- `Version`: `module-boundaries/v1`
-- `Last Review`: `2026-07-25`
+- `Version`: `module-boundaries/v1.1`
+- `Last Review`: `2026-07-26`
 - `Owning Plan`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
 - `Task Policy`: [`../tasks/00-module-work-policy.md`](../tasks/00-module-work-policy.md)
 
@@ -13,7 +13,7 @@ This registry defines what may cross each large-module boundary. It does not pre
 ## 1. Boundary rules
 
 1. Every cross-module call uses a named command, query, event or port contract.
-2. Public values contain stable IDs, bounded data and typed errors; they do not expose private fields or concrete adapter handles.
+2. M00-owned identity values use [`platform-identity/v0`](platform-identity.md). Other public values likewise contain stable IDs, bounded data and typed errors; they do not expose private fields or concrete adapter handles.
 3. A module may validate its own public input again. Callers cannot claim that prior UI/transport validation is authoritative.
 4. The module that owns a state transition owns its legal command/event/result. A composition root may order calls but cannot synthesize an accepted transition.
 5. Cross-module errors are mapped explicitly. No failure selects a same-name module/tool/provider/runtime fallback.

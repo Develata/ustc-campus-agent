@@ -179,12 +179,23 @@ class DocsTopologyContractTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary_directory.name)
         shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        ci_path = self.root / ".github/workflows/ci.yml"
+        ci_path.parent.mkdir(parents=True)
+        shutil.copy2(REPO_ROOT / ".github/workflows/ci.yml", ci_path)
         self.original_root = cast(Path, getattr(checker, "ROOT"))
         setattr(checker, "ROOT", self.root)
 
     def tearDown(self) -> None:
         setattr(checker, "ROOT", self.original_root)
         self.temporary_directory.cleanup()
+
+    def replace_once(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, f"stale or ambiguous mutation target in {rel}")
+        updated = text.replace(old, new, 1)
+        self.assertNotEqual(updated, text)
+        path.write_text(updated, encoding="utf-8")
 
     def check_docs_topology(self) -> list[str]:
         issues: list[str] = []
@@ -219,6 +230,26 @@ class DocsTopologyContractTests(unittest.TestCase):
             self.check_key_files(),
         )
 
+    def test_platform_identity_contract_is_a_registered_nonempty_key_file(self) -> None:
+        issues = self.check_key_files()
+        self.assertFalse(any("platform-identity.md" in issue for issue in issues))
+
+    def test_missing_platform_identity_contract_fails_closed(self) -> None:
+        path = self.root / "docs/contracts/platform-identity.md"
+        path.unlink()
+        self.assertIn(
+            "key file missing: docs/contracts/platform-identity.md",
+            self.check_key_files(),
+        )
+
+    def test_empty_platform_identity_contract_fails_closed(self) -> None:
+        path = self.root / "docs/contracts/platform-identity.md"
+        path.write_text(" \n", encoding="utf-8")
+        self.assertIn(
+            "key file empty: docs/contracts/platform-identity.md",
+            self.check_key_files(),
+        )
+
     def test_unregistered_current_contract_fails_closed(self) -> None:
         path = self.root / "docs/contracts/example-current.md"
         path.write_text("# Example current contract\n", encoding="utf-8")
@@ -245,7 +276,7 @@ class DocsTopologyContractTests(unittest.TestCase):
 
     def test_retired_docs_reference_outside_markdown_is_rejected(self) -> None:
         codeowners = self.root / ".github/CODEOWNERS"
-        codeowners.parent.mkdir()
+        codeowners.parent.mkdir(exist_ok=True)
         codeowners.write_text("/docs/architecture/ @owner\n", encoding="utf-8")
         issues: list[str] = []
         checker.check_no_retired_docs_references(issues)
@@ -286,6 +317,133 @@ class DocsTopologyContractTests(unittest.TestCase):
         checker.check_acceptance_catalog(issues)
         self.assertTrue(any("active case missing from long-horizon catalog" in issue for issue in issues))
 
+    def test_active_auth_case_must_exist_in_catalog(self) -> None:
+        matrix_path = self.root / "docs/acceptance/matrix.tsv"
+        matrix = matrix_path.read_text(encoding="utf-8")
+        matrix_path.write_text(matrix.replace("AUTH-011", "AUTH-999", 1), encoding="utf-8")
+        issues: list[str] = []
+        checker.check_acceptance_catalog(issues)
+        self.assertTrue(any("active case missing from long-horizon catalog" in issue for issue in issues))
+
+    def test_rust_doctest_gate_is_declared_in_docs_and_ci(self) -> None:
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertEqual(issues, [])
+
+    def test_blank_line_inside_trigger_block_remains_valid(self) -> None:
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            "on:\n  pull_request:",
+            "on:\n\n  pull_request:",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertEqual(issues, [])
+
+    def test_missing_rust_doctest_docs_gate_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/acceptance/gates.md",
+            checker.RUST_DOCTEST_GATE_COMMAND,
+            f"# {checker.RUST_DOCTEST_GATE_COMMAND}",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertIn("Rust doctest gate missing from docs/acceptance/gates.md", issues)
+
+    def test_missing_rust_doctest_ci_gate_fails_closed(self) -> None:
+        ci_command = f"        run: {checker.RUST_DOCTEST_GATE_COMMAND}"
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            ci_command,
+            f"        # run: {checker.RUST_DOCTEST_GATE_COMMAND}",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertIn("Rust doctest CI step must use the exact run command", issues)
+
+    def test_conditional_rust_job_fails_closed(self) -> None:
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            "  rust:\n    name: rust",
+            "  rust:\n    if: github.event_name != 'pull_request'\n    name: rust",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertIn("Rust doctest CI rust job must not be conditional", issues)
+
+    def test_rust_job_outside_jobs_block_fails_closed(self) -> None:
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            "jobs:\n  rust:",
+            "x-disabled:\n  rust:",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertIn("Rust doctest CI rust job missing or ambiguous", issues)
+
+    def test_doctest_step_outside_steps_block_fails_closed(self) -> None:
+        run_line = f"        run: {checker.RUST_DOCTEST_GATE_COMMAND}"
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            f"      - name: Doc tests\n{run_line}",
+            f"    x-disabled:\n      - name: Doc tests\n{run_line}",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertIn("Rust doctest CI step missing or ambiguous in rust steps", issues)
+
+    def test_conditional_rust_doctest_step_fails_closed(self) -> None:
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            "      - name: Doc tests\n        run:",
+            "      - name: Doc tests\n        if: github.event_name != 'pull_request'\n        run:",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertIn("Rust doctest CI step must be unconditional and blocking", issues)
+
+    def test_nonblocking_rust_doctest_step_fails_closed(self) -> None:
+        run_line = f"        run: {checker.RUST_DOCTEST_GATE_COMMAND}"
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            run_line,
+            f"{run_line}\n        continue-on-error: true",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertIn("Rust doctest CI step must be unconditional and blocking", issues)
+
+    def test_missing_pull_request_trigger_fails_closed(self) -> None:
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            "  pull_request:",
+            "  # pull_request:",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertIn("Rust doctest CI pull_request trigger missing or ambiguous", issues)
+
+    def test_pull_request_token_outside_on_block_fails_closed(self) -> None:
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            "on:\n  pull_request:\n  push:",
+            "x-disabled:\n  pull_request:\non:\n  push:",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertIn("Rust doctest CI pull_request trigger missing or ambiguous", issues)
+
+    def test_multiline_rust_doctest_carrier_requires_contract_update(self) -> None:
+        run_line = f"        run: {checker.RUST_DOCTEST_GATE_COMMAND}"
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            run_line,
+            f"        run: |\n          {checker.RUST_DOCTEST_GATE_COMMAND}",
+        )
+        issues: list[str] = []
+        checker.check_rust_doctest_gate(issues)
+        self.assertIn("Rust doctest CI step must use the exact run command", issues)
+
 
 class ModuleRegistryContractTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -314,6 +472,18 @@ class ModuleRegistryContractTests(unittest.TestCase):
 
     def test_current_module_registry_passes(self) -> None:
         self.assertEqual(self.check_module_registry(), [])
+
+    def test_m00_exact_active_acceptance_reference_requires_matrix_row(self) -> None:
+        self.remove_table_row("docs/acceptance/matrix.tsv", "AUTH-011\t")
+        issues = self.check_module_registry()
+        self.assertTrue(
+            any(
+                "active acceptance reference is not registered in matrix.tsv for M00: AUTH-011"
+                in issue
+                for issue in issues
+            ),
+            issues,
+        )
 
     def test_missing_blueprint_fails_closed(self) -> None:
         (self.root / checker.MODULE_BLUEPRINTS["M51"]).unlink()
@@ -458,7 +628,14 @@ class ModuleRegistryContractTests(unittest.TestCase):
     def test_unstructured_acceptance_projection_fails_closed(self) -> None:
         path = self.root / "docs/coverage-matrix.md"
         text = path.read_text(encoding="utf-8")
-        path.write_text(text.replace("| `gap` |", "| active rows missing |", 1), encoding="utf-8")
+        path.write_text(
+            text.replace(
+                "`active:AUTH-011`",
+                "active rows missing",
+                1,
+            ),
+            encoding="utf-8",
+        )
         issues = self.check_module_registry()
         self.assertTrue(
             any("acceptance projection has an unstructured token" in issue for issue in issues),

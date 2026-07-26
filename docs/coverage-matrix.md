@@ -15,19 +15,19 @@ This matrix keeps the live documentation layers aligned:
 | `00-engineering-constitution` | — | repository `AGENTS.md`, `tasks/00-module-work-policy.md` | `acceptance/gates.md`, repository checker |
 | `01-terminology` | all feature vocabulary | `contracts/module-boundaries.md`, Market schema/capability IDs | matrix/checker vocabulary |
 | `02-product-positioning` | `00-market-browse-install`, three first-party features | `plugin-package.md` | `MARKET-*`, `FP-*` |
-| `03-platform-authority` | `00-market-browse-install`, `04-bounded-agent-harness` | `module-boundaries.md`, `agent-harness.md`, `agent-plugin-boundary.md`, `client-shell.md`, `interfaces.md`, `permissions.md` | `HARNESS-*`, `AGENT-*`, `MARKET-*`, long-horizon client cases |
+| `03-platform-authority` | `00-market-browse-install`, `04-bounded-agent-harness` | `platform-identity.md`, `module-boundaries.md`, `agent-harness.md`, `agent-plugin-boundary.md`, `client-shell.md`, `interfaces.md`, `permissions.md` | `AUTH-*`, `HARNESS-*`, `AGENT-*`, `MARKET-*`, long-horizon client cases |
 | `04-market-and-plugin-lifecycle` | `00-market-browse-install` | `plugin-package.md`, `permissions.md`, `invocation-resolution.md`, `agent-plugin-boundary.md` | `MARKET-*`, `PKG-*`, selected `AGENT-*`, `FP-*` |
 | `05-campus-trust-kernel` | all three first-party features | `source-import.md`, `data-models.md` | `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
 | `06-first-party-plugins` | three first-party features | manifests, `data-models.md`, `source-import.md` | `FP-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
 | `07-runtime-and-integration` | `04-bounded-agent-harness` | `agent-harness.md`, `agent-plugin-boundary.md`, `agent-runtime.md`, `interfaces.md` | `HARNESS-*`, `AGENT-*`, `RUNTIME-*`; long-horizon `AI-*`/`MCP-*`/`RUN-*` retained in `platform-baseline.md` |
-| `08-security-and-delivery` | permission/privacy/publication failure states | `permissions.md`, `source-import.md`, module-specific security boundaries | `PUBLIC-*`, release/security gates |
+| `08-security-and-delivery` | permission/privacy/publication failure states | `platform-identity.md`, `permissions.md`, `source-import.md`, module-specific security boundaries | `AUTH-*`, `PUBLIC-*`, release/security gates |
 
 ## Large-module blueprints
 
 | Module blueprint | Primary public boundary | Feature projection | Acceptance projection |
 |---|---|---|---|
 | `modules/00-module-map` | `module-boundaries.md` | all | every module must bind before implementation |
-| `M00 Platform Control/Identity` | `B-M00-M10-ACTOR`, request/session/causation values | cross-feature admission only | `gap` |
+| `M00 Platform Control/Identity` | `platform-identity.md`, `B-M00-M10-ACTOR`, later request/session/causation values | cross-feature admission only | `active:AUTH-011`; `active:AUTH-012`; `active:AUTH-014`; `active:AUTH-015`; `active:AUTH-016`; `long-horizon:AUTH-013` |
 | `M10 Application Ingress Host` | `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT`, `B-M10-APP-CALL`, `B-APP-M10-RESULT`; server-function/public endpoint registry in `interfaces.md` | all real Web/Android/integration journeys | `gap`; `long-horizon:CLIENT-*`; `long-horizon:WEB-*` |
 | `M20 Market/Package` | package/install/grant/resolver contracts | `00-market-browse-install` | `active:MARKET-*`; `active:PKG-*`; `active:AGENT-*`; `active:FP-*` |
 | `M30 Agent Harness/Runtime` | `agent-harness.md`, `agent-runtime.md`, `B-M30-M50-MODEL`, `B-M20-M30-TOOLSET`, `B-M30-M40-CALL`, `B-COMP-M30-EFFECT`, `B-M40-M30-RESULT` | `04-bounded-agent-harness` | `active:HARNESS-*`; `active:AGENT-*` |
