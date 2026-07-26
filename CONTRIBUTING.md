@@ -24,11 +24,4 @@ test: cover Course Planning hard-constraint gate
 
 ## PR gate
 
-```bash
-cargo fmt --all -- --check
-cargo clippy --locked --all-targets --all-features -- -D warnings
-cargo test --locked --all-targets --all-features
-python3 -m unittest discover -s scripts/tests -p 'test_*.py'
-python3 scripts/check_repo_contracts.py
-git diff --check
-```
+The authoritative PR-gate command set and evidence-state rules live in [`docs/acceptance/gates.md`](docs/acceptance/gates.md). Run its complete current PR gate before requesting review, and report every command as pass, fail or honestly not run.
