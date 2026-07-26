@@ -230,6 +230,7 @@ KEY_FILES = [
     "docs/contracts/module-boundaries.md",
     "docs/contracts/permissions.md",
     "docs/contracts/platform-identity.md",
+    "docs/contracts/platform-session.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",
     "market/review-policy/first-party.md",

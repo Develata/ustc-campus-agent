@@ -320,6 +320,26 @@ class DocsTopologyContractTests(unittest.TestCase):
             self.check_key_files(),
         )
 
+    def test_platform_session_contract_is_a_registered_nonempty_key_file(self) -> None:
+        issues = self.check_key_files()
+        self.assertFalse(any("platform-session.md" in issue for issue in issues))
+
+    def test_missing_platform_session_contract_fails_closed(self) -> None:
+        path = self.root / "docs/contracts/platform-session.md"
+        path.unlink()
+        self.assertIn(
+            "key file missing: docs/contracts/platform-session.md",
+            self.check_key_files(),
+        )
+
+    def test_empty_platform_session_contract_fails_closed(self) -> None:
+        path = self.root / "docs/contracts/platform-session.md"
+        path.write_text(" \n", encoding="utf-8")
+        self.assertIn(
+            "key file empty: docs/contracts/platform-session.md",
+            self.check_key_files(),
+        )
+
     def test_unregistered_current_contract_fails_closed(self) -> None:
         path = self.root / "docs/contracts/example-current.md"
         path.write_text("# Example current contract\n", encoding="utf-8")
