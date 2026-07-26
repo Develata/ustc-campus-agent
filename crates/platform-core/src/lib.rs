@@ -4,6 +4,7 @@
 //! executable surfaces can depend on one shared source of truth instead of copying
 //! product identifiers, package ids, and source-authority ordering.
 
+pub mod identity;
 pub mod invocation;
 
 /// Human-facing product name.

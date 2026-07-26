@@ -4,7 +4,7 @@
 
 - `Status`: Current delivery and task-splitting order
 - `Version`: `module-roadmap/v2.1`
-- `Last Review`: `2026-07-25`
+- `Last Review`: `2026-07-26`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module map`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
@@ -57,7 +57,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 
 | Module | State key | Current state | Current module target | Owner | Merge gate |
 |---|---|---|---|---|---|
-| `M00` Platform Control/Identity | `planned` | planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
+| `M00` Platform Control/Identity | `partial-evidence` | identity-types implemented; session/request-context/ports planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
 | `M10` Application Ingress Host | `skeleton` | skeleton | Dioxus server-function/public route/DTO/error/event/compatibility host | unassigned | black-box Fullstack/HTTP/stream conformance and no reach-through |
 | `M20` Market/Package | `partial-evidence` | partial evidence | browse + durable install/grant/disable/revoke around audited resolver | unassigned | `MARKET-*` current-scope rows |
 | `M30` Agent Harness/Runtime | `partial-evidence` | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |

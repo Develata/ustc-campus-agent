@@ -59,7 +59,7 @@ The thin client displays and submits intent. Backend modules perform every truth
 
 | ID | Module | Owns | Current evidence |
 |---|---|---|---|
-| `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | planned |
+| `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity value types only |
 | `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | daemon help/version skeleton |
 | `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | manifests + pure resolver/fixtures |
 | `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel |
