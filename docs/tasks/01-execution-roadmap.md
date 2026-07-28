@@ -228,6 +228,8 @@ M70 ChangeRadar source/revision/diff foundation
 
 ### M70 — ChangeRadar
 
+Contract-readiness decisions are tracked in [`03-m70-contract-readiness.md`](03-m70-contract-readiness.md). While that ledger remains `InReview`, M70 stays `design-only`; the ledger records review evidence only and does not authorize retained Rust, public API/schema implementation, acceptance promotion, or M60/M10/M80 integration.
+
 - `M70-B1 board-policy`;
 - `M70-B2 semantic-diff`;
 - `M70-B3 candidate-evidence`;
