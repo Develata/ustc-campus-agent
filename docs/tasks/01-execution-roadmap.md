@@ -57,7 +57,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 
 | Module | State key | Current state | Current module target | Owner | Merge gate |
 |---|---|---|---|---|---|
-| `M00` Platform Control/Identity | `partial-evidence` | identity-types implemented; session/request-context/ports planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
+| `M00` Platform Control/Identity | `partial-evidence` | identity-types implemented; session-domain contract accepted and unimplemented; request-context/ports planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
 | `M10` Application Ingress Host | `skeleton` | skeleton | Dioxus server-function/public route/DTO/error/event/compatibility host | unassigned | black-box Fullstack/HTTP/stream conformance and no reach-through |
 | `M20` Market/Package | `partial-evidence` | typed package/catalog + capability-registry + bounded managed-installation fake + pure resolver evidence | M10/M80 browse delivery + durable installation/grant/update/composition around audited resolver | unassigned | `MARKET-*` current-scope rows |
 | `M30` Agent Harness/Runtime | `partial-evidence` | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |
@@ -112,7 +112,7 @@ Team assignment updates only the `Owner` cells and issue links. It does not chan
 ## 5. M00 lane — Platform Control and Identity
 
 - `M00-B1 identity-types`: the six bounded tenant/user/session/request/command/correlation values and their shared construction error under `platform-identity/v0`; converge the invocation resolver onto the M00 tenant/user definitions only.
-- `M00-B2 session-domain`: open/refresh/expire/revoke transitions and replay.
+- `M00-B2 session-domain`: open/refresh/expire/revoke transitions and replay under accepted [`platform-session/v0`](../contracts/platform-session.md). The contract is accepted and `AUTH-017..020` are active `planned` rows with exact future bindings, which is the §10 entry condition; no implementation exists, and the batch adds no dependency, port, repository, clock, request context or M10 integration.
 - `M00-B3 request-context`: land `policy-reference` first, then immutable admitted actor/request/command/causation context and duplicate/conflict semantics as separate reviewable commits.
 - `M00-B4 ports-and-fakes`: land `session-port` and `control-evidence` as separate reviewable commits, then clock/session/audit/secret-ref fakes with failure fixtures.
 - `M00-B5 api-admission-integration`: attach to `M10`; one denied request reaches no downstream fake.

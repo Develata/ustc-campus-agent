@@ -4,7 +4,7 @@
 
 - `Status`: Accepted `M00-B1` contract; implemented with passing evidence
 - `Version`: `platform-identity/v0`
-- `Last Review`: `2026-07-27`
+- `Last Review`: `2026-07-28`
 - `Owning Blueprint`: [`M00 Platform Control and Identity`](../plan/modules/10-platform-control-identity.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for authority partition and [`module-boundaries.md`](module-boundaries.md) for cross-module ownership
 - `Acceptance`: implemented `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015`, `AUTH-016`; catalog-only `AUTH-013` is deferred to `M00-B3 request-context`
@@ -168,7 +168,14 @@ Evidence must enforce this as a **complete allowlist over the declaration gramma
 
 The frozen surface belongs to the six value kinds, not to one file. Anything in a sibling module of `platform-core` that adds externally reachable API to those kinds is equally forbidden: an **inherent** implementation, which Rust's orphan rule does not restrict to the defining file; and any alias or re-export that gives an admitted kind a second name or path.
 
-Alias bindings are rejected rather than resolved. No sibling source may `use` or `type`-alias an admitted kind or the identity module itself, whether the binding is public or private, because a local alias does not change Rust's self type — `use crate::identity::TenantId as Tenant; impl AsRef<str> for Tenant { … }` is a real implementation for the governed type that no comparison against the kind's own name will see. A whole-module re-export such as `pub use crate::identity as identity_alias;` names no kind at all yet republishes every one of them, so the module path is governed exactly like the type names. The only admitted cross-file binding is the invocation compatibility re-export named in §6, spelled without renaming.
+Alias bindings are rejected rather than resolved. No sibling source may `use` or `type`-alias an admitted kind or the identity module itself, whether the binding is public or private, because a local alias does not change Rust's self type — `use crate::identity::TenantId as Tenant; impl AsRef<str> for Tenant { … }` is a real implementation for the governed type that no comparison against the kind's own name will see. A whole-module re-export such as `pub use crate::identity as identity_alias;` names no kind at all yet republishes every one of them, so the module path is governed exactly like the type names.
+
+Cross-file bindings of an admitted kind are therefore admitted by **enumeration**, never by pattern. Each admitted binding is listed in the item allowlist, is spelled without renaming, and sits in a source whose own item, `impl`, macro, derive and attribute surfaces are frozen on exactly the terms above — the accounting is what makes an import safe, so an import outside it is not. Two bindings are currently admitted:
+
+1. `invocation.rs`'s tenant/user compatibility re-export named in §6;
+2. the non-renaming `use crate::identity::{SessionId, TenantId, UserId};` taken by the `M00-B2` session module under [`platform-session/v0`](platform-session.md) §2.0, which re-exports nothing, implements nothing for an admitted kind, and gains no access to the private `identity_value!` generator.
+
+Enumerating a further binding is drift of this **registration** and must be mirrored in both carriers, exactly as an import-list change to `invocation.rs` is. It changes no accepted byte grammar, maximum length, error precedence, Serde shape or nominal kind set, so it is not a `platform-identity/v0` change under §9 — the same distinction §5 draws for the `IdentityValueError` representation. Re-exporting an admitted kind from a third source *would* give a kind a second public path and is refused; §6's re-export is a compatibility exception that is not extended.
 
 Evidence must identify an implementation's self type structurally. A `where` clause follows the self type rather than belonging to it, and an `impl` token's position on a line proves nothing about whether it is an item — a preceding `fn` on the same line can be a decoy. Every `impl` token in every pinned source file must therefore be resolved to its self type and checked.
 

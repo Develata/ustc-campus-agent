@@ -2,14 +2,14 @@
 
 ## Metadata
 
-- `Status`: Draft, non-mergeable `M00-B2 session-domain` target contract; must be rebased onto merged M00-B1 and re-reviewed before acceptance or merge
+- `Status`: Accepted `M00-B2 session-domain` contract; no implementation exists yet
 - `Version`: `platform-session/v0`
-- `Last Review`: `2026-07-26`
+- `Last Review`: `2026-07-28`
 - `Owning Blueprint`: [`M00 Platform Control and Identity`](../plan/modules/10-platform-control-identity.md)
-- `Depends On`: accepted [`platform-identity/v0`](platform-identity.md) values and [`module-boundaries.md`](module-boundaries.md)
+- `Depends On`: implemented [`platform-identity/v0`](platform-identity.md) values and [`module-boundaries.md`](module-boundaries.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for authority partition
-- `Acceptance`: proposed catalog-only `AUTH-017`, `AUTH-018`, `AUTH-019`, `AUTH-020`; no active matrix row or implementation evidence yet
-- `Primary Code`: future cohesive session-domain module under `crates/platform-core/`
+- `Acceptance`: active `planned` `AUTH-017`, `AUTH-018`, `AUTH-019`, `AUTH-020`; none is `implemented`, and no session implementation evidence exists
+- `Primary Code`: `crates/platform-core/src/session.rs`, with evidence in `crates/platform-core/tests/platform_session.rs`; neither file exists yet
 
 ## 1. Scope and authority
 
@@ -29,21 +29,77 @@ Authentication adapters produce bounded `SessionCredentialEvidence`; `M00-B4 ses
 
 ## 2. Required public semantic values
 
-The final implementation contract must expose nominal, private-field Rust values equivalent to the shapes below. Naming may be refined before this draft becomes accepted, but no field or invariant may be silently dropped.
+The implementation must expose nominal, private-field Rust values with exactly the names, fields and invariants below. The names are frozen by acceptance of this contract; changing one is a `platform-session/v0` change under §16, not an implementation detail. No field or invariant may be silently dropped.
+
+### 2.0 Binding to the merged `platform-identity/v0` implementation
+
+`M00-B1` is merged, so the following are read back from the implementation rather than proposed.
+
+**Placement.** The session domain is one cohesive module at `crates/platform-core/src/session.rs`, declared `pub mod session;` in `crates/platform-core/src/lib.rs`, with evidence at `crates/platform-core/tests/platform_session.rs`. It is a sibling of `identity` and `invocation`, not a submodule of either, and it creates no new crate: `module-work-policy/v1.3` §5 prefers a small internal module until a compiler-enforced dependency, independent release or a second real consumer exists, and none does.
+
+**Identity values are imported, never redefined and never re-exported.** The session module binds exactly:
+
+```rust
+use crate::identity::{SessionId, TenantId, UserId};
+```
+
+spelled without renaming. `platform-identity/v0` §4 requires that every governed source's `use`/`type`/`mod` items, `impl` self types, macro definitions and macro invocations be accounted for against an exact allowlist; the session module joins that governed set on the same terms and gains no exemption. It publishes **no** `pub use` of any identity kind: `invocation.rs`'s §6 compatibility re-export is the only admitted second path to an admitted kind, and B2 does not receive one. B2 therefore adds no externally reachable API to any `platform-identity/v0` kind — no inherent method, no trait implementation, no alias, no second path.
+
+**B2 mints no seventh identity kind, and structurally cannot.** The `identity_value!` generator is private to `identity.rs`, so it is unreachable from a sibling module. `AuthAdapterId` and `CredentialEvidenceDigest` are `platform-session/v0` values defined by this contract, not `platform-identity/v0` values, and they do not widen, alias or re-spell one.
+
+**Representation is part of the rule, inherited from `platform-identity/v0` §4.** Every B2 value carrying a validated invariant is a **named-field struct with private fields**, never a tuple struct. A tuple struct's constructor is a *value*, not only syntax: `let ctor = AuthAdapterId; ctor(text)` fills the private field while writing no construction expression a scan can find, and that was demonstrated against real evidence during B1. A named-field struct has no constructor function item, so a struct literal — syntax, which cannot be bound, aliased, passed or returned — is the only way to produce one.
+
+**One checked constructor per value.** Each value has exactly one inherent validating constructor and no public unchecked path, no `Default`, no `Deref`, no mutable backing access and no cross-kind conversion. String-backed values use `parse(value: impl Into<String>) -> Result<Self, SessionValueError>`, matching `platform-identity/v0` §4. Integer-backed and aggregate values use the exact constructor named with them below.
+
+**Serde delegates rather than re-implements.** No B2 value implements a hand-written `Visitor`, a `visit_*` method or `deserialize_any`. Each `Deserialize` deserializes the canonical primitive once through that primitive's own implementation and hands the result to the same checked constructor, so whichever entry point a deserializer chooses there is exactly one construction path. Aggregate structs carry `#[serde(deny_unknown_fields)]`; enums carry `#[serde(rename_all = "snake_case")]`.
+
+**Errors follow the merged B1 shape.** `SessionValueError` mirrors `IdentityValueError`: a small `Copy` value naming the Rust value kind that rejected the input plus one `SessionValueErrorKind`, with no `source`, no rejected-input field and no input-derived rendering. §9 names the decision/evolution taxonomy separately.
+
+This section states what B2 inherits. It does not restate B1's construction-site, function-body, sweep and lexer closure; §11.2 states exactly how much of that apparatus B2 carries and why the difference is deliberate.
 
 ### 2.1 Time and duration
 
 `SessionInstant` is a non-negative `u64` count of Unix-epoch milliseconds. The domain never reads wall-clock time itself; a command carries one adapter-observed instant. Every addition is checked and overflow fails before an event is produced.
 
+Every `u64` denotes an instant, so its constructor is total and is honestly declared so rather than returning a `Result` that cannot fail:
+
+```text
+SessionInstant::from_unix_millis(millis: u64) -> Self
+SessionInstant::as_unix_millis(&self) -> u64
+```
+
+Totality here is a statement about representation, not about admissibility: §3 still rejects an instant that is stale, non-monotone or arithmetically out of range for the transition being decided.
+
 `SessionDuration` is a non-zero `u64` millisecond duration. Session-policy/config loading owns deployment ceilings; the pure kernel still rejects zero and arithmetic overflow. A duration is not a retry count, token lifetime or UI timeout.
+
+```text
+SessionDuration::from_millis(millis: u64) -> Result<Self, SessionValueError>
+SessionDuration::as_millis(&self) -> u64
+```
 
 Time is compared only as an integer ordering. No timezone, locale, leap-second or formatted timestamp enters the state machine.
 
+Both values serialize as one `u64`. `SessionDuration` deserialization delegates to `from_millis`, so a zero cannot arrive through Serde; `SessionInstant` deserialization delegates to `from_unix_millis`, which admits every `u64` by construction.
+
 ### 2.2 Adapter and credential-evidence provenance
 
-`AuthAdapterId` is a bounded opaque adapter identity. Its accepted spelling uses the same 1–128-byte ASCII grammar as `platform-identity/v0`; the spelling carries no trust level or provider semantics.
+`AuthAdapterId` is a bounded opaque adapter identity. The spelling carries no trust level, provider semantics or authorization result. Its accepted UTF-8 bytes are:
 
-`CredentialEvidenceDigest` is exactly lowercase `sha256:<64 hex>`. It fingerprints already-admitted evidence for replay/audit correlation; it is not a credential, bearer token, password hash, refresh token or authorization result.
+```regex
+^[A-Za-z0-9](?:[-A-Za-z0-9._:]{0,126}[A-Za-z0-9])?$
+```
+
+**That grammar is owned by this contract, not borrowed from `platform-identity/v0`.** It is deliberately byte-identical to `platform-identity/v0` §3 so that an operator reads one identifier shape across `M00`, but the agreement is a recorded design choice, not a derivation: neither document is authority for the other, neither is obliged to follow the other if one changes, and each is bound to its own implementation by its own carriers. `platform-identity/v0` §4 is explicit that agreement among mutable carriers is not evidence; a claim here that B2 "uses B1's grammar" would be exactly such an unbound claim, because nothing would compare them. Stating the bytes here instead gives B2's grammar a root of its own.
+
+Consequently `AuthAdapterId` is not one of the six `platform-identity/v0` kinds, does not widen them, and must not be converted to or from one. An operator who wants the two grammars to stay equal changes both documents, and the change is visible as two changes.
+
+`CredentialEvidenceDigest` is exactly lowercase `sha256:` followed by 64 lowercase hexadecimal digits:
+
+```regex
+^sha256:[0-9a-f]{64}$
+```
+
+Uppercase hexadecimal, a bare 64-character digest with no prefix, another algorithm prefix and any other length are rejected; there is no normalization, lower-casing or prefix-insertion path. It fingerprints already-admitted evidence for replay/audit correlation; it is not a credential, bearer token, password hash, refresh token or authorization result, and B2 never computes one — see §11.
 
 `SessionCredentialEvidence` contains exactly:
 
@@ -374,31 +430,54 @@ A duplicate event sequence is an error, not an apply-time no-op. B4's journal ma
 
 ## 9. Typed failures and diagnostic safety
 
-The domain distinguishes at least:
+There are exactly two taxonomies, split along §7's own precedence: value construction is rejected **before** decision, so a shape failure cannot reach the state machine and the state machine carries no shape variant.
+
+### 9.1 Construction — `SessionValueError`
+
+`SessionValueError` mirrors `IdentityValueError`: a small `Copy` value carrying exactly the static Rust value-kind name that rejected the input and one `SessionValueErrorKind`, with private fields, exactly two read-only accessors `value_kind()` and `kind()`, and no `source`. `SessionValueErrorKind` is the public enum owning exactly:
 
 ```text
-InvalidCredentialEvidence
+Empty
+TooLong { max_bytes: usize }
+InvalidStart
+InvalidCharacter { byte_index: usize }
+InvalidEnd
+MalformedDigest
+ZeroDuration
+CredentialWindowNotAfterAuthentication
+```
+
+The first five apply to `AuthAdapterId` under §2.2's grammar, in `platform-identity/v0` §5's precedence — empty, over-length, invalid first byte, first invalid interior byte scanned left to right, invalid final byte. `MalformedDigest` is the single, payload-free rejection for `CredentialEvidenceDigest`: the value has one fixed shape, so a positional index would describe secret-derived text without adding a usable distinction. `ZeroDuration` rejects a zero `SessionDuration`. `CredentialWindowNotAfterAuthentication` rejects `SessionCredentialEvidence` whose `credential_not_after` is present and not strictly later than `authenticated_at`.
+
+### 9.2 Decision and evolution — `SessionDomainError`
+
+`SessionDomainError` is a `Copy` enum owning exactly:
+
+```text
 CredentialEvidenceExpired
-InvalidSessionPolicy
 InvalidTimeOrder
 DeadlineOverflow
 SessionNotFound
 SessionAlreadyExists
 SessionIdMismatch
-RevisionMismatch { expected, actual }
+RevisionMismatch { expected: u64, actual: u64 }
 RevisionOverflow
-TerminalSession { status }
+TerminalSession { status: SessionStatus }
 NonMonotoneTime
 SessionNotYetExpired
 NoEffectiveRefresh
-EventSequenceMismatch { expected, actual }
+EventSequenceMismatch { expected: u64, actual: u64 }
 IllegalEventForState
 EventDerivedFieldMismatch { field: EventDerivedField }
 ```
 
+The draft revision of this contract also listed `InvalidCredentialEvidence` and `InvalidSessionPolicy` here. They are deliberately **not** domain variants: `SessionCredentialEvidence` and `SessionPolicy` have validating constructors and validating Serde, so a malformed one cannot be built, cannot be deserialized and therefore cannot reach `decide` or `evolve` — including from a persisted event, whose fields are already those types. Retaining an unreachable variant would be a permanent dead arm that no adversarial fixture could exercise, and §13 requires every fixture to affect an executable assertion. The corresponding real failures are `SessionValueErrorKind::MalformedDigest`, `ZeroDuration` and `CredentialWindowNotAfterAuthentication` in §9.1.
+
 `EventDerivedField` is a closed non-secret enum containing exactly `RefreshEffectiveExpiresAt`, `ExpiredAt` and `ExpiryCause`. The error does not carry arbitrary field names, source payloads or rendered event values.
 
-`CredentialEvidenceExpired` has no credential/evidence payload. `InvalidTimeOrder` covers `opened_at < authenticated_at`; `DeadlineOverflow` covers checked deadline arithmetic. Errors are small typed values. They may report a failure kind, safe expected/actual revision and terminal status. They must not retain or render:
+`CredentialEvidenceExpired` has no credential/evidence payload. `InvalidTimeOrder` covers `opened_at < authenticated_at`; `DeadlineOverflow` covers checked deadline arithmetic. §3's further open condition — that the derived absolute and idle deadlines be strictly later than `opened_at` — is an invariant that both `decide` and `evolve` assert, not a separate reachable variant: with `SessionDuration` non-zero by construction and every addition checked, the only way to fail it is the overflow `DeadlineOverflow` already names. It is stated as an invariant so evolution has an explicit postcondition to re-derive rather than trust, not so that a dead error variant exists.
+
+Errors are small typed values. They may report a failure kind, safe expected/actual revision and terminal status. They must not retain or render:
 
 - credential/token/cookie/password text;
 - a provider subject or arbitrary adapter payload;
@@ -415,7 +494,9 @@ The exact B2 Serde surface is:
 - nominal scalar values, `SessionCredentialEvidence`, `SessionPolicy`, commands and events support validating serialization/deserialization needed by command handling and event replay;
 - deserialization delegates to the same decision-independent value validators; unknown and missing fields fail closed;
 - `SessionSnapshot` and `SessionStatus` are serialization-only read models: they implement no public `Deserialize`, `Default` or direct constructor and can arise only from validated `SessionOpened` evolution plus legal replay;
-- domain errors need not implement wire/persistence Serde; B4 owns stable external error/event projections.
+- `SessionValueError`, `SessionValueErrorKind`, `SessionDomainError` and `EventDerivedField` implement neither `Serialize` nor `Deserialize`; B4 owns stable external error/event projections.
+
+Mechanically that means `#[serde(deny_unknown_fields)]` on every aggregate struct, `#[serde(rename_all = "snake_case")]` on every enum, and no hand-written visitor anywhere, exactly as §2.0 requires. A derived unchecked field decode on an authority-bearing value is forbidden: `deny_unknown_fields` closes the unknown-field half, and delegation to the checked constructor closes the invalid-value half. Neither closes the other, so both are required.
 
 Serde proves only shape and invariant validity, never credential authenticity or caller admission. B3/B4/B5 composition must not expose `OpenSession` deserialization as an untrusted transport endpoint. Derived unchecked decoding is forbidden on every authority-bearing value.
 
@@ -453,11 +534,54 @@ It must not import or expose:
 - M10, Market, Agent, Plugin, provider or MCP types;
 - raw secret storage or logging behavior.
 
-A source-level checker eventually binds these negative-space claims to the implementation. The contract itself does not claim those checker carriers exist yet.
+Two of those are concrete in-repository names rather than categories, and are called out because `platform-core` already depends on them for M20 work: the session module must not import `ustc_agent_tool_protocol` — an M40/M20-facing crate, and the exact class §5 of `module-boundaries.md` keeps out of `M00` — and must not import `semver`, which carries package-version semantics owned by M20. Adding either import, or any new entry to `crates/platform-core/Cargo.toml`, is out of scope for B2; the batch introduces **no** manifest dependency change.
 
-## 12. Proposed acceptance coverage
+`B2` also computes no digest. `CredentialEvidenceDigest` is validated for shape and stored; nothing in the module hashes, derives or verifies it. The "lightweight digest-shape validation" admitted above is byte-class validation of an already-supplied string, not a cryptographic dependency, and no digest crate is added.
 
-These cases remain catalog-only while this contract is draft. Exact active `matrix.tsv` commands and test names must be reviewed before implementation begins.
+### 11.1 Required carrier extensions in the frozen `platform-core` surface
+
+`platform-identity/v0` §4 freezes `platform-core`'s compiled surface by **total accounting**, not by pattern search: the crate's file inventory, each governed source's `mod`/`use`/`type`/`extern` items in source order with their attribute envelopes, each source's `impl` self types, macro definitions, macro invocation names, derive list and manifest key sets are each compared against an exact allowlist, and *an added item fails exactly as a removed one does*. Adding a module is therefore not a silent act — which is the intended design, and also means B2 cannot begin until the extension is made deliberately.
+
+Adding the session module is admitted drift of that surface, and B2's first implementation commit must extend, in `scripts/check_repo_contracts.py` and its mirroring Rust guard together:
+
+- the governed source-file inventory, with `src/session.rs` and `tests/platform_session.rs`;
+- the admitted `mod` declarations, with `session` under `lib.rs` and none under `session.rs`;
+- the admitted item declarations, with `pub mod session;` in `lib.rs` and the session module's own complete `use` list — including the non-renaming `use crate::identity::{SessionId, TenantId, UserId};` of §2.0;
+- the admitted sibling `impl` self types, macro definitions, macro invocation names and derive list for `session.rs`;
+- the admitted test-file items and attribute envelope for `tests/platform_session.rs`.
+
+This is drift of the frozen **surface registration**, not of `platform-identity/v0` itself. It changes no accepted byte grammar, maximum length, error precedence, Serde shape or nominal kind set, so by `platform-identity/v0` §9 it is not a version change of that contract — the same reasoning that document already applies in its §5 to the `IdentityValueError` representation, and the same cost it already accepts in its §4 for `invocation.rs`'s import list. One sentence of `platform-identity/v0` §4 is amended by acceptance of this contract, from admitting a single cross-file identity binding to admitting an enumerated set of them; the substance of the rule — no renaming, and complete accounting of every governed source — is unchanged, and B2 receives no re-export.
+
+If a future reviewer prefers a separate crate to this extension, that is a `platform-session/v0` change under §16 and a `module-work-policy/v1.3` §5 extraction decision, not an implementation choice available at commit time.
+
+### 11.2 How much of B1's closure B2 carries, and why less
+
+`platform-identity/v0` §4 closes its grammar against a co-mutating adversary: contract-rooted regex parsing, construction-site and spelling accounting, frozen function bodies, effective-use elimination for the length bound, guard-as-one-structural-unit, control-transfer prohibitions, name-resolution shadowing rules, a runtime sweep whose carriers are pinned as values, and a shared lexical corpus differential between two independent implementations. That apparatus exists because those six values are the repository's root identity authority: every tenant, user, session, request, command and correlation reference in every module is whatever that grammar admits.
+
+B2 carries the **root**, not the whole apparatus. Required: §2.2's two grammars exist as fenced normative carriers in this document; the implementation's admitted byte classes, length bound and digest shape are extracted from source and cross-checked against them by the repository checker; the acceptance rows in §12 each run that checker before their Rust leg, because a Rust test cannot prove it ran; and the negative-space and API proofs in §10 and §13 are executable.
+
+Deliberately **not** required: frozen per-function body fingerprints, construction-expression counting, the effective-use elimination chain, statement-position and shadowing rules, and a second lexer with a corpus differential.
+
+The reason is a difference in blast radius, stated rather than implied. A defect in B1's grammar mints or admits identities repository-wide. A defect in `AuthAdapterId`'s grammar admits a malformed adapter label into one session's provenance record; it authenticates nothing, authorizes nothing, mints no identity, and cannot widen a `platform-identity/v0` value, because §2.0 gives B2 no path to construct one. The session values whose failure *would* matter — revision algebra, deadline algebra, terminal precedence, replay equality — are closed by executable adversarial fixtures under §13 rather than by source-shape accounting, because they are behavioural properties that a fixture can actually falsify.
+
+This is a stated scope limit, not a claim of equivalent rigor. A later batch that raises `AuthAdapterId` to an authority-bearing value must revisit it.
+
+## 12. Acceptance coverage
+
+`AUTH-017`, `AUTH-018`, `AUTH-019` and `AUTH-020` are active rows in [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv) with status `planned`, gate `pr`, and the exact future bindings below. They are simultaneously retained in the long-horizon catalog [`platform-baseline.md`](../acceptance/platform-baseline.md), which is a catalog and confers no currency by itself.
+
+`planned` is a non-pass state. No row here is `implemented`, no named test exists, and this section is the specification those tests must satisfy — not a report that they do.
+
+| Case | Binding |
+|---|---|
+| `AUTH-017` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_open_pins_immutable_scope_and_checked_deadlines -- --exact` |
+| `AUTH-018` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_lifecycle_precedence_is_deterministic_and_terminal -- --exact` |
+| `AUTH-019` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_revision_and_replay_are_exact_and_fail_closed -- --exact` |
+| `AUTH-020` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_domain_has_no_credential_or_adapter_surface -- --exact && cargo test --locked -p ustc-campus-agent-core --doc session` |
+
+Each binding runs the repository checker before its Rust leg for the reason `platform-identity/v0` §4 gives: redirecting a `[[test]]` target or renaming a bound function makes `--exact` match nothing, which cargo reports as `running 0 tests` at exit zero, and a guard written inside the suite is exactly what such a change replaces. Only an out-of-band carrier detects that, so the checker is part of each binding rather than a courtesy check.
+
+`AUTH-020`'s `--doc` leg is covered by CI's separate unconditional `cargo test --locked --all-features --doc` step, since `--all-targets` does not run doctests.
 
 ### `AUTH-017` — immutable open scope and deadline algebra
 
@@ -477,9 +601,9 @@ Prove that commands/events/errors/Serde/debug paths never retain or echo raw cre
 
 Existing catalog `AUTH-008` remains the later demo/integration assertion for idle/absolute expiry and logout invalidation. Existing `AUTH-010` remains the broader manual-security assertion that the platform never stores/logs raw USTC passwords or tokens. B2 unit evidence supports but does not complete either case.
 
-## 13. Required adversarial fixtures before acceptance
+## 13. Required adversarial fixtures
 
-The accepted contract/implementation gate must bind at least:
+Acceptance of this contract does not bind these; the implementation does. `AUTH-017..020` may be promoted to `implemented` only once every case below is an executable assertion under §12's named tests. The list is a floor, not a ceiling:
 
 - open at, before and after credential `not_after`;
 - zero duration and checked-add overflow;
@@ -521,19 +645,29 @@ This contract does not define or claim:
 
 These remain owned by later M00 batches, M10, M90 or release/security integration as named in their contracts.
 
-## 15. Draft-to-accepted gate
+## 15. Acceptance record and implementation-entry gate
 
-This exact draft revision MUST NOT merge. Passing draft-local documentation/checker gates does not waive the required post-B1 rebase, authority reconciliation, active planned bindings and final exact-head review.
+The eight conditions this contract carried while it was a draft are now discharged, in the same order they were stated:
 
-Before this draft may become accepted or authorize Rust implementation:
+1. `M00-B1` is merged at `c347e689aa23ee777b95e0989e633a9d91041161` and its public surface is read back in §2.0;
+2. the M00 blueprint, module map, roadmap and coverage matrix project B2 alongside — not over — B1's implemented evidence;
+3. `AUTH-017..020` are in the long-horizon catalog and are active `planned` matrix rows with the exact future bindings in §12;
+4. the repository checker registers this contract as a fail-closed key file and cross-validates §12 against the active matrix, so a stale or missing projection carrier fails the run;
+5. transition, deadline and error precedence received independent blocker review, and accepted findings are folded into this revision;
+6. public type names and Serde shapes are frozen in §2 against the merged B1 API;
+7. no current-status carrier claims B2 implementation evidence — every affected carrier says `planned`, and `M00` stays `partial-evidence`;
+8. documentation and checker gates pass on the exact final head.
 
-1. B1 canonical identity implementation is merged and its exact public surface is read back;
-2. the M00 blueprint and roadmap project B2 without overwriting B1 evidence;
-3. `AUTH-017..020` exist in the long-horizon catalog and active matrix as `planned` with exact non-vacuous future bindings;
-4. the repository checker registers this contract and rejects missing/stale projection carriers;
-5. transition/deadline/error precedence receives independent blocker review;
-6. public type names and Serde shapes are frozen against the merged B1 API;
-7. no current-status carrier claims B2 implementation evidence;
-8. docs/checker gates pass on the exact final head.
+This contract is therefore accepted, and accepted is the *entry* condition for implementation, not evidence of it. What acceptance authorizes is exactly one thing: `M00-B2 session-domain` may be implemented against this specification, under `module-work-policy/v1.3` §3 Path B, on its own branch, with its own review and its own exact-head CI.
 
-Until all eight are true, this file is design evidence only and MUST NOT be cited as implementation authorization or module readiness.
+What acceptance does **not** establish:
+
+- no `AUTH-017..020` row may be promoted from documentation alone; each is promoted only when its named test exists and every assertion in §§3–13 that it covers is executable;
+- `M00` does not advance past `partial-evidence`, and neither `StandaloneReady` nor any later readiness state is reachable from this batch — `module-work-policy/v1.3` §7 owns that gate and B3, B4 and B5 are unstarted;
+- no session, actor, request-context, policy-reference, port, adapter, journal or M10 admission behavior becomes operational, and none of it may be described as such.
+
+## 16. Change rule
+
+Changing a public value name, field set, transition table entry, precedence order, deadline formula, error variant set or Serde shape frozen above changes `platform-session/v0`. Such a change requires an owning-contract update, acceptance-row and fixture review, and — once implementation exists — implementation and consumer evidence on the same revision.
+
+Adding request-context, policy-reference, port, control-evidence, credential-verification or transport semantics is a later owning contract, not an incidental extension of these values. §14 lists what those later contracts own.

@@ -3,14 +3,14 @@
 ## Metadata
 
 - `Module ID`: `M00`
-- `Status`: Accepted blueprint; `M00-B1 identity-types` implemented, remaining batches planned
+- `Status`: Accepted blueprint; `M00-B1 identity-types` implemented, `M00-B2 session-domain` contract accepted and unimplemented, remaining batches planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m00-platform-control/v1`
-- `Last Review`: `2026-07-26`
+- `Last Review`: `2026-07-28`
 - `Composition`: `apps/ustc-agentd`
-- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; future cohesive modules under `crates/platform-core/`; adapter implementations under `M90`
-- `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md) for `M00-B1`; [`module-boundaries.md`](../../contracts/module-boundaries.md) for later cross-module actor/context values
-- `Acceptance`: implemented `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015`, `AUTH-016`; catalog-only `AUTH-013` and later session/admission cases remain deferred
+- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`, which does not exist yet; future cohesive modules under `crates/platform-core/`; adapter implementations under `M90`
+- `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md) for `M00-B1`; [`platform-session/v0`](../../contracts/platform-session.md) for `M00-B2`; [`module-boundaries.md`](../../contracts/module-boundaries.md) for later cross-module actor/context values
+- `Acceptance`: implemented `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015`, `AUTH-016`; active `planned` `AUTH-017`, `AUTH-018`, `AUTH-019`, `AUTH-020`; catalog-only `AUTH-013` and later admission cases remain deferred
 
 ## 1. Purpose
 
@@ -158,7 +158,7 @@ The hot path is request-context admission: session lookup, expiry/revoke check, 
 ## 13. Small-module decomposition
 
 1. `identity-types` — the six bounded tenant/user/session/request/command/correlation IDs and their shared validation error.
-2. `session-domain` — legal session transitions.
+2. `session-domain` — legal session transitions, frozen by [`platform-session/v0`](../../contracts/platform-session.md).
 3. `request-context` — immutable request/command/causation envelope.
 4. `policy-reference` — pinned platform policy identity.
 5. `session-port` — repository/clock/secret-ref interfaces and fakes.
@@ -174,8 +174,18 @@ Each small module receives a separate reviewable commit with unit tests before t
 
 `M00-B1` deliberately does not create an authenticated actor, session lifecycle, request context, policy decision, ID generator or storage port. Those claims remain blocked behind later batches. `AUTH-013` stays catalog-only until request-context work.
 
-`M00-B1` is implemented in `crates/platform-core/src/identity.rs`, with evidence in `crates/platform-core/tests/platform_identity.rs` and rustdoc `compile_fail` API proofs; `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` pass. Invocation authority now consumes the M00 tenant/user definitions. That is bounded partial evidence for one small module: `M00-B2` through `M00-B5` are planned, and the module remains short of the §15 exit gate, so it is neither `StandaloneReady` nor accepted.
+`M00-B1` is implemented in `crates/platform-core/src/identity.rs`, with evidence in `crates/platform-core/tests/platform_identity.rs` and rustdoc `compile_fail` API proofs; `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` pass. Invocation authority now consumes the M00 tenant/user definitions. That is bounded partial evidence for one small module: `M00-B3` through `M00-B5` are planned, `M00-B2` has an accepted contract and no implementation, and the module remains short of the §16 exit gate, so it is neither `StandaloneReady` nor accepted.
 
-## 15. Exit gate
+## 15. Second approved batch — `M00-B2 session-domain`
+
+[`platform-session/v0`](../../contracts/platform-session.md) is the exact contract for the second small module. It freezes the pure, replayable lifecycle kernel for one session: immutable open scope, resolved idle/absolute/credential deadline algebra, the open/refresh/expire/revoke transition table, expected-revision event ordering, deterministic decision/evolution/replay, typed non-echoing failures, and the credential and dependency negative space.
+
+The contract is **accepted and unimplemented**. `crates/platform-core/src/session.rs` and `crates/platform-core/tests/platform_session.rs` do not exist; `AUTH-017`, `AUTH-018`, `AUTH-019` and `AUTH-020` are active rows at status `planned` with the exact future bindings in that contract's §12. `planned` is a non-pass state, so nothing in this section is evidence of behavior.
+
+`M00-B2` deliberately does not create a clock, repository, journal, database, secret resolver, ID generator, authenticated actor, request context, policy reference, session port, control-evidence projection, cookie/token/auth adapter or `M10` integration. It authenticates no credential and persists nothing: `expected_revision` is validated as optimistic-concurrency *intent*, and the compare-and-append that would make it durable belongs to `M00-B4`. Those claims stay blocked behind their own batches and contracts.
+
+Two boundary facts are worth stating here rather than only in the contract. The session module imports the canonical `SessionId`, `TenantId` and `UserId` without renaming and re-exports none of them, so it adds no externally reachable API to a `platform-identity/v0` kind and mints no seventh kind. Adding it to `crates/platform-core/` extends the frozen surface `platform-identity/v0` §4 accounts for; that extension is deliberate registered drift, listed in `platform-session/v0` §11.1, and it changes no accepted grammar, bound, precedence, Serde shape or kind set.
+
+## 16. Exit gate
 
 `M00` is integration-ready when standalone tests prove tenant/session scope, expire/revoke, duplicate/conflicting command behavior, redaction and deterministic replay through fake ports. It is accepted only after `M10` proves one admitted and one denied request without invoking a downstream fake on denial.

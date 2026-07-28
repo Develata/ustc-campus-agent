@@ -4862,5 +4862,249 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
         )
 
 
+class RepositoryCheckerRegistrationTests(unittest.TestCase):
+    """Pin the exact call list of `main()`.
+
+    Each `check_*` function that guards itself does so by asserting that `main()` still
+    calls it — which is vacuous, because a guard inside a function that is no longer
+    called cannot run. Deleting one line from `main()` therefore silently disables a whole
+    check and every self-guard inside it. That residue is closed here rather than per
+    check: this test runs from the always-required `unittest discover` CI step, outside the
+    checker it inspects, and fails on an added, removed or reordered call.
+
+    The cost is one mirrored line when a check is registered. That is the same cost every
+    other frozen surface in this repository already carries.
+    """
+
+    EXPECTED_MAIN_CALLS = (
+        "check_key_files_present_and_nonempty(issues)",
+        "check_docs_topology(issues)",
+        "check_no_retired_docs_references(issues)",
+        "check_markdown_links(issues)",
+        "check_no_obvious_secrets(issues)",
+        "check_market(issues)",
+        "check_course_fixture(issues)",
+        "check_invocation_fixtures(issues)",
+        "check_agent_plugin_dependency_direction(issues)",
+        "check_acceptance_matrix(issues)",
+        "check_acceptance_catalog(issues)",
+        "check_rust_doctest_gate(issues)",
+        "check_platform_identity_grammar_authority(issues)",
+        "check_platform_identity_implementation(issues)",
+        "check_platform_session_contract(issues)",
+        "check_module_registry(issues)",
+        "check_s0_architecture_review(issues)",
+    )
+
+    def test_main_invokes_exactly_the_registered_checks(self) -> None:
+        source = CHECKER_PATH.read_text(encoding="utf-8")
+        body = source.split("\ndef main() -> int:", 1)
+        self.assertEqual(len(body), 2, "checker has no main() definition")
+        actual = tuple(
+            line.strip()
+            for line in body[1].splitlines()
+            if line.startswith("    check_") and line.strip().endswith("(issues)")
+        )
+        self.assertEqual(actual, self.EXPECTED_MAIN_CALLS)
+
+
+class PlatformSessionContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        (self.root / "scripts").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(CHECKER_PATH, self.root / "scripts/check_repo_contracts.py")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def check_session(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_platform_session_contract(issues)
+        return issues
+
+    def assert_rejected(self, issues: list[str], fragment: str) -> None:
+        self.assertTrue(
+            any(fragment in issue for issue in issues),
+            f"expected an issue containing {fragment!r}, got {issues!r}",
+        )
+
+    def rewrite(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertIn(old, text)
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def edit_matrix_cell(self, case_id: str, column: int, value: str) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        rows = path.read_text(encoding="utf-8").splitlines()
+        found = False
+        for index, row in enumerate(rows):
+            if row.startswith(f"{case_id}\t"):
+                cells = row.split("\t")
+                cells[column] = value
+                rows[index] = "\t".join(cells)
+                found = True
+        self.assertTrue(found, f"{case_id} not present in matrix.tsv")
+        path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    def write_implementation_carriers(self, source: bool, test: bool) -> None:
+        source_path = self.root / checker.PLATFORM_SESSION_SOURCE
+        test_path = self.root / checker.PLATFORM_SESSION_TEST
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        test_path.parent.mkdir(parents=True, exist_ok=True)
+        if source:
+            source_path.write_text("// placeholder\n", encoding="utf-8")
+        if test:
+            test_path.write_text("// placeholder\n", encoding="utf-8")
+
+    def test_current_platform_session_contract_passes(self) -> None:
+        self.assertEqual(self.check_session(), [])
+
+    def test_all_four_cases_are_planned_and_unimplemented_today(self) -> None:
+        rows = (self.root / "docs/acceptance/matrix.tsv").read_text(encoding="utf-8")
+        for case_id in checker.PLATFORM_SESSION_CASES:
+            row = next(
+                line for line in rows.splitlines() if line.startswith(f"{case_id}\t")
+            )
+            self.assertEqual(row.split("\t")[5], "planned")
+        self.assertFalse((REPO_ROOT / checker.PLATFORM_SESSION_SOURCE).exists())
+        self.assertFalse((REPO_ROOT / checker.PLATFORM_SESSION_TEST).exists())
+
+    def test_missing_contract_fails_closed(self) -> None:
+        (self.root / checker.PLATFORM_SESSION_CONTRACT).unlink()
+        self.assert_rejected(
+            self.check_session(),
+            "platform session contract missing: docs/contracts/platform-session.md",
+        )
+
+    def test_contract_without_primary_code_carrier_fails_closed(self) -> None:
+        # Every occurrence, not the first: the path is named in several sections, and a
+        # rule that one surviving mention satisfies is not a rule about the contract.
+        path = self.root / checker.PLATFORM_SESSION_CONTRACT
+        text = path.read_text(encoding="utf-8")
+        self.assertIn(checker.PLATFORM_SESSION_SOURCE, text)
+        path.write_text(
+            text.replace(
+                checker.PLATFORM_SESSION_SOURCE, "crates/platform-core/src/elsewhere.rs"
+            ),
+            encoding="utf-8",
+        )
+        self.assert_rejected(
+            self.check_session(), "platform session contract carrier missing"
+        )
+
+    def test_contract_binding_table_case_set_drift_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_CONTRACT,
+            "| `AUTH-020` | `python3",
+            "| `AUTH-021` | `python3",
+        )
+        self.assert_rejected(
+            self.check_session(), "platform session contract binding table drift"
+        )
+
+    def test_matrix_binding_that_leaves_the_contract_table_fails_closed(self) -> None:
+        self.edit_matrix_cell(
+            "AUTH-017",
+            3,
+            "python3 scripts/check_repo_contracts.py && cargo test --locked "
+            "-p ustc-campus-agent-core --test platform_session something_else -- --exact",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session acceptance binding drift in AUTH-017",
+        )
+
+    def test_binding_without_the_repository_checker_leg_fails_closed(self) -> None:
+        stripped = (
+            "cargo test --locked -p ustc-campus-agent-core --test platform_session "
+            "session_open_pins_immutable_scope_and_checked_deadlines -- --exact"
+        )
+        self.edit_matrix_cell("AUTH-017", 3, stripped)
+        self.rewrite(
+            checker.PLATFORM_SESSION_CONTRACT,
+            f"`{checker.PLATFORM_SESSION_BINDING_PREFIX}{stripped}`",
+            f"`{stripped}`",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "must run the repository checker before its Rust leg",
+        )
+
+    def test_domain_drift_fails_closed(self) -> None:
+        self.edit_matrix_cell("AUTH-018", 1, "platform-identity")
+        self.assert_rejected(
+            self.check_session(), "platform session acceptance domain drift in AUTH-018"
+        )
+
+    def test_gate_drift_fails_closed(self) -> None:
+        self.edit_matrix_cell("AUTH-020", 4, "release")
+        self.assert_rejected(
+            self.check_session(), "platform session acceptance gate drift in AUTH-020"
+        )
+
+    def test_assertion_drift_from_the_catalog_fails_closed(self) -> None:
+        self.edit_matrix_cell("AUTH-019", 2, "something the catalog never said")
+        self.assert_rejected(
+            self.check_session(),
+            "assertion drift between matrix and catalog in AUTH-019",
+        )
+
+    def test_missing_matrix_row_fails_closed(self) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        rows = path.read_text(encoding="utf-8").splitlines()
+        path.write_text(
+            "\n".join(row for row in rows if not row.startswith("AUTH-019\t")) + "\n",
+            encoding="utf-8",
+        )
+        self.assert_rejected(
+            self.check_session(), "platform session acceptance row missing: AUTH-019"
+        )
+
+    def test_implemented_without_any_carrier_fails_closed(self) -> None:
+        self.edit_matrix_cell("AUTH-017", 5, "implemented")
+        self.assert_rejected(
+            self.check_session(),
+            "platform session acceptance status in AUTH-017 claims 'implemented'",
+        )
+
+    def test_implemented_with_only_the_source_carrier_fails_closed(self) -> None:
+        self.write_implementation_carriers(source=True, test=False)
+        self.edit_matrix_cell("AUTH-017", 5, "implemented")
+        self.assert_rejected(
+            self.check_session(),
+            "platform session acceptance status in AUTH-017 claims 'implemented'",
+        )
+
+    def test_implemented_with_only_the_test_carrier_fails_closed(self) -> None:
+        self.write_implementation_carriers(source=False, test=True)
+        self.edit_matrix_cell("AUTH-018", 5, "implemented")
+        self.assert_rejected(
+            self.check_session(),
+            "platform session acceptance status in AUTH-018 claims 'implemented'",
+        )
+
+    def test_implemented_with_both_carriers_is_admitted(self) -> None:
+        self.write_implementation_carriers(source=True, test=True)
+        self.edit_matrix_cell("AUTH-017", 5, "implemented")
+        self.assertEqual(self.check_session(), [])
+
+    def test_checker_not_invoked_from_main_fails_closed(self) -> None:
+        self.rewrite(
+            "scripts/check_repo_contracts.py",
+            "    check_platform_session_contract(issues)\n",
+            "    # check_platform_session_contract(issues)\n",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "check_platform_session_contract must be invoked from repository main()",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
