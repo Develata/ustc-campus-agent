@@ -53,6 +53,8 @@ spelled without renaming. `platform-identity/v0` §4 requires that every governe
 
 **Serde delegates rather than re-implements.** No B2 value implements a hand-written `Visitor`, a `visit_*` method or `deserialize_any`. Each `Deserialize` deserializes the canonical primitive once through that primitive's own implementation and hands the result to the same checked constructor, so whichever entry point a deserializer chooses there is exactly one construction path. Aggregate structs carry `#[serde(deny_unknown_fields)]`; enums carry `#[serde(rename_all = "snake_case")]`.
 
+**An aggregate deserializes through its constructor, not field by field.** `deny_unknown_fields` plus per-field delegation validates every field and still admits a struct that no constructor would have built, because a cross-field invariant belongs to no field. Any aggregate carrying such an invariant therefore decodes a private shadow struct and hands it to the named constructor; the derived field-by-field decode is insufficient and is forbidden for those values. This is load-bearing rather than stylistic: §9.2 removes two error variants on the argument that a malformed evidence or policy cannot reach `decide` or `evolve`, and that argument is only true if every deserialization path routes through the constructor that enforces the invariant.
+
 **Errors follow the merged B1 shape.** `SessionValueError` mirrors `IdentityValueError`: a small `Copy` value naming the Rust value kind that rejected the input plus one `SessionValueErrorKind`, with no `source`, no rejected-input field and no input-derived rendering. §9 names the decision/evolution taxonomy separately.
 
 This section states what B2 inherits. It does not restate B1's construction-site, function-body, sweep and lexer closure; §11.2 states exactly how much of that apparatus B2 carries and why the difference is deliberate.
@@ -89,6 +91,15 @@ Both values serialize as one `u64`. `SessionDuration` deserialization delegates 
 ^[A-Za-z0-9](?:[-A-Za-z0-9._:]{0,126}[A-Za-z0-9])?$
 ```
 
+Normative consequences, each an anchored line the implementation is cross-checked against:
+
+1. encoded length is `1..=128` bytes;
+2. the first and last byte are ASCII alphanumeric;
+3. interior bytes are ASCII alphanumeric or one of `.`, `_`, `:`, `-`;
+4. whitespace, control characters, non-ASCII text and every other punctuation byte are rejected;
+5. case is significant;
+6. no trimming, Unicode normalization, case folding, delimiter rewriting or alternate spelling occurs.
+
 **That grammar is owned by this contract, not borrowed from `platform-identity/v0`.** It is deliberately byte-identical to `platform-identity/v0` §3 so that an operator reads one identifier shape across `M00`, but the agreement is a recorded design choice, not a derivation: neither document is authority for the other, neither is obliged to follow the other if one changes, and each is bound to its own implementation by its own carriers. `platform-identity/v0` §4 is explicit that agreement among mutable carriers is not evidence; a claim here that B2 "uses B1's grammar" would be exactly such an unbound claim, because nothing would compare them. Stating the bytes here instead gives B2's grammar a root of its own.
 
 Consequently `AuthAdapterId` is not one of the six `platform-identity/v0` kinds, does not widen them, and must not be converted to or from one. An operator who wants the two grammars to stay equal changes both documents, and the change is visible as two changes.
@@ -101,6 +112,8 @@ Consequently `AuthAdapterId` is not one of the six `platform-identity/v0` kinds,
 
 Uppercase hexadecimal, a bare 64-character digest with no prefix, another algorithm prefix and any other length are rejected; there is no normalization, lower-casing or prefix-insertion path. It fingerprints already-admitted evidence for replay/audit correlation; it is not a credential, bearer token, password hash, refresh token or authorization result, and B2 never computes one — see §11.
 
+**The producer carries an obligation B2 cannot check, so it is stated normatively rather than assumed.** A `CredentialEvidenceDigest` MUST be a domain-separated, non-invertible fingerprint over adapter-side material that is not raw credential text. Computing it directly over a password, cookie, bearer token or other secret is forbidden. The reason is concrete: this value is pinned into an immutable event, retained in a serializable snapshot and preserved across replay, so a digest taken over a low-entropy campus password would be an unsalted, offline-attackable hash embedded permanently in audit evidence — which catalog `AUTH-010` exists to prevent. B2 receives the value and validates its shape only; it has no way to observe how it was produced. The obligation is therefore inherited by the authentication-adapter contract named in §14, and this paragraph is what that contract must satisfy.
+
 `SessionCredentialEvidence` contains exactly:
 
 ```text
@@ -111,6 +124,17 @@ evidence_digest:       CredentialEvidenceDigest
 authenticated_at:      SessionInstant
 credential_not_after:  Option<SessionInstant>
 ```
+
+Its single checked constructor is:
+
+```text
+SessionCredentialEvidence::new(
+    tenant_id, user_id, auth_adapter_id, evidence_digest,
+    authenticated_at, credential_not_after,
+) -> Result<Self, SessionValueError>
+```
+
+`Deserialize` decodes a private shadow struct and hands it to that constructor, per §2.0, because the temporal invariant below spans two fields and so belongs to none of them.
 
 Invariants:
 
@@ -136,7 +160,11 @@ idle_timeout:      SessionDuration
 absolute_timeout:  SessionDuration
 ```
 
+Its constructor is `SessionPolicy::new(idle_timeout, absolute_timeout) -> Self`. It is total: both fields are already non-zero by type and the two durations carry no relation to each other, so there is nothing left to reject.
+
 The values are resolved and pinned when the session opens. Refresh never reloads policy and never changes either duration. A later platform-policy version affects new sessions unless a separately accepted migration contract says otherwise.
+
+Deliberately, `idle_timeout` may equal or exceed `absolute_timeout`. Such a policy is well-formed and simply means the idle candidate never binds, so every refresh returns `NoEffectiveRefresh`. The same is true of any session whose effective deadline has already reached its absolute or credential cap. `NoEffectiveRefresh` is therefore an ordinary steady state, not a liveness failure, and a consumer must not treat it as one.
 
 ### 2.4 Session status and snapshot
 
@@ -183,6 +211,16 @@ revision:               u64
 All fields are private and read-only. Tenant, user, session, adapter, evidence digest, authentication time, credential deadline, policy durations and policy-absolute expiry are immutable after open. `revision` is the last applied event sequence and starts at `1` after `SessionOpened`.
 
 Adding, removing or reinterpreting a persisted/public snapshot field requires a versioned contract and acceptance update; implementations cannot append convenience or framework state to this snapshot.
+
+**`effective_expires_at` is not a validity predicate, and the snapshot exposes one so that no consumer has to invent it.** A revoked session keeps its `effective_expires_at` unchanged — §8 preserves it — so that field alone still reads as "not yet expired" while `status` says `Revoked`. The obvious consumer test `observed_at < effective_expires_at` is therefore correct for `Active`, correct for `Expired`, and **wrong exactly for `Revoked`**: it fails open on the logout/revocation path, which is the security-critical one catalog `AUTH-008` names. That is the worst shape of defect, because it passes casual testing.
+
+The one sanctioned validity question is therefore part of this contract:
+
+```text
+SessionSnapshot::admits_at(&self, observed_at: SessionInstant) -> bool
+```
+
+It returns `true` only when `status` is `Active` **and** `observed_at < effective_expires_at`. `M00-B3`'s request-context admission is the intended consumer; it asks this and does not recompute.
 
 The internal evidence digest is not part of a client-safe projection by default. B3/B4 define later projections explicitly rather than serializing the whole domain snapshot across module boundaries.
 
@@ -266,7 +304,9 @@ RevokeSession {
 }
 ```
 
-Command values have private fields and validating constructors/Serde. Unknown fields fail closed. No command carries a raw credential, arbitrary metadata map, downstream permission, UI state, database handle or framework session object.
+Command values have private fields and one checked constructor each — `OpenSession::new(...)`, `RefreshSession::new(...)`, `ExpireSession::new(...)`, `RevokeSession::new(...)` — returning `Result<Self, SessionValueError>`. No command carries a raw credential, arbitrary metadata map, downstream permission, UI state, database handle or framework session object.
+
+**Commands implement `Serialize` but not `Deserialize`.** §10 admits Serde only where command handling and event *replay* need it, and replay reads events, never commands. Making that explicit converts a rule someone must remember into one the compiler enforces: §2.2 requires that untrusted callers cannot invoke `OpenSession` with self-asserted evidence, and with no `Deserialize` there is no way to decode one from a transport payload at all. A future ingress maps its own validated DTO through these constructors, which is where the admission decision belongs.
 
 `expected_revision` is optimistic-concurrency intent. B2 validates it during pure decision; B4 later binds the same value to journal/repository compare-and-append. B2 does not claim that an in-memory decision alone persisted anything.
 
@@ -312,6 +352,10 @@ SessionRevoked {
 ```
 
 Every event sequence is the exact next positive integer. Event fields are private. External callers cannot construct an accepted snapshot by setting fields directly.
+
+Events implement both `Serialize` and `Deserialize`, because replay reads them back. Each has one checked constructor, and `SessionExpired`'s is the only one with a cross-field invariant — `observed_at >= expired_at` — so it is the one event that deserializes through a shadow struct per §2.0.
+
+A `sequence` is **not** validated at construction. Whether a sequence is the exact next integer is a question about the aggregate, not about the event, and §8 answers it with `EventSequenceMismatch`; there is deliberately no `SessionValueErrorKind` variant for a zero or out-of-order sequence, because a value-level check could only ever repeat what the aggregate must decide anyway.
 
 Events retain only bounded provenance. They never contain raw credentials, secret values, cookies, authorization headers, provider payloads, arbitrary reason strings or client-supplied metadata.
 
@@ -368,11 +412,15 @@ For `RefreshSession`, `ExpireSession` and `RevokeSession` on an existing aggrega
 1. malformed command/value shape is rejected by constructors before decision;
 2. command `session_id` mismatch;
 3. `expected_revision` mismatch;
-4. `current_revision == u64::MAX` returns `RevisionOverflow` before any event-producing transition;
-5. terminal session mutation;
+4. terminal session mutation;
+5. `current_revision == u64::MAX` returns `RevisionOverflow`;
 6. non-monotone observed time;
 7. time-derived expiry at the observed instant;
-8. command-specific legality such as not-yet-expired or no-effective-refresh.
+8. command-specific legality — not-yet-expired, no-effective-refresh, and `DeadlineOverflow` when a refresh's own checked deadline arithmetic overflows.
+
+Terminal state is checked **before** revision exhaustion, so §6.3's flat statement — every later `RefreshSession`, `ExpireSession` or `RevokeSession` on a terminal session returns `TerminalSession` — is exactly true with no exception at `u64::MAX`. That ordering is also the more useful answer: a terminal session will never emit another event, so reporting its exhausted counter would describe the less decisive of two facts. `RevisionOverflow` keeps precedence over time and command legality, because an exhausted counter makes every remaining transition impossible regardless of the clock.
+
+Item 8's `DeadlineOverflow` is reachable and belongs here rather than at open: `effective_expires_at` may sit at `u64::MAX` under an absolute or credential cap, with `observed_at` just below it, so `checked_add(observed_at, idle_timeout)` overflows while the session is still validly `Active`. No other failure can co-occur with it, so its position is unambiguous.
 
 For open, precedence is:
 
@@ -399,6 +447,17 @@ command
 → equal replayed snapshot
 ```
 
+Both halves are free functions over caller-supplied state, with no hidden aggregate registry:
+
+```text
+decide(state: Option<&SessionSnapshot>, command: &SessionCommand)
+    -> Result<SessionEvent, SessionDomainError>
+evolve(state: Option<&SessionSnapshot>, event: &SessionEvent)
+    -> Result<SessionSnapshot, SessionDomainError>
+```
+
+`None` is the empty aggregate. Because the caller supplies the state rather than the domain looking it up, a command naming a different session than the state it was given is a real, reachable `SessionIdMismatch` on the decide path — not only on the replay path — and §13 binds a fixture for each.
+
 Applying an event requires:
 
 ```text
@@ -414,15 +473,19 @@ For every existing aggregate, evolution first requires exact next sequence, exac
 
 | Current state | Event | Additional apply guard | Result |
 |---|---|---|---|
-| `Active` | `SessionRefreshed` | `observed_at < effective_expires_at`; recomputed effective deadline strictly advances the current deadline and exactly equals the event field | update effective deadline, `last_transition_at`, revision |
+| `Active` | `SessionRefreshed` | `observed_at < effective_expires_at`; recomputed effective deadline strictly advances the current deadline and exactly equals the event field | set `effective_expires_at` to the event field, set `last_transition_at = event.observed_at`, advance revision |
 | `Active` | `SessionExpired` | `observed_at >= effective_expires_at`; event `expired_at` exactly equals the pre-existing effective deadline; event cause exactly equals the §3 tie-precedence result | enter `Expired`, preserve immutable scope and current `effective_expires_at`, set `last_transition_at = observed_at` |
 | `Active` | `SessionRevoked` | `observed_at < effective_expires_at` | enter `Revoked { revoked_at: event.observed_at }`, preserve immutable scope and current `effective_expires_at`, set `last_transition_at = observed_at` |
 | `Active` | `SessionOpened` | never legal | fail closed |
 | `Expired` or `Revoked` | any event | never legal | fail closed |
 
-`SessionExpired.observed_at` must be greater than or equal to `SessionExpired.expired_at`. Refresh and revoke apply guards use the same effective-expiry and cause functions as command decision; evolution may not accept a persisted event that `decide` could never have emitted. No event can replace tenant/user/session/adapter/evidence/policy scope or change a terminal state.
+`SessionExpired.observed_at` must be greater than or equal to `SessionExpired.expired_at`. The refresh and revoke apply guards use the same effective-expiry function as command decision, and the expire guard additionally uses the same §3 cause function; evolution may not accept a persisted event that `decide` could never have emitted. No event can replace tenant/user/session/adapter/evidence/policy scope or change a terminal state.
 
-A gap, duplicate sequence, out-of-order event, cross-session event, forged derived field, illegal event/state pair or failed open invariant fails closed and returns no partial snapshot.
+**An apply-guard violation has its own named failure.** A forged or corrupted event can carry an exact sequence, an exact `SessionId`, a forward `observed_at` and — for `SessionRevoked`, which has no derived field at all — nothing else to check, while still sitting on the wrong side of the effective deadline for its kind. None of `EventSequenceMismatch`, `SessionIdMismatch`, `NonMonotoneTime` or `EventDerivedFieldMismatch` describes that, and `IllegalEventForState` would contradict this table, which lists the pair as legal. It is `EventTimeOutsideValidity`, and it covers all three `Active` rows: a `SessionRefreshed` or `SessionRevoked` whose `observed_at` is at or after the effective deadline, and a `SessionExpired` whose `observed_at` precedes it.
+
+So the complete fail-closed set for evolution is: a gap, a duplicate sequence, an out-of-order event, a cross-session event, a forged derived field, an event time outside the guard's validity window, an illegal event/state pair, or a failed open invariant. Each returns no partial snapshot.
+
+While a session is `Active`, `effective_expires_at > last_transition_at` is an invariant: open requires strictly-future derived deadlines and a credential deadline later than `opened_at`, and refresh requires both `observed_at < effective_expires_at` and a strictly advancing deadline. This is what makes §7's ordering of non-monotone time before time-derived expiry unambiguous rather than merely conventional — `observed_at < last_transition_at` implies `observed_at < effective_expires_at`, so the two conditions have an empty overlap and can never compete.
 
 Replaying the same validated `SessionOpened` plus the same ordered events must reconstruct a structurally equal `SessionSnapshot`: every field compares equal. Replay never reads the current clock, reloads policy, resolves a credential, calls an adapter or writes evidence. A canonical persisted byte encoding and checksum are deferred to B4's journal contract; B2 does not invent a format-independent “canonical Serde byte representation”.
 
@@ -467,9 +530,14 @@ NonMonotoneTime
 SessionNotYetExpired
 NoEffectiveRefresh
 EventSequenceMismatch { expected: u64, actual: u64 }
+EventTimeOutsideValidity
 IllegalEventForState
 EventDerivedFieldMismatch { field: EventDerivedField }
 ```
+
+Field roles are pinned so two implementations cannot report them oppositely. In `RevisionMismatch`, `expected` is the caller's claim and `actual` is the aggregate's truth, as §6.1 already fixes. In `EventSequenceMismatch` the roles are the same shape: `expected` is the derived `next_revision` and `actual` is the event's own `sequence`.
+
+`EventTimeOutsideValidity` is the §8 apply-guard failure: the event's `observed_at` is on the wrong side of the effective deadline for that event kind. It is payload-free — the two instants involved are already in the caller's own snapshot and event.
 
 The draft revision of this contract also listed `InvalidCredentialEvidence` and `InvalidSessionPolicy` here. They are deliberately **not** domain variants: `SessionCredentialEvidence` and `SessionPolicy` have validating constructors and validating Serde, so a malformed one cannot be built, cannot be deserialized and therefore cannot reach `decide` or `evolve` — including from a persisted event, whose fields are already those types. Retaining an unreachable variant would be a permanent dead arm that no adversarial fixture could exercise, and §13 requires every fixture to affect an executable assertion. The corresponding real failures are `SessionValueErrorKind::MalformedDigest`, `ZeroDuration` and `CredentialWindowNotAfterAuthentication` in §9.1.
 
@@ -491,7 +559,8 @@ Failed commands and failed event application leave the previous snapshot unchang
 
 The exact B2 Serde surface is:
 
-- nominal scalar values, `SessionCredentialEvidence`, `SessionPolicy`, commands and events support validating serialization/deserialization needed by command handling and event replay;
+- nominal scalar values, `SessionCredentialEvidence`, `SessionPolicy` and events implement validating `Serialize` and `Deserialize`, which is what event replay needs;
+- commands implement `Serialize` only, per §4;
 - deserialization delegates to the same decision-independent value validators; unknown and missing fields fail closed;
 - `SessionSnapshot` and `SessionStatus` are serialization-only read models: they implement no public `Deserialize`, `Default` or direct constructor and can arise only from validated `SessionOpened` evolution plus legal replay;
 - `SessionValueError`, `SessionValueErrorKind`, `SessionDomainError` and `EventDerivedField` implement neither `Serialize` nor `Deserialize`; B4 owns stable external error/event projections.
@@ -512,7 +581,9 @@ External compile-fail/API proofs must show that callers cannot:
 - pass raw credential text to any B2 evidence constructor or conversion API;
 - call a public unchecked constructor or generic state setter.
 
-Read-only, zero-copy accessors are allowed. `Display` for client/log use must not expose credential evidence internals; internal debug output remains redacted according to B4 control-evidence rules.
+Read-only, zero-copy accessors are allowed. `Display` for client/log use must not expose credential evidence internals.
+
+**`Debug` redaction is owned by B2, not deferred.** Every value carrying an `evidence_digest` — `SessionCredentialEvidence`, `SessionOpened` and `SessionSnapshot` — implements `Debug` by hand and renders that field as a fixed redaction token rather than its bytes. An earlier revision deferred this to B4 `control-evidence`, which does not exist; that would have left an implementer with no rule to satisfy while the repository's default convention is a derived `Debug`, and a derived `Debug` prints the digest on every `assert_eq!` failure, panic message and trace line. It would also have made B2 weaker than its own sibling: `AUTH-014` governs B1's identity errors on `Display` **and** `Debug`. B4 may later widen redaction to further surfaces; it is not a prerequisite for this one.
 
 ## 11. Dependency and side-effect boundary
 
@@ -534,7 +605,11 @@ It must not import or expose:
 - M10, Market, Agent, Plugin, provider or MCP types;
 - raw secret storage or logging behavior.
 
-Two of those are concrete in-repository names rather than categories, and are called out because `platform-core` already depends on them for M20 work: the session module must not import `ustc_agent_tool_protocol` — an M40/M20-facing crate, and the exact class §5 of `module-boundaries.md` keeps out of `M00` — and must not import `semver`, which carries package-version semantics owned by M20. Adding either import, or any new entry to `crates/platform-core/Cargo.toml`, is out of scope for B2; the batch introduces **no** manifest dependency change.
+Two of those are concrete in-repository names rather than categories, and are called out because `platform-core` already depends on them for M20 work: the session module must not import **or reference by path** `ustc_agent_tool_protocol` — the Agent-facing tool family §4 of [`module-boundaries.md`](module-boundaries.md) confines to the M30/M40 seam — and must not import or reference `semver`, which carries package-version semantics owned by M20.
+
+"Or reference" is the load-bearing half. Both crates are already real dependencies of `platform-core`, so `semver::Version::parse(…)` written inside a function body compiles, declares no item, and would therefore be invisible to an item-level allowlist. §11.1 accordingly requires a per-file forbidden-carrier scan rather than relying on the item accounting alone.
+
+Adding either import, or any new entry to `crates/platform-core/Cargo.toml`, is out of scope for B2; the batch introduces **no** manifest dependency change.
 
 `B2` also computes no digest. `CredentialEvidenceDigest` is validated for shape and stored; nothing in the module hashes, derives or verifies it. The "lightweight digest-shape validation" admitted above is byte-class validation of an already-supplied string, not a cryptographic dependency, and no digest crate is added.
 
@@ -544,11 +619,16 @@ Two of those are concrete in-repository names rather than categories, and are ca
 
 Adding the session module is admitted drift of that surface, and B2's first implementation commit must extend, in `scripts/check_repo_contracts.py` and its mirroring Rust guard together:
 
-- the governed source-file inventory, with `src/session.rs` and `tests/platform_session.rs`;
+- the governed source-file inventory and the package file inventory, with `src/session.rs` and `tests/platform_session.rs`;
 - the admitted `mod` declarations, with `session` under `lib.rs` and none under `session.rs`;
-- the admitted item declarations, with `pub mod session;` in `lib.rs` and the session module's own complete `use` list — including the non-renaming `use crate::identity::{SessionId, TenantId, UserId};` of §2.0;
-- the admitted sibling `impl` self types, macro definitions, macro invocation names and derive list for `session.rs`;
+- the admitted item declarations, with `pub mod session;` in `lib.rs` and the session module's own complete `use` list;
+- **the enumerated cross-file identity-binding exception.** This is a *separate* rule from the item allowlist and is the one that actually admits §2.0's import. It is currently a hard-coded single exception — admitted only when the file is `invocation.rs` **and** the normalized text equals that one re-export string — carried in both `scripts/check_repo_contracts.py` and the mirroring Rust guard. It must be widened to an enumerated set keyed by **exact file name and exact normalized text**, adding `session.rs` with exactly `use crate::identity::{SessionId, TenantId, UserId};`. It must **never** be relaxed into a predicate over `crate::identity::`, a prefix match or a regex: the rule's whole purpose is to refuse the alias class, and a pattern would re-open it. The failure message an implementer will see first reads `platform identity value alias or import outside the M00 identity module`, which describes a prohibition rather than a missing registration — that message is not an invitation to loosen the predicate;
+- the admitted sibling `impl` self types, macro definitions and macro invocation names for `session.rs`;
+- **the per-source attribute-name allowlist** for `session.rs`. There is no per-sibling derive-body carrier; the rule that fires is an exact-set comparison over every attribute name in the file. `session.rs` will carry at least `serde`, from §2.0's `deny_unknown_fields` and `rename_all`, plus `derive`, `doc` and `must_use` — none of which is admitted for a sibling today;
+- a **forbidden-carrier scan over `session.rs`**, listing at least `ustc_agent_tool_protocol` and `semver` alongside the §11 categories. B1 has such a scan but applies it only to `identity.rs`, necessarily, since `invocation.rs` legitimately uses both crates. Without a session-scoped equivalent, §11's prohibition has no carrier at all once B2 exists, because a path-qualified call inside a function body declares no item. One scan closes it, and it does not require the frozen function bodies §11.2 declines;
 - the admitted test-file items and attribute envelope for `tests/platform_session.rs`.
+
+One trap in the Rust mirror is worth naming, because "extend the table" does not describe it: several of its lookups dispatch by **fallthrough default** rather than by exhaustive match, so a `session.rs` that is never added explicitly is silently checked against `lib.rs`'s lists instead of failing closed. Each extension must be verified by running the gate against a real `session.rs`, not by inspecting the table.
 
 This is drift of the frozen **surface registration**, not of `platform-identity/v0` itself. It changes no accepted byte grammar, maximum length, error precedence, Serde shape or nominal kind set, so by `platform-identity/v0` §9 it is not a version change of that contract — the same reasoning that document already applies in its §5 to the `IdentityValueError` representation, and the same cost it already accepts in its §4 for `invocation.rs`'s import list. One sentence of `platform-identity/v0` §4 is amended by acceptance of this contract, from admitting a single cross-file identity binding to admitting an enumerated set of them; the substance of the rule — no renaming, and complete accounting of every governed source — is unchanged, and B2 receives no re-export.
 
@@ -616,13 +696,17 @@ Acceptance of this contract does not bind these; the implementation does. `AUTH-
 - decision and evolution at revision `u64::MAX`, including forged wrapped sequence `0`;
 - equal, backward and forward observed instants;
 - event sequence gap, duplicate and reorder;
-- cross-session event injection;
+- cross-session event injection, and a decide-side `SessionIdMismatch` where the command names a different session than the supplied state;
 - forged refreshed deadline, effective `expired_at` and expiry cause;
+- a persisted `SessionRefreshed` and a persisted `SessionRevoked` whose `observed_at` is at or after the effective deadline, and a persisted `SessionExpired` whose `observed_at` precedes it — each `EventTimeOutsideValidity`, each with sequence, `SessionId` and every derived field otherwise exact, so no other variant can answer;
 - late expiry observation that must retain the earlier effective deadline;
 - expiry observed exactly at and strictly after each deadline, with equal derived `expired_at` but distinct `observed_at`;
+- a refresh whose own deadline arithmetic overflows because `effective_expires_at` sits at `u64::MAX`, returning `DeadlineOverflow`;
+- deserialization of a `SessionCredentialEvidence` payload whose `credential_not_after` is not strictly later than `authenticated_at`, rejected as `CredentialWindowNotAfterAuthentication` — this is the fixture that proves §2.0's shadow-struct rule is in force and that §9.2's removal of `InvalidCredentialEvidence` was safe;
+- `admits_at` false for a revoked session at an instant strictly before its preserved `effective_expires_at`, and true only while `Active` and before that deadline;
 - replay after each legal prefix and across the full lifecycle;
-- dual-fault precedence cases;
-- secret-like canary strings absent from every error and serialized event/snapshot surface where forbidden.
+- dual-fault precedence cases, including a terminal session whose `current_revision` is `u64::MAX`, which must return `TerminalSession` and not `RevisionOverflow`;
+- secret-like canary strings absent from every error, `Display` and `Debug` surface, and from every serialized event/snapshot surface where forbidden — `Debug` included because §10 makes its redaction a B2 obligation.
 
 Fixture names or expected-output edits must affect executable assertions; a checker that merely counts fixture files is insufficient.
 
@@ -645,6 +729,8 @@ This contract does not define or claim:
 
 These remain owned by later M00 batches, M10, M90 or release/security integration as named in their contracts.
 
+One of them is an obligation rather than a feature, so it is named with an owner rather than only excluded. **Producing** a `CredentialEvidenceDigest` — choosing the domain separation and the adapter-side material it is computed over, and never computing it over raw credential text — belongs to the authentication-adapter contract that `M00-B4` introduces alongside `session-port` and `control-evidence`. §2.2 states the obligation normatively because B2 pins the resulting value into immutable evidence and cannot verify it; that batch's contract must discharge it explicitly rather than inherit it silently.
+
 ## 15. Acceptance record and implementation-entry gate
 
 The eight conditions this contract carried while it was a draft are now discharged, in the same order they were stated:
@@ -653,7 +739,7 @@ The eight conditions this contract carried while it was a draft are now discharg
 2. the M00 blueprint, module map, roadmap and coverage matrix project B2 alongside — not over — B1's implemented evidence;
 3. `AUTH-017..020` are in the long-horizon catalog and are active `planned` matrix rows with the exact future bindings in §12;
 4. the repository checker registers this contract as a fail-closed key file and cross-validates §12 against the active matrix, so a stale or missing projection carrier fails the run;
-5. transition, deadline and error precedence received independent blocker review, and accepted findings are folded into this revision;
+5. transition, deadline and error precedence received independent blocker review across three lanes — contract/dependency direction, acceptance evidence, and semantics/security — and every accepted finding is folded into this revision, including a frozen error set that could not express a specified apply-guard rejection, a precedence list that contradicted §6.3 at `u64::MAX`, `Debug` redaction deferred to an unstarted batch, an unowned digest-provenance obligation, a read model that was fail-open for `Revoked`, and an incomplete §11.1 carrier list;
 6. public type names and Serde shapes are frozen in §2 against the merged B1 API;
 7. no current-status carrier claims B2 implementation evidence — every affected carrier says `planned`, and `M00` stays `partial-evidence`;
 8. documentation and checker gates pass on the exact final head.

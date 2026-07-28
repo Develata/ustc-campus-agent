@@ -4952,7 +4952,14 @@ class PlatformSessionContractTests(unittest.TestCase):
         self.assertTrue(found, f"{case_id} not present in matrix.tsv")
         path.write_text("\n".join(rows) + "\n", encoding="utf-8")
 
-    def write_implementation_carriers(self, source: bool, test: bool) -> None:
+    def write_implementation_carriers(
+        self, source: bool, test: bool, functions: bool = True
+    ) -> None:
+        """Create the carriers a promoted row needs.
+
+        `functions=False` writes a test file with no bound function in it, which is the
+        stub case: the file exists, so an existence-only gate would admit it.
+        """
         source_path = self.root / checker.PLATFORM_SESSION_SOURCE
         test_path = self.root / checker.PLATFORM_SESSION_TEST
         source_path.parent.mkdir(parents=True, exist_ok=True)
@@ -4960,7 +4967,18 @@ class PlatformSessionContractTests(unittest.TestCase):
         if source:
             source_path.write_text("// placeholder\n", encoding="utf-8")
         if test:
-            test_path.write_text("// placeholder\n", encoding="utf-8")
+            body = "// placeholder\n"
+            if functions:
+                contract = (self.root / checker.PLATFORM_SESSION_CONTRACT).read_text(
+                    encoding="utf-8"
+                )
+                names = [
+                    match.group("function")
+                    for match in checker.PLATFORM_SESSION_BOUND_FUNCTION.finditer(contract)
+                ]
+                self.assertEqual(len(names), len(checker.PLATFORM_SESSION_CASES))
+                body = "".join(f"#[test]\nfn {name}() {{}}\n" for name in names)
+            test_path.write_text(body, encoding="utf-8")
 
     def test_current_platform_session_contract_passes(self) -> None:
         self.assertEqual(self.check_session(), [])
@@ -5089,10 +5107,64 @@ class PlatformSessionContractTests(unittest.TestCase):
             "platform session acceptance status in AUTH-018 claims 'implemented'",
         )
 
-    def test_implemented_with_both_carriers_is_admitted(self) -> None:
+    def test_implemented_with_a_stub_test_file_fails_closed(self) -> None:
+        # The file exists but declares no bound function. `--exact` against a missing
+        # function is `running 0 tests` at exit zero, so existence alone must not admit
+        # the promotion — this is the case an is_file() gate would wave through.
+        self.write_implementation_carriers(source=True, test=True, functions=False)
+        self.edit_matrix_cell("AUTH-017", 5, "implemented")
+        self.assert_rejected(
+            self.check_session(),
+            "declares no session_open_pins_immutable_scope_and_checked_deadlines",
+        )
+
+    def test_implemented_with_both_carriers_and_bound_function_is_admitted(self) -> None:
         self.write_implementation_carriers(source=True, test=True)
         self.edit_matrix_cell("AUTH-017", 5, "implemented")
         self.assertEqual(self.check_session(), [])
+
+    def test_binding_naming_no_exact_test_function_fails_closed(self) -> None:
+        replacement = "python3 scripts/check_repo_contracts.py && cargo test --locked"
+        self.edit_matrix_cell("AUTH-019", 3, replacement)
+        self.rewrite(
+            checker.PLATFORM_SESSION_CONTRACT,
+            "| `AUTH-019` | `python3 scripts/check_repo_contracts.py && cargo test "
+            "--locked -p ustc-campus-agent-core --test platform_session "
+            "session_revision_and_replay_are_exact_and_fail_closed -- --exact` |",
+            f"| `AUTH-019` | `{replacement}` |",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "names no exact platform_session test function",
+        )
+
+    def test_duplicate_binding_row_for_one_case_fails_closed(self) -> None:
+        # A dict comprehension keeps the last match, so a stray row placed BEFORE the real
+        # table is silently shadowed by it. Counting rows is what catches that direction.
+        self.rewrite(
+            checker.PLATFORM_SESSION_CONTRACT,
+            "| Case | Binding |\n|---|---|\n",
+            "| Case | Binding |\n|---|---|\n"
+            "| `AUTH-017` | `python3 scripts/check_repo_contracts.py && "
+            "cargo test --locked -p ustc-campus-agent-core --test platform_session "
+            "stale_stray_row -- --exact` |\n",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "binding table has duplicate or stray rows",
+        )
+
+    def test_case_missing_from_the_long_horizon_catalog_fails_closed(self) -> None:
+        path = self.root / "docs/acceptance/platform-baseline.md"
+        rows = path.read_text(encoding="utf-8").splitlines()
+        path.write_text(
+            "\n".join(row for row in rows if not row.startswith("| `AUTH-020` |")) + "\n",
+            encoding="utf-8",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "acceptance case missing from long-horizon catalog: AUTH-020",
+        )
 
     def test_checker_not_invoked_from_main_fails_closed(self) -> None:
         self.rewrite(

@@ -184,6 +184,12 @@ The contract is **accepted and unimplemented**. `crates/platform-core/src/sessio
 
 `M00-B2` deliberately does not create a clock, repository, journal, database, secret resolver, ID generator, authenticated actor, request context, policy reference, session port, control-evidence projection, cookie/token/auth adapter or `M10` integration. It authenticates no credential and persists nothing: `expected_revision` is validated as optimistic-concurrency *intent*, and the compare-and-append that would make it durable belongs to `M00-B4`. Those claims stay blocked behind their own batches and contracts.
 
+`M00-B2` hands three obligations forward that it cannot discharge itself. They are recorded here, in the module that owns all three batches, so they are carried rather than asserted in a contract whose successors have not been written:
+
+1. **`M00-B3 request-context`** consumes `SessionSnapshot::admits_at` as the single validity question. It must not recompute admission from `effective_expires_at`, which a revoked session deliberately preserves and which therefore reads as still-valid for exactly the revocation case.
+2. **`M00-B4`** owns producing `CredentialEvidenceDigest` — the domain separation and the adapter-side material it is computed over — under `platform-session/v0` §2.2's prohibition on computing it over raw credential text. B2 pins the value into immutable evidence and cannot verify how it was made.
+3. **`M00-B5 api-admission-integration`** owns the composition rule that untrusted callers cannot reach `OpenSession` with self-asserted evidence. B2 makes the transport half structural by giving commands no `Deserialize`, but admission itself is a composition decision.
+
 Two boundary facts are worth stating here rather than only in the contract. The session module imports the canonical `SessionId`, `TenantId` and `UserId` without renaming and re-exports none of them, so it adds no externally reachable API to a `platform-identity/v0` kind and mints no seventh kind. Adding it to `crates/platform-core/` extends the frozen surface `platform-identity/v0` §4 accounts for; that extension is deliberate registered drift, listed in `platform-session/v0` §11.1, and it changes no accepted grammar, bound, precedence, Serde shape or kind set.
 
 ## 16. Exit gate
