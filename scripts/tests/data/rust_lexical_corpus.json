@@ -1,0 +1,2129 @@
+{
+  "purpose": "Cross-language differential corpus for the platform-identity evidence lexer. scripts/check_repo_contracts.py and crates/platform-core/tests/platform_identity.rs implement the same rules twice; both compare their own output against these exact expectations, so a divergence fails whichever carrier drifted. Regenerate only by a deliberate, reviewed change to both implementations.",
+  "cases": [
+    {
+      "source": "pub mod identity;",
+      "stripped": "pub mod identity;",
+      "stripped_literals": "pub mod identity;",
+      "items": [
+        "pub mod identity;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "pub(crate) mod identity;",
+      "stripped": "pub(crate) mod identity;",
+      "stripped_literals": "pub(crate) mod identity;",
+      "items": [
+        "pub(crate) mod identity;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "pub(in crate::x) use super::*;",
+      "stripped": "pub(in crate::x) use super::*;",
+      "stripped_literals": "pub(in crate::x) use super::*;",
+      "items": [
+        "pub(in crate::x) use super::*;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "#[path = \"a.rs\"] pub mod identity;",
+      "stripped": "#[path =  ] pub mod identity;",
+      "stripped_literals": "#[path = \"a.rs\"] pub mod identity;",
+      "items": [
+        "#[path = ] pub mod identity;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "path",
+          "path ="
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": [
+        "a.rs"
+      ]
+    },
+    {
+      "source": "#[/*c*/ path = \"a.rs\"]\npub mod identity;",
+      "stripped": "#[  path =  ]\npub mod identity;",
+      "stripped_literals": "#[  path = \"a.rs\"]\npub mod identity;",
+      "items": [
+        "#[ path = ] pub mod identity;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "path",
+          "path ="
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": [
+        "a.rs"
+      ]
+    },
+    {
+      "source": "#[cfg(test)]\n#[allow(dead_code)]\nmod tests {}",
+      "stripped": "#[cfg(test)]\n#[allow(dead_code)]\nmod tests {}",
+      "stripped_literals": "#[cfg(test)]\n#[allow(dead_code)]\nmod tests {}",
+      "items": [
+        "#[cfg(test)] #[allow(dead_code)] mod tests"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "cfg",
+          "cfg(test)"
+        ],
+        [
+          false,
+          "allow",
+          "allow(dead_code)"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "#[cfg_attr(\n    all(),\n    path = \"a.txt\"\n)]\npub mod identity;",
+      "stripped": "#[cfg_attr(\n    all(),\n    path =  \n)]\npub mod identity;",
+      "stripped_literals": "#[cfg_attr(\n    all(),\n    path = \"a.txt\"\n)]\npub mod identity;",
+      "items": [
+        "#[cfg_attr( all(), path = )] pub mod identity;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "cfg_attr",
+          "cfg_attr( all(), path = )"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": [
+        "a.txt"
+      ]
+    },
+    {
+      "source": "#![allow(x)]\nuse a::b;",
+      "stripped": "#![allow(x)]\nuse a::b;",
+      "stripped_literals": "#![allow(x)]\nuse a::b;",
+      "items": [
+        "#![allow(x)] use a::b;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          true,
+          "allow",
+          "allow(x)"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "# /*inner*/ ! [allow(dead_code)]",
+      "stripped": "#   ! [allow(dead_code)]",
+      "stripped_literals": "#   ! [allow(dead_code)]",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          true,
+          "allow",
+          "allow(dead_code)"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "pub use crate::{identity as i, invocation as v};",
+      "stripped": "pub use crate::{identity as i, invocation as v};",
+      "stripped_literals": "pub use crate::{identity as i, invocation as v};",
+      "items": [
+        "pub use crate::{identity as i, invocation as v};"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "pub use crate::{ identity::{self as i}, invocation as v };",
+      "stripped": "pub use crate::{ identity::{self as i}, invocation as v };",
+      "stripped_literals": "pub use crate::{ identity::{self as i}, invocation as v };",
+      "items": [
+        "pub use crate::{ identity::{self as i}, invocation as v };"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "pub use {identity as i, invocation as v};",
+      "stripped": "pub use {identity as i, invocation as v};",
+      "stripped_literals": "pub use {identity as i, invocation as v};",
+      "items": [
+        "pub use {identity as i, invocation as v};"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "use a::b; use c::d;",
+      "stripped": "use a::b; use c::d;",
+      "stripped_literals": "use a::b; use c::d;",
+      "items": [
+        "use a::b;",
+        "use c::d;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "mod a; mod b;",
+      "stripped": "mod a; mod b;",
+      "stripped_literals": "mod a; mod b;",
+      "items": [
+        "mod a;",
+        "mod b;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "impl Foo { fn f(x: impl Into<String>) {} }",
+      "stripped": "impl Foo { fn f(x: impl Into<String>) {} }",
+      "stripped_literals": "impl Foo { fn f(x: impl Into<String>) {} }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [
+        "impl Foo",
+        "impl-arg Into<String>"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "f",
+          "{}"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "impl Foo {\n    fn f(x: impl Into<String>) {}\n}",
+      "stripped": "impl Foo {\n    fn f(x: impl Into<String>) {}\n}",
+      "stripped_literals": "impl Foo {\n    fn f(x: impl Into<String>) {}\n}",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [
+        "impl Foo",
+        "impl-arg Into<String>"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "f",
+          "{}"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "impl<T> Ext for T {}",
+      "stripped": "impl<T> Ext for T {}",
+      "stripped_literals": "impl<T> Ext for T {}",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [
+        "impl Ext for T"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "impl<'a, T: X> Ext<'a> for T where T: Y { }",
+      "stripped": "impl<'a, T: X> Ext<'a> for T where T: Y { }",
+      "stripped_literals": "impl<'a, T: X> Ext<'a> for T where T: Y { }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [
+        "impl Ext<'a> for T where T: Y"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "impl Foo where Foo: Sized { }",
+      "stripped": "impl Foo where Foo: Sized { }",
+      "stripped_literals": "impl Foo where Foo: Sized { }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [
+        "impl Foo where Foo: Sized"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "fn f() { use crate::identity::TenantId; }",
+      "stripped": "fn f() { use crate::identity::TenantId; }",
+      "stripped_literals": "fn f() { use crate::identity::TenantId; }",
+      "items": [
+        "use crate::identity::TenantId;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "f",
+          "{ use crate::identity::TenantId; }"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "type A = B; pub type C = D;",
+      "stripped": "type A = B; pub type C = D;",
+      "stripped_literals": "type A = B; pub type C = D;",
+      "items": [
+        "type A = B;",
+        "pub type C = D;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "impl A {} impl B {}",
+      "stripped": "impl A {} impl B {}",
+      "stripped_literals": "impl A {} impl B {}",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [
+        "impl A",
+        "impl-arg B"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "  impl A {}\n  impl B {}",
+      "stripped": "  impl A {}\n  impl B {}",
+      "stripped_literals": "  impl A {}\n  impl B {}",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [
+        "impl A",
+        "impl B"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "let x = a.type_of(); let y = crate::modx;",
+      "stripped": "let x = a.type_of(); let y = crate::modx;",
+      "stripped_literals": "let x = a.type_of(); let y = crate::modx;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "m!(TenantId); n! { UserId } o![SessionId]",
+      "stripped": "m!(TenantId); n! { UserId } o![SessionId]",
+      "stripped_literals": "m!(TenantId); n! { UserId } o![SessionId]",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [
+        "m!(TenantId)",
+        "n!(UserId)",
+        "o!(SessionId)"
+      ],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "macro_rules! m { ($t:ty) => { impl X for $t {} }; }",
+      "stripped": "macro_rules! m { ($t:ty) => { impl X for $t {} }; }",
+      "stripped_literals": "macro_rules! m { ($t:ty) => { impl X for $t {} }; }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [
+        "impl-arg X"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [
+        "m"
+      ],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [
+        [
+          "m",
+          [
+            "($t:ty)"
+          ]
+        ]
+      ],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "macro_rules! assert_eq { ($($a:tt)*) => {{ }}; }",
+      "stripped": "macro_rules! assert_eq { ($($a:tt)*) => {{ }}; }",
+      "stripped_literals": "macro_rules! assert_eq { ($($a:tt)*) => {{ }}; }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [
+        "assert_eq"
+      ],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [
+        [
+          "assert_eq",
+          [
+            "($($a:tt)*)"
+          ]
+        ]
+      ],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "extern crate self as z;",
+      "stripped": "extern crate self as z;",
+      "stripped_literals": "extern crate self as z;",
+      "items": [
+        "extern crate self as z;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "extern/**/crate self as z;",
+      "stripped": "extern crate self as z;",
+      "stripped_literals": "extern crate self as z;",
+      "items": [
+        "extern crate self as z;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "pub extern/*a*//*b*/crate self as z;",
+      "stripped": "pub extern  crate self as z;",
+      "stripped_literals": "pub extern  crate self as z;",
+      "items": [
+        "pub extern crate self as z;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "externcrate self as z;",
+      "stripped": "externcrate self as z;",
+      "stripped_literals": "externcrate self as z;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "impl Trait for Type;",
+      "stripped": "impl Trait for Type;",
+      "stripped_literals": "impl Trait for Type;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": true,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "pub\nmod\nidentity\n;",
+      "stripped": "pub\nmod\nidentity\n;",
+      "stripped_literals": "pub\nmod\nidentity\n;",
+      "items": [
+        "pub mod identity;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "#[a]#[b]pub mod identity;",
+      "stripped": "#[a]#[b]pub mod identity;",
+      "stripped_literals": "#[a]#[b]pub mod identity;",
+      "items": [
+        "#[a]#[b]pub mod identity;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "a",
+          "a"
+        ],
+        [
+          false,
+          "b",
+          "b"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "let s = 5 != 6; let t = !flag;",
+      "stripped": "let s = 5 != 6; let t = !flag;",
+      "stripped_literals": "let s = 5 != 6; let t = !flag;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "pub  mod   identity ;",
+      "stripped": "pub  mod   identity ;",
+      "stripped_literals": "pub  mod   identity ;",
+      "items": [
+        "pub mod identity;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "pub type Résumé = Naïve;\nuse crate::identity::TenantId;",
+      "stripped": "pub type Résumé = Naïve;\nuse crate::identity::TenantId;",
+      "stripped_literals": "pub type Résumé = Naïve;\nuse crate::identity::TenantId;",
+      "items": [
+        "pub type Résumé = Naïve;",
+        "use crate::identity::TenantId;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "/* ünïcödé */ pub mod identity;",
+      "stripped": "  pub mod identity;",
+      "stripped_literals": "  pub mod identity;",
+      "items": [
+        "pub mod identity;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "type A = fn(i32) -> i32;",
+      "stripped": "type A = fn(i32) -> i32;",
+      "stripped_literals": "type A = fn(i32) -> i32;",
+      "items": [
+        "type A = fn(i32) -> i32;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "type A = Vec<Box<dyn Fn() -> u8>>;",
+      "stripped": "type A = Vec<Box<dyn Fn() -> u8>>;",
+      "stripped_literals": "type A = Vec<Box<dyn Fn() -> u8>>;",
+      "items": [
+        "type A = Vec<Box<dyn Fn() -> u8>>;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "use a::{b::{c, d}, e};",
+      "stripped": "use a::{b::{c, d}, e};",
+      "stripped_literals": "use a::{b::{c, d}, e};",
+      "items": [
+        "use a::{b::{c, d}, e};"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "pub mod outer { pub mod inner { use super::*; } }",
+      "stripped": "pub mod outer { pub mod inner { use super::*; } }",
+      "stripped_literals": "pub mod outer { pub mod inner { use super::*; } }",
+      "items": [
+        "pub mod outer",
+        "pub mod inner",
+        "use super::*;"
+      ],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "impl\n<T>\nExt\nfor\nT\n{}",
+      "stripped": "impl\n<T>\nExt\nfor\nT\n{}",
+      "stripped_literals": "impl\n<T>\nExt\nfor\nT\n{}",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [
+        "impl Ext for T"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "mod m { impl A {} impl B for C {} }",
+      "stripped": "mod m { impl A {} impl B for C {} }",
+      "stripped_literals": "mod m { impl A {} impl B for C {} }",
+      "items": [
+        "mod m"
+      ],
+      "item_unterminated": [],
+      "impls": [
+        "impl-arg A",
+        "impl-arg B"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "#[rustfmt::skip] mod m { fn d() {} impl X for crate::identity::TenantId {} }",
+      "stripped": "#[rustfmt::skip] mod m { fn d() {} impl X for crate::identity::TenantId {} }",
+      "stripped_literals": "#[rustfmt::skip] mod m { fn d() {} impl X for crate::identity::TenantId {} }",
+      "items": [
+        "#[rustfmt::skip] mod m"
+      ],
+      "item_unterminated": [],
+      "impls": [
+        "impl-arg X"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "rustfmt",
+          "rustfmt::skip"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "d",
+          "{}"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "let x = foo.r#type;",
+      "stripped": "let x = foo.r#type;",
+      "stripped_literals": "let x = foo.r#type;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "struct S { r#type: u32 }",
+      "stripped": "struct S { r#type: u32 }",
+      "stripped_literals": "struct S { r#type: u32 }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "path::r#mod::Bar;",
+      "stripped": "path::r#mod::Bar;",
+      "stripped_literals": "path::r#mod::Bar;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "include/*x*/!(\"a.rs\");",
+      "stripped": "include !( );",
+      "stripped_literals": "include !(\"a.rs\");",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [
+        "include!()"
+      ],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": [
+        "a.rs"
+      ]
+    },
+    {
+      "source": "include !(\"a.rs\");",
+      "stripped": "include !( );",
+      "stripped_literals": "include !(\"a.rs\");",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [
+        "include!()"
+      ],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": [
+        "a.rs"
+      ]
+    },
+    {
+      "source": "if !(a || b) { } while !(c) { }",
+      "stripped": "if !(a || b) { } while !(c) { }",
+      "stripped_literals": "if !(a || b) { } while !(c) { }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "authority_id!(TenantId",
+      "stripped": "authority_id!(TenantId",
+      "stripped_literals": "authority_id!(TenantId",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [
+        "authority_id"
+      ],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "let c = 'a'; let d = b'\\n'; let e = r#\"raw\"#;",
+      "stripped": "let c =  ; let d =  ; let e =  ;",
+      "stripped_literals": "let c = 'a'; let d = b'\\n'; let e = r#\"raw\"#;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": [
+        "raw"
+      ]
+    },
+    {
+      "source": "let f = b'-'; let g = b'.';",
+      "stripped": "let f =  ; let g =  ;",
+      "stripped_literals": "let f = b'-'; let g = b'.';",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "macro_rules! g { ($x:expr) => {{ 1 }}; ($k:ty) => {{ 2 }}; }",
+      "stripped": "macro_rules! g { ($x:expr) => {{ 1 }}; ($k:ty) => {{ 2 }}; }",
+      "stripped_literals": "macro_rules! g { ($x:expr) => {{ 1 }}; ($k:ty) => {{ 2 }}; }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [
+        "g"
+      ],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [
+        [
+          "g",
+          [
+            "($x:expr)",
+            "($k:ty)"
+          ]
+        ]
+      ],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "# [derive(Clone, Copy)]",
+      "stripped": "# [derive(Clone, Copy)]",
+      "stripped_literals": "# [derive(Clone, Copy)]",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [
+        "Clone, Copy"
+      ],
+      "attributes": [
+        [
+          false,
+          "derive",
+          "derive(Clone, Copy)"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "macro_rules !shadow { () => {{}}; }",
+      "stripped": "macro_rules !shadow { () => {{}}; }",
+      "stripped_literals": "macro_rules !shadow { () => {{}}; }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [
+        "shadow"
+      ],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [
+        [
+          "shadow",
+          [
+            "()"
+          ]
+        ]
+      ],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "#[r#derive(Default)]",
+      "stripped": "#[r#derive(Default)]",
+      "stripped_literals": "#[r#derive(Default)]",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [
+        "Default"
+      ],
+      "attributes": [
+        [
+          false,
+          "derive",
+          "r#derive(Default)"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "# [ r#derive ( Copy ) ]",
+      "stripped": "# [ r#derive ( Copy ) ]",
+      "stripped_literals": "# [ r#derive ( Copy ) ]",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [
+        "Copy"
+      ],
+      "attributes": [
+        [
+          false,
+          "derive",
+          "r#derive ( Copy )"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "#[r#ignore] #[r#test] fn t() {}",
+      "stripped": "#[r#ignore] #[r#test] fn t() {}",
+      "stripped_literals": "#[r#ignore] #[r#test] fn t() {}",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "ignore",
+          "r#ignore"
+        ],
+        [
+          false,
+          "test",
+          "r#test"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "t",
+          "{}"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "enum E { #[r#default] A }",
+      "stripped": "enum E { #[r#default] A }",
+      "stripped_literals": "enum E { #[r#default] A }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "default",
+          "r#default"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "#[$attribute] pub struct S;",
+      "stripped": "#[$attribute] pub struct S;",
+      "stripped_literals": "#[$attribute] pub struct S;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "$attribute",
+          "$attribute"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "#[unterminated(",
+      "stripped": "#[unterminated(",
+      "stripped_literals": "#[unterminated(",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [
+        "#[unterminated("
+      ],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "#[derive(Debug)] #[must_use] pub fn f() {}",
+      "stripped": "#[derive(Debug)] #[must_use] pub fn f() {}",
+      "stripped_literals": "#[derive(Debug)] #[must_use] pub fn f() {}",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [
+        "Debug"
+      ],
+      "attributes": [
+        [
+          false,
+          "derive",
+          "derive(Debug)"
+        ],
+        [
+          false,
+          "must_use",
+          "must_use"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "f",
+          "{}"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "x#[a] pub fn f() {}",
+      "stripped": "x#[a] pub fn f() {}",
+      "stripped_literals": "x#[a] pub fn f() {}",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "f",
+          "{}"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "r#[a] pub fn f() {}",
+      "stripped": "r#[a] pub fn f() {}",
+      "stripped_literals": "r#[a] pub fn f() {}",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "f",
+          "{}"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "9#[a]",
+      "stripped": "9#[a]",
+      "stripped_literals": "9#[a]",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "_#[a]",
+      "stripped": "_#[a]",
+      "stripped_literals": "_#[a]",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "#[$]",
+      "stripped": "#[$]",
+      "stripped_literals": "#[$]",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "$",
+          "$"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "é#[a]",
+      "stripped": "é#[a]",
+      "stripped_literals": "é#[a]",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [
+        [
+          false,
+          "a",
+          "a"
+        ]
+      ],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "fn f<T: Into<Vec<u8>>>(x: T) {}",
+      "stripped": "fn f<T: Into<Vec<u8>>>(x: T) {}",
+      "stripped_literals": "fn f<T: Into<Vec<u8>>>(x: T) {}",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "f",
+          "{}"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "fn g(x: [u8; { 2 }]) { 1 }",
+      "stripped": "fn g(x: [u8; { 2 }]) { 1 }",
+      "stripped_literals": "fn g(x: [u8; { 2 }]) { 1 }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "g",
+          "{ 1 }"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "trait T { fn h(&self); }",
+      "stripped": "trait T { fn h(&self); }",
+      "stripped_literals": "trait T { fn h(&self); }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "h",
+          ";"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "let p: fn(u8) -> u8 = q;",
+      "stripped": "let p: fn(u8) -> u8 = q;",
+      "stripped_literals": "let p: fn(u8) -> u8 = q;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "fn r#match() { 1 }",
+      "stripped": "fn r#match() { 1 }",
+      "stripped_literals": "fn r#match() { 1 }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [
+        "r"
+      ],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "let r#fn = 1;",
+      "stripped": "let r#fn = 1;",
+      "stripped_literals": "let r#fn = 1;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "fn outer() { fn inner() { 1 } }",
+      "stripped": "fn outer() { fn inner() { 1 } }",
+      "stripped_literals": "fn outer() { fn inner() { 1 } }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "outer",
+          "{ fn inner() { 1 } }"
+        ],
+        [
+          "inner",
+          "{ 1 }"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "fn w<T>(x: T) -> T where T: Copy { x }",
+      "stripped": "fn w<T>(x: T) -> T where T: Copy { x }",
+      "stripped_literals": "fn w<T>(x: T) -> T where T: Copy { x }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "w",
+          "{ x }"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "fn s() -> Result<(), ()> { Ok(()) }",
+      "stripped": "fn s() -> Result<(), ()> { Ok(()) }",
+      "stripped_literals": "fn s() -> Result<(), ()> { Ok(()) }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "s",
+          "{ Ok(()) }"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "let c = \"fn hidden() { }\"; /* fn also_hidden() { } */",
+      "stripped": "let c =  ;  ",
+      "stripped_literals": "let c = \"fn hidden() { }\";  ",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": [
+        "fn hidden() { }"
+      ]
+    },
+    {
+      "source": "fn f() -> TenantId { Self { value: v } }",
+      "stripped": "fn f() -> TenantId { Self { value: v } }",
+      "stripped_literals": "fn f() -> TenantId { Self { value: v } }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "f",
+          "{ Self { value: v } }"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [
+        "Self{",
+        "TenantId{"
+      ],
+      "string_literals": []
+    },
+    {
+      "source": "fn f() -> TenantId { Self{value: v} }",
+      "stripped": "fn f() -> TenantId { Self{value: v} }",
+      "stripped_literals": "fn f() -> TenantId { Self{value: v} }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [
+        [
+          "f",
+          "{ Self{value: v} }"
+        ]
+      ],
+      "function_unresolved": [],
+      "constructions": [
+        "Self{",
+        "TenantId{"
+      ],
+      "string_literals": []
+    },
+    {
+      "source": "struct TenantId { value: String }",
+      "stripped": "struct TenantId { value: String }",
+      "stripped_literals": "struct TenantId { value: String }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "impl fmt::Display for TenantId { }",
+      "stripped": "impl fmt::Display for TenantId { }",
+      "stripped_literals": "impl fmt::Display for TenantId { }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [
+        "impl fmt::Display for TenantId"
+      ],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "fn éq() { 1 }",
+      "stripped": "fn éq() { 1 }",
+      "stripped_literals": "fn éq() { 1 }",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [
+        "<unnamed>"
+      ],
+      "constructions": [],
+      "string_literals": []
+    },
+    {
+      "source": "let a = \"x\"; /*c*/ let b = b'-'; let c = r#\"r\"#; let d = b\"y\"; // t",
+      "stripped": "let a =  ;   let b =  ; let c =  ; let d =  ;  ",
+      "stripped_literals": "let a = \"x\";   let b = b'-'; let c = r#\"r\"#; let d = b\"y\";  ",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": [
+        "x",
+        "r",
+        "y"
+      ]
+    },
+    {
+      "source": "let e = '\\n'; let f = b'\\\\'; let g = 'a' as u8;",
+      "stripped": "let e =  ; let f =  ; let g =   as u8;",
+      "stripped_literals": "let e = '\\n'; let f = b'\\\\'; let g = 'a' as u8;",
+      "items": [],
+      "item_unterminated": [],
+      "impls": [],
+      "impl_unclassified": false,
+      "macro_definitions": [],
+      "macro_invocations": [],
+      "macro_unterminated": [],
+      "macro_arms": [],
+      "derives": [],
+      "attributes": [],
+      "attribute_unterminated": [],
+      "functions": [],
+      "function_unresolved": [],
+      "constructions": [],
+      "string_literals": []
+    }
+  ]
+}

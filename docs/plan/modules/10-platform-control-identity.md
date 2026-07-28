@@ -3,14 +3,14 @@
 ## Metadata
 
 - `Module ID`: `M00`
-- `Status`: Accepted blueprint; implementation planned
-- `Implementation State`: `planned`
+- `Status`: Accepted blueprint; `M00-B1 identity-types` implemented, remaining batches planned
+- `Implementation State`: `partial-evidence`
 - `Version`: `m00-platform-control/v1`
 - `Last Review`: `2026-07-26`
 - `Composition`: `apps/ustc-agentd`
-- `Primary code area`: future cohesive modules under `crates/platform-core/`; adapter implementations under `M90`
+- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; future cohesive modules under `crates/platform-core/`; adapter implementations under `M90`
 - `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md) for `M00-B1`; [`module-boundaries.md`](../../contracts/module-boundaries.md) for later cross-module actor/context values
-- `Acceptance`: active planned `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015`, `AUTH-016`; catalog-only `AUTH-013` and later session/admission cases remain deferred
+- `Acceptance`: implemented `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015`, `AUTH-016`; catalog-only `AUTH-013` and later session/admission cases remain deferred
 
 ## 1. Purpose
 
@@ -172,7 +172,9 @@ Each small module receives a separate reviewable commit with unit tests before t
 
 `CausationId` and any tenant-scoped actor key remain with `request-context`; `PlatformPolicySnapshotId` remains with `policy-reference`. The M20-owned invocation `PolicySnapshotId` identifies a different fact and must not alias the future platform-policy identity.
 
-`M00-B1` deliberately does not create an authenticated actor, session lifecycle, request context, policy decision, ID generator or storage port. Those claims remain blocked behind later batches. The active `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` rows are `planned`; `AUTH-013` stays catalog-only until request-context work. This contract-ready slice does not promote the module from `planned` and is not implementation evidence.
+`M00-B1` deliberately does not create an authenticated actor, session lifecycle, request context, policy decision, ID generator or storage port. Those claims remain blocked behind later batches. `AUTH-013` stays catalog-only until request-context work.
+
+`M00-B1` is implemented in `crates/platform-core/src/identity.rs`, with evidence in `crates/platform-core/tests/platform_identity.rs` and rustdoc `compile_fail` API proofs; `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` pass. Invocation authority now consumes the M00 tenant/user definitions. That is bounded partial evidence for one small module: `M00-B2` through `M00-B5` are planned, and the module remains short of the §15 exit gate, so it is neither `StandaloneReady` nor accepted.
 
 ## 15. Exit gate
 

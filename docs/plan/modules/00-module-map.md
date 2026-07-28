@@ -5,7 +5,7 @@
 - `Layer`: Large-module architecture
 - `Status`: Accepted current skeleton
 - `Version`: `module-map/v2`
-- `Last Review`: `2026-07-25`
+- `Last Review`: `2026-07-26`
 - `Owning Constitution`: [`../00-engineering-constitution.md`](../00-engineering-constitution.md)
 - `Counterpart Contract`: [`../../contracts/module-boundaries.md`](../../contracts/module-boundaries.md)
 - `Counterpart Tasks`: [`../../tasks/00-module-work-policy.md`](../../tasks/00-module-work-policy.md), [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md)
@@ -16,7 +16,7 @@ A large module is an independently owned and independently testable part. “Lar
 
 | ID | Large module | State key | Owns | Must not own | Current state |
 |---|---|---|---|---|---|
-| `M00` | Platform Control and Identity | `planned` | tenant/user/session identity, request causation, application command envelope, platform-wide policy references | package internals, Agent loop, source parsing, UI | planned |
+| `M00` | Platform Control and Identity | `partial-evidence` | tenant/user/session identity, request causation, application command envelope, platform-wide policy references | package internals, Agent loop, source parsing, UI | identity-types implemented; session/request-context/ports planned |
 | `M10` | Application Ingress Host | `skeleton` | Dioxus/Axum server-function ingress, versioned public HTTP/typed streams where needed, auth/session/client-compatibility admission, mapping to application ports | domain decisions, direct database/executor rules, UI | skeleton only |
 | `M20` | Market and Package Lifecycle | `partial-evidence` | catalog package/component identity, install/configure/enable/disable/update/revoke/grant lifecycle, invocation authority snapshots | model loop, Plugin execution, client state | manifest baseline + pure resolver evidence |
 | `M30` | Agent Harness and Runtime | `partial-evidence` | finite user-task/run phases, graph, budgets, context projection, provider/tool ports, replay and review | package lifecycle, executor implementation, transport/UI | node runtime kernel implemented; harness planned |

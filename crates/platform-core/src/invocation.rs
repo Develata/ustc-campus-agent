@@ -1,5 +1,9 @@
 //! Pure, deterministic invocation authority for `invocation-resolution/v0`.
 
+/// Canonical tenant/user identity is M00-owned. Invocation authority consumes the exact
+/// `platform-identity/v0` types and re-exports them so existing `invocation::{TenantId, UserId}`
+/// paths keep resolving to the same nominal types instead of a second wrapper.
+pub use crate::identity::{TenantId, UserId};
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
@@ -43,8 +47,9 @@ macro_rules! authority_id {
     };
 }
 
-authority_id!(TenantId);
-authority_id!(UserId);
+// TenantId and UserId are deliberately absent here: they are M00-owned and re-exported above.
+// PolicySnapshotId below stays M20-owned; it identifies an InvocationPolicySnapshot and must
+// not alias any future platform-policy identity.
 authority_id!(RunId);
 authority_id!(TurnId);
 authority_id!(InstallationId);
