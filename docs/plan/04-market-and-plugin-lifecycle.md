@@ -3,12 +3,13 @@
 ## Metadata
 
 - `Layer`: Product authority
-- `Status`: Schema/identity baseline and pure P0a resolver implemented; durable runtime lifecycle planned
+- `Status`: Schema/identity baseline and pure P0a resolver implemented; lifecycle contract accepted; durable runtime lifecycle planned
 - `Version`: `0.5.0`
-- `Last Review`: `2026-07-25`
+- `Last Review`: `2026-07-29`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
 - `Authority Defers To`: Market JSON schema/registries and package/permission contracts for exact fields
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
+- `Owning Lifecycle Contract`: [`../contracts/market-lifecycle.md`](../contracts/market-lifecycle.md)
 - `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
 - `Counterpart Acceptance`: `MARKET-*`, `PKG-*`, `AGENT-002`, `AGENT-017`, `AGENT-018`, `FP-006`, `FP-015`, `FP-007`
 - `Primary Code Areas`: `market/`, `crates/platform-core/`, future installation/gateway modules

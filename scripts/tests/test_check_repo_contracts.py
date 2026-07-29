@@ -446,6 +446,75 @@ class DocsTopologyContractTests(unittest.TestCase):
         self.assertIn("Rust doctest CI step must use the exact run command", issues)
 
 
+class MarketLifecycleContractTests(unittest.TestCase):
+    """The owning market lifecycle contract is registered, non-empty and drift-checked.
+
+    The repository checker registers every current contract in ``KEY_FILES`` and fails when
+    one is missing, empty, or introduced without registration. These rows pin that the
+    ``market-lifecycle/v0`` contract is admitted through that existing architecture rather
+    than through a second checker, and that each failure class is reachable by mutation.
+    """
+
+    CONTRACT_REL = "docs/contracts/market-lifecycle.md"
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        ci_path = self.root / ".github/workflows/ci.yml"
+        ci_path.parent.mkdir(parents=True)
+        shutil.copy2(REPO_ROOT / ".github/workflows/ci.yml", ci_path)
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        self.original_key_files = list(checker.KEY_FILES)
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        checker.KEY_FILES[:] = self.original_key_files
+        self.temporary_directory.cleanup()
+
+    def contract_path(self) -> Path:
+        return self.root / self.CONTRACT_REL
+
+    def check_key_files(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_key_files_present_and_nonempty(issues)
+        return issues
+
+    def test_market_lifecycle_contract_is_registered_and_nonempty(self) -> None:
+        # A registered, present, non-empty contract produces no issue naming it. The temp
+        # root carries only docs/ plus ci.yml, so unrelated key-file issues are expected;
+        # none of them may mention this contract.
+        self.assertFalse(
+            any("market-lifecycle.md" in issue for issue in self.check_key_files()),
+            self.check_key_files(),
+        )
+
+    def test_missing_market_lifecycle_contract_fails_closed(self) -> None:
+        self.contract_path().unlink()
+        self.assertIn(
+            f"key file missing: {self.CONTRACT_REL}",
+            self.check_key_files(),
+        )
+
+    def test_empty_market_lifecycle_contract_fails_closed(self) -> None:
+        self.contract_path().write_text(" \n", encoding="utf-8")
+        self.assertIn(
+            f"key file empty: {self.CONTRACT_REL}",
+            self.check_key_files(),
+        )
+
+    def test_unregistered_market_lifecycle_contract_fails_closed(self) -> None:
+        # The file remains present and non-empty, but is removed from the registration list,
+        # so the existing contract-registration architecture must report it as an
+        # unregistered current contract rather than admit it silently.
+        checker.KEY_FILES.remove(self.CONTRACT_REL)
+        self.assertIn(
+            f"current contract not registered as key file: {self.CONTRACT_REL}",
+            self.check_key_files(),
+        )
+
+
 class ModuleRegistryContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()

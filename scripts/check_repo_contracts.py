@@ -226,6 +226,7 @@ KEY_FILES = [
     "docs/contracts/data-models.md",
     "docs/contracts/interfaces.md",
     "docs/contracts/invocation-resolution.md",
+    "docs/contracts/market-lifecycle.md",
     "docs/contracts/module-boundaries.md",
     "docs/contracts/permissions.md",
     "docs/contracts/platform-identity.md",
