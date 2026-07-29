@@ -18,6 +18,8 @@ if SPEC is None or SPEC.loader is None:
 checker = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(checker)
 
+ADMITTED_INSTALLATION_SOURCE = '\nuse crate::identity::{TenantId, UserId};\nuse crate::invocation::{\n    CapabilityId, CatalogRevision, ComponentId, ComponentKind, ComponentVersion,\n    ExecutionIdentity, InstallationId, InstallationRevision, InstalledComponentIdentity,\n    PackageId, PackageVersion, PluginInstallationSnapshot, Sha256Digest,\n};\nuse std::collections::{BTreeMap, BTreeSet};\nuse std::error::Error;\nuse std::fmt;\n\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct InstallationCommandId(String);\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub struct InstallationEventSequence(u64);\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub struct ConfigurationRevision(u64);\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct ConfigurationKey(String);\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct NonSecretText(String);\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct SecretRefId(String);\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct SecretRef { tenant_id: TenantId, id: SecretRefId }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub enum ConfigurationValue { Text(NonSecretText), Integer(i64), Boolean(bool), Secret(SecretRef) }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct InstallationConfiguration { values: BTreeMap<ConfigurationKey, ConfigurationValue>, digest: Sha256Digest }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct InstalledComponentPin { component_id: ComponentId, kind: ComponentKind, version: ComponentVersion, digest: Sha256Digest, execution_identity: ExecutionIdentity }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct InstallationPackagePin { catalog_revision: CatalogRevision, package_id: PackageId, package_version: PackageVersion, package_digest: Sha256Digest, components: Vec<InstalledComponentPin>, component_set_digest: Sha256Digest, capability_manifest_digest: Sha256Digest }\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum ManagedInstallationState { InstalledDisabled, Enabled, Disabled, Revoked, Uninstalled }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct EnablePreconditionEvidence { installation_id: InstallationId, expected_revision: InstallationRevision, digest: Sha256Digest }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct InstallationAggregate { tenant_id: TenantId, user_id: UserId, installation_id: InstallationId, state: ManagedInstallationState }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct InstallationCommand { command_id: InstallationCommandId, installation_id: InstallationId }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub enum InstallationEventKind { Installed, Configured, Enabled, Disabled, Revoked, Uninstalled }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct InstallationEvent { sequence: InstallationEventSequence, kind: InstallationEventKind }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct InstallationSnapshot { aggregate: InstallationAggregate, resolver: Option<PluginInstallationSnapshot> }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub enum InstallationDecisionError { Rejected }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub enum InstallationReplayError { Rejected }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub enum InstallationRepositoryError { CommandConflict }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct InstallationCommandReceipt { command: InstallationCommand }\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct InMemoryInstallationRepository { receipts: BTreeMap<InstallationCommandId, InstallationCommandReceipt>, seen_capabilities: BTreeSet<CapabilityId> }\nstruct PersistedCommandReceipt;\n\nimpl InstallationCommandId { fn parse(value: impl Into<String>) -> Self { Self(value.into()) } }\nimpl InstallationEventSequence {}\nimpl ConfigurationRevision {}\nimpl ConfigurationKey {}\nimpl NonSecretText {}\nimpl SecretRefId {}\nimpl SecretRef {}\nimpl InstallationConfiguration {}\nimpl InstalledComponentPin {}\nimpl InstallationPackagePin {}\nimpl EnablePreconditionEvidence {}\nimpl InstallationAggregate {}\nimpl InstallationCommand {}\nimpl InstallationEvent {}\nimpl InstallationSnapshot {}\nimpl InstallationCommandReceipt {}\nimpl InMemoryInstallationRepository {}\nimpl fmt::Display for InstallationDecisionError { fn fmt(&self, formatter: &mut fmt::Formatter<\'_>) -> fmt::Result { write!(formatter, "installation decision error") } }\nimpl fmt::Display for InstallationReplayError { fn fmt(&self, formatter: &mut fmt::Formatter<\'_>) -> fmt::Result { write!(formatter, "installation replay error") } }\nimpl fmt::Display for InstallationRepositoryError { fn fmt(&self, formatter: &mut fmt::Formatter<\'_>) -> fmt::Result { write!(formatter, "installation repository error") } }\nimpl Error for InstallationDecisionError {}\nimpl Error for InstallationReplayError {}\nimpl Error for InstallationRepositoryError {}\n\npub trait InstallationRepository {\n    fn execute(&mut self, command: InstallationCommand) -> Result<InstallationCommandReceipt, InstallationRepositoryError>;\n}\nimpl InstallationRepository for InMemoryInstallationRepository {\n    fn execute(&mut self, command: InstallationCommand) -> Result<InstallationCommandReceipt, InstallationRepositoryError> {\n        let _ = matches!(InstallationRepositoryError::CommandConflict, InstallationRepositoryError::CommandConflict);\n        let _ = format!("installation receipt");\n        Ok(InstallationCommandReceipt { command })\n    }\n}\n\npub fn decide(_current: Option<&InstallationAggregate>, _command: &InstallationCommand) -> Result<InstallationEvent, InstallationDecisionError> { Err(InstallationDecisionError::Rejected) }\npub fn evolve(_current: Option<InstallationAggregate>, _event: &InstallationEvent) -> Result<InstallationAggregate, InstallationReplayError> { Err(InstallationReplayError::Rejected) }\npub fn replay<\'a>(_events: impl IntoIterator<Item = &\'a InstallationEvent>) -> Result<Option<InstallationAggregate>, InstallationReplayError> { Ok(None) }\n'
+
 
 class MarketContractTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -2777,6 +2779,24 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def market_path(self) -> Path:
         return self.root / "crates/platform-core/src/market.rs"
 
+    def installation_path(self) -> Path:
+        return self.root / checker.PLATFORM_INSTALLATION_SOURCE
+
+    def installation_test_path(self) -> Path:
+        return self.root / checker.PLATFORM_INSTALLATION_TEST
+
+    def admit_installation_surface(self) -> None:
+        path = self.installation_path()
+        if not path.is_file():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(ADMITTED_INSTALLATION_SOURCE, encoding="utf-8")
+        if "pub mod installation;" not in self.market_path().read_text(encoding="utf-8"):
+            self.rewrite(
+                self.market_path(),
+                "use crate::invocation::{",
+                "pub mod installation;\n\nuse crate::invocation::{",
+            )
+
     def bound_test_path(self) -> Path:
         return self.root / checker.PLATFORM_IDENTITY_TEST
 
@@ -2814,7 +2834,102 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
 
     def test_missing_market_source_fails_closed(self) -> None:
         self.market_path().unlink()
-        self.assert_rejected(self.check_identity(), "platform-core source file set drifted")
+        self.assert_rejected(self.check_identity(), "platform identity carrier missing")
+
+    def test_admitted_market_installation_surface_passes(self) -> None:
+        self.admit_installation_surface()
+        self.assertEqual(self.check_identity(), [])
+
+    def test_missing_market_installation_nested_file_fails_closed(self) -> None:
+        self.admit_installation_surface()
+        self.installation_path().unlink()
+        issues = self.check_identity()
+        self.assert_rejected(issues, "market installation carrier missing")
+        self.assert_rejected(issues, "platform-core source file set drifted")
+
+    def test_market_installation_ignored_tests_fail_closed(self) -> None:
+        self.admit_installation_surface()
+        text = self.installation_test_path().read_text(encoding="utf-8")
+        test_count = text.count("#[test]\nfn ")
+        self.assertEqual(test_count, len(checker.PLATFORM_INSTALLATION_TEST_FUNCTIONS))
+        self.installation_test_path().write_text(
+            text.replace("#[test]\nfn ", "#[ignore]\n#[test]\nfn "),
+            encoding="utf-8",
+        )
+        issues = self.check_identity()
+        self.assert_rejected(issues, "market installation acceptance test")
+        self.assert_rejected(issues, "attribute envelope drifted")
+
+    def test_market_installation_missing_bound_test_fails_closed(self) -> None:
+        self.admit_installation_surface()
+        self.rewrite(
+            self.installation_test_path(),
+            "#[test]\nfn configuration_values_are_canonical_bounded_and_secret_safe()",
+            "fn configuration_values_are_canonical_bounded_and_secret_safe()",
+        )
+        self.assert_rejected(
+            self.check_identity(),
+            "market installation acceptance test registration drift",
+        )
+
+    def test_missing_market_installation_module_declaration_fails_closed(self) -> None:
+        self.admit_installation_surface()
+        self.rewrite(self.market_path(), "pub mod installation;\n\n", "")
+        self.assert_rejected(
+            self.check_identity(),
+            "market installation module declaration missing",
+        )
+
+    def test_market_installation_public_surface_rename_fails_closed(self) -> None:
+        self.admit_installation_surface()
+        self.rewrite(self.installation_path(), "pub struct SecretRefId", "pub struct SecretReferenceId")
+        self.assert_rejected(
+            self.check_identity(),
+            "market installation public declaration surface drifted",
+        )
+
+    def test_market_installation_extra_public_surface_fails_closed(self) -> None:
+        self.admit_installation_surface()
+        self.rewrite(
+            self.installation_path(),
+            "pub trait InstallationRepository {",
+            "pub struct ExtraPublicSurface;\n\npub trait InstallationRepository {",
+        )
+        self.assert_rejected(
+            self.check_identity(),
+            "market installation public declaration surface drifted",
+        )
+
+    def test_market_installation_visibility_widening_fails_closed(self) -> None:
+        self.admit_installation_surface()
+        self.rewrite(self.installation_path(), "struct CommandLedgerEntry {", "pub struct CommandLedgerEntry {")
+        self.assert_rejected(
+            self.check_identity(),
+            "market installation public declaration surface drifted",
+        )
+
+    def test_market_installation_dependency_import_drift_fails_closed(self) -> None:
+        self.admit_installation_surface()
+        self.rewrite(
+            self.installation_path(),
+            "use std::fmt;",
+            "use std::fmt;\nuse std::time::SystemTime;",
+        )
+        self.assert_rejected(self.check_identity(), "market installation item declarations drifted")
+
+    def test_market_installation_omitted_allowlist_entry_fails_closed(self) -> None:
+        self.admit_installation_surface()
+        old = checker.PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS
+        self.addCleanup(setattr, checker, "PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS", old)
+        setattr(
+            checker,
+            "PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS",
+            tuple(item for item in old if item != "pub struct SecretRefId"),
+        )
+        self.assert_rejected(
+            self.check_identity(),
+            "market installation public declaration surface drifted",
+        )
 
     def test_missing_market_catalog_test_fails_closed(self) -> None:
         (self.root / "crates/platform-core/tests/market_package_catalog.rs").unlink()

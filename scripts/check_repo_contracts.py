@@ -2115,6 +2115,8 @@ PLATFORM_CORE_LIB = "crates/platform-core/src/lib.rs"
 PLATFORM_INVOCATION_SOURCE = "crates/platform-core/src/invocation.rs"
 PLATFORM_MARKET_SOURCE = "crates/platform-core/src/market.rs"
 PLATFORM_CAPABILITY_TEST = "crates/platform-core/tests/market_capability_registry.rs"
+PLATFORM_INSTALLATION_TEST = 'crates/platform-core/tests/market_installation_lifecycle.rs'
+PLATFORM_INSTALLATION_SOURCE = 'crates/platform-core/src/market/installation.rs'
 PLATFORM_IDENTITY_KINDS = (
     "TenantId",
     "UserId",
@@ -2382,13 +2384,16 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/lib.rs',
  'src/market.rs',
  'src/market/capability.rs',
+ 'src/market/installation.rs',
  'tests/invocation_resolution.rs',
  'tests/market_capability_registry.rs',
+ 'tests/market_installation_lifecycle.rs',
  'tests/market_package_catalog.rs',
  'tests/platform_identity.rs',
  'tests/support/invocation_fixture.rs',
  'tests/support/invocation_fixture_executor.rs')
 PLATFORM_IDENTITY_ADMITTED_REEXPORT = "pub use crate::identity::{TenantId, UserId};"
+PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
 # a file extension. Pinning the declarations pins the compiled set semantically, so no
 # attribute spelling — `#[path]`, `#[cfg_attr(all(), path = "x.txt")]`, or a future one — can
@@ -2396,8 +2401,9 @@ PLATFORM_IDENTITY_ADMITTED_REEXPORT = "pub use crate::identity::{TenantId, UserI
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'invocation.rs': (),
  'lib.rs': ('identity', 'invocation', 'market'),
- 'market.rs': ('capability',),
- 'market/capability.rs': ()}
+ 'market.rs': ('capability', 'installation'),
+ 'market/capability.rs': (),
+ 'market/installation.rs': ()}
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
 # the spelling `crate::identity` is not the same as accounting for the use tree that contains
 # it. `#[path = "identity_hidden.txt"] pub mod identity;` keeps the admitted name while Cargo
@@ -2436,6 +2442,7 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
             '#[cfg(test)] mod tests',
             'use super::*;'),
  'market.rs': ('pub mod capability;',
+               'pub mod installation;',
                'use crate::invocation::{ CapabilityId, CatalogRevision, ComponentKind, PackageId, '
                'PackageVersion, Sha256Digest, };',
                'use serde::Deserialize;',
@@ -2451,7 +2458,20 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                           'use std::error::Error;',
                           'use std::fmt;',
                           '#[cfg(test)] mod tests',
-                          'use super::*;')}
+                          'use super::*;'),
+ 'market/installation.rs': ('use crate::identity::{TenantId, UserId};',
+                            'use crate::invocation::{ CatalogRevision, ComponentId, ComponentKind, '
+                            'ComponentVersion, ExecutionIdentity, InstallationId, '
+                            'InstallationRevision, InstallationState as ResolverInstallationState, '
+                            'InstalledComponentIdentity, PackageId, PackageVersion, '
+                            'PluginInstallationSnapshot, Sha256Digest, };',
+                            'use std::collections::{BTreeMap, BTreeSet};',
+                            'use std::error::Error;',
+                            'use std::fmt;',
+                            'pub type InstallationSnapshot = InstallationAggregate;',
+                            '#[cfg(test)] #[allow(clippy::expect_used, clippy::panic, '
+                            'clippy::unwrap_used)] mod tests',
+                            'use super::*;')}
 # A macro is the remaining item category that can add API to a governed type without naming it
 # in a `use`, a `type` or an `impl` header: `macro_rules! m { ($t:ty) => { impl AsRef<str> for
 # $t { .. } } }` plus `m!(TenantId);` implements a trait for an identity kind while every
@@ -2461,7 +2481,8 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
  'invocation.rs': ('authority_id',),
  'lib.rs': (),
  'market.rs': (),
- 'market/capability.rs': ()}
+ 'market/capability.rs': (),
+ 'market/installation.rs': ()}
 # Macro INVOCATION names are pinned too, not screened for `include!`. A splicing macro can be
 # reached whatever the spelling — `include /* x */ !("f.rs")` contains no `include!` substring —
 # so the admitted name set per governed source is exact. `include_str!` stays admitted in
@@ -2470,7 +2491,8 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_
  'invocation.rs': ('authority_id', 'format', 'write'),
  'lib.rs': ('assert', 'assert_eq', 'include_str', 'panic'),
  'market.rs': ('matches', 'write'),
- 'market/capability.rs': ('assert', 'assert_eq', 'matches')}
+ 'market/capability.rs': ('assert', 'assert_eq', 'matches'),
+ 'market/installation.rs': ('assert_eq', 'format', 'matches', 'panic', 'vec', 'write')}
 PLATFORM_IDENTITY_ADMITTED_TEST_MACRO_INVOCATIONS = (
     "assert",
     "assert_eq",
@@ -2507,6 +2529,48 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'capability.rs': ('impl CapabilityDefini
                  'impl fmt::Display for $name',
                  'impl fmt::Display for IdentityValueError',
                  'impl-arg Into<String>'),
+ 'installation.rs': ('impl ConfigurationKey',
+                     'impl ConfigurationRevision',
+                     'impl EnablePreconditionEvidence',
+                     'impl Error for InstallationConstructionError',
+                     'impl Error for InstallationDecisionError',
+                     'impl Error for InstallationReplayError',
+                     'impl Error for InstallationRepositoryError',
+                     'impl InMemoryInstallationRepository',
+                     'impl InstallationAggregate',
+                     'impl InstallationCommand',
+                     'impl InstallationCommandId',
+                     'impl InstallationCommandReceipt',
+                     'impl InstallationConfiguration',
+                     'impl InstallationEvent',
+                     'impl InstallationEventPayload',
+                     'impl InstallationEventSequence',
+                     'impl InstallationPackagePin',
+                     'impl InstallationRepository for InMemoryInstallationRepository',
+                     'impl InstalledComponentPin',
+                     'impl ManagedInstallationState',
+                     'impl NonSecretText',
+                     'impl SecretRef',
+                     'impl SecretRefId',
+                     'impl fmt::Debug for ConfigurationValue',
+                     'impl fmt::Debug for EnablePreconditionEvidence',
+                     'impl fmt::Debug for InstallationCommandAction',
+                     'impl fmt::Debug for InstallationCommandId',
+                     'impl fmt::Debug for InstallationConfiguration',
+                     'impl fmt::Debug for InstallationEvent',
+                     'impl fmt::Debug for InstallationEventPayload',
+                     'impl fmt::Debug for NonSecretText',
+                     'impl fmt::Debug for SecretRef',
+                     'impl fmt::Debug for SecretRefId',
+                     'impl fmt::Display for InstallationConstructionError',
+                     'impl fmt::Display for InstallationDecisionError',
+                     'impl fmt::Display for InstallationReplayError',
+                     'impl fmt::Display for InstallationRepositoryError',
+                     'impl-arg Into<String>',
+                     'impl-arg Into<String>',
+                     'impl-arg Into<String>',
+                     'impl-arg Into<String>',
+                     "impl-arg IntoIterator<Item = &'a InstallationEvent>"),
  'invocation.rs': ('impl $name',
                    'impl AuthorizedInvocation',
                    'impl Error for InvocationAuthorizationError',
@@ -2539,6 +2603,143 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'capability.rs': ('impl CapabilityDefini
 # Kept as a second, independent carrier alongside the `extern` item accounting above.
 PLATFORM_CORE_FORBIDDEN_SOURCE_PATTERNS = (("extern crate", r"\bextern\s+crate\b"),)
 PLATFORM_CAPABILITY_TEST_FUNCTIONS = ('current_registry_loads_with_exact_eight_definitions', 'enum_risk_and_compatibility_mappings_are_exact', 'source_size_and_malformed_json_fail_closed', 'duplicate_json_keys_fail_closed', 'duplicate_capability_ids_fail_closed', 'invalid_capability_id_grammar_fail_closed', 'missing_extra_and_unknown_fields_fail_closed', 'invalid_schema_version_and_registry_revision_fail_closed', 'forbidden_and_incoherent_combinations_fail_closed', 'auto_grant_candidacy_and_deprecated_revoked_exclusions', 'deterministic_ordering_and_permutation_independent_digest', 'fixed_definition_and_registry_digest_vectors', 'one_field_change_alters_definition_digest', 'registry_revision_does_not_change_definition_digests', 'policy_change_comparator_branches_and_precedence', 'errors_do_not_leak_rejected_source_fragments', 'empty_registry_loads_with_zero_definitions')
+PLATFORM_INSTALLATION_TEST_FUNCTIONS = ('configuration_values_are_canonical_bounded_and_secret_safe',
+ 'package_pins_are_exact_canonical_and_duplicate_safe',
+ 'legal_install_configure_revoke_and_uninstall_transitions_are_explicit',
+ 'illegal_transitions_fail_closed_with_stable_categories',
+ 'absence_terminal_and_reinstall_semantics_are_distinct',
+ 'repository_idempotency_persists_accepted_rejected_and_global_conflicts',
+ 'repository_failure_injection_is_atomic_and_retryable',
+ 'replay_accepts_success_histories_and_rejects_gap_duplicate_reorder_and_command_reuse',
+ 'replay_rejects_impossible_initial_post_terminal_and_redundant_field_mismatches',
+ 'resolver_projection_maps_managed_states_without_grants_or_resolver_mutation',
+ 'event_receipt_and_error_debug_display_do_not_leak_configuration_or_secret_material')
+PLATFORM_INSTALLATION_ADMITTED_DERIVES = ('Clone, Copy',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Debug, Default')
+PLATFORM_INSTALLATION_ADMITTED_UNCLASSIFIED_PUBLIC = ('pub(in crate::market) fn fr',)
+PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn capability_manifest_digest',
+ 'pub const fn capability_manifest_digest',
+ 'pub const fn catalog_revision',
+ 'pub const fn command',
+ 'pub const fn command_id',
+ 'pub const fn command_id',
+ 'pub const fn component_id',
+ 'pub const fn component_set_digest',
+ 'pub const fn component_set_digest',
+ 'pub const fn configuration',
+ 'pub const fn configuration_digest',
+ 'pub const fn configuration_revision',
+ 'pub const fn digest',
+ 'pub const fn digest',
+ 'pub const fn entries',
+ 'pub const fn evidence_digest',
+ 'pub const fn execution_identity',
+ 'pub const fn expected_installation_revision',
+ 'pub const fn get',
+ 'pub const fn get',
+ 'pub const fn grant_set_snapshot_digest',
+ 'pub const fn id',
+ 'pub const fn installation_id',
+ 'pub const fn installation_id',
+ 'pub const fn installation_id',
+ 'pub const fn kind',
+ 'pub const fn kind',
+ 'pub const fn last_sequence',
+ 'pub const fn outcome',
+ 'pub const fn package_digest',
+ 'pub const fn package_digest',
+ 'pub const fn package_id',
+ 'pub const fn package_pin',
+ 'pub const fn package_version',
+ 'pub const fn policy_admission_snapshot_digest',
+ 'pub const fn post_revision',
+ 'pub const fn revision',
+ 'pub const fn sequence',
+ 'pub const fn state',
+ 'pub const fn tenant_id',
+ 'pub const fn tenant_id',
+ 'pub const fn user_id',
+ 'pub const fn version',
+ 'pub enum ConfigurationValue',
+ 'pub enum InstallationCommandOutcome',
+ 'pub enum InstallationConstructionError',
+ 'pub enum InstallationDecisionError',
+ 'pub enum InstallationEventKind',
+ 'pub enum InstallationReplayError',
+ 'pub enum InstallationRepositoryError',
+ 'pub enum ManagedInstallationState',
+ 'pub fn as_str',
+ 'pub fn as_str',
+ 'pub fn as_str',
+ 'pub fn as_str',
+ 'pub fn components',
+ 'pub fn configure',
+ 'pub fn decide',
+ 'pub fn disable',
+ 'pub fn enable',
+ 'pub fn evolve',
+ 'pub fn fail_next_commit_for_testing',
+ 'pub fn install',
+ 'pub fn new',
+ 'pub fn new',
+ 'pub fn new',
+ 'pub fn new',
+ 'pub fn new',
+ 'pub fn new',
+ 'pub fn new',
+ 'pub fn parse',
+ 'pub fn parse',
+ 'pub fn parse',
+ 'pub fn parse',
+ 'pub fn replay',
+ 'pub fn revoke',
+ 'pub fn to_installed_identity',
+ 'pub fn to_resolver_snapshot',
+ 'pub fn uninstall',
+ 'pub struct ConfigurationKey',
+ 'pub struct ConfigurationRevision',
+ 'pub struct EnablePreconditionEvidence',
+ 'pub struct InMemoryInstallationRepository',
+ 'pub struct InstallationAggregate',
+ 'pub struct InstallationCommand',
+ 'pub struct InstallationCommandId',
+ 'pub struct InstallationCommandReceipt',
+ 'pub struct InstallationConfiguration',
+ 'pub struct InstallationEvent',
+ 'pub struct InstallationEventSequence',
+ 'pub struct InstallationPackagePin',
+ 'pub struct InstalledComponentPin',
+ 'pub struct NonSecretText',
+ 'pub struct SecretRef',
+ 'pub struct SecretRefId',
+ 'pub trait InstallationRepository',
+ 'pub type InstallationSnapshot')
 # `#` `!` `[` with any whitespace between: an inner attribute is a token sequence, and
 # `# /*x*/ ! [cfg(any())]` excludes a module or a whole crate exactly as `#![cfg(any())]` does.
 RUST_INNER_ATTRIBUTE_PATTERN = r"#\s*!\s*\["
@@ -2763,7 +2964,8 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive'
  'invocation.rs': ('derive', 'must_use'),
  'lib.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'market.rs': ('derive', 'must_use', 'serde'),
- 'market/capability.rs': ('cfg', 'derive', 'must_use', 'serde', 'test')}
+ 'market/capability.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
+ 'market/installation.rs': ('allow', 'cfg', 'derive', 'must_use', 'test')}
 PLATFORM_IDENTITY_ADMITTED_TEST_ATTRIBUTE_NAMES = ("test",)
 # Pinning dependency NAMES pins nothing about what those names resolve to. `semver = { path =
 # "crates/fake-semver" }` keeps the admitted name while Cargo compiles an attacker-authored
@@ -5250,17 +5452,96 @@ def _check_bound_rust_test_file(
         )
 
 
+def _platform_core_installation_surface_enabled(market_code: str) -> bool:
+    installation_path = ROOT / PLATFORM_INSTALLATION_SOURCE
+    return installation_path.is_file() or re.search(
+        r"^\s*pub\s+mod\s+installation\s*;", market_code, flags=re.MULTILINE
+    ) is not None
+
+
+def _check_market_installation_surface(market_code: str, issues: list[str]) -> bool:
+    """Pins the M20-B3-s1 nested installation module once that surface appears."""
+    enabled = _platform_core_installation_surface_enabled(market_code)
+    if not enabled:
+        return False
+    installation_path = ROOT / PLATFORM_INSTALLATION_SOURCE
+    if not re.search(r"^\s*pub\s+mod\s+installation\s*;", market_code, flags=re.MULTILINE):
+        fail("market installation module declaration missing from crates/platform-core/src/market.rs", issues)
+    if not installation_path.is_file():
+        fail(f"market installation carrier missing: {PLATFORM_INSTALLATION_SOURCE}", issues)
+        return True
+    governed = strip_rust_comments_and_literals(installation_path.read_text(encoding="utf-8"))
+    label = PLATFORM_INSTALLATION_SOURCE
+    if re.search(r"\bcfg_attr\b", governed):
+        fail(f"platform-core source must not carry cfg_attr: {label}", issues)
+    if re.search(RUST_INNER_ATTRIBUTE_PATTERN, governed):
+        fail(f"platform-core source must not carry an inner attribute: {label}", issues)
+    for carrier, pattern in PLATFORM_CORE_FORBIDDEN_SOURCE_PATTERNS + PLATFORM_CORE_FORBIDDEN_SPLICE_PATTERNS:
+        if re.search(pattern, governed):
+            fail(f"platform-core source must not carry {carrier!r}: {label}", issues)
+    items, unterminated = rust_item_declarations(governed)
+    if unterminated:
+        fail(f"unterminated platform-core item declaration in {label}: {unterminated}", issues)
+    admitted_items = list(PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS["market/installation.rs"])
+    if items != admitted_items:
+        fail(f"market installation item declarations drifted: expected {admitted_items} actual={items}", issues)
+    attributes, unterminated_attributes = rust_attributes(governed)
+    if unterminated_attributes:
+        fail(f"unterminated attribute in {label}: {unterminated_attributes}", issues)
+    observed_attributes = rust_attribute_names(attributes)
+    admitted_attributes = tuple(sorted(PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES["market/installation.rs"]))
+    if observed_attributes != admitted_attributes:
+        fail(f"market installation attribute names drifted: expected {admitted_attributes} actual={observed_attributes}", issues)
+    public_declarations, unclassified_public = rust_public_declarations(governed)
+    if tuple(unclassified_public) != PLATFORM_INSTALLATION_ADMITTED_UNCLASSIFIED_PUBLIC:
+        fail(
+            "market installation has an unclassified public declaration: "
+            f"expected {PLATFORM_INSTALLATION_ADMITTED_UNCLASSIFIED_PUBLIC} "
+            f"actual={unclassified_public}",
+            issues,
+        )
+    if public_declarations != sorted(PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS):
+        fail(f"market installation public declaration surface drifted: actual={public_declarations}", issues)
+    impl_declarations, unclassified_impls = rust_impl_declarations(governed)
+    if unclassified_impls:
+        fail(f"market installation has an unclassified impl declaration: {unclassified_impls}", issues)
+    if impl_declarations != sorted(PLATFORM_CORE_ADMITTED_SIBLING_IMPLS["installation.rs"]):
+        fail(f"market installation implementation surface drifted: actual={impl_declarations}", issues)
+    derives = sorted(rust_derive_bodies(governed))
+    if derives != sorted(PLATFORM_INSTALLATION_ADMITTED_DERIVES):
+        fail(f"market installation derive surface drifted: {derives}", issues)
+    definitions = rust_macro_definitions(governed)
+    if definitions != sorted(PLATFORM_CORE_ADMITTED_SIBLING_MACROS["market/installation.rs"]):
+        fail(f"market installation macro definitions drifted: actual={definitions}", issues)
+    invocations, unterminated_macros = rust_macro_invocation_arguments(governed)
+    if unterminated_macros:
+        fail(f"unterminated platform-core macro invocation in {label}: {sorted(unterminated_macros)}", issues)
+    invoked = tuple(sorted({name for name, _ in invocations}))
+    admitted_invocations = tuple(sorted(PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS["market/installation.rs"]))
+    if invoked != admitted_invocations:
+        fail(f"market installation macro invocations drifted: expected {admitted_invocations} actual={invoked}", issues)
+    _check_bound_rust_test_file(
+        PLATFORM_INSTALLATION_TEST,
+        PLATFORM_INSTALLATION_TEST_FUNCTIONS,
+        "market installation",
+        issues,
+    )
+    return True
+
+
 def check_platform_identity_implementation(issues: list[str]) -> None:
     source_path = ROOT / PLATFORM_IDENTITY_SOURCE
     test_path = ROOT / PLATFORM_IDENTITY_TEST
     lib_path = ROOT / PLATFORM_CORE_LIB
     invocation_path = ROOT / PLATFORM_INVOCATION_SOURCE
+    market_path = ROOT / PLATFORM_MARKET_SOURCE
 
     for rel, path in (
         (PLATFORM_IDENTITY_SOURCE, source_path),
         (PLATFORM_IDENTITY_TEST, test_path),
         (PLATFORM_CORE_LIB, lib_path),
         (PLATFORM_INVOCATION_SOURCE, invocation_path),
+        (PLATFORM_MARKET_SOURCE, market_path),
     ):
         if not path.is_file():
             fail(f"platform identity carrier missing: {rel}", issues)
@@ -5273,6 +5554,8 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
     invocation_code = strip_rust_comments_and_literals(
         invocation_path.read_text(encoding="utf-8")
     )
+    market_code = strip_rust_comments_and_literals(market_path.read_text(encoding="utf-8"))
+    _check_market_installation_surface(market_code, issues)
     test_code = strip_rust_comments_and_literals(test_path.read_text(encoding="utf-8"))
 
     if not re.search(r"^\s*pub mod identity;$", lib_code, flags=re.MULTILINE):
@@ -6023,6 +6306,9 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
             admitted = (
                 path.name == "invocation.rs"
                 and normalized == PLATFORM_IDENTITY_ADMITTED_REEXPORT
+            ) or (
+                path.relative_to(ROOT).as_posix() == PLATFORM_INSTALLATION_SOURCE
+                and normalized == PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT
             )
             if (mentions_kind or mentions_module) and not admitted:
                 fail(

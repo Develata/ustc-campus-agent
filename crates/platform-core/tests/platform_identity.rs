@@ -1745,7 +1745,7 @@ fn assert_public_surface_is_frozen() {
         (
             "market.rs",
             MARKET_SOURCE,
-            &["capability"] as &[&str],
+            &["capability", "installation"] as &[&str],
             &ADMITTED_MARKET_ITEMS as &[&str],
             &[] as &[&str],
             false,
@@ -4163,8 +4163,9 @@ const ADMITTED_INVOCATION_ITEMS: [&str; 6] = [
     ),
 ];
 
-const ADMITTED_MARKET_ITEMS: [&str; 8] = [
+const ADMITTED_MARKET_ITEMS: [&str; 9] = [
     "pub mod capability;",
+    "pub mod installation;",
     concat!(
         "use crate::invocation::{ CapabilityId, CatalogRevision, ComponentKind, PackageId, ",
         "PackageVersion, Sha256Digest, };"
