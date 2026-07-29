@@ -3,14 +3,14 @@
 ## Metadata
 
 - `Module ID`: `M00`
-- `Status`: Accepted blueprint; `M00-B1 identity-types` implemented, `M00-B2 session-domain` contract accepted and unimplemented, remaining batches planned
+- `Status`: Accepted blueprint; `M00-B1 identity-types` and `M00-B2 session-domain` implemented, remaining batches planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m00-platform-control/v1`
 - `Last Review`: `2026-07-29`
 - `Composition`: `apps/ustc-agentd`
-- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`, which does not exist yet; future cohesive modules under `crates/platform-core/`; adapter implementations under `M90`
+- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`; future cohesive modules under `crates/platform-core/`; adapter implementations under `M90`
 - `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md) for `M00-B1`; [`platform-session/v0`](../../contracts/platform-session.md) for `M00-B2`; [`module-boundaries.md`](../../contracts/module-boundaries.md) for later cross-module actor/context values
-- `Acceptance`: implemented `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015`, `AUTH-016`; active `planned` `AUTH-017`, `AUTH-018`, `AUTH-019`, `AUTH-020`; catalog-only `AUTH-013` and later admission cases remain deferred
+- `Acceptance`: implemented `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015`, `AUTH-016`, `AUTH-017`, `AUTH-018`, `AUTH-019`, `AUTH-020`; catalog-only `AUTH-013` and later admission cases remain deferred
 
 ## 1. Purpose
 
@@ -182,13 +182,13 @@ Each small module receives a separate reviewable commit with unit tests before t
 
 `M00-B1` deliberately does not create an authenticated actor, session lifecycle, request context, policy decision, ID generator or storage port. Those claims remain blocked behind later batches. `AUTH-013` stays catalog-only until request-context work.
 
-`M00-B1` is implemented in `crates/platform-core/src/identity.rs`, with evidence in `crates/platform-core/tests/platform_identity.rs` and rustdoc `compile_fail` API proofs; `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` pass. Invocation authority now consumes the M00 tenant/user definitions. That is bounded partial evidence for one small module: `M00-B3` through `M00-B5` are planned, `M00-B2` has an accepted contract and no implementation, and the module remains short of the §16 exit gate, so it is neither `StandaloneReady` nor accepted.
+`M00-B1` is implemented in `crates/platform-core/src/identity.rs`, with evidence in `crates/platform-core/tests/platform_identity.rs` and rustdoc `compile_fail` API proofs; `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` pass. Invocation authority now consumes the M00 tenant/user definitions. That is bounded partial evidence for one small module. `M00-B2` is now implemented alongside it under §15, `M00-B3` through `M00-B5` are planned, and the module remains short of the §16 exit gate, so it is neither `StandaloneReady` nor accepted.
 
 ## 15. Second approved batch — `M00-B2 session-domain`
 
 [`platform-session/v0`](../../contracts/platform-session.md) is the exact contract for the second small module. It freezes the pure, replayable lifecycle kernel for one session: immutable open scope, resolved idle/absolute/credential deadline algebra, the open/refresh/expire/revoke transition table, expected-revision event ordering, deterministic decision/evolution/replay, typed non-echoing failures, the credential and dependency negative space, and — in its §4.1 and §5.1 — the exact public command/event topology, constructor signatures, accessors, derive set and Serde tagging that this blueprint's §3 and §4 name only semantically.
 
-The contract is **accepted and unimplemented**. `crates/platform-core/src/session.rs` and `crates/platform-core/tests/platform_session.rs` do not exist; `AUTH-017`, `AUTH-018`, `AUTH-019` and `AUTH-020` are active rows at status `planned` with the exact future bindings in that contract's §12. `planned` is a non-pass state, so nothing in this section is evidence of behavior.
+The contract is **accepted and implemented**. `crates/platform-core/src/session.rs` and `crates/platform-core/tests/platform_session.rs` exist and carry the four bound tests of that contract's §12. `AUTH-017`, `AUTH-018`, `AUTH-019` and `AUTH-020` are `implemented`; two of their §13 fixtures are private library-target fixtures inside the session module, for the reason that contract's §17 records. `M00` stays `partial-evidence`: this batch creates no port, adapter, request context or admission behavior.
 
 `M00-B2` deliberately does not create a clock, repository, journal, database, secret resolver, ID generator, authenticated actor, request context, policy reference, session port, control-evidence projection, cookie/token/auth adapter or `M10` integration. It authenticates no credential and persists nothing: `expected_revision` is validated as optimistic-concurrency *intent*, and the compare-and-append that would make it durable belongs to `M00-B4`. Those claims stay blocked behind their own batches and contracts.
 

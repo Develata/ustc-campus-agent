@@ -2115,6 +2115,8 @@ PLATFORM_IDENTITY_TEST = "crates/platform-core/tests/platform_identity.rs"
 PLATFORM_CORE_LIB = "crates/platform-core/src/lib.rs"
 PLATFORM_INVOCATION_SOURCE = "crates/platform-core/src/invocation.rs"
 PLATFORM_MARKET_SOURCE = "crates/platform-core/src/market.rs"
+PLATFORM_SESSION_SOURCE = "crates/platform-core/src/session.rs"
+PLATFORM_SESSION_TEST = "crates/platform-core/tests/platform_session.rs"
 PLATFORM_CAPABILITY_TEST = "crates/platform-core/tests/market_capability_registry.rs"
 PLATFORM_INSTALLATION_TEST = 'crates/platform-core/tests/market_installation_lifecycle.rs'
 PLATFORM_INSTALLATION_SOURCE = 'crates/platform-core/src/market/installation.rs'
@@ -2386,25 +2388,44 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/market.rs',
  'src/market/capability.rs',
  'src/market/installation.rs',
+ 'src/session.rs',
  'tests/invocation_resolution.rs',
  'tests/market_capability_registry.rs',
  'tests/market_installation_lifecycle.rs',
  'tests/market_package_catalog.rs',
  'tests/platform_identity.rs',
+ 'tests/platform_session.rs',
  'tests/support/invocation_fixture.rs',
  'tests/support/invocation_fixture_executor.rs')
 PLATFORM_IDENTITY_ADMITTED_REEXPORT = "pub use crate::identity::{TenantId, UserId};"
 PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
+PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT = (
+    "use crate::identity::{SessionId, TenantId, UserId};"
+)
+# Cross-file bindings of an admitted kind are admitted by ENUMERATION, never by pattern, and
+# each entry is keyed by exact repository-relative file together with exact normalized text.
+# Relaxing this into a prefix, regex or predicate over `crate::identity::` would re-open
+# precisely the alias class the surrounding rule exists to close: `use crate::identity::TenantId
+# as Tenant;` matches every such pattern while changing the name every textual comparison sees.
+# Two independent carriers must both admit a binding — it appears in the governed source's item
+# allowlist above like any other item, AND it appears here — and neither substitutes for the
+# other. Adding a row is registered drift that must be mirrored in the Rust guard.
+PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
+    (PLATFORM_INVOCATION_SOURCE, PLATFORM_IDENTITY_ADMITTED_REEXPORT),
+    (PLATFORM_INSTALLATION_SOURCE, PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT),
+    (PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT),
+)
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
 # a file extension. Pinning the declarations pins the compiled set semantically, so no
 # attribute spelling — `#[path]`, `#[cfg_attr(all(), path = "x.txt")]`, or a future one — can
 # introduce a module the scan never reads.
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'invocation.rs': (),
- 'lib.rs': ('identity', 'invocation', 'market'),
+ 'lib.rs': ('identity', 'invocation', 'market', 'session'),
  'market.rs': ('capability', 'installation'),
  'market/capability.rs': (),
- 'market/installation.rs': ()}
+ 'market/installation.rs': (),
+ 'session.rs': ()}
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
 # the spelling `crate::identity` is not the same as accounting for the use tree that contains
 # it. `#[path = "identity_hidden.txt"] pub mod identity;` keeps the admitted name while Cargo
@@ -2440,6 +2461,7 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
  'lib.rs': ('pub mod identity;',
             'pub mod invocation;',
             'pub mod market;',
+            'pub mod session;',
             '#[cfg(test)] mod tests',
             'use super::*;'),
  'market.rs': ('pub mod capability;',
@@ -2472,7 +2494,14 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                             'pub type InstallationSnapshot = InstallationAggregate;',
                             '#[cfg(test)] #[allow(clippy::expect_used, clippy::panic, '
                             'clippy::unwrap_used)] mod tests',
-                            'use super::*;')}
+                            'use super::*;'),
+ 'session.rs': ('use std::error::Error;',
+                'use std::fmt;',
+                'use serde::de;',
+                'use serde::{Deserialize, Deserializer, Serialize};',
+                'use crate::identity::{SessionId, TenantId, UserId};',
+                '#[cfg(test)] mod tests',
+                'use super::*;')}
 # A macro is the remaining item category that can add API to a governed type without naming it
 # in a `use`, a `type` or an `impl` header: `macro_rules! m { ($t:ty) => { impl AsRef<str> for
 # $t { .. } } }` plus `m!(TenantId);` implements a trait for an identity kind while every
@@ -2483,7 +2512,8 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
  'lib.rs': (),
  'market.rs': (),
  'market/capability.rs': (),
- 'market/installation.rs': ()}
+ 'market/installation.rs': (),
+ 'session.rs': ()}
 # Macro INVOCATION names are pinned too, not screened for `include!`. A splicing macro can be
 # reached whatever the spelling — `include /* x */ !("f.rs")` contains no `include!` substring —
 # so the admitted name set per governed source is exact. `include_str!` stays admitted in
@@ -2493,7 +2523,8 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_
  'lib.rs': ('assert', 'assert_eq', 'include_str', 'panic'),
  'market.rs': ('matches', 'write'),
  'market/capability.rs': ('assert', 'assert_eq', 'matches'),
- 'market/installation.rs': ('assert_eq', 'format', 'matches', 'panic', 'vec', 'write')}
+ 'market/installation.rs': ('assert_eq', 'format', 'matches', 'panic', 'vec', 'write'),
+ 'session.rs': ('assert', 'assert_eq', 'matches', 'panic', 'write')}
 PLATFORM_IDENTITY_ADMITTED_TEST_MACRO_INVOCATIONS = (
     "assert",
     "assert_eq",
@@ -2585,6 +2616,35 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'capability.rs': ('impl CapabilityDefini
                    'impl-arg Into<String>',
                    "impl-arg IntoIterator<Item = &'a str>"),
  'lib.rs': ('impl SourceAuthority',),
+ 'session.rs': ('impl AuthAdapterId',
+                'impl CredentialEvidenceDigest',
+                "impl Deserialize<'de> for AuthAdapterId",
+                "impl Deserialize<'de> for CredentialEvidenceDigest",
+                "impl Deserialize<'de> for SessionCredentialEvidence",
+                "impl Deserialize<'de> for SessionDuration",
+                'impl Error for SessionDomainError',
+                'impl Error for SessionValueError',
+                'impl ExpireSession',
+                'impl OpenSession',
+                'impl RefreshSession',
+                'impl RevokeSession',
+                'impl SessionCommand',
+                'impl SessionCredentialEvidence',
+                'impl SessionDuration',
+                'impl SessionEvent',
+                'impl SessionExpired',
+                'impl SessionInstant',
+                'impl SessionOpened',
+                'impl SessionPolicy',
+                'impl SessionRefreshed',
+                'impl SessionRevoked',
+                'impl SessionSnapshot',
+                'impl SessionValueError',
+                'impl fmt::Debug for CredentialEvidenceDigest',
+                'impl fmt::Display for SessionDomainError',
+                'impl fmt::Display for SessionValueError',
+                'impl-arg Into<String>',
+                'impl-arg Into<String>'),
  'market.rs': ('impl CatalogReadModel',
                'impl ComponentDeclaration',
                "impl Deserialize<'de> for UniqueStringMap",
@@ -2966,7 +3026,8 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive'
  'lib.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'market.rs': ('derive', 'must_use', 'serde'),
  'market/capability.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
- 'market/installation.rs': ('allow', 'cfg', 'derive', 'must_use', 'test')}
+ 'market/installation.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
+ 'session.rs': ('cfg', 'derive', 'must_use', 'serde', 'test')}
 PLATFORM_IDENTITY_ADMITTED_TEST_ATTRIBUTE_NAMES = ("test",)
 # Pinning dependency NAMES pins nothing about what those names resolve to. `semver = { path =
 # "crates/fake-semver" }` keeps the admitted name while Cargo compiles an attacker-authored
@@ -6304,12 +6365,12 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
             # kind yet publishes every one of them under a second path, so the module path is
             # governed exactly like the type names.
             mentions_module = re.search(r"\b(?:crate|self|super)::identity\b", normalized)
-            admitted = (
-                path.name == "invocation.rs"
-                and normalized == PLATFORM_IDENTITY_ADMITTED_REEXPORT
-            ) or (
-                path.relative_to(ROOT).as_posix() == PLATFORM_INSTALLATION_SOURCE
-                and normalized == PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT
+            relative = path.relative_to(ROOT).as_posix()
+            admitted = any(
+                relative == admitted_file and normalized == admitted_text
+                for admitted_file, admitted_text in (
+                    PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS
+                )
             )
             if (mentions_kind or mentions_module) and not admitted:
                 fail(
@@ -6393,8 +6454,6 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
 
 
 PLATFORM_SESSION_CONTRACT = "docs/contracts/platform-session.md"
-PLATFORM_SESSION_SOURCE = "crates/platform-core/src/session.rs"
-PLATFORM_SESSION_TEST = "crates/platform-core/tests/platform_session.rs"
 PLATFORM_SESSION_VERSION = "`Version`: `platform-session/v0`"
 PLATFORM_SESSION_DOMAIN = "platform-session"
 PLATFORM_SESSION_GATE = "pr"
@@ -6483,6 +6542,7 @@ def check_platform_session_contract(issues: list[str]) -> None:
     test_path = ROOT / PLATFORM_SESSION_TEST
     carriers_exist = source_path.is_file() and test_path.is_file()
     test_source = test_path.read_text(encoding="utf-8") if test_path.is_file() else ""
+    source_text = source_path.read_text(encoding="utf-8") if source_path.is_file() else ""
 
     for case_id in PLATFORM_SESSION_CASES:
         row = matrix_rows.get(case_id)
@@ -6524,6 +6584,21 @@ def check_platform_session_contract(issues: list[str]) -> None:
                 f"platform session acceptance gate drift in {case_id}: {row[4]!r}",
                 issues,
             )
+        expected_lib = PLATFORM_SESSION_LIB_BINDING_CASES.get(case_id)
+        lib_bound = PLATFORM_SESSION_LIB_BINDING.search(row[3])
+        if expected_lib is None:
+            if lib_bound is not None:
+                fail(
+                    f"platform session acceptance binding in {case_id} carries an unexpected "
+                    "library leg",
+                    issues,
+                )
+        elif lib_bound is None or lib_bound.group("function") != expected_lib:
+            fail(
+                f"platform session acceptance binding in {case_id} must name the exact library "
+                f"fixture {expected_lib}",
+                issues,
+            )
         bound = PLATFORM_SESSION_BOUND_FUNCTION.search(row[3])
         if bound is None:
             fail(
@@ -6548,6 +6623,15 @@ def check_platform_session_contract(issues: list[str]) -> None:
                     f"{bound.group('function')}",
                     issues,
                 )
+            elif lib_bound is not None and not re.search(
+                rf"\bfn\s+{re.escape(lib_bound.group('function'))}\b", source_text
+            ):
+                fail(
+                    f"platform session acceptance status in {case_id} claims "
+                    f"'implemented' while {PLATFORM_SESSION_SOURCE} declares no "
+                    f"{lib_bound.group('function')}",
+                    issues,
+                )
 
     checker_path = ROOT / "scripts/check_repo_contracts.py"
     if not checker_path.is_file():
@@ -6560,6 +6644,667 @@ def check_platform_session_contract(issues: list[str]) -> None:
     )
     if not invoked:
         fail("check_platform_session_contract must be invoked from repository main()", issues)
+
+
+
+# `platform-session/v0` §11.2 carries the ROOT of B1's closure, not the whole apparatus: the two
+# grammars exist as fenced normative carriers in the contract, and the implementation's admitted
+# byte classes, length bound and digest shape are extracted from source and cross-checked against
+# them. Frozen per-function body fingerprints, construction-expression counting and a second lexer
+# with a corpus differential are deliberately NOT required — a defect in `AuthAdapterId`'s grammar
+# admits a malformed adapter label into one session's provenance record, while a defect in B1's
+# mints identities repository-wide. The session values whose failure would matter — revision,
+# deadline, terminal precedence, replay equality — are closed by executable adversarial fixtures
+# under the four bound tests instead, because those are behavioural properties a fixture can
+# actually falsify.
+PLATFORM_SESSION_ADAPTER_REGEX = "^[A-Za-z0-9](?:[-A-Za-z0-9._:]{0,126}[A-Za-z0-9])?$"
+PLATFORM_SESSION_ADAPTER_INTERIOR_EXTRA = "-._:"
+PLATFORM_SESSION_DIGEST_REGEX = "^sha256:[0-9a-f]{64}$"
+# A structural parse, not a substring comparison: an algorithm prefix that changed, a byte class
+# that gained a member or a digit count that moved are each a different parse.
+PLATFORM_SESSION_DIGEST_SHAPE = re.compile(
+    r"\A\^(?P<prefix>[A-Za-z0-9]+:)\[(?P<class>[^\]]+)\]\{(?P<digits>\d+)\}\$\Z"
+)
+PLATFORM_SESSION_LENGTH_CONSTANT = "MAX_ADAPTER_ID_BYTES"
+PLATFORM_SESSION_DIGEST_DIGITS_CONSTANT = "DIGEST_HEX_DIGITS"
+PLATFORM_SESSION_DIGEST_PREFIX_DECLARATION = re.compile(
+    r'const DIGEST_PREFIX: &str = "(?P<prefix>[^"]*)";'
+)
+PLATFORM_SESSION_BOUNDARY_FUNCTION = "is_adapter_boundary_byte"
+PLATFORM_SESSION_INTERIOR_FUNCTION = "is_adapter_interior_byte"
+PLATFORM_SESSION_DIGEST_FUNCTION = "classify_digest"
+PLATFORM_SESSION_BOUNDARY_PREDICATE = "byte.is_ascii_alphanumeric()"
+PLATFORM_SESSION_DIGEST_CLASS_CARRIER = "matches!(byte, b'0'..=b'9' | b'a'..=b'f')"
+# §11 forbids these by CATEGORY; two of them are concrete in-repository names because
+# `platform-core` already depends on them for M20 work. "Or reference" is the load-bearing half:
+# `semver::Version::parse(...)` written inside a function body compiles, declares no item, and is
+# therefore invisible to the item allowlist — so this is a per-file carrier scan, not item
+# accounting. `Instant` is deliberately absent from the list: it is a substring of this module's
+# own `SessionInstant`, so the clock carriers are spelled in the forms that would actually import
+# or call one.
+PLATFORM_SESSION_FORBIDDEN_CARRIERS = (
+    "ustc_agent_tool_protocol",
+    "semver",
+    "uuid",
+    "Uuid",
+    "ulid",
+    "Ulid",
+    "nanoid",
+    "NanoId",
+    "rand",
+    "Rng",
+    "random",
+    "generate",
+    "mint",
+    "SystemTime",
+    "Instant::now",
+    "chrono",
+    "std::time",
+    "std::net",
+    "TcpStream",
+    "reqwest",
+    "hyper",
+    "std::fs",
+    "std::process",
+    "sqlx",
+    "diesel",
+    "rusqlite",
+    "axum",
+    "dioxus",
+    "cookie",
+    "Cookie",
+    "oauth",
+    "OAuth",
+    "oidc",
+    "Oidc",
+    "sha2::",
+    "Sha256",
+    "hmac",
+    "Hmac",
+    "hex::",
+    "std::env",
+    "std::io",
+)
+# B2 computes no digest. The admitted "lightweight digest-shape validation" is byte-class
+# validation of an already-supplied string, not a cryptographic dependency.
+PLATFORM_SESSION_FORBIDDEN_DIGEST_CARRIERS = (
+    ("hashing function", r"\bfn\s+hash\b"),
+    ("digest call", r"::digest\s*\("),
+    ("streaming update", r"\.update\s*\("),
+    ("streaming finalize", r"\.finalize\s*\("),
+)
+PLATFORM_SESSION_FORBIDDEN_PUBLIC_ITEM_KINDS = (
+    "pub type",
+    "pub use",
+    "pub mod",
+    "pub trait",
+    "pub static",
+    "pub union",
+    "pub macro",
+)
+# The private same-module fixtures §13 binds to the library legs of `AUTH-018` and `AUTH-019`.
+# They exist because `SessionSnapshot` at `revision == u64::MAX` is unreachable from an
+# integration test — no public constructor, no `Deserialize`, and `evolve` only ever increments by
+# one — while §7 item 5 and §8's checked increment both have observable behaviour there. They add
+# no public or feature-gated hook: the module is `#[cfg(test)]`-gated and the public-declaration
+# allowlist above is unchanged by their presence, so a `pub` on any of them fails.
+PLATFORM_SESSION_TEST_MODULE = "tests"
+PLATFORM_SESSION_LIB_TEST_FUNCTIONS = (
+    "terminal_precedence_holds_at_the_revision_ceiling",
+    "revision_ceiling_fails_closed_on_decide_and_evolve",
+)
+PLATFORM_SESSION_LIB_BINDING = re.compile(
+    r"--lib session::tests::(?P<function>[A-Za-z0-9_]+) -- --exact"
+)
+# Which case each library leg belongs to, so a leg cannot be moved to another row unnoticed.
+PLATFORM_SESSION_LIB_BINDING_CASES = {
+    "AUTH-018": "terminal_precedence_holds_at_the_revision_ceiling",
+    "AUTH-019": "revision_ceiling_fails_closed_on_decide_and_evolve",
+}
+PLATFORM_SESSION_TEST_FUNCTIONS = (
+    "session_open_pins_immutable_scope_and_checked_deadlines",
+    "session_lifecycle_precedence_is_deterministic_and_terminal",
+    "session_revision_and_replay_are_exact_and_fail_closed",
+    "session_domain_has_no_credential_or_adapter_surface",
+)
+PLATFORM_SESSION_ADMITTED_TEST_ATTRIBUTE_NAMES = ("test",)
+PLATFORM_SESSION_ADMITTED_PUBLIC_DECLARATIONS = (
+    'pub const fn absolute_expires_at',
+    'pub const fn absolute_timeout',
+    'pub const fn absolute_timeout',
+    'pub const fn admits_at',
+    'pub const fn as_millis',
+    'pub const fn as_unix_millis',
+    'pub const fn auth_adapter_id',
+    'pub const fn auth_adapter_id',
+    'pub const fn authenticated_at',
+    'pub const fn authenticated_at',
+    'pub const fn cause',
+    'pub const fn credential_evidence',
+    'pub const fn credential_evidence',
+    'pub const fn credential_not_after',
+    'pub const fn credential_not_after',
+    'pub const fn effective_expires_at',
+    'pub const fn effective_expires_at',
+    'pub const fn evidence_digest',
+    'pub const fn evidence_digest',
+    'pub const fn expected_revision',
+    'pub const fn expected_revision',
+    'pub const fn expected_revision',
+    'pub const fn expected_revision',
+    'pub const fn expected_revision',
+    'pub const fn expired_at',
+    'pub const fn from_millis',
+    'pub const fn from_unix_millis',
+    'pub const fn idle_timeout',
+    'pub const fn idle_timeout',
+    'pub const fn kind',
+    'pub const fn last_transition_at',
+    'pub const fn new',
+    'pub const fn new',
+    'pub const fn new',
+    'pub const fn new',
+    'pub const fn new',
+    'pub const fn new',
+    'pub const fn new',
+    'pub const fn new',
+    'pub const fn new',
+    'pub const fn observed_at',
+    'pub const fn observed_at',
+    'pub const fn observed_at',
+    'pub const fn observed_at',
+    'pub const fn observed_at',
+    'pub const fn observed_at',
+    'pub const fn observed_at',
+    'pub const fn observed_at',
+    'pub const fn observed_at',
+    'pub const fn opened_at',
+    'pub const fn opened_at',
+    'pub const fn policy',
+    'pub const fn policy',
+    'pub const fn revision',
+    'pub const fn sequence',
+    'pub const fn sequence',
+    'pub const fn sequence',
+    'pub const fn sequence',
+    'pub const fn sequence',
+    'pub const fn session_id',
+    'pub const fn session_id',
+    'pub const fn session_id',
+    'pub const fn session_id',
+    'pub const fn session_id',
+    'pub const fn session_id',
+    'pub const fn session_id',
+    'pub const fn session_id',
+    'pub const fn session_id',
+    'pub const fn session_id',
+    'pub const fn session_id',
+    'pub const fn status',
+    'pub const fn tenant_id',
+    'pub const fn tenant_id',
+    'pub const fn user_id',
+    'pub const fn user_id',
+    'pub const fn value_kind',
+    'pub enum EventDerivedField',
+    'pub enum SessionCommand',
+    'pub enum SessionDomainError',
+    'pub enum SessionEvent',
+    'pub enum SessionExpiryCause',
+    'pub enum SessionStatus',
+    'pub enum SessionValueErrorKind',
+    'pub fn as_str',
+    'pub fn as_str',
+    'pub fn decide',
+    'pub fn evolve',
+    'pub fn new',
+    'pub fn parse',
+    'pub fn parse',
+    'pub struct AuthAdapterId',
+    'pub struct CredentialEvidenceDigest',
+    'pub struct ExpireSession',
+    'pub struct OpenSession',
+    'pub struct RefreshSession',
+    'pub struct RevokeSession',
+    'pub struct SessionCredentialEvidence',
+    'pub struct SessionDuration',
+    'pub struct SessionExpired',
+    'pub struct SessionInstant',
+    'pub struct SessionOpened',
+    'pub struct SessionPolicy',
+    'pub struct SessionRefreshed',
+    'pub struct SessionRevoked',
+    'pub struct SessionSnapshot',
+    'pub struct SessionValueError',
+)
+PLATFORM_SESSION_ADMITTED_DERIVES = (
+    'Clone, PartialEq, Eq, PartialOrd, Ord, Serialize',
+    'Debug, Clone, Copy, PartialEq, Eq',
+    'Debug, Clone, Copy, PartialEq, Eq',
+    'Debug, Clone, Copy, PartialEq, Eq',
+    'Debug, Clone, Copy, PartialEq, Eq',
+    'Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize',
+    'Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize',
+    'Debug, Clone, Copy, PartialEq, Eq, Serialize',
+    'Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize',
+    'Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize',
+    'Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize',
+    'Debug, Clone, PartialEq, Eq, Serialize',
+    'Debug, Clone, PartialEq, Eq, Serialize',
+    'Debug, Clone, PartialEq, Eq, Serialize',
+    'Debug, Clone, PartialEq, Eq, Serialize',
+    'Debug, Clone, PartialEq, Eq, Serialize',
+    'Debug, Clone, PartialEq, Eq, Serialize',
+    'Debug, Clone, PartialEq, Eq, Serialize',
+    'Debug, Clone, PartialEq, Eq, Serialize, Deserialize',
+    'Debug, Clone, PartialEq, Eq, Serialize, Deserialize',
+    'Debug, Clone, PartialEq, Eq, Serialize, Deserialize',
+    'Debug, Clone, PartialEq, Eq, Serialize, Deserialize',
+    'Debug, Clone, PartialEq, Eq, Serialize, Deserialize',
+    'Deserialize',
+)
+PLATFORM_SESSION_ADMITTED_TEST_ITEMS = (
+    'use ustc_campus_agent_core::identity::{SessionId, TenantId, UserId};',
+    'use ustc_campus_agent_core::session::{ AuthAdapterId, CredentialEvidenceDigest, EventDerivedField, ExpireSession, OpenSession, RefreshSession, RevokeSession, SessionCommand, SessionCredentialEvidence, SessionDomainError, SessionDuration, SessionEvent, SessionExpired, SessionExpiryCause, SessionInstant, SessionOpened, SessionPolicy, SessionRefreshed, SessionRevoked, SessionSnapshot, SessionStatus, SessionValueErrorKind, decide, evolve, };',
+)
+PLATFORM_SESSION_ADMITTED_TEST_MACRO_INVOCATIONS = (
+    'assert',
+    'assert_eq',
+    'concat',
+    'format',
+    'include_str',
+    'panic',
+    'vec',
+)
+
+
+def check_platform_session_implementation(issues: list[str]) -> None:
+    """Freeze the `M00-B2` session module's surface, grammars and bound evidence.
+
+    `check_platform_session_contract` binds the contract's §12 table to the matrix. This binds
+    the contract to the CODE: the two §2.2 grammars, the public declaration and derive surface,
+    the §11 dependency negative space, and the bound test file's own executable envelope.
+
+    The module joins `platform-identity/v0` §4's total accounting on the same terms through the
+    shared `PLATFORM_CORE_*` tables above, which is where its file inventory, `mod`/`use`/`type`
+    items, `impl` surface, macros and attribute names are frozen. What is here is what those
+    shared tables cannot express: a per-file forbidden-carrier scan, because a path-qualified call
+    inside a function body declares no item; and the grammar cross-check §11.2 requires.
+    """
+    source_path = ROOT / PLATFORM_SESSION_SOURCE
+    test_path = ROOT / PLATFORM_SESSION_TEST
+    contract_path = ROOT / PLATFORM_SESSION_CONTRACT
+    lib_path = ROOT / PLATFORM_CORE_LIB
+    for rel, path in (
+        (PLATFORM_SESSION_SOURCE, source_path),
+        (PLATFORM_SESSION_TEST, test_path),
+        (PLATFORM_SESSION_CONTRACT, contract_path),
+        (PLATFORM_CORE_LIB, lib_path),
+    ):
+        if not path.is_file():
+            fail(f"platform session carrier missing: {rel}", issues)
+            return
+
+    source = source_path.read_text(encoding="utf-8")
+    code = strip_rust_comments_and_literals(source)
+    literal_code = strip_rust_comments_and_literals(source, keep_literals=True)
+    test_code = strip_rust_comments_and_literals(test_path.read_text(encoding="utf-8"))
+    contract = contract_path.read_text(encoding="utf-8")
+    lib_code = strip_rust_comments_and_literals(lib_path.read_text(encoding="utf-8"))
+
+    if not re.search(r"^\s*pub mod session;$", lib_code, flags=re.MULTILINE):
+        fail("platform-core must export the M00 session module", issues)
+
+    # The enumerated cross-file identity binding is required POSITIVELY here, not only admitted
+    # by the exception in `check_platform_identity_implementation`. An admitted binding that was
+    # deleted, renamed or re-spelled would otherwise pass both carriers by simply not appearing.
+    if PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT not in " ".join(code.split()):
+        fail(
+            "platform session module lost the enumerated identity binding: expected "
+            f"{PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT!r}",
+            issues,
+        )
+
+    # Both §2.2 grammars exist as fenced normative carriers in the contract, and the contract's
+    # own regex — not a checker-local copy — is what the source is compared against.
+    for regex in (PLATFORM_SESSION_ADAPTER_REGEX, PLATFORM_SESSION_DIGEST_REGEX):
+        if f"```regex\n{regex}\n```" not in contract:
+            fail(
+                f"platform session contract lost a fenced normative grammar: {regex!r}",
+                issues,
+            )
+            return
+
+    shape = PLATFORM_IDENTITY_GRAMMAR_SHAPE.match(PLATFORM_SESSION_ADAPTER_REGEX)
+    if shape is None:
+        fail("platform session adapter grammar is not a parseable shape", issues)
+        return
+    if shape.group("lead") != shape.group("tail"):
+        fail(
+            "platform session adapter grammar: leading and trailing boundary classes differ "
+            f"({shape.group('lead')!r} vs {shape.group('tail')!r})",
+            issues,
+        )
+    boundary, boundary_duplicate = rust_character_class_bytes(shape.group("lead"))
+    interior, interior_duplicate = rust_character_class_bytes(shape.group("interior"))
+    if boundary_duplicate or interior_duplicate:
+        fail("platform session adapter grammar repeats a character-class byte", issues)
+    if frozenset(boundary) != ASCII_ALPHANUMERIC_BYTES:
+        fail(
+            "platform session adapter grammar boundary class is not ASCII alphanumeric",
+            issues,
+        )
+    if frozenset(interior) - ASCII_ALPHANUMERIC_BYTES != frozenset(interior) - frozenset(
+        boundary
+    ):
+        fail(
+            "platform session adapter grammar interior class does not extend the boundary class",
+            issues,
+        )
+    # The delimiters are what the source predicate actually enumerates; the alphanumerics reach
+    # it through `is_ascii_alphanumeric()` and are checked above rather than listed twice.
+    interior_extra = tuple(sorted(frozenset(interior) - ASCII_ALPHANUMERIC_BYTES))
+    expected_max_bytes = int(shape.group("bound")) + 2
+    declared_bound = rust_module_level_usize_constants(code, PLATFORM_SESSION_LENGTH_CONSTANT)
+    if declared_bound != (expected_max_bytes,):
+        fail(
+            f"platform session adapter length bound drifted: {PLATFORM_SESSION_LENGTH_CONSTANT} "
+            f"is {list(declared_bound)}, contract regex implies {expected_max_bytes}",
+            issues,
+        )
+
+    boundary_body = _rust_function_body(literal_code, PLATFORM_SESSION_BOUNDARY_FUNCTION)
+    if boundary_body is None:
+        fail(
+            "platform session adapter boundary predicate missing: "
+            f"{PLATFORM_SESSION_BOUNDARY_FUNCTION}",
+            issues,
+        )
+    elif " ".join(boundary_body.split()) != f"{{ {PLATFORM_SESSION_BOUNDARY_PREDICATE} }}":
+        fail(
+            "platform session adapter boundary predicate drifted: expected "
+            f"{PLATFORM_SESSION_BOUNDARY_PREDICATE!r}",
+            issues,
+        )
+
+    interior_body = _rust_function_body(literal_code, PLATFORM_SESSION_INTERIOR_FUNCTION)
+    interior_shape = (
+        None
+        if interior_body is None
+        else PLATFORM_IDENTITY_INTERIOR_SHAPE.match(" ".join(interior_body.split()))
+    )
+    if interior_shape is None:
+        fail(
+            "platform session adapter interior predicate is not the admitted shape: "
+            f"{PLATFORM_SESSION_INTERIOR_FUNCTION}",
+            issues,
+        )
+    else:
+        admitted_bytes = []
+        for alternative in interior_shape.group("alternatives").split("|"):
+            literal = PLATFORM_IDENTITY_BYTE_LITERAL.match(alternative.strip())
+            if literal is None:
+                fail(
+                    "platform session adapter interior predicate admits a non-literal byte: "
+                    f"{alternative.strip()!r}",
+                    issues,
+                )
+                continue
+            admitted_bytes.append(literal.group("byte"))
+        if tuple(sorted(admitted_bytes)) != tuple(sorted(interior_extra)):
+            fail(
+                "platform session adapter interior byte class drifted from the contract: source "
+                f"admits {sorted(admitted_bytes)}, contract regex admits "
+                f"{sorted(interior_extra)}",
+                issues,
+            )
+        if tuple(sorted(interior_extra)) != tuple(sorted(PLATFORM_SESSION_ADAPTER_INTERIOR_EXTRA)):
+            fail(
+                "platform session adapter interior class table drifted from the contract regex",
+                issues,
+            )
+
+    digest_shape = PLATFORM_SESSION_DIGEST_SHAPE.match(PLATFORM_SESSION_DIGEST_REGEX)
+    if digest_shape is None:
+        fail("platform session digest grammar is not a parseable shape", issues)
+        return
+    digest_prefix = PLATFORM_SESSION_DIGEST_PREFIX_DECLARATION.search(literal_code)
+    if digest_prefix is None:
+        fail("platform session digest prefix constant missing or not a literal", issues)
+    elif digest_prefix.group("prefix") != digest_shape.group("prefix"):
+        fail(
+            "platform session digest prefix drifted from the contract: source "
+            f"{digest_prefix.group('prefix')!r}, contract {digest_shape.group('prefix')!r}",
+            issues,
+        )
+    declared_digits = rust_module_level_usize_constants(
+        code, PLATFORM_SESSION_DIGEST_DIGITS_CONSTANT
+    )
+    if declared_digits != (int(digest_shape.group("digits")),):
+        fail(
+            "platform session digest length drifted: "
+            f"{PLATFORM_SESSION_DIGEST_DIGITS_CONSTANT} is {list(declared_digits)}, contract "
+            f"regex implies {digest_shape.group('digits')}",
+            issues,
+        )
+    digest_body = _rust_function_body(literal_code, PLATFORM_SESSION_DIGEST_FUNCTION)
+    if digest_body is None:
+        fail(f"platform session digest validator missing: {PLATFORM_SESSION_DIGEST_FUNCTION}", issues)
+    elif PLATFORM_SESSION_DIGEST_CLASS_CARRIER not in " ".join(digest_body.split()):
+        fail(
+            "platform session digest byte class drifted: expected "
+            f"{PLATFORM_SESSION_DIGEST_CLASS_CARRIER!r}",
+            issues,
+        )
+    elif digest_shape.group("class") != "0-9a-f":
+        fail(
+            "platform session digest contract class is not the admitted lowercase hexadecimal "
+            f"set: {digest_shape.group('class')!r}",
+            issues,
+        )
+
+    # §11's dependency prohibition has no other carrier once B2 exists: a path-qualified call
+    # inside a function body declares no item, so the item allowlist cannot see it.
+    for carrier in PLATFORM_SESSION_FORBIDDEN_CARRIERS:
+        if carrier in code:
+            fail(
+                f"platform session module gained a forbidden dependency carrier: {carrier!r}",
+                issues,
+            )
+    for label, pattern in PLATFORM_SESSION_FORBIDDEN_DIGEST_CARRIERS:
+        if re.search(pattern, code):
+            fail(
+                f"platform session module must compute no digest: {label!r} is forbidden",
+                issues,
+            )
+    for label, pattern in PLATFORM_IDENTITY_FORBIDDEN_SPLICE_PATTERNS:
+        if re.search(pattern, code):
+            fail(f"platform session module must not splice external source: {label!r}", issues)
+    if re.search(r"\bmod\s+[A-Za-z_][A-Za-z0-9_]*\s*;", code):
+        fail(
+            "platform session module must not declare a file-backed submodule: a `mod name;` "
+            "compiles a second file that no scan reads",
+            issues,
+        )
+    declared_modules = re.findall(r"\bmod\s+([A-Za-z_][A-Za-z0-9_]*)", code)
+    if declared_modules != [PLATFORM_SESSION_TEST_MODULE]:
+        fail(
+            "platform session module declarations drifted: expected exactly "
+            f"['{PLATFORM_SESSION_TEST_MODULE}'] actual={declared_modules}",
+            issues,
+        )
+    if f"#[cfg(test)] mod {PLATFORM_SESSION_TEST_MODULE}" not in (
+        PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS["session.rs"]
+    ):
+        fail(
+            "platform session fixture module must be admitted as a cfg(test)-gated item",
+            issues,
+        )
+    if re.search(RUST_INNER_ATTRIBUTE_PATTERN, code):
+        fail("platform session module must not carry an inner attribute", issues)
+    for kind in PLATFORM_SESSION_FORBIDDEN_PUBLIC_ITEM_KINDS:
+        if kind in code:
+            fail(
+                f"platform session module declared a forbidden public item kind: {kind!r}",
+                issues,
+            )
+    for line in code.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("pub const ") and not stripped.startswith("pub const fn "):
+            fail(f"platform session module declared a public constant: {stripped!r}", issues)
+
+    # The public surface is an ALLOWLIST over the declaration grammar, not a blacklist of bad
+    # spellings: `pub fn new` being absent says nothing about `pub fn from_unchecked`, a cross-kind
+    # `From`, a `pub type` alias or a generic state setter. An unclassifiable `pub` fails too.
+    public_declarations, unclassified_public = rust_public_declarations(code)
+    if unclassified_public:
+        fail(
+            "platform session module has an unclassified public declaration: "
+            f"{unclassified_public}",
+            issues,
+        )
+    if public_declarations != sorted(PLATFORM_SESSION_ADMITTED_PUBLIC_DECLARATIONS):
+        fail(
+            "platform session public declaration surface drifted from the admitted allowlist: "
+            f"actual={public_declarations}",
+            issues,
+        )
+    derives = sorted(rust_derive_bodies(code))
+    if derives != sorted(PLATFORM_SESSION_ADMITTED_DERIVES):
+        fail(
+            f"platform session derive surface drifted from the admitted allowlist: {derives}",
+            issues,
+        )
+
+    # The bound test file. A renamed or de-registered function makes `--exact` match nothing,
+    # which cargo reports as `running 0 tests` at exit zero, so the four names, the `#[test]`
+    # count and each attribute envelope are pinned out of band.
+    for function in PLATFORM_SESSION_TEST_FUNCTIONS:
+        if not re.search(rf"^fn {function}\(\)", test_code, flags=re.MULTILINE):
+            fail(f"platform session acceptance test missing: {function}", issues)
+            continue
+        attributes = rust_attribute_block(test_code, function)
+        if attributes is None:
+            fail(f"platform session acceptance test unreadable: {function}", issues)
+            continue
+        if attributes != list(PLATFORM_IDENTITY_REQUIRED_TEST_ATTRIBUTES):
+            fail(
+                f"platform session acceptance test {function} attribute envelope drifted: "
+                f"expected {list(PLATFORM_IDENTITY_REQUIRED_TEST_ATTRIBUTES)} "
+                f"actual={attributes}",
+                issues,
+            )
+        for attribute in attributes:
+            for marker in PLATFORM_IDENTITY_FORBIDDEN_TEST_ATTRIBUTE_MARKERS:
+                if marker in attribute:
+                    fail(
+                        f"platform session acceptance test {function} carries a non-executing "
+                        f"attribute: {attribute}",
+                        issues,
+                    )
+    # The library-leg fixtures, held to the same envelope rule: a renamed or de-registered one
+    # makes `--exact` match nothing, which cargo reports as `running 0 tests` at exit zero.
+    for function in PLATFORM_SESSION_LIB_TEST_FUNCTIONS:
+        if not re.search(rf"^    fn {function}\(\)", code, flags=re.MULTILINE):
+            fail(f"platform session library fixture missing: {function}", issues)
+            continue
+        attributes = rust_attribute_block(code, function)
+        if attributes != list(PLATFORM_IDENTITY_REQUIRED_TEST_ATTRIBUTES):
+            fail(
+                f"platform session library fixture {function} attribute envelope drifted: "
+                f"expected {list(PLATFORM_IDENTITY_REQUIRED_TEST_ATTRIBUTES)} "
+                f"actual={attributes}",
+                issues,
+            )
+    lib_registered = len(re.findall(r"^    #\[test\]$", code, flags=re.MULTILINE))
+    if lib_registered != len(PLATFORM_SESSION_LIB_TEST_FUNCTIONS):
+        fail(
+            "platform session library fixture registration drift: expected "
+            f"{len(PLATFORM_SESSION_LIB_TEST_FUNCTIONS)} #[test] carriers actual={lib_registered}",
+            issues,
+        )
+
+    registered_tests = len(re.findall(r"^#\[test\]$", test_code, flags=re.MULTILINE))
+    if registered_tests != len(PLATFORM_SESSION_TEST_FUNCTIONS):
+        fail(
+            "platform session acceptance test registration drift: expected "
+            f"{len(PLATFORM_SESSION_TEST_FUNCTIONS)} #[test] carriers actual={registered_tests}",
+            issues,
+        )
+    for marker, pattern in PLATFORM_IDENTITY_FORBIDDEN_TEST_FILE_PATTERNS:
+        if re.search(pattern, test_code):
+            fail(
+                "platform session acceptance tests must execute unconditionally: "
+                f"{marker!r} is forbidden in {PLATFORM_SESSION_TEST}",
+                issues,
+            )
+    test_definitions = rust_macro_definitions(test_code)
+    if test_definitions:
+        fail(
+            f"macro definitions drifted in {PLATFORM_SESSION_TEST}: expected none actual="
+            f"{test_definitions}",
+            issues,
+        )
+    test_attributes, unterminated_test_attributes = rust_attributes(test_code)
+    if unterminated_test_attributes:
+        fail(
+            f"unterminated attribute in {PLATFORM_SESSION_TEST}: "
+            f"{unterminated_test_attributes}",
+            issues,
+        )
+    observed_test_attribute_names = rust_attribute_names(test_attributes)
+    admitted_test_attribute_names = tuple(sorted(PLATFORM_SESSION_ADMITTED_TEST_ATTRIBUTE_NAMES))
+    if observed_test_attribute_names != admitted_test_attribute_names:
+        fail(
+            f"bound test attribute names drifted in {PLATFORM_SESSION_TEST}: expected "
+            f"{admitted_test_attribute_names} actual={observed_test_attribute_names}",
+            issues,
+        )
+    # A block-local `use std::assert as assert_eq;` rebinds the macro for the rest of its scope
+    # while adding no definition and changing no invocation name, so the bound file's items are
+    # accounted for in full, exactly as the governed sources are.
+    test_items, unterminated_test_items = rust_item_declarations(test_code)
+    if unterminated_test_items:
+        fail(
+            f"unterminated item declaration in {PLATFORM_SESSION_TEST}: "
+            f"{unterminated_test_items}",
+            issues,
+        )
+    if test_items != list(PLATFORM_SESSION_ADMITTED_TEST_ITEMS):
+        fail(
+            f"bound test item declarations drifted in {PLATFORM_SESSION_TEST}: expected "
+            f"{list(PLATFORM_SESSION_ADMITTED_TEST_ITEMS)} actual={test_items}",
+            issues,
+        )
+    test_invocations, unterminated_test_macros = rust_macro_invocation_arguments(test_code)
+    if unterminated_test_macros:
+        fail(
+            f"unterminated macro invocation in {PLATFORM_SESSION_TEST}: "
+            f"{sorted(unterminated_test_macros)}",
+            issues,
+        )
+    invoked_in_test = tuple(sorted({name for name, _ in test_invocations}))
+    admitted_in_test = tuple(sorted(PLATFORM_SESSION_ADMITTED_TEST_MACRO_INVOCATIONS))
+    if invoked_in_test != admitted_in_test:
+        fail(
+            f"macro invocations drifted in {PLATFORM_SESSION_TEST}: expected "
+            f"{admitted_in_test} actual={invoked_in_test}",
+            issues,
+        )
+
+    checker_path = ROOT / "scripts/check_repo_contracts.py"
+    if not checker_path.is_file():
+        fail("platform session carrier missing: scripts/check_repo_contracts.py", issues)
+        return
+    main_body = checker_path.read_text(encoding="utf-8").split("\ndef main() -> int:", 1)
+    required_call = "check_platform_session_implementation(issues)"
+    invoked = len(main_body) == 2 and any(
+        line.strip() == required_call for line in main_body[1].splitlines()
+    )
+    if not invoked:
+        fail(
+            "check_platform_session_implementation must be invoked from repository main()",
+            issues,
+        )
 
 
 def main() -> int:
@@ -6579,6 +7324,7 @@ def main() -> int:
     check_platform_identity_grammar_authority(issues)
     check_platform_identity_implementation(issues)
     check_platform_session_contract(issues)
+    check_platform_session_implementation(issues)
     check_module_registry(issues)
     check_s0_architecture_review(issues)
     if issues:

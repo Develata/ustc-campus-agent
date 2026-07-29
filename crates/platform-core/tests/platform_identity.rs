@@ -1753,8 +1753,16 @@ fn assert_public_surface_is_frozen() {
         (
             "lib.rs",
             LIB_SOURCE,
-            &["identity", "invocation", "market"] as &[&str],
+            &["identity", "invocation", "market", "session"] as &[&str],
             &ADMITTED_LIB_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
+            "session.rs",
+            SESSION_SOURCE,
+            &[] as &[&str],
+            &ADMITTED_SESSION_ITEMS as &[&str],
             &[] as &[&str],
             false,
         ),
@@ -1834,11 +1842,16 @@ fn assert_public_surface_is_frozen() {
             unterminated_macros.is_empty(),
             "unterminated platform-core macro invocation in {label}: {unterminated_macros:?}"
         );
+        // Exhaustive by label, NOT by fallthrough default. A `_ =>` arm here would silently
+        // check an unregistered source against lib.rs's list instead of failing closed, which is
+        // the opposite of what a total-accounting guard is for.
         let admitted_invocations: &[&str] = match label {
             "identity.rs" => &ADMITTED_IDENTITY_MACRO_INVOCATIONS,
             "invocation.rs" => &ADMITTED_INVOCATION_MACRO_INVOCATIONS,
             "market.rs" => &ADMITTED_MARKET_MACRO_INVOCATIONS,
-            _ => &ADMITTED_LIB_MACRO_INVOCATIONS,
+            "lib.rs" => &ADMITTED_LIB_MACRO_INVOCATIONS,
+            "session.rs" => &ADMITTED_SESSION_MACRO_INVOCATIONS,
+            other => panic!("ungoverned platform-core source macro invocations: {other}"),
         };
         assert_eq!(
             macro_invocation_names(&invocations),
@@ -1944,6 +1957,7 @@ fn assert_public_surface_is_frozen() {
         ("invocation.rs", INVOCATION_SOURCE),
         ("market.rs", MARKET_SOURCE),
         ("lib.rs", LIB_SOURCE),
+        ("session.rs", SESSION_SOURCE),
     ] {
         let sibling_code = strip_comments_and_literals(sibling);
         for (carrier, tokens) in [
@@ -2007,8 +2021,12 @@ fn assert_public_surface_is_frozen() {
             let mentions_module = ["crate::identity", "self::identity", "super::identity"]
                 .iter()
                 .any(|path| declaration.contains(path));
-            let admitted = label == "invocation.rs"
-                && declaration == "pub use crate::identity::{TenantId, UserId};";
+            // Enumerated by exact file name together with exact normalized text, never a
+            // prefix, regex or predicate over `crate::identity::` — a pattern would re-open the
+            // alias class this rule exists to close.
+            let admitted = ADMITTED_CROSS_FILE_IDENTITY_BINDINGS
+                .iter()
+                .any(|(file, text)| *file == label && declaration == *text);
             assert!(
                 !(mentions_kind || mentions_module) || admitted,
                 "identity value alias or import outside the identity module: {label}: {declaration}"
@@ -2026,10 +2044,13 @@ fn assert_public_surface_is_frozen() {
         }
         // …and the sibling implementation surface is an allowlist, not a kind blacklist: a
         // blanket `impl<T> Extension for T` names no governed kind yet covers all six.
+        // Exhaustive by label, for the same reason as the macro-invocation lookup above.
         let admitted_impls: &[&str] = match label {
             "invocation.rs" => &ADMITTED_INVOCATION_IMPLS,
             "market.rs" => &ADMITTED_MARKET_IMPLS,
-            _ => &ADMITTED_LIB_IMPLS,
+            "lib.rs" => &ADMITTED_LIB_IMPLS,
+            "session.rs" => &ADMITTED_SESSION_IMPLS,
+            other => panic!("ungoverned platform-core sibling implementations: {other}"),
         };
         assert_eq!(
             impl_declarations(&sibling_code),
@@ -2210,10 +2231,14 @@ const DESERIALIZE_BODY_INDEX: usize = 13;
 ///
 /// The rule belongs to every governed source, not only the identity module: an unadmitted
 /// attribute in a sibling is the same carrier reached one file over.
-const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 3] = [
+const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 4] = [
     ("invocation.rs", &["derive", "must_use"]),
     ("market.rs", &["derive", "must_use", "serde"]),
     ("lib.rs", &["cfg", "derive", "must_use", "serde", "test"]),
+    (
+        "session.rs",
+        &["cfg", "derive", "must_use", "serde", "test"],
+    ),
 ];
 
 /// The only macro this file defines. Pinned because a definition rebinds every call site that
@@ -4077,6 +4102,7 @@ const IDENTITY_SOURCE: &str = include_str!("../src/identity.rs");
 const INVOCATION_SOURCE: &str = include_str!("../src/invocation.rs");
 const MARKET_SOURCE: &str = include_str!("../src/market.rs");
 const LIB_SOURCE: &str = include_str!("../src/lib.rs");
+const SESSION_SOURCE: &str = include_str!("../src/session.rs");
 const MANIFEST_SOURCE: &str = include_str!("../Cargo.toml");
 const LOCKFILE_SOURCE: &str = include_str!("../../../Cargo.lock");
 
@@ -4178,10 +4204,26 @@ const ADMITTED_MARKET_ITEMS: [&str; 9] = [
     "type Value = UniqueStringMap;",
 ];
 
-const ADMITTED_LIB_ITEMS: [&str; 5] = [
+const ADMITTED_LIB_ITEMS: [&str; 6] = [
     "pub mod identity;",
     "pub mod invocation;",
     "pub mod market;",
+    "pub mod session;",
+    "#[cfg(test)] mod tests",
+    "use super::*;",
+];
+
+/// The `M00-B2` session module's complete `mod`/`use`/`type` item list.
+///
+/// Its last entry is the enumerated cross-file identity binding, which two independent carriers
+/// must both admit: this allowlist, like any other item, AND the exception below that otherwise
+/// refuses every `use` naming an admitted kind or the identity module path.
+const ADMITTED_SESSION_ITEMS: [&str; 7] = [
+    "use std::error::Error;",
+    "use std::fmt;",
+    "use serde::de;",
+    "use serde::{Deserialize, Deserializer, Serialize};",
+    "use crate::identity::{SessionId, TenantId, UserId};",
     "#[cfg(test)] mod tests",
     "use super::*;",
 ];
@@ -4221,6 +4263,41 @@ const ADMITTED_MARKET_IMPLS: [&str; 13] = [
 
 const ADMITTED_LIB_IMPLS: [&str; 1] = ["impl SourceAuthority"];
 
+/// The `M00-B2` session module's complete `impl` surface, sorted. An allowlist rather than a
+/// kind blacklist, because a blanket `impl<T> Extension for T` names no governed kind yet
+/// covers all six.
+const ADMITTED_SESSION_IMPLS: [&str; 29] = [
+    "impl AuthAdapterId",
+    "impl CredentialEvidenceDigest",
+    "impl Deserialize<'de> for AuthAdapterId",
+    "impl Deserialize<'de> for CredentialEvidenceDigest",
+    "impl Deserialize<'de> for SessionCredentialEvidence",
+    "impl Deserialize<'de> for SessionDuration",
+    "impl Error for SessionDomainError",
+    "impl Error for SessionValueError",
+    "impl ExpireSession",
+    "impl OpenSession",
+    "impl RefreshSession",
+    "impl RevokeSession",
+    "impl SessionCommand",
+    "impl SessionCredentialEvidence",
+    "impl SessionDuration",
+    "impl SessionEvent",
+    "impl SessionExpired",
+    "impl SessionInstant",
+    "impl SessionOpened",
+    "impl SessionPolicy",
+    "impl SessionRefreshed",
+    "impl SessionRevoked",
+    "impl SessionSnapshot",
+    "impl SessionValueError",
+    "impl fmt::Debug for CredentialEvidenceDigest",
+    "impl fmt::Display for SessionDomainError",
+    "impl fmt::Display for SessionValueError",
+    "impl-arg Into<String>",
+    "impl-arg Into<String>",
+];
+
 /// Macro INVOCATION names of each governed source, pinned exactly. A splicing macro reached by
 /// any spelling adds items from a file no scan reads, and no substring enumerates the spellings
 /// of `include /* x */ !("f.rs")`. `include_str!` stays admitted in lib.rs, which legitimately
@@ -4230,6 +4307,8 @@ const ADMITTED_IDENTITY_MACRO_INVOCATIONS: [&str; 5] =
 const ADMITTED_INVOCATION_MACRO_INVOCATIONS: [&str; 3] = ["authority_id", "format", "write"];
 const ADMITTED_MARKET_MACRO_INVOCATIONS: [&str; 2] = ["matches", "write"];
 const ADMITTED_LIB_MACRO_INVOCATIONS: [&str; 4] = ["assert", "assert_eq", "include_str", "panic"];
+const ADMITTED_SESSION_MACRO_INVOCATIONS: [&str; 5] =
+    ["assert", "assert_eq", "matches", "panic", "write"];
 
 /// The Cargo target set of `platform-core`, pinned by the same key sets as
 /// `check_platform_core_manifest` in `scripts/check_repo_contracts.py`.
@@ -4322,6 +4401,21 @@ fn manifest_keys(entries: &[(String, String)], table: &str) -> Vec<String> {
     keys.dedup();
     keys
 }
+
+/// Every admitted cross-file binding of an identity kind, by exact file and exact normalized
+/// text. Adding a row is registered surface drift that must be mirrored in
+/// `scripts/check_repo_contracts.py`; it changes no accepted grammar, bound, error precedence,
+/// Serde shape or nominal kind set.
+const ADMITTED_CROSS_FILE_IDENTITY_BINDINGS: [(&str, &str); 2] = [
+    (
+        "invocation.rs",
+        "pub use crate::identity::{TenantId, UserId};",
+    ),
+    (
+        "session.rs",
+        "use crate::identity::{SessionId, TenantId, UserId};",
+    ),
+];
 
 /// The six kinds whose public surface `platform-identity/v0` freezes.
 const ADMITTED_IDENTITY_KINDS: [&str; 6] = [

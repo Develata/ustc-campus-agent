@@ -4892,6 +4892,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_platform_identity_grammar_authority(issues)",
         "check_platform_identity_implementation(issues)",
         "check_platform_session_contract(issues)",
+        "check_platform_session_implementation(issues)",
         "check_module_registry(issues)",
         "check_s0_architecture_review(issues)",
     )
@@ -4915,6 +4916,14 @@ class PlatformSessionContractTests(unittest.TestCase):
         shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
         (self.root / "scripts").mkdir(parents=True, exist_ok=True)
         shutil.copy2(CHECKER_PATH, self.root / "scripts/check_repo_contracts.py")
+        # The sandbox mirrors the real carrier state. Before `M00-B2` landed there were none, so
+        # every carrier-absence case got its precondition for free; now the promoted rows require
+        # them, and a case about absence has to create that absence itself.
+        for rel in (checker.PLATFORM_SESSION_SOURCE, checker.PLATFORM_SESSION_TEST):
+            real = REPO_ROOT / rel
+            if real.is_file():
+                (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(real, self.root / rel)
         self.original_root = cast(Path, getattr(checker, "ROOT"))
         setattr(checker, "ROOT", self.root)
 
@@ -4955,7 +4964,10 @@ class PlatformSessionContractTests(unittest.TestCase):
     def write_implementation_carriers(
         self, source: bool, test: bool, functions: bool = True
     ) -> None:
-        """Create the carriers a promoted row needs.
+        """Set the carrier state a promoted row is checked against, authoritatively.
+
+        A carrier this is not asked to write is REMOVED rather than left as the sandbox found
+        it, so `source=False` means "absent" whatever the real repository contains.
 
         `functions=False` writes a test file with no bound function in it, which is the
         stub case: the file exists, so an existence-only gate would admit it.
@@ -4964,8 +4976,19 @@ class PlatformSessionContractTests(unittest.TestCase):
         test_path = self.root / checker.PLATFORM_SESSION_TEST
         source_path.parent.mkdir(parents=True, exist_ok=True)
         test_path.parent.mkdir(parents=True, exist_ok=True)
+        for wanted, path in ((source, source_path), (test, test_path)):
+            if not wanted and path.is_file():
+                path.unlink()
         if source:
-            source_path.write_text("// placeholder\n", encoding="utf-8")
+            body = "// placeholder\n"
+            if functions:
+                # A promoted row is checked against its library leg as well, so the stub source
+                # declares the fixtures those legs name.
+                body += "#[cfg(test)]\nmod tests {\n" + "".join(
+                    f"    #[test]\n    fn {name}() {{}}\n"
+                    for name in checker.PLATFORM_SESSION_LIB_TEST_FUNCTIONS
+                ) + "}\n"
+            source_path.write_text(body, encoding="utf-8")
         if test:
             body = "// placeholder\n"
             if functions:
@@ -4983,15 +5006,59 @@ class PlatformSessionContractTests(unittest.TestCase):
     def test_current_platform_session_contract_passes(self) -> None:
         self.assertEqual(self.check_session(), [])
 
-    def test_all_four_cases_are_planned_and_unimplemented_today(self) -> None:
+    # All four rows are `implemented`. `AUTH-018` and `AUTH-019` reach that state through an
+    # additional exact library-target leg, because the §13 entries they cover need a snapshot at
+    # `revision == u64::MAX` that no public call sequence produces; `platform-session/v0` §17
+    # records the amendment. Pinning the set here means a silent demotion or a silent promotion
+    # of a fifth row fails this test.
+    IMPLEMENTED_CASES = ("AUTH-017", "AUTH-018", "AUTH-019", "AUTH-020")
+    PLANNED_CASES: tuple[str, ...] = ()
+
+    def test_case_status_split_matches_the_recorded_evidence(self) -> None:
+        """`M00-B2` has landed, so this pins the post-implementation truth.
+
+        Its predecessor asserted the opposite — four `planned` rows and absent carriers — which
+        was the correct pin while the contract was accepted and unimplemented. What keeps earning
+        its place is that every promotion is backed by a carrier that really declares the
+        function its binding names, on both the integration and the library leg.
+        """
         rows = (self.root / "docs/acceptance/matrix.tsv").read_text(encoding="utf-8")
-        for case_id in checker.PLATFORM_SESSION_CASES:
+        contract = (self.root / checker.PLATFORM_SESSION_CONTRACT).read_text(encoding="utf-8")
+        test_source = (REPO_ROOT / checker.PLATFORM_SESSION_TEST).read_text(encoding="utf-8")
+        self.assertTrue((REPO_ROOT / checker.PLATFORM_SESSION_SOURCE).exists())
+        self.assertTrue((REPO_ROOT / checker.PLATFORM_SESSION_TEST).exists())
+        self.assertEqual(
+            tuple(sorted(self.IMPLEMENTED_CASES + self.PLANNED_CASES)),
+            tuple(sorted(checker.PLATFORM_SESSION_CASES)),
+        )
+        for case_id, expected in (
+            [(case, "implemented") for case in self.IMPLEMENTED_CASES]
+            + [(case, "planned") for case in self.PLANNED_CASES]
+        ):
             row = next(
                 line for line in rows.splitlines() if line.startswith(f"{case_id}\t")
             )
-            self.assertEqual(row.split("\t")[5], "planned")
-        self.assertFalse((REPO_ROOT / checker.PLATFORM_SESSION_SOURCE).exists())
-        self.assertFalse((REPO_ROOT / checker.PLATFORM_SESSION_TEST).exists())
+            self.assertEqual(row.split("\t")[5], expected, case_id)
+        # Every row's bound function exists regardless of its status, so `planned` here means
+        # "one required assertion is not executable", never "no evidence was written".
+        bound = [
+            match.group("function")
+            for match in checker.PLATFORM_SESSION_BOUND_FUNCTION.finditer(contract)
+        ]
+        self.assertEqual(len(bound), len(checker.PLATFORM_SESSION_CASES))
+        for function in bound:
+            self.assertRegex(test_source, rf"#\[test\]\nfn {function}\(\)")
+        # …and the two library legs, which live in the module source rather than the test file.
+        source = (REPO_ROOT / checker.PLATFORM_SESSION_SOURCE).read_text(encoding="utf-8")
+        lib_bound = [
+            match.group("function")
+            for match in checker.PLATFORM_SESSION_LIB_BINDING.finditer(contract)
+        ]
+        self.assertEqual(
+            sorted(lib_bound), sorted(checker.PLATFORM_SESSION_LIB_TEST_FUNCTIONS)
+        )
+        for function in lib_bound:
+            self.assertRegex(source, rf"    #\[test\]\n    fn {function}\(\)")
 
     def test_missing_contract_fails_closed(self) -> None:
         (self.root / checker.PLATFORM_SESSION_CONTRACT).unlink()
@@ -5085,6 +5152,7 @@ class PlatformSessionContractTests(unittest.TestCase):
         )
 
     def test_implemented_without_any_carrier_fails_closed(self) -> None:
+        self.write_implementation_carriers(source=False, test=False)
         self.edit_matrix_cell("AUTH-017", 5, "implemented")
         self.assert_rejected(
             self.check_session(),
@@ -5123,14 +5191,50 @@ class PlatformSessionContractTests(unittest.TestCase):
         self.edit_matrix_cell("AUTH-017", 5, "implemented")
         self.assertEqual(self.check_session(), [])
 
+    def test_library_leg_on_an_unbound_case_fails_closed(self) -> None:
+        # Each library leg belongs to one case. Attaching one to a row that owns none is drift,
+        # not a harmless extra command.
+        rows = (self.root / "docs/acceptance/matrix.tsv").read_text(encoding="utf-8")
+        current = next(
+            line for line in rows.splitlines() if line.startswith("AUTH-017\t")
+        ).split("\t")[3]
+        self.edit_matrix_cell(
+            "AUTH-017",
+            3,
+            current
+            + " && cargo test --locked -p ustc-campus-agent-core --lib "
+            "session::tests::terminal_precedence_holds_at_the_revision_ceiling -- --exact",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session acceptance binding in AUTH-017 carries an unexpected library leg",
+        )
+
+    def test_library_leg_naming_the_wrong_fixture_fails_closed(self) -> None:
+        rows = (self.root / "docs/acceptance/matrix.tsv").read_text(encoding="utf-8")
+        current = next(
+            line for line in rows.splitlines() if line.startswith("AUTH-018\t")
+        ).split("\t")[3]
+        self.edit_matrix_cell(
+            "AUTH-018",
+            3,
+            current.replace(
+                "terminal_precedence_holds_at_the_revision_ceiling",
+                "revision_ceiling_fails_closed_on_decide_and_evolve",
+            ),
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session acceptance binding in AUTH-018 must name the exact library "
+            "fixture terminal_precedence_holds_at_the_revision_ceiling",
+        )
+
     def test_binding_naming_no_exact_test_function_fails_closed(self) -> None:
         replacement = "python3 scripts/check_repo_contracts.py && cargo test --locked"
         self.edit_matrix_cell("AUTH-019", 3, replacement)
         self.rewrite(
             checker.PLATFORM_SESSION_CONTRACT,
-            "| `AUTH-019` | `python3 scripts/check_repo_contracts.py && cargo test "
-            "--locked -p ustc-campus-agent-core --test platform_session "
-            "session_revision_and_replay_are_exact_and_fail_closed -- --exact` |",
+            "| `AUTH-019` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_revision_and_replay_are_exact_and_fail_closed -- --exact && cargo test --locked -p ustc-campus-agent-core --lib session::tests::revision_ceiling_fails_closed_on_decide_and_evolve -- --exact` |",
             f"| `AUTH-019` | `{replacement}` |",
         )
         self.assert_rejected(
@@ -5175,6 +5279,341 @@ class PlatformSessionContractTests(unittest.TestCase):
         self.assert_rejected(
             self.check_session(),
             "check_platform_session_contract must be invoked from repository main()",
+        )
+
+
+class PlatformSessionImplementationTests(unittest.TestCase):
+    """Fail-closed regressions for the `M00-B2` source and evidence surface.
+
+    Each case mutates a real carrier in a throwaway copy of the repository and asserts the
+    checker rejects it. Removal, redirection, aliasing, broadening and stale status are covered
+    separately, because they fail through different rules and a green run on one says nothing
+    about the others.
+    """
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        shutil.copytree(REPO_ROOT / "crates", self.root / "crates")
+        (self.root / "scripts").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(CHECKER_PATH, self.root / "scripts/check_repo_contracts.py")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def check_session(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_platform_session_implementation(issues)
+        return issues
+
+    def assert_rejected(self, issues: list[str], fragment: str) -> None:
+        self.assertTrue(
+            any(fragment in issue for issue in issues),
+            f"expected an issue containing {fragment!r}, got {issues!r}",
+        )
+
+    def rewrite(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertIn(old, text)
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def test_current_session_implementation_passes(self) -> None:
+        self.assertEqual(self.check_session(), [])
+
+    def test_missing_source_carrier_fails_closed(self) -> None:
+        (self.root / checker.PLATFORM_SESSION_SOURCE).unlink()
+        self.assert_rejected(
+            self.check_session(),
+            "platform session carrier missing: crates/platform-core/src/session.rs",
+        )
+
+    def test_undeclared_module_fails_closed(self) -> None:
+        self.rewrite(checker.PLATFORM_CORE_LIB, "pub mod session;\n", "")
+        self.assert_rejected(
+            self.check_session(), "platform-core must export the M00 session module"
+        )
+
+    def test_removed_identity_binding_fails_closed(self) -> None:
+        # Removal, not aliasing: an admitted binding that simply disappears would otherwise pass
+        # the exception rule by never reaching it, so the binding is required positively too.
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "use crate::identity::{SessionId, TenantId, UserId};",
+            "use crate::identity::{SessionId, TenantId};",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session module lost the enumerated identity binding",
+        )
+
+    def test_renamed_identity_binding_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "use crate::identity::{SessionId, TenantId, UserId};",
+            "use crate::identity::{SessionId, TenantId, UserId as PlatformUser};",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session module lost the enumerated identity binding",
+        )
+
+    def test_aliasing_binding_is_refused_by_the_identity_exception(self) -> None:
+        # The other half of the same rule, in the checker that owns it: a SECOND binding compiles
+        # and leaves the first intact, so only the enumerated exception can refuse it.
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "use crate::identity::{SessionId, TenantId, UserId};",
+            "use crate::identity::{SessionId, TenantId, UserId};\n"
+            "use crate::identity::TenantId as Tenant;",
+        )
+        issues: list[str] = []
+        checker.check_platform_identity_implementation(issues)
+        self.assert_rejected(
+            issues,
+            "platform identity value alias or import outside the M00 identity module",
+        )
+
+    def test_broadened_cross_file_binding_table_admits_no_pattern(self) -> None:
+        # The exception is an ENUMERATION keyed by exact file and exact text. This pins that
+        # neither key is a prefix: a different file with the admitted text is refused, and so is
+        # the admitted file with different text.
+        for admitted_file, admitted_text in (
+            checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS
+        ):
+            self.assertRegex(admitted_file, r"\Acrates/platform-core/src/[a-z_/]+\.rs\Z")
+            self.assertRegex(admitted_text, r"\A(?:pub )?use crate::identity::\{[^}]*\};\Z")
+            self.assertNotIn(" as ", admitted_text)
+        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 3)
+
+    def test_forbidden_dependency_carrier_fails_closed(self) -> None:
+        # A path-qualified call inside a function body declares no item, so the item allowlist
+        # cannot see it; only the per-file carrier scan can.
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "    let bytes = value.as_bytes();",
+            "    let _ = semver::Version::parse(value);\n    let bytes = value.as_bytes();",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session module gained a forbidden dependency carrier: 'semver'",
+        )
+
+    def test_tool_protocol_reference_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "    let bytes = value.as_bytes();",
+            "    let _ = ustc_agent_tool_protocol::is_valid_tool_name(value);\n"
+            "    let bytes = value.as_bytes();",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "forbidden dependency carrier: 'ustc_agent_tool_protocol'",
+        )
+
+    def test_broadened_public_surface_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "impl SessionSnapshot {",
+            "impl SessionSnapshot {\n    pub fn from_unchecked_parts() -> u64 {\n        0\n    }\n",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session public declaration surface drifted",
+        )
+
+    def test_public_alias_of_an_identity_kind_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "use crate::identity::{SessionId, TenantId, UserId};",
+            "use crate::identity::{SessionId, TenantId, UserId};\n"
+            "pub type SessionOwner = UserId;",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session module declared a forbidden public item kind: 'pub type'",
+        )
+
+    def test_adapter_length_bound_drift_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "const MAX_ADAPTER_ID_BYTES: usize = 128;",
+            "const MAX_ADAPTER_ID_BYTES: usize = 64;",
+        )
+        self.assert_rejected(
+            self.check_session(), "platform session adapter length bound drifted"
+        )
+
+    def test_adapter_interior_byte_class_drift_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "matches!(byte, b'-' | b'.' | b'_' | b':')",
+            "matches!(byte, b'-' | b'.' | b'_' | b':' | b'/')",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session adapter interior byte class drifted from the contract",
+        )
+
+    def test_digest_prefix_drift_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            'const DIGEST_PREFIX: &str = "sha256:";',
+            'const DIGEST_PREFIX: &str = "md5:";',
+        )
+        self.assert_rejected(
+            self.check_session(), "platform session digest prefix drifted from the contract"
+        )
+
+    def test_digest_length_drift_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "const DIGEST_HEX_DIGITS: usize = 64;",
+            "const DIGEST_HEX_DIGITS: usize = 40;",
+        )
+        self.assert_rejected(self.check_session(), "platform session digest length drifted")
+
+    def test_digest_byte_class_widened_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "matches!(byte, b'0'..=b'9' | b'a'..=b'f')",
+            "matches!(byte, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F')",
+        )
+        self.assert_rejected(self.check_session(), "platform session digest byte class drifted")
+
+    def test_contract_losing_a_fenced_grammar_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_CONTRACT,
+            "^sha256:[0-9a-f]{64}$",
+            "^sha256:[0-9a-fA-F]{64}$",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session contract lost a fenced normative grammar",
+        )
+
+    def test_spliced_source_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "use std::error::Error;",
+            'use std::error::Error;\ninclude!("hidden.rs");',
+        )
+        self.assert_rejected(
+            self.check_session(), "platform session module must not splice external source"
+        )
+
+    def test_renamed_bound_test_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_TEST,
+            "fn session_revision_and_replay_are_exact_and_fail_closed",
+            "fn session_revision_and_replay",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session acceptance test missing: "
+            "session_revision_and_replay_are_exact_and_fail_closed",
+        )
+
+    def test_ignored_bound_test_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_TEST,
+            "#[test]\nfn session_open_pins_immutable_scope_and_checked_deadlines",
+            "#[test]\n#[ignore]\nfn session_open_pins_immutable_scope_and_checked_deadlines",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "attribute envelope drifted",
+        )
+
+    def test_crate_level_exclusion_of_the_bound_suite_fails_closed(self) -> None:
+        # `#![cfg(any())]` makes every bound command report `running 0 tests` at exit zero and
+        # silences any guard written inside the suite, so it is refused out of band.
+        self.rewrite(
+            checker.PLATFORM_SESSION_TEST,
+            "use ustc_campus_agent_core::identity::",
+            "#![cfg(any())]\nuse ustc_campus_agent_core::identity::",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session acceptance tests must execute unconditionally",
+        )
+
+    def test_test_local_macro_definition_fails_closed(self) -> None:
+        # A test-local `macro_rules! assert_eq` rebinds every admitted invocation NAME while
+        # making each equality claim type-check-only.
+        self.rewrite(
+            checker.PLATFORM_SESSION_TEST,
+            "fn tenant() -> TenantId {",
+            "macro_rules! assert_eq {\n    ($($rest:tt)*) => {};\n}\n\nfn tenant() -> TenantId {",
+        )
+        self.assert_rejected(self.check_session(), "macro definitions drifted in")
+
+    def test_test_item_alias_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_TEST,
+            "fn tenant() -> TenantId {",
+            "use std::assert as assert_eq;\n\nfn tenant() -> TenantId {",
+        )
+        self.assert_rejected(self.check_session(), "bound test item declarations drifted in")
+
+    def test_renamed_library_fixture_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "fn terminal_precedence_holds_at_the_revision_ceiling",
+            "fn terminal_precedence_at_ceiling",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session library fixture missing: "
+            "terminal_precedence_holds_at_the_revision_ceiling",
+        )
+
+    def test_ignored_library_fixture_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "    #[test]\n    fn revision_ceiling_fails_closed_on_decide_and_evolve",
+            "    #[test]\n    #[ignore]\n    fn revision_ceiling_fails_closed_on_decide_and_evolve",
+        )
+        self.assert_rejected(
+            self.check_session(), "library fixture revision_ceiling_fails_closed_on_decide_and_evolve"
+        )
+
+    def test_file_backed_submodule_fails_closed(self) -> None:
+        # The inline `#[cfg(test)] mod tests` is admitted by exact item accounting; a `mod name;`
+        # compiles a second file no scan reads and stays forbidden outright.
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "use std::error::Error;",
+            "use std::error::Error;\nmod hidden;",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "platform session module must not declare a file-backed submodule",
+        )
+
+    def test_second_inline_module_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_SESSION_SOURCE,
+            "#[cfg(test)]\nmod tests {",
+            "mod extra {}\n\n#[cfg(test)]\nmod tests {",
+        )
+        self.assert_rejected(
+            self.check_session(), "platform session module declarations drifted"
+        )
+
+    def test_checker_not_invoked_from_main_fails_closed(self) -> None:
+        self.rewrite(
+            "scripts/check_repo_contracts.py",
+            "    check_platform_session_implementation(issues)\n",
+            "    # check_platform_session_implementation(issues)\n",
+        )
+        self.assert_rejected(
+            self.check_session(),
+            "check_platform_session_implementation must be invoked from repository main()",
         )
 
 

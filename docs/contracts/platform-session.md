@@ -2,14 +2,14 @@
 
 ## Metadata
 
-- `Status`: Accepted `M00-B2 session-domain` contract; no implementation exists yet
+- `Status`: Accepted `M00-B2 session-domain` contract; implemented under §17
 - `Version`: `platform-session/v0`
 - `Last Review`: `2026-07-29`
 - `Owning Blueprint`: [`M00 Platform Control and Identity`](../plan/modules/10-platform-control-identity.md)
 - `Depends On`: implemented [`platform-identity/v0`](platform-identity.md) values and [`module-boundaries.md`](module-boundaries.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for authority partition
-- `Acceptance`: active `planned` `AUTH-017`, `AUTH-018`, `AUTH-019`, `AUTH-020`; none is `implemented`, and no session implementation evidence exists
-- `Primary Code`: `crates/platform-core/src/session.rs`, with evidence in `crates/platform-core/tests/platform_session.rs`; neither file exists yet
+- `Acceptance`: active `AUTH-017`, `AUTH-018`, `AUTH-019` and `AUTH-020`, all `implemented` under §17
+- `Primary Code`: `crates/platform-core/src/session.rs`, with evidence in `crates/platform-core/tests/platform_session.rs`
 
 ## 1. Scope and authority
 
@@ -265,9 +265,10 @@ A public algebra whose derive lists do not close is not frozen, only described: 
 
 | Type | Derived | Hand-written |
 |---|---|---|
-| `SessionInstant`, `SessionDuration` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Serialize`, `Deserialize` | — |
-| `AuthAdapterId` | `Debug`, `Clone`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Serialize`, `Deserialize` | — |
-| `CredentialEvidenceDigest` | `Clone`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Serialize`, `Deserialize` | `Debug` — redacting, see §10 |
+| `SessionInstant` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Serialize`, `Deserialize` | — |
+| `SessionDuration` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Serialize` | `Deserialize` — validating, §2.1 |
+| `AuthAdapterId` | `Debug`, `Clone`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Serialize` | `Deserialize` — validating, §2.2 |
+| `CredentialEvidenceDigest` | `Clone`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Serialize` | `Debug` — redacting, §10; `Deserialize` — validating, §2.2 |
 | `SessionCredentialEvidence` | `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize` | `Deserialize` — shadow struct, §2.2 |
 | `SessionPolicy` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Serialize`, `Deserialize` | — |
 | `SessionExpiryCause` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Serialize`, `Deserialize` | — |
@@ -275,8 +276,15 @@ A public algebra whose derive lists do not close is not frozen, only described: 
 | `SessionSnapshot` | `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize` | — |
 | the four commands, `SessionCommand` | `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize` | — |
 | the four events, `SessionEvent` | `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize`, `Deserialize` | — |
-| `SessionValueErrorKind`, `SessionDomainError`, `EventDerivedField` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq` | `Display`, `Error` on the two error types |
+| `SessionValueErrorKind`, `EventDerivedField` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq` | — |
 | `SessionValueError` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq` | `Display`, `Error` |
+| `SessionDomainError` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq` | `Display`, `Error` |
+
+**The two Serde columns are not symmetric, and the asymmetry is the rule rather than an inconsistency.** `Serialize` is derived for every value in this contract, because nothing here constrains serialization beyond the wire form §§2.1–2.2 already fix: the four scalar values carry `#[serde(transparent)]` and therefore emit exactly one `u64` or one string, which is byte-for-byte what a hand-written `serialize_u64`/`serialize_str` produces. Writing one by hand would add an implementation that proves nothing.
+
+`Deserialize` is different because §2.0 requires every decode to reach the value's own checked constructor, and a derive cannot do that for a value that owns an invariant. `#[serde(transparent)]` fills the private field directly, so a zero `SessionDuration` or an ungrammatical `AuthAdapterId` would be admitted; `#[serde(try_from = "…")]` would route through a constructor but only by adding a public `TryFrom`, which is a second construction path under §2.0 rule 1 and a public associated function outside the closure this section ends with. So exactly those values whose constructor can reject — `SessionDuration`, `AuthAdapterId`, `CredentialEvidenceDigest`, and `SessionCredentialEvidence` through its shadow struct — hand-write a `Deserialize` that reads the canonical primitive through that primitive's own implementation and hands the result to `parse`/`from_millis`/`new`. `SessionInstant` is the one scalar whose constructor is total, so its derived decode and `from_unix_millis` are the same function and it stays fully derived. Everything else derives both. A hand-written `Visitor`, `visit_*` method or `deserialize_any` remains forbidden everywhere.
+
+**`Display` and `Error` belong to the wrapper, never to the kind.** `SessionValueError` and `SessionDomainError` are the two values a caller propagates, so they carry the rendering and the `std::error::Error` implementation. `SessionValueErrorKind` and `EventDerivedField` are payloads read by pattern matching and implement neither, exactly as `platform-identity/v0` §5 gives `IdentityValueError` a `Display` while `IdentityValueErrorKind` has none. Giving a kind enum its own `Display` would publish a second rendering path for the same failure and widen the public trait surface for nothing.
 
 `SessionId`, `TenantId` and `UserId` bring their own derives from `platform-identity/v0` §4; B2 neither adds to them nor relies on any trait that contract does not already give them.
 
@@ -685,7 +693,9 @@ For every existing aggregate, evolution first requires exact next sequence, exac
 
 **An apply-guard violation has its own named failure.** A forged or corrupted event can carry an exact sequence, an exact `SessionId`, a forward `observed_at` and — for `SessionRevoked`, which has no derived field at all — nothing else to check, while still sitting on the wrong side of the effective deadline for its kind. None of `EventSequenceMismatch`, `SessionIdMismatch`, `NonMonotoneTime` or `EventDerivedFieldMismatch` describes that, and `IllegalEventForState` would contradict this table, which lists the pair as legal. It is `EventTimeOutsideValidity`, and it covers all three `Active` rows: a `SessionRefreshed` or `SessionRevoked` whose `observed_at` is at or after the effective deadline, and a `SessionExpired` whose `observed_at` precedes it.
 
-So the complete fail-closed set for evolution is: a gap, a duplicate sequence, an out-of-order event, a cross-session event, a forged derived field, an event time outside the guard's validity window, an illegal event/state pair, or a failed open invariant. Each returns no partial snapshot.
+So the complete fail-closed set for evolution is: revision exhaustion (`RevisionOverflow`), a gap, a duplicate sequence, an out-of-order event (`EventSequenceMismatch`), a cross-session event (`SessionIdMismatch`), a backward event time (`NonMonotoneTime`), an illegal event/state pair (`IllegalEventForState`), an event time outside the guard's validity window (`EventTimeOutsideValidity`), a forged derived field (`EventDerivedFieldMismatch`), a persisted refresh whose recomputed deadline does not strictly advance (`NoEffectiveRefresh`), a persisted refresh whose own checked deadline arithmetic overflows (`DeadlineOverflow`), or a failed open invariant (`InvalidTimeOrder`, `CredentialEvidenceExpired`, `DeadlineOverflow`). Each returns no partial snapshot.
+
+The last two are reachable on this path and are named here rather than folded into "a forged derived field", because reporting a forged field for either would be false. `NoEffectiveRefresh` answers when the recomputed deadline does not advance — under a policy whose idle candidate is already clipped by the absolute or credential cap, the event's own `effective_expires_at` may equal that recomputation exactly, so nothing was forged and the refresh is simply impossible. The `Active`/`SessionRefreshed` guards therefore run in a fixed order — validity window, then strict advance, then exact agreement with the recomputed deadline — and two implementations report the same failure for a multiply-invalid event.
 
 While a session is `Active`, `effective_expires_at > last_transition_at` is an invariant: open requires strictly-future derived deadlines and a credential deadline later than `opened_at`, and refresh requires both `observed_at < effective_expires_at` and a strictly advancing deadline. This is what makes §7's ordering of non-monotone time before time-derived expiry unambiguous rather than merely conventional — `observed_at < last_transition_at` implies `observed_at < effective_expires_at`, so the two conditions have an empty overlap and can never compete.
 
@@ -755,6 +765,10 @@ Errors are small typed values. They may report a failure kind, safe expected/act
 - a complete serialized evidence value;
 - arbitrary caller-provided reason text.
 
+**That guarantee is scoped to the diagnostics B2 produces, and the boundary is stated rather than left implicit.** It binds every `SessionValueError` and `SessionDomainError`, every `Display` and `Debug` rendering of a B2 value, and the validation mapping each `Deserialize` applies when it hands a decoded primitive to a checked constructor. It does **not** bind the deserializer's own syntax and type diagnostics, and cannot: because every decode reads the canonical primitive first, a payload of the wrong shape is rejected by the serde implementation before any B2 validator runs, and `deny_unknown_fields` names the field it refused. Those messages are produced outside this contract's values, and §10's prohibition on a hand-written `Visitor` means B2 has no interception point at which to rewrite them.
+
+They are therefore **untrusted boundary diagnostics**, not B2 errors, and carrying them across a trust boundary is a redaction obligation assigned to `M00-B4 control-evidence` together with whatever transport surface renders it: that batch owns the stable external error projection, and it must map a decode failure to a bounded reason code rather than forward the deserializer's message. No `AUTH-017..020` row asserts anything about those messages, and none may be read as doing so.
+
 Failed commands and failed event application leave the previous snapshot unchanged and produce no partial event/snapshot.
 
 ## 10. Serde and public API negative space
@@ -771,6 +785,8 @@ The exact B2 Serde surface is:
 Mechanically that means `#[serde(deny_unknown_fields)]` on every aggregate struct, `#[serde(rename_all = "snake_case")]` on every enum **that derives Serde** — the three error enums derive none, and a bare `serde` attribute without the derive in scope does not compile — and no hand-written visitor anywhere, exactly as §2.0 requires. A derived **unchecked** field decode on an authority-bearing value is forbidden: `deny_unknown_fields` closes the unknown-field half, and delegation to the checked constructor closes the invalid-value half. Neither closes the other, so both are required.
 
 "Unchecked" is the operative word, and §§4.1 and 5.1 make the boundary exact rather than leaving it to judgement. A derived decode whose every field is itself a validating `Deserialize` *is* checked, field by field, and is what events use. What is forbidden is a decode that reaches a private field without passing that field's own validator, and a derived decode of an aggregate whose invariant spans fields — which §2.0 routes through a shadow struct instead, for the one value that has one.
+
+A decode failure carries two kinds of message, and only one is B2's. A value this contract owns rejected through its checked constructor renders a `SessionValueError` under §9's non-echo rule; a payload the deserializer itself refused — wrong JSON type, malformed syntax, unknown field — renders that deserializer's diagnostic, which B2 neither produces nor can suppress. §9 assigns the second class to `M00-B4 control-evidence` as an untrusted boundary diagnostic. A consumer must not forward it verbatim across a trust boundary.
 
 Serde proves only shape and invariant validity, never credential authenticity or caller admission. B3/B4/B5 composition must not expose `OpenSession` deserialization as an untrusted transport endpoint. Derived unchecked decoding is forbidden on every authority-bearing value.
 
@@ -830,7 +846,7 @@ Adding the session module is admitted drift of that surface, and B2's first impl
 
 - the governed source-file inventory and the package file inventory, with `src/session.rs` and `tests/platform_session.rs`;
 - the admitted `mod` declarations, with `session` under `lib.rs` and none under `session.rs`;
-- the admitted item declarations, with `pub mod session;` in `lib.rs` and the session module's own complete `use` list;
+- the admitted item declarations, with `pub mod session;` in `lib.rs` and the session module's own complete item list. That list is its five `use` items **plus the two items the §12 library fixtures introduce**: the inline `#[cfg(test)] mod tests` and its `use super::*;`. Both are ordinary accounted items, not an exemption — the module-declaration carrier named in the bullet above governs *non-inline* `mod name;` declarations only, and `session.rs` still admits none of those, so the checker forbids the file-backed form outright while positively requiring exactly one registered inline fixture module. Neither carrier is loosened to admit them: the fixture module carries no `pub`, so the public-declaration allowlist is unchanged by its presence, and its `#[test]` and `#[cfg]` attribute names join the per-source attribute allowlist below by enumeration;
 - **the enumerated cross-file identity-binding exception.** This is a *separate* rule from the item allowlist and is the one that actually admits §2.0's import. It is currently a hard-coded single exception — admitted only when the file is `invocation.rs` **and** the normalized text equals that one re-export string — carried in both `scripts/check_repo_contracts.py` and the mirroring Rust guard. It must be widened to an enumerated set keyed by **exact file name and exact normalized text**, adding `session.rs` with exactly `use crate::identity::{SessionId, TenantId, UserId};`. It must **never** be relaxed into a predicate over `crate::identity::`, a prefix match or a regex: the rule's whole purpose is to refuse the alias class, and a pattern would re-open it. The failure message an implementer will see first reads `platform identity value alias or import outside the M00 identity module`, which describes a prohibition rather than a missing registration — that message is not an invitation to loosen the predicate;
 - the admitted sibling `impl` self types, macro definitions and macro invocation names for `session.rs`;
 - **the per-source attribute-name allowlist** for `session.rs`. There is no per-sibling derive-body carrier; the rule that fires is an exact-set comparison over every attribute name in the file. `session.rs` will carry at least `serde`, from §2.0's `deny_unknown_fields` and `rename_all`, plus `derive`, `doc` and `must_use` — none of which is admitted for a sibling today;
@@ -857,20 +873,22 @@ This is a stated scope limit, not a claim of equivalent rigor. A later batch tha
 
 ## 12. Acceptance coverage
 
-`AUTH-017`, `AUTH-018`, `AUTH-019` and `AUTH-020` are active rows in [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv) with status `planned`, gate `pr`, and the exact future bindings below. They are simultaneously retained in the long-horizon catalog [`platform-baseline.md`](../acceptance/platform-baseline.md), which is a catalog and confers no currency by itself.
+`AUTH-017`, `AUTH-018`, `AUTH-019` and `AUTH-020` are active rows in [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv) at gate `pr`, carrying exactly the bindings below. All four are `implemented`; §17 records the evidence and the two §13 entries whose fixtures are library-target rather than integration tests. They are simultaneously retained in the long-horizon catalog [`platform-baseline.md`](../acceptance/platform-baseline.md), which is a catalog and confers no currency by itself.
 
-`planned` is a non-pass state. No row here is `implemented`, no named test exists, and this section is the specification those tests must satisfy — not a report that they do.
+`planned` is a non-pass state, and no row here carries it any longer: each named test exists, runs unconditionally and passes. This section remains the specification those tests satisfy, and §17 is the record of what was proved.
 
 | Case | Binding |
 |---|---|
 | `AUTH-017` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_open_pins_immutable_scope_and_checked_deadlines -- --exact` |
-| `AUTH-018` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_lifecycle_precedence_is_deterministic_and_terminal -- --exact` |
-| `AUTH-019` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_revision_and_replay_are_exact_and_fail_closed -- --exact` |
+| `AUTH-018` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_lifecycle_precedence_is_deterministic_and_terminal -- --exact && cargo test --locked -p ustc-campus-agent-core --lib session::tests::terminal_precedence_holds_at_the_revision_ceiling -- --exact` |
+| `AUTH-019` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_revision_and_replay_are_exact_and_fail_closed -- --exact && cargo test --locked -p ustc-campus-agent-core --lib session::tests::revision_ceiling_fails_closed_on_decide_and_evolve -- --exact` |
 | `AUTH-020` | `python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_session session_domain_has_no_credential_or_adapter_surface -- --exact && cargo test --locked -p ustc-campus-agent-core --doc session` |
 
 Each binding runs the repository checker before its Rust leg for the reason `platform-identity/v0` §4 gives: redirecting a `[[test]]` target or renaming a bound function makes `--exact` match nothing, which cargo reports as `running 0 tests` at exit zero, and a guard written inside the suite is exactly what such a change replaces. Only an out-of-band carrier detects that, so the checker is part of each binding rather than a courtesy check.
 
 `AUTH-020`'s `--doc` leg is covered by CI's separate unconditional `cargo test --locked --all-features --doc` step, since `--all-targets` does not run doctests.
+
+**`AUTH-018` and `AUTH-019` each carry a second exact leg against the library target**, and the reason is a property of this contract's own algebra rather than a preference. §2.4 gives `SessionSnapshot` no public constructor, §10 gives it no `Deserialize`, and §8 sets `revision` only to `current + 1` from a base of `1`, so an aggregate at `revision == u64::MAX` is not reachable from an integration test at any feasible cost — while §7 item 5 and §8's checked increment both have observable behaviour there that a wrapping increment would silently change. §13 therefore binds those cases to private `#[cfg(test)]` fixtures inside `crates/platform-core/src/session.rs`, which may build that snapshot directly because they are in the module that owns the fields, and which then call the real `decide` and `evolve`. The fixtures add no public or feature-gated hook, change no production item, and are frozen by the same surface accounting as the rest of the module — a `pub` on any of them fails the public-declaration allowlist, and `#[cfg(test)]`/`#[test]` are the only attribute names the registration admits beyond those the production code already uses.
 
 ### `AUTH-017` — immutable open scope and deadline algebra
 
@@ -902,7 +920,7 @@ Acceptance of this contract does not bind these; the implementation does. `AUTH-
 - revoke before and at expiry;
 - repeated refresh/expire/revoke on terminal states;
 - stale and future expected revisions;
-- decision and evolution at revision `u64::MAX`, including forged wrapped sequence `0`;
+- decision and evolution at revision `u64::MAX`, including a forged wrapped sequence `0` that a wrapping increment would accept as the next sequence — proved by the private same-module fixtures §12 binds to `AUTH-019`'s library leg, since no reachable public call sequence produces that aggregate;
 - equal, backward and forward observed instants;
 - event sequence gap, duplicate and reorder;
 - cross-session event injection, and a decide-side `SessionIdMismatch` where the command names a different session than the supplied state;
@@ -922,8 +940,10 @@ Acceptance of this contract does not bind these; the implementation does. `AUTH-
 - `admits_at` false for an `Active` snapshot that has been refreshed, observed strictly between `opened_at` and `last_transition_at` — the stale-time case a status-plus-upper-bound predicate wrongly admits, and the one that distinguishes §2.4's three-conjunct rule from the two-conjunct one;
 - `admits_at` at both boundaries of an `Active` snapshot: true at exactly `last_transition_at`, false at exactly `effective_expires_at`;
 - replay after each legal prefix and across the full lifecycle;
-- dual-fault precedence cases, including a terminal session whose `current_revision` is `u64::MAX`, which must return `TerminalSession` and not `RevisionOverflow`;
-- secret-like canary strings absent from every error, `Display` and `Debug` surface, and from every serialized event/snapshot surface where forbidden — `Debug` included because §10 makes its redaction a B2 obligation.
+- dual-fault precedence cases; the reachable orientations belong to the integration tests, and the one that is not reachable — a terminal session whose `current_revision` is `u64::MAX`, which must return `TerminalSession` and not `RevisionOverflow` — is proved by the private same-module fixture §12 binds to `AUTH-018`'s library leg;
+- secret-like canary strings absent from every **B2-owned** error, `Display` and `Debug` surface, and from every serialized event/snapshot surface where forbidden — `Debug` included because §10 makes its redaction a B2 obligation. §9 scopes this to the diagnostics B2 produces: a deserializer's own syntax or type message is an untrusted boundary diagnostic owned by `M00-B4 control-evidence`, so no fixture here asserts anything about it and no acceptance row may be read as covering it.
+
+**Two entries above name a private same-module fixture rather than an integration test, and that is a deliberate amendment rather than a concession.** An acceptance floor entry that no test can express is worse than a missing one: it leaves an implementer nothing to satisfy and a reviewer nothing to measure, which is the defect §15's third round already corrected once elsewhere in this contract. A source-text assertion — that one guard is written above another, or that a call site spells `checked_add` — is not an acceptable substitute either, because it proves the shape of the code rather than the behaviour of the algebra. The realizable shape is the one that runs the real `decide` and `evolve` against the state in question, and the only way to hold that state is from inside the module that owns the fields. Those fixtures are held to the same standard as every other entry here: each must fail when its production guard or guard order is broken.
 
 Fixture names or expected-output edits must affect executable assertions; a checker that merely counts fixture files is insufficient.
 
@@ -950,7 +970,7 @@ One of them is an obligation rather than a feature, so it is named with an owner
 
 ## 15. Acceptance record and implementation-entry gate
 
-The eight conditions this contract carried while it was a draft are now discharged, in the same order they were stated:
+**This section is the historical record of the acceptance-entry gate, stated as it stood when the contract was accepted.** Its conditions describe that moment, not the present: §17 is the current-state carrier, and where the two differ §17 is the later fact. The eight conditions this contract carried while it was a draft were discharged, in the same order they were stated:
 
 1. `M00-B1` is merged at `c347e689aa23ee777b95e0989e633a9d91041161` and its public surface is read back in §2.0;
 2. the M00 blueprint, module map, roadmap and coverage matrix project B2 alongside — not over — B1's implemented evidence;
@@ -989,3 +1009,28 @@ What acceptance does **not** establish:
 Changing a public value name, field set, transition table entry, precedence order, deadline formula, error variant set or Serde shape frozen above changes `platform-session/v0`. Such a change requires an owning-contract update, acceptance-row and fixture review, and — once implementation exists — implementation and consumer evidence on the same revision.
 
 Adding request-context, policy-reference, port, control-evidence, credential-verification or transport semantics is a later owning contract, not an incidental extension of these values. §14 lists what those later contracts own.
+
+**`platform-session/v0` is retained across the implementation revision, and the reason is stated rather than assumed.** That revision corrected four statements in this document and amended two §13 fixture entries. Measured against the list above: no public value name changed, no field set changed, no transition-table entry changed, no precedence order changed, no deadline formula changed, and the error variant sets of §9.1 and §9.2 are identical. Nor did any **Serde shape** change — §2.5's Serde columns now record which `Deserialize` is hand-written, and the wire form each value produces and accepts is byte-for-byte what §§2.1–2.2 already fixed.
+
+Two of the four corrections touch the public trait surface, so they are called out rather than folded in silently. §2.5 previously implied a `Display`/`Error` pair on `SessionValueErrorKind`; that implication is withdrawn, which **narrows** the described surface to what `platform-identity/v0` §5's wrapper-versus-kind precedent already gave B1 and what §9.1's accessor list already assumed. And §9's non-echo guarantee is now scoped to the diagnostics B2 produces, with the deserializer's own messages assigned to `M00-B4`; that narrows a *stated* guarantee without weakening any behaviour, because no implementation of this contract could ever have bound a message it has no interception point for. Neither correction adds a trait, a variant, a field or a construction path, so neither meets this section's threshold. A future change that widens the trait surface — a `Display` on a kind enum, a public `TryFrom`, a `Deserialize` on `SessionSnapshot` — would.
+
+## 17. Implementation record
+
+`M00-B2 session-domain` is implemented. This section projects the resulting evidence state; §§1–16 remain the authority and this section overrides none of them.
+
+The carriers are `crates/platform-core/src/session.rs`, declared `pub mod session;` in `crates/platform-core/src/lib.rs`, with integration evidence in `crates/platform-core/tests/platform_session.rs` and the two private library fixtures §12 binds inside the module itself. The batch added no crate, no manifest dependency and no change to `crates/platform-core/Cargo.toml`. §11.1's carrier extensions were made in `scripts/check_repo_contracts.py` and the mirroring Rust guard in `crates/platform-core/tests/platform_identity.rs` together, including the enumerated cross-file identity binding, the per-source attribute allowlist, the session-scoped forbidden-carrier scan, the fixture module's own registration and the bound test surfaces.
+
+**All four rows — `AUTH-017`, `AUTH-018`, `AUTH-019`, `AUTH-020` — are `implemented`.** Every §13 fixture is an executable assertion under the tests §12 binds, and each was shown to fail when the production guard or guard order it covers is broken.
+
+Four statements in this document were corrected in the same revision that implemented it, because an implementation cannot be conformant to text that no implementation can satisfy:
+
+1. **§2.5's Serde columns** listed `Deserialize` as derived for `SessionDuration`, `AuthAdapterId` and `CredentialEvidenceDigest`. A derived decode cannot reach those values' checked constructors without adding a public `TryFrom`, which §2.0 rule 1 and §2.5's own closure both forbid, so the column was not satisfiable alongside §2.1's "a zero cannot arrive through Serde" and §2.2's grammars. §2.5 now separates a derived `Serialize` from a validating hand-written `Deserialize` and says which values need which, and why.
+2. **§2.5's error row** implied `Display` and `Error` on `SessionValueErrorKind`. `platform-identity/v0` §5 gives those to the wrapper and not to the kind, and §2.0 states B2 inherits that shape. The row now names `SessionValueError` and `SessionDomainError` as the two types that carry them.
+3. **§8's evolution failure enumeration** omitted `NoEffectiveRefresh` and `DeadlineOverflow`, both reachable when a persisted `SessionRefreshed` cannot advance or overflows its own recomputation. Reporting a forged derived field for either would be false, so §8 now names them and fixes the guard order that decides between them.
+4. **§9's non-echo guarantee** was unqualified and therefore unachievable at its edge. Because every decode reads the canonical primitive first, a deserializer rejects a wrong-typed or malformed payload with its own message before any B2 validator runs, and §10 forbids the hand-written `Visitor` that would be needed to intercept it. §9 now scopes the guarantee to the diagnostics B2 produces and assigns the rest to `M00-B4 control-evidence` as untrusted boundary diagnostics; §10 states the same boundary where the Serde surface is frozen, §13 scopes its canary fixture to B2-owned surfaces, and `AUTH-020` carries the same scope in its own assertion text rather than an explanation attached to it.
+
+`platform-session/v0` is **retained**, and §16 states the reasoning: none of the four corrections changes a public value name, field set, transition-table entry, precedence order, deadline formula, error variant set or Serde wire shape. Two of them touch the public trait surface, and both narrow it rather than widen it — one withdraws an implied `Display`/`Error` pair the implementation never had, the other narrows a stated guarantee to what any implementation could actually deliver.
+
+**§13 was amended in the same revision, for two entries.** Both named a `SessionSnapshot` already at `revision == u64::MAX`. That aggregate is not reachable from an integration test at any feasible cost: §2.4 gives the type no public constructor, §10 gives it no `Deserialize`, and §8 sets `revision` only to `current + 1` from a base of `1`, so arriving there needs on the order of 1.8e19 accepted evolutions. The behaviour at that value is nonetheless real — §7 item 5 puts `RevisionOverflow` below terminal state and above time, and §8's checked increment is what makes a wrapped sequence `0` rejectable rather than acceptable — so an unprovable requirement would have left the most dangerous arithmetic in the contract unguarded.
+
+The amendment binds those two entries to private `#[cfg(test)]` fixtures inside the module that owns the fields, which construct the ceiling snapshot from a real opened snapshot with only `revision` and `status` overridden and then call the production `decide` and `evolve`. §12 binds each by an exact library-target command alongside the existing integration command. The fixtures add no public or feature-gated hook and change no production item: the public-declaration, `impl`, derive and macro allowlists that freeze this module are unchanged by their presence, so a `pub` on any of them fails the gate. A source-text assertion — that one guard is written above another — was considered and rejected as the acceptance proof, because it pins the shape of the code rather than the behaviour of the algebra; the fixtures execute the real paths, and mutation of each guard and of each increment fails them.
