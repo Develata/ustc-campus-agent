@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Layer`: Product authority
-- `Status`: Schema/identity baseline, typed package-manifest/catalog read model and pure P0a resolver implemented; lifecycle contract accepted with `M20-B3-s1` managed-installation surface frozen contract-first; durable runtime lifecycle planned
+- `Status`: Schema/identity baseline, typed package-manifest/catalog read model, `M20-B2` capability registry, `M20-B3-s1` managed-installation aggregate/in-memory repository and pure P0a resolver implemented as bounded evidence; durable runtime lifecycle and composition planned
 - `Version`: `0.5.0`
 - `Last Review`: `2026-07-29`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
@@ -12,7 +12,7 @@
 - `Owning Lifecycle Contract`: [`../contracts/market-lifecycle.md`](../contracts/market-lifecycle.md)
 - `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
 - `Counterpart Acceptance`: `MARKET-*`, `PKG-*`, `AGENT-002`, `AGENT-017`, `AGENT-018`, `FP-006`, `FP-015`, `FP-007`
-- `Primary Code Areas`: `market/`, `crates/platform-core/`, future installation/gateway modules
+- `Primary Code Areas`: `market/`, `crates/platform-core/src/market.rs`, `crates/platform-core/src/market/capability.rs`, `crates/platform-core/src/market/installation.rs`, `crates/platform-core/src/invocation.rs`, future grant/update/gateway composition modules
 - `Large-module Blueprint`: [`modules/30-market-package-lifecycle.md`](modules/30-market-package-lifecycle.md)
 
 ## 1. Scope and repository boundary
@@ -153,15 +153,16 @@ Implemented:
 - exact first-party IDs, versions, statuses, capabilities and install policies;
 - safe component path validation and Rust/catalog identity cross-check;
 - allowance for safe user-installed non-first-party packages.
+- typed immutable capability-registry loading, exact registry/definition digests, derived risk and auto-grant eligibility, and permission-change classification under `crate::market::capability` (`M20-B2` bounded evidence only; no grant issuance).
+- pure managed-installation decide/evolve/replay, exact pins/configuration, terminal lifecycle, deny-side resolver projection and atomic semantic in-memory repository behavior under `crate::market::installation` (`M20-B3-s1` bounded evidence only; no durable store or production enable-evidence issuance).
 - pure typed invocation resolution, immutable per-turn projection and synthetic `RunSpec` proof (`MARKET-005/006`).
 - Agent–Plugin dependency direction and composition-root cross-boundary proof (`AGENT-017`).
 
 Planned:
 
 - M10/M80 anonymous catalog browse/detail API/browser delivery (`MARKET-001`);
-- `M20-B3-s1` managed-installation aggregate and semantic in-memory repository fake under `crate::market::installation` (contract frozen first in [`../contracts/market-lifecycle.md`](../contracts/market-lifecycle.md); implementation planned; mints no production enable evidence and promotes no acceptance row);
-- durable installations/grants;
-- enable/disable resolver;
+- durable installation/grant repositories and production transaction/TOCTOU closure;
+- grant issuance, production enable-evidence assembly and installation/grant-to-resolver composition;
 - Market browse/detail UI;
 - upgrade/revoke/rollback runtime.
 - production ToolGateway and executable Plugin tool-host packaging; the framework-neutral Agent tool protocol value subset is implemented.

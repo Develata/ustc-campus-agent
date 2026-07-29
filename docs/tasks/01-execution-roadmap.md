@@ -18,7 +18,7 @@ This document schedules independent large modules and their small-module batches
 
 The module skeleton review is complete. Concrete implementation remains contract- and acceptance-gated. Existing code is retained as executable evidence:
 
-- `M20`: pure invocation resolver and fixtures;
+- `M20`: typed package/catalog, capability-registry, bounded managed-installation aggregate/in-memory repository, and pure invocation-resolver evidence;
 - `M30`: node-local `AgentRun` kernel;
 - `M40`: Agent tool protocol and fake gateway/executor proof;
 - `M72`: offline Course Planning spike;
@@ -59,7 +59,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 |---|---|---|---|---|---|
 | `M00` Platform Control/Identity | `partial-evidence` | identity-types implemented; session/request-context/ports planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
 | `M10` Application Ingress Host | `skeleton` | skeleton | Dioxus server-function/public route/DTO/error/event/compatibility host | unassigned | black-box Fullstack/HTTP/stream conformance and no reach-through |
-| `M20` Market/Package | `partial-evidence` | typed package/catalog metadata + pure resolver evidence | M10/M80 browse delivery + durable install/grant/disable/revoke around audited resolver | unassigned | `MARKET-*` current-scope rows |
+| `M20` Market/Package | `partial-evidence` | typed package/catalog + capability-registry + bounded managed-installation fake + pure resolver evidence | M10/M80 browse delivery + durable installation/grant/update/composition around audited resolver | unassigned | `MARKET-*` current-scope rows |
 | `M30` Agent Harness/Runtime | `partial-evidence` | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |
 | `M40` Tool Gateway/Execution | `partial-evidence` | protocol/fake proof | durable intent/executor/receipt composition | unassigned | `AGENT-018/019`, `MARKET-007` |
 | `M50` Model Provider | `planned` | planned | typed profiles + one provider adapter | unassigned | provider conformance + real bounded turn |
@@ -138,8 +138,8 @@ Handlers contain mapping and coordination only. Domain validation remains in own
 
 - `M20-B0 existing-resolver-audit`: compare `invocation.rs`/fixtures with the module blueprint; adopt/amend/spike decision.
 - `M20-B1 package-catalog`: schema, catalog publication and anonymous read model.
-- `M20-B2 capability-registry`: risk/data class and auto-grant eligibility.
-- `M20-B3 installation-domain`: exact install/configure/enable/disable/revoke/uninstall. The bounded first slice `M20-B3-s1` delivers a pure managed-installation aggregate plus a semantic in-memory repository fake under `platform-core`; its contract is frozen first in [`../contracts/market-lifecycle.md`](../contracts/market-lifecycle.md) and it may land before full `M20-B2` because it mints no production enable evidence and promotes no acceptance row.
+- `M20-B2 capability-registry`: risk/data class and auto-grant eligibility. Bounded implementation evidence is complete; it creates no grants and promotes no acceptance row.
+- `M20-B3 installation-domain`: exact install/configure/enable/disable/revoke/uninstall. The bounded first slice `M20-B3-s1` implements a pure managed-installation aggregate plus a semantic in-memory repository fake under `platform-core`; it mints no production enable evidence, creates no durable state and promotes no acceptance row.
 - `M20-B4 grant-domain`: scope/version/reapproval and tenant checks.
 - `M20-B5 invocation-authority`: integrate audited projection/recheck with repository transaction/preconditions.
 - `M20-B6 update-rollback`: staged update, permission expansion and exact rollback.

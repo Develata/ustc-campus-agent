@@ -2,15 +2,15 @@
 
 ## Metadata
 
-- `Status`: Accepted `market-lifecycle/v0` contract; the contract was established in historical `B1-0` and the historical `B1-1` (= canonical `M20-B1` `package-catalog`) typed package-manifest loader and anonymous catalog metadata read model are implemented; `M20-B3-s1` managed-installation aggregate and semantic in-memory repository surface frozen contract-first, implementation planned; durable grant/update lifecycle planned; pure invocation resolver and call-time recheck adopted as items 7–8
+- `Status`: Accepted `market-lifecycle/v0` contract; historical `B1-0` established the contract, while canonical `M20-B1` package/catalog, `M20-B2` capability-registry and bounded `M20-B3-s1` managed-installation aggregate/in-memory repository evidence are implemented; durable installation/grant/update repositories and production composition remain planned; pure invocation resolver and call-time recheck are adopted as items 7–8
 - `Version`: `market-lifecycle/v0`
 - `Last Review`: `2026-07-29`
 - `Owning Plan`: [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)
 - `Large-module Blueprint`: [`../plan/modules/30-market-package-lifecycle.md`](../plan/modules/30-market-package-lifecycle.md)
 - `Counterpart Contracts`: [`plugin-package.md`](plugin-package.md), [`invocation-resolution.md`](invocation-resolution.md), [`permissions.md`](permissions.md), [`agent-plugin-boundary.md`](agent-plugin-boundary.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for state ownership, [`agent-runtime.md`](agent-runtime.md) for run/effect state, and [`invocation-resolution.md`](invocation-resolution.md) for the adopted projection/recheck decision shapes
-- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); the `M20-B3-s1` contract-first freeze mints no production enable evidence and promotes no acceptance row
-- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` (historical `B1-1`) typed package validation/catalog metadata; current adopted resolver/recheck authority in `crates/platform-core/src/invocation.rs` (items 7–8 only); `M20-B3-s1` managed installation surface planned under `crates/platform-core/src/market/installation.rs` with `market.rs` declaring `pub mod installation;`; later durable lifecycle may split `market.rs` when cohesion or size requires it
+- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); `M20-B2` and `M20-B3-s1` are supporting domain evidence only, mint no production grant/enable evidence and promote no acceptance row
+- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` package validation/catalog metadata; `crates/platform-core/src/market/capability.rs` for the bounded `M20-B2` capability registry; `crates/platform-core/src/market/installation.rs` for the bounded `M20-B3-s1` managed-installation aggregate and semantic in-memory repository; `crates/platform-core/src/invocation.rs` for adopted resolver/recheck items 7–8; later durable lifecycle may split `market.rs` when cohesion or size requires it
 
 ## 1. Scope and authority
 
@@ -135,7 +135,7 @@ Disable or revoke MUST change current authority before any later projection or r
 
 ### M20-B3-s1 managed installation surface
 
-This subsection freezes the exact public surface of the bounded `M20-B3-s1` slice: a pure managed-installation aggregate plus a semantic in-memory repository fake under `platform-core`. It specializes `M20-LC-003` through `M20-LC-011` into an implementation-bound contract. The slice is allowed to land before full `M20-B2` only because it cannot mint production enable evidence and cannot promote installation/enable acceptance; production enable-evidence issuance remains `M20-B2`/later composition work.
+This subsection freezes the exact public surface of the bounded `M20-B3-s1` slice: a pure managed-installation aggregate plus a semantic in-memory repository fake under `platform-core`. It specializes `M20-LC-003` through `M20-LC-011` into an implementation-bound contract. The slice was allowed to land before full `M20-B2` only because it cannot mint production enable evidence and cannot promote installation/enable acceptance; production enable-evidence issuance remains future grant/authority-assembly/composition work.
 
 The flow MUST be exactly:
 
@@ -408,10 +408,10 @@ Package update, disable or revoke MUST change only future projections and curren
 This contract does not own:
 
 - anonymous browse/detail delivery through M10/M80 application/query adapters remains planned (`MARKET-001`); the `M20-B1` (historical `B1-1`) anonymous metadata domain read model is implemented but is not delivery evidence;
-- durable installation/grant/enable/disable/upgrade mutation (planned, `MARKET-002`/`MARKET-003`/`MARKET-004`); the `M20-B3-s1` managed-installation aggregate and semantic in-memory repository surface is frozen contract-first above, with implementation planned and no production enable-evidence issuance;
+- durable installation/grant/enable/disable/upgrade mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); the bounded `M20-B3-s1` managed-installation aggregate and semantic in-memory repository are implemented but issue no production enable evidence;
 - a production database/repository transaction or TOCTOU closure (planned);
 - provider, network, MCP, daemon HTTP/SSE or UI adapters;
 - external tool execution, durable journal or crash recovery;
 - M30 `EffectIntent`, M40 executor dispatch, or M51 process isolation.
 
-Current repository status: the pure P0a invocation resolver and call-time recheck with typed in-memory snapshots and synthetic fixtures are implemented and adopted (`MARKET-005`/`MARKET-006`). `M20-B1` (historical `B1-1`) also implements the bounded typed package-manifest loader, canonical declaration digests and immutable anonymous catalog metadata domain read model in `crate::market`. The `M20-B3-s1` managed-installation aggregate and semantic in-memory repository surface is frozen contract-first in this document; no Rust implementation, production database, grant aggregate, update/rollback, application composition or M10/M80 browse delivery exists yet. No current first-party manifest is made runnable by `M20-B1`. Future implementation slices and their intended bindings are listed in [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv) and remain `planned` until their exact evidence exists.
+Current repository status: the pure P0a invocation resolver and call-time recheck with typed in-memory snapshots and synthetic fixtures are implemented and adopted (`MARKET-005`/`MARKET-006`). `M20-B1` implements the bounded typed package-manifest loader, canonical declaration digests and immutable anonymous catalog metadata domain read model in `crate::market`. `M20-B2` implements the typed immutable capability-registry loader/read model, exact digests, derived risk/auto-grant policy and permission-change classification without creating grants. `M20-B3-s1` implements the pure managed-installation aggregate, decide/evolve/replay, exact pins/configuration, terminal transitions, deny-side resolver projection and atomic semantic in-memory repository without a production enable-evidence issuer. No production database, grant aggregate, update/rollback, application composition or M10/M80 browse delivery exists yet, and no current first-party manifest is made runnable by these bounded slices. Future implementation slices and their intended bindings are listed in [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv) and remain `planned` until their exact evidence exists.

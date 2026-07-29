@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Module ID`: `M20`
-- `Status`: Accepted blueprint; manifest baseline, typed package-manifest/catalog read model and pure invocation resolver evidence exist; `market-lifecycle/v0` accepted with `M20-B3-s1` managed-installation aggregate and semantic in-memory repository surface frozen contract-first and durable lifecycle implementation planned
+- `Status`: Accepted blueprint; manifest/package-catalog, `M20-B2` capability-registry, bounded `M20-B3-s1` managed-installation aggregate/in-memory repository and pure invocation-resolver evidence exist; durable installation/grant/update repositories and production composition remain planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m20-market-package/v0`
 - `Last Review`: `2026-07-29`
@@ -173,7 +173,7 @@ Existing `invocation.rs` is reviewed against items 7–8; it is not permission t
 
 ### Delivery sequence
 
-The canonical roadmap batch schedule lives in [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md) §7 (`M20-B0` through `M20-B7`); this subsection maps the small-module items above onto those batches and records the historical labels. The current delivery sequence established the owning lifecycle contract in historical `B1-0` ([`../../contracts/market-lifecycle.md`](../../contracts/market-lifecycle.md)) and implemented the bounded historical `B1-1` (= canonical `M20-B1` `package-catalog`) package-schema/catalog-read-model slice in `crate::market`. The remaining work maps as follows: `M20-B3` `installation-domain` (bounded first slice `M20-B3-s1`: pure managed-installation aggregate + semantic in-memory repository fake, contract frozen first), `M20-B2` `capability-registry` plus `M20-B4` `grant-domain`, `M20-B5` `invocation-authority`, `M20-B6` `update-rollback`, and `M20-B7` `composition`; the standalone fake-port exit gate is §14 below. No slice promotes module state until its own gate passes; the `M20-B1` read model is not M10/M80 browse delivery, and the pure resolver/recheck kernel (items 7–8) is adopted authority rather than a substitute for durable lifecycle slices. `M20-B3-s1` is allowed to land before full `M20-B2` only because it cannot mint production enable evidence and cannot promote installation/enable acceptance.
+The canonical roadmap batch schedule lives in [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md) §7 (`M20-B0` through `M20-B7`); this subsection maps the small-module items above onto those batches and records the historical labels. Historical `B1-0` established the owning lifecycle contract, and canonical `M20-B1` implemented the bounded package-schema/catalog-read-model slice in `crate::market`. `M20-B2` now provides bounded capability-registry evidence, and `M20-B3-s1` now provides the pure managed-installation aggregate plus semantic in-memory repository fake; neither creates production grants, durable state, enable evidence or acceptance promotion. The remaining delivery work is `M20-B4` `grant-domain`, `M20-B5` `invocation-authority`, `M20-B6` `update-rollback`, and `M20-B7` `composition`; the standalone fake-port exit gate is §14 below. No bounded slice promotes module state until its own gate passes; the `M20-B1` read model is not M10/M80 browse delivery, and the pure resolver/recheck kernel (items 7–8) is adopted authority rather than a substitute for durable lifecycle slices.
 
 ## 14. Exit gate
 
