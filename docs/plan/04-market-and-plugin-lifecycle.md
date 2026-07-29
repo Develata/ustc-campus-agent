@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Layer`: Product authority
-- `Status`: Schema/identity baseline, typed package-manifest/catalog read model and pure P0a resolver implemented; lifecycle contract accepted; durable runtime lifecycle planned
+- `Status`: Schema/identity baseline, typed package-manifest/catalog read model and pure P0a resolver implemented; lifecycle contract accepted with `M20-B3-s1` managed-installation surface frozen contract-first; durable runtime lifecycle planned
 - `Version`: `0.5.0`
 - `Last Review`: `2026-07-29`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
@@ -159,6 +159,7 @@ Implemented:
 Planned:
 
 - M10/M80 anonymous catalog browse/detail API/browser delivery (`MARKET-001`);
+- `M20-B3-s1` managed-installation aggregate and semantic in-memory repository fake under `crate::market::installation` (contract frozen first in [`../contracts/market-lifecycle.md`](../contracts/market-lifecycle.md); implementation planned; mints no production enable evidence and promotes no acceptance row);
 - durable installations/grants;
 - enable/disable resolver;
 - Market browse/detail UI;

@@ -4,7 +4,7 @@
 
 - `Status`: Current delivery and task-splitting order
 - `Version`: `module-roadmap/v2.1`
-- `Last Review`: `2026-07-26`
+- `Last Review`: `2026-07-29`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module map`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
@@ -139,13 +139,13 @@ Handlers contain mapping and coordination only. Domain validation remains in own
 - `M20-B0 existing-resolver-audit`: compare `invocation.rs`/fixtures with the module blueprint; adopt/amend/spike decision.
 - `M20-B1 package-catalog`: schema, catalog publication and anonymous read model.
 - `M20-B2 capability-registry`: risk/data class and auto-grant eligibility.
-- `M20-B3 installation-domain`: exact install/configure/enable/disable/revoke/uninstall.
+- `M20-B3 installation-domain`: exact install/configure/enable/disable/revoke/uninstall. The bounded first slice `M20-B3-s1` delivers a pure managed-installation aggregate plus a semantic in-memory repository fake under `platform-core`; its contract is frozen first in [`../contracts/market-lifecycle.md`](../contracts/market-lifecycle.md) and it may land before full `M20-B2` because it mints no production enable evidence and promotes no acceptance row.
 - `M20-B4 grant-domain`: scope/version/reapproval and tenant checks.
 - `M20-B5 invocation-authority`: integrate audited projection/recheck with repository transaction/preconditions.
 - `M20-B6 update-rollback`: staged update, permission expansion and exact rollback.
 - `M20-B7 composition`: attach read/mutation APIs and fake `M40` consumer.
 
-`M20` merge scope is complete only when browse and current lifecycle state are distinct and disable/revoke blocks discovery/calls.
+`M20` merge scope is complete only when browse and current lifecycle state are distinct and disable/revoke blocks discovery/calls. Historical `B1-0`/`B1-1` labels map to the lifecycle-contract establishment and `M20-B1` respectively; the earlier `B1-2`/`B1-3`/… sequence is superseded by the canonical `M20-B<n>`/slice references above.
 
 ## 8. M30 lane — Agent Harness and Runtime
 
