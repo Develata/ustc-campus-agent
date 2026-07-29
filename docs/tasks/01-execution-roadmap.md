@@ -59,7 +59,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 |---|---|---|---|---|---|
 | `M00` Platform Control/Identity | `partial-evidence` | identity-types implemented; session/request-context/ports planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
 | `M10` Application Ingress Host | `skeleton` | skeleton | Dioxus server-function/public route/DTO/error/event/compatibility host | unassigned | black-box Fullstack/HTTP/stream conformance and no reach-through |
-| `M20` Market/Package | `partial-evidence` | partial evidence | browse + durable install/grant/disable/revoke around audited resolver | unassigned | `MARKET-*` current-scope rows |
+| `M20` Market/Package | `partial-evidence` | typed package/catalog metadata + pure resolver evidence | M10/M80 browse delivery + durable install/grant/disable/revoke around audited resolver | unassigned | `MARKET-*` current-scope rows |
 | `M30` Agent Harness/Runtime | `partial-evidence` | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |
 | `M40` Tool Gateway/Execution | `partial-evidence` | protocol/fake proof | durable intent/executor/receipt composition | unassigned | `AGENT-018/019`, `MARKET-007` |
 | `M50` Model Provider | `planned` | planned | typed profiles + one provider adapter | unassigned | provider conformance + real bounded turn |

@@ -2707,6 +2707,9 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def invocation_path(self) -> Path:
         return self.root / checker.PLATFORM_INVOCATION_SOURCE
 
+    def market_path(self) -> Path:
+        return self.root / "crates/platform-core/src/market.rs"
+
     def bound_test_path(self) -> Path:
         return self.root / checker.PLATFORM_IDENTITY_TEST
 
@@ -2738,6 +2741,47 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
 
     def test_current_platform_identity_implementation_passes(self) -> None:
         self.assertEqual(self.check_identity(), [])
+
+    def test_missing_market_source_fails_closed(self) -> None:
+        self.market_path().unlink()
+        self.assert_rejected(self.check_identity(), "platform-core source file set drifted")
+
+    def test_missing_market_catalog_test_fails_closed(self) -> None:
+        (self.root / "crates/platform-core/tests/market_package_catalog.rs").unlink()
+        self.assert_rejected(self.check_identity(), "platform-core source file set drifted")
+
+    def test_missing_market_module_export_fails_closed(self) -> None:
+        self.rewrite(
+            self.root / checker.PLATFORM_CORE_LIB,
+            "pub mod market;",
+            "// pub mod market;",
+        )
+        self.assert_rejected(
+            self.check_identity(),
+            "platform-core module declarations drifted in crates/platform-core/src/lib.rs",
+        )
+
+    def test_market_source_item_drift_fails_closed(self) -> None:
+        self.rewrite(
+            self.market_path(),
+            "use std::fmt;",
+            "use std::fmt;\nuse std::time::SystemTime;",
+        )
+        self.assert_rejected(
+            self.check_identity(),
+            "platform-core item declarations drifted in crates/platform-core/src/market.rs",
+        )
+
+    def test_serde_json_dependency_role_drift_fails_closed(self) -> None:
+        self.rewrite(self.manifest_path(), "serde_json.workspace = true\n", "")
+        self.rewrite(
+            self.manifest_path(),
+            'hex = "0.4.3"',
+            'hex = "0.4.3"\nserde_json.workspace = true',
+        )
+        issues = self.check_identity()
+        self.assert_rejected(issues, "platform-core [dependencies] drifted")
+        self.assert_rejected(issues, "platform-core [dev-dependencies] drifted")
 
     def test_missing_identity_module_fails_closed(self) -> None:
         self.source_path().unlink()

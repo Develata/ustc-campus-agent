@@ -1743,9 +1743,17 @@ fn assert_public_surface_is_frozen() {
             false,
         ),
         (
+            "market.rs",
+            MARKET_SOURCE,
+            &[] as &[&str],
+            &ADMITTED_MARKET_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
             "lib.rs",
             LIB_SOURCE,
-            &["identity", "invocation"] as &[&str],
+            &["identity", "invocation", "market"] as &[&str],
             &ADMITTED_LIB_ITEMS as &[&str],
             &[] as &[&str],
             false,
@@ -1829,6 +1837,7 @@ fn assert_public_surface_is_frozen() {
         let admitted_invocations: &[&str] = match label {
             "identity.rs" => &ADMITTED_IDENTITY_MACRO_INVOCATIONS,
             "invocation.rs" => &ADMITTED_INVOCATION_MACRO_INVOCATIONS,
+            "market.rs" => &ADMITTED_MARKET_MACRO_INVOCATIONS,
             _ => &ADMITTED_LIB_MACRO_INVOCATIONS,
         };
         assert_eq!(
@@ -1931,7 +1940,11 @@ fn assert_public_surface_is_frozen() {
 
     // The frozen surface belongs to the value kinds, not to one file. Rust's orphan rule does
     // not stop a sibling module in the same crate from adding a second inherent impl.
-    for (label, sibling) in [("invocation.rs", INVOCATION_SOURCE), ("lib.rs", LIB_SOURCE)] {
+    for (label, sibling) in [
+        ("invocation.rs", INVOCATION_SOURCE),
+        ("market.rs", MARKET_SOURCE),
+        ("lib.rs", LIB_SOURCE),
+    ] {
         let sibling_code = strip_comments_and_literals(sibling);
         for (carrier, tokens) in [
             ("include!", &["include", "!"][..]),
@@ -2013,10 +2026,10 @@ fn assert_public_surface_is_frozen() {
         }
         // …and the sibling implementation surface is an allowlist, not a kind blacklist: a
         // blanket `impl<T> Extension for T` names no governed kind yet covers all six.
-        let admitted_impls: &[&str] = if label == "invocation.rs" {
-            &ADMITTED_INVOCATION_IMPLS
-        } else {
-            &ADMITTED_LIB_IMPLS
+        let admitted_impls: &[&str] = match label {
+            "invocation.rs" => &ADMITTED_INVOCATION_IMPLS,
+            "market.rs" => &ADMITTED_MARKET_IMPLS,
+            _ => &ADMITTED_LIB_IMPLS,
         };
         assert_eq!(
             impl_declarations(&sibling_code),
@@ -2197,8 +2210,9 @@ const DESERIALIZE_BODY_INDEX: usize = 13;
 ///
 /// The rule belongs to every governed source, not only the identity module: an unadmitted
 /// attribute in a sibling is the same carrier reached one file over.
-const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 2] = [
+const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 3] = [
     ("invocation.rs", &["derive", "must_use"]),
+    ("market.rs", &["derive", "must_use", "serde"]),
     ("lib.rs", &["cfg", "derive", "must_use", "serde", "test"]),
 ];
 
@@ -4061,17 +4075,19 @@ fn byte_literals(body: &str) -> Vec<char> {
 
 const IDENTITY_SOURCE: &str = include_str!("../src/identity.rs");
 const INVOCATION_SOURCE: &str = include_str!("../src/invocation.rs");
+const MARKET_SOURCE: &str = include_str!("../src/market.rs");
 const LIB_SOURCE: &str = include_str!("../src/lib.rs");
 const MANIFEST_SOURCE: &str = include_str!("../Cargo.toml");
 const LOCKFILE_SOURCE: &str = include_str!("../../../Cargo.lock");
 
 /// Exact dependency specifications, so an admitted NAME cannot be redirected to another crate.
-const ADMITTED_DEPENDENCY_SPECS: [&str; 3] = [
+const ADMITTED_DEPENDENCY_SPECS: [&str; 4] = [
     "semver.workspace = true",
     "serde.workspace = true",
+    "serde_json.workspace = true",
     "ustc-agent-tool-protocol.workspace = true",
 ];
-const ADMITTED_DEV_DEPENDENCY_SPECS: [&str; 2] = ["hex = \"0.4.3\"", "serde_json.workspace = true"];
+const ADMITTED_DEV_DEPENDENCY_SPECS: [&str; 1] = ["hex = \"0.4.3\""];
 
 /// The resolved source of each direct dependency, as recorded in the committed lockfile.
 ///
@@ -4147,9 +4163,23 @@ const ADMITTED_INVOCATION_ITEMS: [&str; 6] = [
     ),
 ];
 
-const ADMITTED_LIB_ITEMS: [&str; 4] = [
+const ADMITTED_MARKET_ITEMS: [&str; 7] = [
+    concat!(
+        "use crate::invocation::{ CapabilityId, CatalogRevision, ComponentKind, PackageId, ",
+        "PackageVersion, Sha256Digest, };"
+    ),
+    "use serde::Deserialize;",
+    "use serde::de::{self, MapAccess, Visitor};",
+    "use std::collections::{BTreeMap, BTreeSet};",
+    "use std::error::Error;",
+    "use std::fmt;",
+    "type Value = UniqueStringMap;",
+];
+
+const ADMITTED_LIB_ITEMS: [&str; 5] = [
     "pub mod identity;",
     "pub mod invocation;",
+    "pub mod market;",
     "#[cfg(test)] mod tests",
     "use super::*;",
 ];
@@ -4171,6 +4201,22 @@ const ADMITTED_INVOCATION_IMPLS: [&str; 12] = [
     "impl-arg IntoIterator<Item = &'a str>",
 ];
 
+const ADMITTED_MARKET_IMPLS: [&str; 13] = [
+    "impl CatalogReadModel",
+    "impl ComponentDeclaration",
+    "impl Deserialize<'de> for UniqueStringMap",
+    "impl Error for CatalogReadModelError",
+    "impl Error for PackageLoadError",
+    "impl Error for PackageValidationError",
+    "impl InstallPolicy",
+    "impl PackageValidationError",
+    "impl ValidatedPackageManifest",
+    "impl Visitor<'de> for UniqueStringMapVisitor",
+    "impl fmt::Display for CatalogReadModelError",
+    "impl fmt::Display for PackageLoadError",
+    "impl fmt::Display for PackageValidationError",
+];
+
 const ADMITTED_LIB_IMPLS: [&str; 1] = ["impl SourceAuthority"];
 
 /// Macro INVOCATION names of each governed source, pinned exactly. A splicing macro reached by
@@ -4180,6 +4226,7 @@ const ADMITTED_LIB_IMPLS: [&str; 1] = ["impl SourceAuthority"];
 const ADMITTED_IDENTITY_MACRO_INVOCATIONS: [&str; 5] =
     ["concat", "identity_value", "matches", "stringify", "write"];
 const ADMITTED_INVOCATION_MACRO_INVOCATIONS: [&str; 3] = ["authority_id", "format", "write"];
+const ADMITTED_MARKET_MACRO_INVOCATIONS: [&str; 2] = ["matches", "write"];
 const ADMITTED_LIB_MACRO_INVOCATIONS: [&str; 4] = ["assert", "assert_eq", "include_str", "panic"];
 
 /// The Cargo target set of `platform-core`, pinned by the same key sets as
@@ -4206,8 +4253,9 @@ const ADMITTED_MANIFEST_PACKAGE_KEYS: [&str; 8] = [
     "rust-version",
     "version",
 ];
-const ADMITTED_MANIFEST_DEPENDENCIES: [&str; 3] = ["semver", "serde", "ustc-agent-tool-protocol"];
-const ADMITTED_MANIFEST_DEV_DEPENDENCIES: [&str; 2] = ["hex", "serde_json"];
+const ADMITTED_MANIFEST_DEPENDENCIES: [&str; 4] =
+    ["semver", "serde", "serde_json", "ustc-agent-tool-protocol"];
+const ADMITTED_MANIFEST_DEV_DEPENDENCIES: [&str; 1] = ["hex"];
 const ADMITTED_MANIFEST_LIB_PATH: &str = "\"src/lib.rs\"";
 
 /// Returns `(table, key)` for every key line of a Cargo manifest, table headers normalized to

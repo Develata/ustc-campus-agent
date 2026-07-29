@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Module ID`: `M20`
-- `Status`: Accepted blueprint; manifest baseline and pure invocation resolver evidence exist; `market-lifecycle/v0` accepted with durable lifecycle implementation planned
+- `Status`: Accepted blueprint; manifest baseline, typed package-manifest/catalog read model and pure invocation resolver evidence exist; `market-lifecycle/v0` accepted with durable lifecycle implementation planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m20-market-package/v0`
 - `Last Review`: `2026-07-29`
@@ -173,7 +173,7 @@ Existing `invocation.rs` is reviewed against items 7–8; it is not permission t
 
 ### B1 delivery sequence
 
-The current delivery sequence projects the owning lifecycle contract first (`B1-0`, [`../../contracts/market-lifecycle.md`](../../contracts/market-lifecycle.md)), then implements the small modules above in bounded slices: `B1-1` package schema + catalog read model, `B1-2` installation aggregate + repository fake, `B1-3` capability registry + grant aggregate, `B1-4` authority snapshot assembly, `B1-5` staged update/rollback, `B1-6` standalone fake-port gate, and `B1-7` application composition/integration. No slice promotes module state until its own gate passes; the pure resolver/recheck kernel (items 7–8) is adopted authority, not a substitute for the durable lifecycle slices.
+The current delivery sequence established the owning lifecycle contract in `B1-0` ([`../../contracts/market-lifecycle.md`](../../contracts/market-lifecycle.md)) and implemented the bounded `B1-1` package-schema/catalog-read-model slice in `crate::market`. Remaining slices are `B1-2` installation aggregate + repository fake, `B1-3` capability registry + grant aggregate, `B1-4` authority snapshot assembly, `B1-5` staged update/rollback, `B1-6` standalone fake-port gate, and `B1-7` application composition/integration. No slice promotes module state until its own gate passes; the B1-1 read model is not M10/M80 browse delivery, and the pure resolver/recheck kernel (items 7–8) is adopted authority rather than a substitute for durable lifecycle slices.
 
 ## 14. Exit gate
 
