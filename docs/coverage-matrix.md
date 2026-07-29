@@ -16,7 +16,7 @@ This matrix keeps the live documentation layers aligned:
 | `01-terminology` | all feature vocabulary | `contracts/module-boundaries.md`, Market schema/capability IDs | matrix/checker vocabulary |
 | `02-product-positioning` | `00-market-browse-install`, three first-party features | `plugin-package.md` | `MARKET-*`, `FP-*` |
 | `03-platform-authority` | `00-market-browse-install`, `04-bounded-agent-harness` | `platform-identity.md`, `module-boundaries.md`, `agent-harness.md`, `agent-plugin-boundary.md`, `client-shell.md`, `interfaces.md`, `permissions.md` | `AUTH-*`, `HARNESS-*`, `AGENT-*`, `MARKET-*`, long-horizon client cases |
-| `04-market-and-plugin-lifecycle` | `00-market-browse-install` | `plugin-package.md`, `permissions.md`, `invocation-resolution.md`, `agent-plugin-boundary.md` | `MARKET-*`, `PKG-*`, selected `AGENT-*`, `FP-*` |
+| `04-market-and-plugin-lifecycle` | `00-market-browse-install` | `plugin-package.md`, `market-lifecycle.md`, `permissions.md`, `invocation-resolution.md`, `agent-plugin-boundary.md` | `MARKET-*`, `PKG-*`, selected `AGENT-*`, `FP-*` |
 | `05-campus-trust-kernel` | all three first-party features | `source-import.md`, `data-models.md` | `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
 | `06-first-party-plugins` | three first-party features | manifests, `data-models.md`, `source-import.md` | `FP-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
 | `07-runtime-and-integration` | `04-bounded-agent-harness` | `agent-harness.md`, `agent-plugin-boundary.md`, `agent-runtime.md`, `interfaces.md` | `HARNESS-*`, `AGENT-*`, `RUNTIME-*`; long-horizon `AI-*`/`MCP-*`/`RUN-*` retained in `platform-baseline.md` |
@@ -29,7 +29,7 @@ This matrix keeps the live documentation layers aligned:
 | `modules/00-module-map` | `module-boundaries.md` | all | every module must bind before implementation |
 | `M00 Platform Control/Identity` | `platform-identity.md`, `B-M00-M10-ACTOR`, later request/session/causation values | cross-feature admission only | `active:AUTH-011`; `active:AUTH-012`; `active:AUTH-014`; `active:AUTH-015`; `active:AUTH-016`; `long-horizon:AUTH-013` |
 | `M10 Application Ingress Host` | `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT`, `B-M10-APP-CALL`, `B-APP-M10-RESULT`; server-function/public endpoint registry in `interfaces.md` | all real Web/Android/integration journeys | `gap`; `long-horizon:CLIENT-*`; `long-horizon:WEB-*` |
-| `M20 Market/Package` | package/install/grant/resolver contracts | `00-market-browse-install` | `active:MARKET-*`; `active:PKG-*`; `active:AGENT-*`; `active:FP-*` |
+| `M20 Market/Package` | `plugin-package.md`, `market-lifecycle.md`, `invocation-resolution.md`, package/install/grant/resolver contracts | `00-market-browse-install` | `active:MARKET-*`; `active:PKG-*`; `active:AGENT-*`; `active:FP-*` |
 | `M30 Agent Harness/Runtime` | `agent-harness.md`, `agent-runtime.md`, `B-M30-M50-MODEL`, `B-M20-M30-TOOLSET`, `B-M30-M40-CALL`, `B-COMP-M30-EFFECT`, `B-M40-M30-RESULT` | `04-bounded-agent-harness` | `active:HARNESS-*`; `active:AGENT-*` |
 | `M40 Tool Gateway/Execution` | `agent-plugin-boundary.md`, `invocation-resolution.md`, directional call/result/executor boundaries | tool/review states in harness journey | `active:AGENT-*`; `active:MARKET-*`; `active:PKG-*` |
 | `M50 Model Provider` | `B-M30-M50-MODEL` | model-turn states inside harness journey | `gap`; `long-horizon:AI-*` |

@@ -226,6 +226,7 @@ KEY_FILES = [
     "docs/contracts/data-models.md",
     "docs/contracts/interfaces.md",
     "docs/contracts/invocation-resolution.md",
+    "docs/contracts/market-lifecycle.md",
     "docs/contracts/module-boundaries.md",
     "docs/contracts/permissions.md",
     "docs/contracts/platform-identity.md",
@@ -2237,7 +2238,9 @@ PLATFORM_CORE_SOURCE_FILES = (
     "src/identity.rs",
     "src/invocation.rs",
     "src/lib.rs",
+    "src/market.rs",
     "tests/invocation_resolution.rs",
+    "tests/market_package_catalog.rs",
     "tests/platform_identity.rs",
     "tests/support/invocation_fixture.rs",
     "tests/support/invocation_fixture_executor.rs",
@@ -2248,9 +2251,10 @@ PLATFORM_IDENTITY_ADMITTED_REEXPORT = "pub use crate::identity::{TenantId, UserI
 # attribute spelling — `#[path]`, `#[cfg_attr(all(), path = "x.txt")]`, or a future one — can
 # introduce a module the scan never reads.
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {
-    "lib.rs": ("identity", "invocation"),
+    "lib.rs": ("identity", "invocation", "market"),
     "identity.rs": (),
     "invocation.rs": (),
+    "market.rs": (),
 }
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
 # the spelling `crate::identity` is not the same as accounting for the use tree that contains
@@ -2292,8 +2296,19 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {
     "lib.rs": (
         "pub mod identity;",
         "pub mod invocation;",
+        "pub mod market;",
         "#[cfg(test)] mod tests",
         "use super::*;",
+    ),
+    "market.rs": (
+        "use crate::invocation::{ CapabilityId, CatalogRevision, ComponentKind, PackageId, "
+        "PackageVersion, Sha256Digest, };",
+        "use serde::Deserialize;",
+        "use serde::de::{self, MapAccess, Visitor};",
+        "use std::collections::{BTreeMap, BTreeSet};",
+        "use std::error::Error;",
+        "use std::fmt;",
+        "type Value = UniqueStringMap;",
     ),
 }
 # A macro is the remaining item category that can add API to a governed type without naming it
@@ -2305,6 +2320,7 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {
     "invocation.rs": ("authority_id",),
     "lib.rs": (),
     "identity.rs": ("identity_value",),
+    "market.rs": (),
 }
 # Macro INVOCATION names are pinned too, not screened for `include!`. A splicing macro can be
 # reached whatever the spelling — `include /* x */ !("f.rs")` contains no `include!` substring —
@@ -2314,6 +2330,7 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {
     "identity.rs": ("concat", "identity_value", "matches", "stringify", "write"),
     "invocation.rs": ("authority_id", "format", "write"),
     "lib.rs": ("assert", "assert_eq", "include_str", "panic"),
+    "market.rs": ("matches", "write"),
 }
 PLATFORM_IDENTITY_ADMITTED_TEST_MACRO_INVOCATIONS = (
     "assert",
@@ -2348,6 +2365,21 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {
         "impl-arg IntoIterator<Item = &'a str>",
     ),
     "lib.rs": ("impl SourceAuthority",),
+    "market.rs": (
+        "impl CatalogReadModel",
+        "impl ComponentDeclaration",
+        "impl Deserialize<'de> for UniqueStringMap",
+        "impl Error for CatalogReadModelError",
+        "impl Error for PackageLoadError",
+        "impl Error for PackageValidationError",
+        "impl InstallPolicy",
+        "impl PackageValidationError",
+        "impl ValidatedPackageManifest",
+        "impl Visitor<'de> for UniqueStringMapVisitor",
+        "impl fmt::Display for CatalogReadModelError",
+        "impl fmt::Display for PackageLoadError",
+        "impl fmt::Display for PackageValidationError",
+    ),
 }
 # `extern crate self as x;` re-roots the crate under a second name, which would make
 # `x::identity` a foreign-looking path. It is an item whose keyword is neither `mod`, `use` nor
@@ -2478,9 +2510,10 @@ PLATFORM_CORE_ADMITTED_MANIFEST_PACKAGE_KEYS = (
 PLATFORM_CORE_ADMITTED_MANIFEST_DEPENDENCIES = (
     "semver",
     "serde",
+    "serde_json",
     "ustc-agent-tool-protocol",
 )
-PLATFORM_CORE_ADMITTED_MANIFEST_DEV_DEPENDENCIES = ("hex", "serde_json")
+PLATFORM_CORE_ADMITTED_MANIFEST_DEV_DEPENDENCIES = ("hex",)
 PLATFORM_CORE_ADMITTED_MANIFEST_LIB = {"path": "src/lib.rs"}
 # The `*.rs` inventory above cannot see a module source that does not end in `.rs`. Fixtures
 # are governed by their own digest check, so everything else in the package is pinned here.
@@ -2578,6 +2611,7 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {
     "identity.rs": ("$attribute", "derive", "doc", "must_use"),
     "invocation.rs": ("derive", "must_use"),
     "lib.rs": ("cfg", "derive", "must_use", "serde", "test"),
+    "market.rs": ("derive", "must_use", "serde"),
 }
 PLATFORM_IDENTITY_ADMITTED_TEST_ATTRIBUTE_NAMES = ("test",)
 # Pinning dependency NAMES pins nothing about what those names resolve to. `semver = { path =
@@ -2624,11 +2658,11 @@ PLATFORM_CORE_ADMITTED_DEPENDENCY_SPECS = {
     "dependencies": {
         "semver": {"workspace": True},
         "serde": {"workspace": True},
+        "serde_json": {"workspace": True},
         "ustc-agent-tool-protocol": {"workspace": True},
     },
     "dev-dependencies": {
         "hex": "0.4.3",
-        "serde_json": {"workspace": True},
     },
 }
 PLATFORM_IDENTITY_TEST_FUNCTIONS = (

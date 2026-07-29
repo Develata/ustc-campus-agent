@@ -2,9 +2,11 @@
 
 PluginPackage is the unit users inspect, install, authorize, disable, and upgrade.
 
-Required fields are defined by [`market/schemas/plugin-package.schema.json`](../../market/schemas/plugin-package.schema.json).
+Required fields are defined by [`market/schemas/plugin-package.schema.json`](../../market/schemas/plugin-package.schema.json). The bounded typed Rust ingress, semantic coherence rules and canonical declaration digests are frozen by [`market-lifecycle/v0`](market-lifecycle.md) and implemented in `crates/platform-core/src/market.rs`; successful decoding is not publication or runtime authority.
 
 Runtime compilation and Agent isolation are defined by [`agent-plugin-boundary/v0`](agent-plugin-boundary.md). Package installation never means direct linkage into the Agent kernel.
+
+The package lifecycle — publication, installation, grant, enable/disable/revoke, update and rollback invariants — is owned by [`market-lifecycle/v0`](market-lifecycle.md).
 
 ## Default first-party packages
 

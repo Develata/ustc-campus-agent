@@ -3,12 +3,13 @@
 ## Metadata
 
 - `Layer`: Product authority
-- `Status`: Schema/identity baseline and pure P0a resolver implemented; durable runtime lifecycle planned
+- `Status`: Schema/identity baseline, typed package-manifest/catalog read model and pure P0a resolver implemented; lifecycle contract accepted; durable runtime lifecycle planned
 - `Version`: `0.5.0`
-- `Last Review`: `2026-07-25`
+- `Last Review`: `2026-07-29`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
 - `Authority Defers To`: Market JSON schema/registries and package/permission contracts for exact fields
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
+- `Owning Lifecycle Contract`: [`../contracts/market-lifecycle.md`](../contracts/market-lifecycle.md)
 - `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
 - `Counterpart Acceptance`: `MARKET-*`, `PKG-*`, `AGENT-002`, `AGENT-017`, `AGENT-018`, `FP-006`, `FP-015`, `FP-007`
 - `Primary Code Areas`: `market/`, `crates/platform-core/`, future installation/gateway modules
@@ -147,6 +148,8 @@ An installation pins the package version and effective component/capability iden
 Implemented:
 
 - schema and exactly three default package manifests;
+- bounded typed package loading with duplicate/unknown-field rejection, semantic coherence validation and pinned canonical declaration digests;
+- deterministic anonymous catalog metadata domain read model with exact revision lookup and no install/runtime claims;
 - exact first-party IDs, versions, statuses, capabilities and install policies;
 - safe component path validation and Rust/catalog identity cross-check;
 - allowance for safe user-installed non-first-party packages.
@@ -155,7 +158,7 @@ Implemented:
 
 Planned:
 
-- read-only catalog browse/detail projection (P0b);
+- M10/M80 anonymous catalog browse/detail API/browser delivery (`MARKET-001`);
 - durable installations/grants;
 - enable/disable resolver;
 - Market browse/detail UI;
@@ -165,7 +168,10 @@ Planned:
 Verification:
 
 - `docs/contracts/plugin-package.md`
+- `docs/contracts/market-lifecycle.md`
 - `docs/contracts/invocation-resolution.md`
+- `crates/platform-core/src/market.rs`
+- `cargo test --locked -p ustc-campus-agent-core --test market_package_catalog`
 - `market/schemas/plugin-package.schema.json`
 - `python3 scripts/check_repo_contracts.py`
 - `scripts/tests/test_check_repo_contracts.py`

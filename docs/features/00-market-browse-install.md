@@ -1,8 +1,8 @@
 # Market browse, install and control
 
-- `Status`: Planned user journey; manifest validation exists
+- `Status`: Planned user journey; typed manifest validation and anonymous catalog metadata domain read model exist
 - `Owning plan`: `docs/plan/04-market-and-plugin-lifecycle.md`
-- `Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
+- `Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/market-lifecycle.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
 - `Acceptance`: `MARKET-*`, `PKG-019/020`, `AGENT-002`, `AGENT-017/018`, `FP-006`, `FP-015`, `FP-007`
 
 ## Goal
@@ -63,4 +63,4 @@ Package installation or update never updates the Agent framework. The Agent cons
 
 ## Verification
 
-Current automated evidence validates the exact three manifests and Rust identities plus the pure deterministic invocation resolver over synthetic in-memory authority snapshots. Durable installation, disable/re-enable and browser journeys remain planned; the resolver fixtures do not make any current package runnable.
+Current automated evidence validates the exact three manifests through the bounded typed Rust loader, pins canonical declaration/catalog digests, rejects duplicate/unknown/malformed input, and proves deterministic anonymous catalog metadata ordering/lookup. Existing Rust evidence also covers exact identities and the pure invocation resolver over synthetic in-memory authority snapshots. `MARKET-001` remains planned because M10/M80 anonymous API/browser delivery is absent; durable installation, disable/re-enable and browser journeys remain planned, and neither the read model nor resolver fixtures make any current package runnable.
