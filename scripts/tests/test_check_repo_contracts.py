@@ -50,6 +50,21 @@ class MarketContractTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def registry_path(self) -> Path:
+        return self.root / "market/capabilities/registry.json"
+
+    def load_registry(self) -> dict[str, object]:
+        return json.loads(self.registry_path().read_text(encoding="utf-8"))
+
+    def write_registry(self, registry: dict[str, object]) -> None:
+        self.registry_path().write_text(
+            json.dumps(registry, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+    def capability_schema_path(self) -> Path:
+        return self.root / "market/schemas/capability-registry.schema.json"
+
     def test_three_default_first_party_manifests_pass(self) -> None:
         self.assertEqual(self.check_market(), [])
 
@@ -81,6 +96,58 @@ class MarketContractTests(unittest.TestCase):
         self.write_manifest(package_id, manifest)
         self.assertTrue(
             any("capability is not auto-grant-eligible" in issue for issue in self.check_market())
+        )
+
+    def test_capability_registry_rejects_legacy_fields_and_schema_drift(self) -> None:
+        registry = self.load_registry()
+        rows = cast(list[dict[str, object]], registry["capabilities"])
+        rows[0]["autoGrantEligible"] = True
+        self.write_registry(registry)
+        self.assertTrue(
+            any("capability registry row keys drifted" in issue for issue in self.check_market())
+        )
+
+        registry = self.load_registry()
+        rows = cast(list[dict[str, object]], registry["capabilities"])
+        rows[0].pop("autoGrantEligible", None)
+        registry["schemaVersion"] = "capability-registry/v2"
+        self.write_registry(registry)
+        self.assertTrue(
+            any("capability registry schemaVersion drift" in issue for issue in self.check_market())
+        )
+
+    def test_capability_registry_axes_and_auto_grant_coherence_fail_closed(self) -> None:
+        registry = self.load_registry()
+        rows = cast(list[dict[str, object]], registry["capabilities"])
+        rows[0]["dataClass"] = "UserProfile"
+        self.write_registry(registry)
+        issues = self.check_market()
+        self.assertTrue(any("capability registry axes drifted" in issue for issue in issues))
+        self.assertTrue(
+            any("capability registry unsafe auto-grant tuple" in issue for issue in issues)
+        )
+
+        registry = self.load_registry()
+        rows = cast(list[dict[str, object]], registry["capabilities"])
+        rows[0]["dataClass"] = "PublicCampusFact"
+        rows[0]["autoGrant"] = "Never"
+        self.write_registry(registry)
+        self.assertTrue(
+            any("capability registry axes drifted" in issue for issue in self.check_market())
+        )
+
+    def test_capability_registry_schema_carriers_are_pinned(self) -> None:
+        schema = json.loads(self.capability_schema_path().read_text(encoding="utf-8"))
+        schema["additionalProperties"] = True
+        self.capability_schema_path().write_text(
+            json.dumps(schema, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "CapabilityRegistry schema must deny unknown top-level fields" in issue
+                for issue in self.check_market()
+            )
         )
 
     def test_default_package_version_is_exact(self) -> None:
@@ -2713,6 +2780,9 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def bound_test_path(self) -> Path:
         return self.root / checker.PLATFORM_IDENTITY_TEST
 
+    def capability_test_path(self) -> Path:
+        return self.root / checker.PLATFORM_CAPABILITY_TEST
+
     def rewrite(
         self,
         path: Path,
@@ -2749,6 +2819,29 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def test_missing_market_catalog_test_fails_closed(self) -> None:
         (self.root / "crates/platform-core/tests/market_package_catalog.rs").unlink()
         self.assert_rejected(self.check_identity(), "platform-core source file set drifted")
+
+    def test_market_capability_registry_ignored_tests_fail_closed(self) -> None:
+        text = self.capability_test_path().read_text(encoding="utf-8")
+        test_count = text.count("#[test]\nfn ")
+        self.assertEqual(test_count, len(checker.PLATFORM_CAPABILITY_TEST_FUNCTIONS))
+        self.capability_test_path().write_text(
+            text.replace("#[test]\nfn ", "#[ignore]\n#[test]\nfn "),
+            encoding="utf-8",
+        )
+        issues = self.check_identity()
+        self.assert_rejected(issues, "market capability registry acceptance test")
+        self.assert_rejected(issues, "attribute envelope drifted")
+
+    def test_market_capability_registry_missing_bound_test_fails_closed(self) -> None:
+        self.rewrite(
+            self.capability_test_path(),
+            "#[test]\nfn current_registry_loads_with_exact_eight_definitions()",
+            "fn current_registry_loads_with_exact_eight_definitions()",
+        )
+        self.assert_rejected(
+            self.check_identity(),
+            "market capability registry acceptance test registration drift",
+        )
 
     def test_missing_market_module_export_fails_closed(self) -> None:
         self.rewrite(
