@@ -230,6 +230,7 @@ KEY_FILES = [
     "docs/contracts/module-boundaries.md",
     "docs/contracts/permissions.md",
     "docs/contracts/platform-identity.md",
+    "docs/contracts/platform-session.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",
     "market/review-policy/first-party.md",
@@ -6391,6 +6392,176 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
             )
 
 
+PLATFORM_SESSION_CONTRACT = "docs/contracts/platform-session.md"
+PLATFORM_SESSION_SOURCE = "crates/platform-core/src/session.rs"
+PLATFORM_SESSION_TEST = "crates/platform-core/tests/platform_session.rs"
+PLATFORM_SESSION_VERSION = "`Version`: `platform-session/v0`"
+PLATFORM_SESSION_DOMAIN = "platform-session"
+PLATFORM_SESSION_GATE = "pr"
+PLATFORM_SESSION_CASES = ("AUTH-017", "AUTH-018", "AUTH-019", "AUTH-020")
+# Every binding runs the repository checker before its Rust leg. `platform-identity/v0` §4 gives
+# the reason: a redirected `[[test]]` target or a renamed function makes `--exact` match nothing,
+# which cargo reports as `running 0 tests` at exit zero, and a guard written inside the suite is
+# exactly what such a change replaces. Only an out-of-band carrier detects that.
+PLATFORM_SESSION_BINDING_PREFIX = "python3 scripts/check_repo_contracts.py && "
+PLATFORM_SESSION_BINDING_ROW = re.compile(
+    r"^\| `(?P<case>AUTH-[0-9]{3})` \| `(?P<binding>[^`]+)` \|$", flags=re.MULTILINE
+)
+PLATFORM_SESSION_CATALOG_ROW = re.compile(
+    r"^\| `(?P<case>AUTH-[0-9]{3})` \| (?P<assertion>.+?) \| ", flags=re.MULTILINE
+)
+# The bound function name inside a binding. Existence of the test FILE is not evidence that the
+# named function survives in it: `--exact` against a renamed or deleted function is `running 0
+# tests` at exit zero, which is the whole reason each binding runs this checker first. So a row
+# may claim `implemented` only when the function it names is still present.
+PLATFORM_SESSION_BOUND_FUNCTION = re.compile(
+    r"--test platform_session (?P<function>[A-Za-z0-9_]+) -- --exact"
+)
+
+
+def check_platform_session_contract(issues: list[str]) -> None:
+    """Bind `platform-session/v0` to the active acceptance matrix in both directions.
+
+    Neither direction implies the other, so both are checked.
+
+    Downward, the contract is the authority: its §12 binding table specifies which test
+    proves which case, so an active row whose binding differs from that table is drift —
+    a row silently repointed at a test the contract never specified would otherwise gate
+    nothing the contract asked for.
+
+    Upward, a `planned` row may not be promoted from documentation alone. `AUTH-017..020`
+    may read `implemented` only once BOTH carriers the contract names actually exist. The
+    implementation does not exist yet, so today this rule pins all four to `planned`; it
+    keeps holding after B2 lands, because deleting the suite while the row still claims
+    `implemented` fails here rather than passing quietly.
+    """
+    contract_path = ROOT / PLATFORM_SESSION_CONTRACT
+    matrix_path = ROOT / "docs/acceptance/matrix.tsv"
+    catalog_path = ROOT / "docs/acceptance/platform-baseline.md"
+    if not contract_path.is_file():
+        fail(f"platform session contract missing: {PLATFORM_SESSION_CONTRACT}", issues)
+        return
+    if not matrix_path.is_file() or not catalog_path.is_file():
+        fail("platform session acceptance sources are missing", issues)
+        return
+    contract = contract_path.read_text(encoding="utf-8")
+
+    for required in (PLATFORM_SESSION_VERSION, PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_TEST):
+        if required not in contract:
+            fail(f"platform session contract carrier missing: {required!r}", issues)
+
+    binding_rows = list(PLATFORM_SESSION_BINDING_ROW.finditer(contract))
+    specified = {match.group("case"): match.group("binding") for match in binding_rows}
+    if set(specified) != set(PLATFORM_SESSION_CASES):
+        fail(
+            "platform session contract binding table drift: "
+            f"expected={sorted(PLATFORM_SESSION_CASES)} actual={sorted(specified)}",
+            issues,
+        )
+    # A dict comprehension keeps the LAST match, so a second row for the same case anywhere in
+    # the document would silently shadow the real table and never be reported. One row per case,
+    # counted, closes that: the shadowing row is drift whichever side of the table it sits on.
+    if len(binding_rows) != len(PLATFORM_SESSION_CASES):
+        fail(
+            "platform session contract binding table has duplicate or stray rows: "
+            f"expected={len(PLATFORM_SESSION_CASES)} actual={len(binding_rows)}",
+            issues,
+        )
+
+    matrix_rows = {
+        row.split("\t")[0]: row.split("\t")
+        for row in matrix_path.read_text(encoding="utf-8").splitlines()[1:]
+        if row.strip()
+    }
+    catalog_assertions = {
+        match.group("case"): match.group("assertion")
+        for match in PLATFORM_SESSION_CATALOG_ROW.finditer(
+            catalog_path.read_text(encoding="utf-8")
+        )
+    }
+    source_path = ROOT / PLATFORM_SESSION_SOURCE
+    test_path = ROOT / PLATFORM_SESSION_TEST
+    carriers_exist = source_path.is_file() and test_path.is_file()
+    test_source = test_path.read_text(encoding="utf-8") if test_path.is_file() else ""
+
+    for case_id in PLATFORM_SESSION_CASES:
+        row = matrix_rows.get(case_id)
+        if row is None or len(row) != 7:
+            fail(f"platform session acceptance row missing: {case_id}", issues)
+            continue
+        if row[1] != PLATFORM_SESSION_DOMAIN:
+            fail(
+                f"platform session acceptance domain drift in {case_id}: {row[1]!r}",
+                issues,
+            )
+        if case_id not in catalog_assertions:
+            fail(
+                f"platform session acceptance case missing from long-horizon catalog: "
+                f"{case_id}",
+                issues,
+            )
+        elif row[2] != catalog_assertions[case_id]:
+            fail(
+                f"platform session acceptance assertion drift between matrix and "
+                f"catalog in {case_id}",
+                issues,
+            )
+        expected_binding = specified.get(case_id)
+        if expected_binding is not None and row[3] != expected_binding:
+            fail(
+                f"platform session acceptance binding drift in {case_id}: "
+                "matrix row does not equal the contract §12 binding table",
+                issues,
+            )
+        if not row[3].startswith(PLATFORM_SESSION_BINDING_PREFIX):
+            fail(
+                f"platform session acceptance binding in {case_id} must run the "
+                "repository checker before its Rust leg",
+                issues,
+            )
+        if row[4] != PLATFORM_SESSION_GATE:
+            fail(
+                f"platform session acceptance gate drift in {case_id}: {row[4]!r}",
+                issues,
+            )
+        bound = PLATFORM_SESSION_BOUND_FUNCTION.search(row[3])
+        if bound is None:
+            fail(
+                f"platform session acceptance binding in {case_id} names no exact "
+                "platform_session test function",
+                issues,
+            )
+        if row[5] == "implemented":
+            if not carriers_exist:
+                fail(
+                    f"platform session acceptance status in {case_id} claims "
+                    f"'implemented' while {PLATFORM_SESSION_SOURCE} or "
+                    f"{PLATFORM_SESSION_TEST} is absent",
+                    issues,
+                )
+            elif bound is not None and not re.search(
+                rf"\bfn\s+{re.escape(bound.group('function'))}\b", test_source
+            ):
+                fail(
+                    f"platform session acceptance status in {case_id} claims "
+                    f"'implemented' while {PLATFORM_SESSION_TEST} declares no "
+                    f"{bound.group('function')}",
+                    issues,
+                )
+
+    checker_path = ROOT / "scripts/check_repo_contracts.py"
+    if not checker_path.is_file():
+        fail("platform session carrier missing: scripts/check_repo_contracts.py", issues)
+        return
+    main_body = checker_path.read_text(encoding="utf-8").split("\ndef main() -> int:", 1)
+    required_call = "check_platform_session_contract(issues)"
+    invoked = len(main_body) == 2 and any(
+        line.strip() == required_call for line in main_body[1].splitlines()
+    )
+    if not invoked:
+        fail("check_platform_session_contract must be invoked from repository main()", issues)
+
+
 def main() -> int:
     issues: list[str] = []
     check_key_files_present_and_nonempty(issues)
@@ -6407,6 +6578,7 @@ def main() -> int:
     check_rust_doctest_gate(issues)
     check_platform_identity_grammar_authority(issues)
     check_platform_identity_implementation(issues)
+    check_platform_session_contract(issues)
     check_module_registry(issues)
     check_s0_architecture_review(issues)
     if issues:

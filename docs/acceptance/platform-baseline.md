@@ -180,6 +180,10 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AUTH-014` | identity construction errors expose only the value kind failure class fixed bound and byte index while Display and Debug contain no complete rejected input input-derived fragment or offending-byte rendering | rust-unit | PR |
 | `AUTH-015` | the M00 identity module mints no identifier and declares no clock random transport database framework or auth-adapter dependency | rust-unit | PR |
 | `AUTH-016` | Market invocation authority consumes the M00 owned tenant and user types so no duplicate public tenant or user identity remains in platform-core and invocation policy snapshot identity stays M20 owned | rust-unit | PR |
+| `AUTH-017` | session open pins immutable tenant user session adapter evidence and resolved policy scope while checked policy credential and idle deadline algebra rejects stale evidence invalid time and overflow | rust-unit | PR |
+| `AUTH-018` | refresh extends only idle expiry while equality expires credential absolute and idle cause ties have deterministic precedence late observation preserves effective expiry revoke blocks immediately and terminal sessions cannot mutate or resurrect | rust-unit | PR |
+| `AUTH-019` | session expected revisions and ordered events fail closed on exhaustion and reject gap duplicate reorder wrapped-zero cross-session and forged-derived-field input while replay reconstructs an equal snapshot without adapter I/O | rust-unit | PR |
+| `AUTH-020` | session-domain commands events snapshots errors and public API retain no raw credential or arbitrary adapter payload expose no mutable unchecked or raw-credential conversion authority fields never represent structural evidence decoding as authentication and declare no clock RNG transport database framework or auth-adapter dependency | rust-unit + rust-doc-test | PR |
 
 ## 9. Capability registry and ControlledCLI — `SEC-*`
 
