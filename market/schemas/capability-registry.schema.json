@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Develata/ustc-campus-agent/market/schemas/capability-registry.schema.json",
+  "title": "USTC Campus Agent CapabilityRegistry",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "registryRevision",
+    "capabilities"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "capability-registry/v1"
+    },
+    "registryRevision": {
+      "type": "string",
+      "pattern": "^capability-registry:[A-Za-z0-9._:-]{1,108}$"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "effectClass",
+          "dataClass",
+          "scopeKind",
+          "autoGrant",
+          "confirmationDefault",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(\\.[a-z0-9_-]+){1,7}$",
+            "maxLength": 128
+          },
+          "effectClass": {
+            "enum": [
+              "Read",
+              "Write",
+              "Destructive",
+              "Linkout",
+              "Diagnostic"
+            ]
+          },
+          "dataClass": {
+            "enum": [
+              "PublicCampusFact",
+              "TenantPrivateFact",
+              "UserProfile",
+              "Credential",
+              "Administrative"
+            ]
+          },
+          "scopeKind": {
+            "enum": [
+              "CampusPublic",
+              "TenantPrivateUser",
+              "OperatorAdministrative"
+            ]
+          },
+          "autoGrant": {
+            "enum": [
+              "Never",
+              "FirstPartyDefaultOnly"
+            ]
+          },
+          "confirmationDefault": {
+            "enum": [
+              "Allow",
+              "Ask"
+            ]
+          },
+          "status": {
+            "enum": [
+              "Active",
+              "Deprecated",
+              "Revoked"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

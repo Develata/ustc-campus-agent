@@ -1,44 +1,78 @@
 {
+  "schemaVersion": "capability-registry/v1",
+  "registryRevision": "capability-registry:2026-07-29-01",
   "capabilities": [
     {
       "id": "campus.public_rules.read",
-      "class": "public-read",
-      "autoGrantEligible": true
+      "effectClass": "Read",
+      "dataClass": "PublicCampusFact",
+      "scopeKind": "CampusPublic",
+      "autoGrant": "FirstPartyDefaultOnly",
+      "confirmationDefault": "Allow",
+      "status": "Active"
     },
     {
       "id": "campus.public_changes.read",
-      "class": "public-read",
-      "autoGrantEligible": true
+      "effectClass": "Read",
+      "dataClass": "PublicCampusFact",
+      "scopeKind": "CampusPublic",
+      "autoGrant": "FirstPartyDefaultOnly",
+      "confirmationDefault": "Allow",
+      "status": "Active"
     },
     {
       "id": "campus.public_plan.read",
-      "class": "public-read",
-      "autoGrantEligible": true
+      "effectClass": "Read",
+      "dataClass": "PublicCampusFact",
+      "scopeKind": "CampusPublic",
+      "autoGrant": "FirstPartyDefaultOnly",
+      "confirmationDefault": "Allow",
+      "status": "Active"
     },
     {
       "id": "campus.public_course.read",
-      "class": "public-read",
-      "autoGrantEligible": true
+      "effectClass": "Read",
+      "dataClass": "PublicCampusFact",
+      "scopeKind": "CampusPublic",
+      "autoGrant": "FirstPartyDefaultOnly",
+      "confirmationDefault": "Allow",
+      "status": "Active"
     },
     {
       "id": "campus.community_review.linkout",
-      "class": "public-linkout",
-      "autoGrantEligible": true
+      "effectClass": "Linkout",
+      "dataClass": "PublicCampusFact",
+      "scopeKind": "CampusPublic",
+      "autoGrant": "FirstPartyDefaultOnly",
+      "confirmationDefault": "Allow",
+      "status": "Active"
     },
     {
       "id": "user.own_academic_snapshot.read",
-      "class": "tenant-private-read",
-      "autoGrantEligible": false
+      "effectClass": "Read",
+      "dataClass": "UserProfile",
+      "scopeKind": "TenantPrivateUser",
+      "autoGrant": "Never",
+      "confirmationDefault": "Ask",
+      "status": "Active"
     },
     {
       "id": "user.own_course_preferences.read",
-      "class": "tenant-private-read",
-      "autoGrantEligible": false
+      "effectClass": "Read",
+      "dataClass": "UserProfile",
+      "scopeKind": "TenantPrivateUser",
+      "autoGrant": "Never",
+      "confirmationDefault": "Ask",
+      "status": "Active"
     },
     {
       "id": "user.own_plan_draft.write",
-      "class": "tenant-private-write",
-      "autoGrantEligible": false
+      "effectClass": "Write",
+      "dataClass": "UserProfile",
+      "scopeKind": "TenantPrivateUser",
+      "autoGrant": "Never",
+      "confirmationDefault": "Ask",
+      "status": "Active"
     }
   ]
 }

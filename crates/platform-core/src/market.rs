@@ -1,5 +1,8 @@
 //! Typed package-manifest validation and deterministic catalog metadata for M20-B1-1.
 
+pub mod capability;
+pub mod installation;
+
 use crate::invocation::{
     CapabilityId, CatalogRevision, ComponentKind, PackageId, PackageVersion, Sha256Digest,
 };

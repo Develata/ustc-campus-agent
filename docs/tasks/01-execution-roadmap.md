@@ -4,7 +4,7 @@
 
 - `Status`: Current delivery and task-splitting order
 - `Version`: `module-roadmap/v2.1`
-- `Last Review`: `2026-07-26`
+- `Last Review`: `2026-07-29`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module map`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
@@ -18,7 +18,7 @@ This document schedules independent large modules and their small-module batches
 
 The module skeleton review is complete. Concrete implementation remains contract- and acceptance-gated. Existing code is retained as executable evidence:
 
-- `M20`: pure invocation resolver and fixtures;
+- `M20`: typed package/catalog, capability-registry, bounded managed-installation aggregate/in-memory repository, and pure invocation-resolver evidence;
 - `M30`: node-local `AgentRun` kernel;
 - `M40`: Agent tool protocol and fake gateway/executor proof;
 - `M72`: offline Course Planning spike;
@@ -59,7 +59,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 |---|---|---|---|---|---|
 | `M00` Platform Control/Identity | `partial-evidence` | identity-types implemented; session/request-context/ports planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
 | `M10` Application Ingress Host | `skeleton` | skeleton | Dioxus server-function/public route/DTO/error/event/compatibility host | unassigned | black-box Fullstack/HTTP/stream conformance and no reach-through |
-| `M20` Market/Package | `partial-evidence` | typed package/catalog metadata + pure resolver evidence | M10/M80 browse delivery + durable install/grant/disable/revoke around audited resolver | unassigned | `MARKET-*` current-scope rows |
+| `M20` Market/Package | `partial-evidence` | typed package/catalog + capability-registry + bounded managed-installation fake + pure resolver evidence | M10/M80 browse delivery + durable installation/grant/update/composition around audited resolver | unassigned | `MARKET-*` current-scope rows |
 | `M30` Agent Harness/Runtime | `partial-evidence` | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |
 | `M40` Tool Gateway/Execution | `partial-evidence` | protocol/fake proof | durable intent/executor/receipt composition | unassigned | `AGENT-018/019`, `MARKET-007` |
 | `M50` Model Provider | `planned` | planned | typed profiles + one provider adapter | unassigned | provider conformance + real bounded turn |
@@ -138,14 +138,14 @@ Handlers contain mapping and coordination only. Domain validation remains in own
 
 - `M20-B0 existing-resolver-audit`: compare `invocation.rs`/fixtures with the module blueprint; adopt/amend/spike decision.
 - `M20-B1 package-catalog`: schema, catalog publication and anonymous read model.
-- `M20-B2 capability-registry`: risk/data class and auto-grant eligibility.
-- `M20-B3 installation-domain`: exact install/configure/enable/disable/revoke/uninstall.
+- `M20-B2 capability-registry`: risk/data class and auto-grant eligibility. Bounded implementation evidence is complete; it creates no grants and promotes no acceptance row.
+- `M20-B3 installation-domain`: exact install/configure/enable/disable/revoke/uninstall. The bounded first slice `M20-B3-s1` implements a pure managed-installation aggregate plus a semantic in-memory repository fake under `platform-core`; it mints no production enable evidence, creates no durable state and promotes no acceptance row.
 - `M20-B4 grant-domain`: scope/version/reapproval and tenant checks.
 - `M20-B5 invocation-authority`: integrate audited projection/recheck with repository transaction/preconditions.
 - `M20-B6 update-rollback`: staged update, permission expansion and exact rollback.
 - `M20-B7 composition`: attach read/mutation APIs and fake `M40` consumer.
 
-`M20` merge scope is complete only when browse and current lifecycle state are distinct and disable/revoke blocks discovery/calls.
+`M20` merge scope is complete only when browse and current lifecycle state are distinct and disable/revoke blocks discovery/calls. Historical `B1-0`/`B1-1` labels map to the lifecycle-contract establishment and `M20-B1` respectively; the earlier `B1-2`/`B1-3`/… sequence is superseded by the canonical `M20-B<n>`/slice references above.
 
 ## 8. M30 lane — Agent Harness and Runtime
 

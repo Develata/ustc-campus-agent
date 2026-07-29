@@ -2,15 +2,15 @@
 
 ## Metadata
 
-- `Status`: Accepted `M20-B1` lifecycle contract; B1-1 typed package-manifest loader and anonymous catalog metadata read model implemented; durable installation/grant/update lifecycle planned; pure invocation resolver and call-time recheck adopted as items 7–8
+- `Status`: Accepted `market-lifecycle/v0` contract; historical `B1-0` established the contract, while canonical `M20-B1` package/catalog, `M20-B2` capability-registry and bounded `M20-B3-s1` managed-installation aggregate/in-memory repository evidence are implemented; durable installation/grant/update repositories and production composition remain planned; pure invocation resolver and call-time recheck are adopted as items 7–8
 - `Version`: `market-lifecycle/v0`
 - `Last Review`: `2026-07-29`
 - `Owning Plan`: [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)
 - `Large-module Blueprint`: [`../plan/modules/30-market-package-lifecycle.md`](../plan/modules/30-market-package-lifecycle.md)
 - `Counterpart Contracts`: [`plugin-package.md`](plugin-package.md), [`invocation-resolution.md`](invocation-resolution.md), [`permissions.md`](permissions.md), [`agent-plugin-boundary.md`](agent-plugin-boundary.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for state ownership, [`agent-runtime.md`](agent-runtime.md) for run/effect state, and [`invocation-resolution.md`](invocation-resolution.md) for the adopted projection/recheck decision shapes
-- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv))
-- `Primary Code`: `crates/platform-core/src/market.rs` for B1-1 typed package validation/catalog metadata; current adopted resolver/recheck authority in `crates/platform-core/src/invocation.rs` (items 7–8 only); later durable lifecycle may split `market.rs` when cohesion or size requires it
+- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); `M20-B2` and `M20-B3-s1` are supporting domain evidence only, mint no production grant/enable evidence and promote no acceptance row
+- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` package validation/catalog metadata; `crates/platform-core/src/market/capability.rs` for the bounded `M20-B2` capability registry; `crates/platform-core/src/market/installation.rs` for the bounded `M20-B3-s1` managed-installation aggregate and semantic in-memory repository; `crates/platform-core/src/invocation.rs` for adopted resolver/recheck items 7–8; later durable lifecycle may split `market.rs` when cohesion or size requires it
 
 ## 1. Scope and authority
 
@@ -46,7 +46,7 @@ A published package revision MUST be bound to exact package ID, SemVer, package 
 
 Catalog `installPolicy`, including `default-installed`/`default-enabled` declarations, is policy input only. It MUST NOT create runtime installation or grant rows and MUST NOT be interpreted as proof of runnable state. A manifest's default-install policy is not proof that runtime installation state exists.
 
-### B1-1 package-manifest and catalog-read-model surface
+### M20-B1 (historical `B1-1`) package-manifest and catalog-read-model surface
 
 The accepted Rust package boundary is `crate::market`. `load_package_manifest(source: &[u8]) -> Result<ValidatedPackageManifest, PackageLoadError>` is the only B1-1 JSON ingress. It MUST bound source bytes to `1_048_576` before decoding, reject malformed JSON, unknown fields and duplicate object members, then construct immutable private-field values. In particular, the free-form `sourcePolicy` object MUST use duplicate-rejecting loading rather than a last-wins map. `PackageLoadError` and `PackageValidationError` expose only stable field/reason categories; their `Debug` and `Display` MUST NOT contain source JSON or a rejected value.
 
@@ -57,7 +57,7 @@ The validated surface projects the existing package schema with these additional
 - package ID retains `^[a-z0-9]+(?:\.[a-z0-9-]+)+$` and is at most `256` UTF-8 bytes; package version is canonical release SemVer `MAJOR.MINOR.PATCH` with no prerelease/build suffix;
 - publisher is `1..=128` bytes and matches `^[A-Za-z0-9][A-Za-z0-9_.-]*$`; display name is `1..=256` bytes and an optional present description is `1..=4096` bytes; display/description strings contain no control character;
 - at most `64` component declarations exist; each has one unique relative slash-separated ASCII path of at most `512` bytes, no empty/`.`/`..` segment or backslash, and an optional mode of `1..=64` bytes using only ASCII alphanumeric, `.`, `_` or `-`;
-- at most `64` unique capability IDs exist; registry membership, risk class and auto-grant eligibility remain B1-3 authority rather than package-schema authority;
+- at most `64` unique capability IDs exist; registry membership, risk class and auto-grant eligibility remain `M20-B2` `capability-registry` authority rather than package-schema authority;
 - `sourcePolicy` has `1..=32` unique entries; each key matches `^[A-Za-z][A-Za-z0-9_.-]{0,63}$` and each non-empty control-free value is at most `4096` bytes;
 - default enable requires default install; `UserInstalledPlugin` is never default-installed or default-enabled; `FirstParty` and `FirstPartySystemPlugin` must agree and the current system policy remains default-installed, default-enabled and user-disableable;
 - `planned` carries no component declaration, while `implemented` carries at least one. `development` remains metadata and is never runnable proof.
@@ -132,6 +132,205 @@ A failed enable MUST emit no enabled state.
 ### M20-LC-006 — disable/revoke fail closed
 
 Disable or revoke MUST change current authority before any later projection or recheck. Uncertain propagation or a repository precondition conflict MUST deny new discovery and calls. In-flight runs MUST retain their frozen projection, but call-time current denial still applies.
+
+### M20-B3-s1 managed installation surface
+
+This subsection freezes the exact public surface of the bounded `M20-B3-s1` slice: a pure managed-installation aggregate plus a semantic in-memory repository fake under `platform-core`. It specializes `M20-LC-003` through `M20-LC-011` into an implementation-bound contract. The slice was allowed to land before full `M20-B2` only because it cannot mint production enable evidence and cannot promote installation/enable acceptance; production enable-evidence issuance remains future grant/authority-assembly/composition work.
+
+The flow MUST be exactly:
+
+```text
+validated command
+→ pure decide
+→ typed event
+→ pure evolve
+→ atomic semantic repository commit
+→ deterministic replay
+```
+
+#### Module boundary and reused authority
+
+The Rust module boundary MUST be `crate::market::installation` under `crates/platform-core/src/market/installation.rs`, with `crates/platform-core/src/market.rs` declaring `pub mod installation;`. The existing `market.rs` manifest/catalog implementation MUST NOT be moved or rewritten. Public lifecycle paths live under `crate::market::installation`.
+
+No Serde derives or public wire deserialization are admitted for installation-domain values. No new framework, database or network dependency is admitted.
+
+The slice MUST reuse exact existing nominal types from `crate::identity` (`TenantId`, `UserId`) and from `crate::invocation` (`InstallationId`, `InstallationRevision`, `PackageId`, `PackageVersion`, `CatalogRevision`, `ComponentId`, `ComponentVersion`, `ComponentKind`, `ExecutionIdentity`, `CapabilityId`, `Sha256Digest`, `InstalledComponentIdentity`, `PluginInstallationSnapshot`, and resolver `InstallationState`) without aliasing or re-wrapping. The existing three-variant `invocation::InstallationState` stays unchanged.
+
+#### New value algebra
+
+All new values MUST use private fields, bounded checked constructors and read-only accessors. No `Default` and no unchecked public constructor are admitted.
+
+IDs and counters:
+
+- `InstallationCommandId`: bounded opaque text with canonical grammar `cmd:[A-Za-z0-9._:-]{1,124}`.
+- `InstallationEventSequence(u64)`: the first persisted event is `1`; successor is checked and overflow fails closed.
+- `ConfigurationRevision(u64)`: initial value is `1`; it increments only on successful Configure and overflow fails closed.
+- `ConfigurationKey`: ASCII `[A-Za-z][A-Za-z0-9_.-]{0,63}`.
+- `NonSecretText`: non-empty, control-free UTF-8 of at most `4096` bytes.
+- `SecretRefId`: opaque grammar `secret-ref:[A-Za-z0-9._:-]{1,118}`.
+- `SecretRef { tenant_id, id }`: reference only. It MUST NOT contain a digest or fingerprint of resolved secret material. Secret bytes and material-derived hashes never enter `M20`.
+
+Configuration:
+
+```rust
+pub enum ConfigurationValue {
+    Text(NonSecretText),
+    Integer(i64),
+    Boolean(bool),
+    Secret(SecretRef),
+}
+```
+
+`InstallationConfiguration` MUST be an immutable `BTreeMap<ConfigurationKey, ConfigurationValue>` with at most `128` entries. Construction MUST reject duplicate keys and cross-tenant `SecretRef`s. It MUST compute a deterministic lowercase `sha256:<64 hex>` digest under domain separator `market-installation-configuration/v0\0`, with explicit typed tags and length-prefix encoding. The digest binds opaque reference IDs, never secret material.
+
+Pins:
+
+- `InstalledComponentPin` MUST bind exact component ID, kind, version, digest and execution identity.
+- `InstallationPackagePin` MUST bind catalog revision, package ID/version/digest, sorted unique component pins, component-set digest and capability-manifest digest.
+
+Pin constructors MUST canonicalize ordering and reject duplicate component IDs.
+
+#### Managed lifecycle
+
+The managed lifecycle state MUST be a distinct enum named exactly:
+
+```rust
+pub enum ManagedInstallationState {
+    InstalledDisabled,
+    Enabled,
+    Disabled,
+    Revoked,
+    Uninstalled,
+}
+```
+
+Legal transitions:
+
+| command | from | to / rule |
+|---|---|---|
+| Install | repository absence | `InstalledDisabled` |
+| Configure | `InstalledDisabled` or `Disabled` | same state; config revision `+1` |
+| Enable | `InstalledDisabled` or `Disabled` | `Enabled`, only with exact evidence |
+| Disable | `Enabled` | `Disabled` |
+| Revoke | any nonterminal state | `Revoked` |
+| Uninstall | any nonterminal state | `Uninstalled` |
+
+`Revoked` and `Uninstalled` MUST be terminal. Repository absence is not `Uninstalled`. Reinstallation MUST use a new installation ID. Configure while `Enabled` MUST be rejected: the caller MUST Disable first, preventing a silent live-authority change.
+
+Projection into the existing resolver MUST be pure and deny-side only, through a method named exactly `to_resolver_snapshot`. It MUST NOT invoke or modify the resolver and MUST NOT imply grants or readiness. The mapping is:
+
+- `InstalledDisabled`/`Disabled` → resolver `Disabled`;
+- `Enabled` → resolver `Enabled`;
+- `Revoked` → resolver `Revoked`;
+- `Uninstalled` → no resolver snapshot.
+
+#### Commands, events and revisions
+
+`InstallationCommand` MUST be a private-action, private-field value with checked associated constructors for Install/Configure/Enable/Disable/Revoke/Uninstall. Every command MUST carry one `InstallationCommandId` and exact installation ID. Every non-Install command MUST carry `expected_revision`.
+
+`InstallationEvent` MUST be an envelope with private fields `sequence`, `post_revision`, `command_id` and `kind`. `InstallationEventKind` MUST contain `Installed`/`Configured`/`Enabled`/`Disabled`/`Revoked`/`Uninstalled` payloads. Every event MUST embed the originating command ID. `Installed` MUST carry all initial aggregate pins/configuration; later events MUST carry only complete transition payloads. No event MAY carry raw secret material.
+
+Revision is deterministic: the post-event `InstallationRevision` MUST be exactly `installation-revision:<sequence>`. `decide` MUST construct it; `evolve` MUST independently recompute and reject mismatch as redundant-field forgery.
+
+Public pure functions:
+
+```rust
+pub fn decide(
+    current: Option<&InstallationAggregate>,
+    command: &InstallationCommand,
+) -> Result<InstallationEvent, InstallationDecisionError>;
+
+pub fn evolve(
+    current: Option<InstallationAggregate>,
+    event: &InstallationEvent,
+) -> Result<InstallationAggregate, InstallationReplayError>;
+
+pub fn replay<'a>(
+    events: impl IntoIterator<Item = &'a InstallationEvent>,
+) -> Result<Option<InstallationAggregate>, InstallationReplayError>;
+```
+
+Exact Rust lifetime/iterator syntax MAY be adjusted for Rust 2021 compilation, but semantics and ownership remain.
+
+#### Enable evidence boundary
+
+`EnablePreconditionEvidence` MUST record exact authority-binding digests/identities for:
+
+- installation ID and expected installation revision;
+- package/component-set/configuration/capability-manifest pins;
+- exact active grant-set snapshot digest;
+- exact policy/source/execution admission snapshot digest.
+
+It MUST expose read-only accessors and a deterministic evidence digest. Its minting constructor MUST NOT be public; visibility MUST be no wider than `pub(in crate::market)`. There MUST be no public boolean or enum constructor that a caller can use to assert admission. Unit tests inside the module MAY mint fixture evidence; production issuance is deferred to a future authority-assembly module under `crate::market`.
+
+`decide(Enable)` MUST check every evidence binding against current aggregate state. Unknown, absent or mismatched evidence MUST fail closed and emit no event.
+
+#### Error and replay discipline
+
+Construction errors MUST reject invalid grammar, bounds, duplicates and cross-tenant secret references before a command exists.
+
+Repository execution precedence MUST be:
+
+1. command-ledger exact duplicate/conflicting reuse;
+2. aggregate missing/already-present as applicable;
+3. terminal-state guard;
+4. expected-revision mismatch;
+5. illegal/already-in-state transition;
+6. enable/configuration coherence.
+
+`CommandConflict` MUST be checked before current state so a reused command ID cannot produce a different outcome or leak state-dependent behavior. An exact duplicate MUST return the stored prior receipt.
+
+Replay MUST reject, with typed errors:
+
+- a non-`Installed` initial event;
+- sequence gap, duplicate, reorder and overflow;
+- duplicate command ID in successful event history;
+- post-terminal event;
+- illegal transition;
+- post-revision mismatch/forgery;
+- tenant/installation/package/configuration redundant-field mismatch.
+
+All errors MUST expose stable categories only. `Debug` and `Display` MUST NOT reveal configuration values, secret references, rejected IDs or source payloads.
+
+#### Semantic repository and persisted command receipts
+
+The semantic port MUST be:
+
+```rust
+pub trait InstallationRepository {
+    fn execute(
+        &mut self,
+        command: InstallationCommand,
+    ) -> Result<InstallationCommandReceipt, InstallationRepositoryError>;
+
+    fn load_exact(
+        &self,
+        id: &InstallationId,
+    ) -> Result<Option<InstallationSnapshot>, InstallationRepositoryError>;
+
+    fn event_history(
+        &self,
+        id: &InstallationId,
+    ) -> Result<Vec<InstallationEvent>, InstallationRepositoryError>;
+}
+```
+
+No generic record-store or arbitrary query API is admitted.
+
+`InstallationCommandReceipt` MUST be persisted for both accepted and domain-rejected commands. It MUST bind the complete original command and exact prior outcome:
+
+- accepted: resulting snapshot plus exact event;
+- rejected: exact typed `InstallationDecisionError` and no event.
+
+The in-memory fake MUST keep a global command ledger `command_id → {complete command, receipt}`. Therefore:
+
+- identical command ID plus identical complete command returns the exact stored receipt and performs no append;
+- same command ID plus different command is `CommandConflict` regardless of current aggregate state;
+- a previously rejected command remains rejected identically after later state changes.
+
+For a new command, state/event/receipt commit MUST be atomic. Injected persistence failure MUST occur before commit and record neither receipt nor event, so a retry may proceed. Corrupt replay MUST fail closed. No public arbitrary insertion hook is admitted; test-only fixture construction remains private/unit-test scoped.
+
+`InMemoryInstallationRepository` MUST be provided as the semantic fake with narrowly named one-shot failure injection.
 
 ## 4. Grants and permission expansion
 
@@ -208,11 +407,11 @@ Package update, disable or revoke MUST change only future projections and curren
 
 This contract does not own:
 
-- anonymous browse/detail delivery through M10/M80 application/query adapters remains planned (`MARKET-001`); the B1-1 anonymous metadata domain read model is implemented but is not delivery evidence;
-- durable installation/grant/enable/disable/upgrade mutation (planned, `MARKET-002`/`MARKET-003`/`MARKET-004`);
+- anonymous browse/detail delivery through M10/M80 application/query adapters remains planned (`MARKET-001`); the `M20-B1` (historical `B1-1`) anonymous metadata domain read model is implemented but is not delivery evidence;
+- durable installation/grant/enable/disable/upgrade mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); the bounded `M20-B3-s1` managed-installation aggregate and semantic in-memory repository are implemented but issue no production enable evidence;
 - a production database/repository transaction or TOCTOU closure (planned);
 - provider, network, MCP, daemon HTTP/SSE or UI adapters;
 - external tool execution, durable journal or crash recovery;
 - M30 `EffectIntent`, M40 executor dispatch, or M51 process isolation.
 
-Current repository status: the pure P0a invocation resolver and call-time recheck with typed in-memory snapshots and synthetic fixtures are implemented and adopted (`MARKET-005`/`MARKET-006`). B1-1 also implements the bounded typed package-manifest loader, canonical declaration digests and immutable anonymous catalog metadata domain read model in `crate::market`. It does not create a durable repository, installation aggregate, grant aggregate, update/rollback, application composition or M10/M80 browse delivery. No current first-party manifest is made runnable by B1-1. Future implementation slices and their intended bindings are listed in [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv) and remain `planned` until their exact evidence exists.
+Current repository status: the pure P0a invocation resolver and call-time recheck with typed in-memory snapshots and synthetic fixtures are implemented and adopted (`MARKET-005`/`MARKET-006`). `M20-B1` implements the bounded typed package-manifest loader, canonical declaration digests and immutable anonymous catalog metadata domain read model in `crate::market`. `M20-B2` implements the typed immutable capability-registry loader/read model, exact digests, derived risk/auto-grant policy and permission-change classification without creating grants. `M20-B3-s1` implements the pure managed-installation aggregate, decide/evolve/replay, exact pins/configuration, terminal transitions, deny-side resolver projection and atomic semantic in-memory repository without a production enable-evidence issuer. No production database, grant aggregate, update/rollback, application composition or M10/M80 browse delivery exists yet, and no current first-party manifest is made runnable by these bounded slices. Future implementation slices and their intended bindings are listed in [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv) and remain `planned` until their exact evidence exists.
