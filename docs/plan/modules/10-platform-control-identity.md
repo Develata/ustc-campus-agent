@@ -6,7 +6,7 @@
 - `Status`: Accepted blueprint; `M00-B1 identity-types` implemented, `M00-B2 session-domain` contract accepted and unimplemented, remaining batches planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m00-platform-control/v1`
-- `Last Review`: `2026-07-28`
+- `Last Review`: `2026-07-29`
 - `Composition`: `apps/ustc-agentd`
 - `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`, which does not exist yet; future cohesive modules under `crates/platform-core/`; adapter implementations under `M90`
 - `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md) for `M00-B1`; [`platform-session/v0`](../../contracts/platform-session.md) for `M00-B2`; [`module-boundaries.md`](../../contracts/module-boundaries.md) for later cross-module actor/context values
@@ -43,10 +43,12 @@ RequestId
 CommandId
 CausationId / CorrelationId
 PlatformPolicySnapshotId
-SessionState: Active | Expired | Revoked
+SessionStatus: Active | Expired | Revoked
 ```
 
 `M00` owns identity validity, session lifecycle and platform-wide request causation. A downstream module still owns whether that actor may perform its specific operation.
+
+`SessionStatus` is spelled as [`platform-session/v0`](../../contracts/platform-session.md) §2.4 freezes it, for the same reason the command names in §4 below are: an earlier `SessionState` spelling here predates that contract and a blueprint does not override it. Two of its three variants carry fields — `Expired { expired_at, observed_at, cause }` and `Revoked { revoked_at }` — so the three-way summary above is the lifecycle shape, not the field list.
 
 ## 4. Public inputs and outputs
 
@@ -54,11 +56,15 @@ Inbound values:
 
 ```text
 SessionCredentialEvidence       # adapter-produced, never raw credential in domain logs
-OpenSessionCommand
-RefreshSessionCommand
-RevokeSessionCommand
+OpenSession
+RefreshSession
+RevokeSession
 BuildRequestContextCommand
 ```
+
+The three session command names are exactly those frozen by [`platform-session/v0`](../../contracts/platform-session.md) §4 and §4.1; the earlier `…Command`-suffixed spelling here did not match the contract that owns them, and a blueprint is not authority for a name an accepted contract has frozen. `ExpireSession` is deliberately absent from this list rather than overlooked: §4 of that contract makes it an M00-internal lifecycle command issued only through the future ports batch, so it is not a public module input. `BuildRequestContextCommand` keeps its provisional name because `M00-B3 request-context` owns it and no accepted contract has frozen it yet.
+
+The values that actually cross the pure session boundary are the wrapper enums `SessionCommand` and `SessionEvent` frozen in §4.1 and §5.1 of that contract — `decide` and `evolve` take `&SessionCommand` and `&SessionEvent`. The four command and four event names above and in §4 are their payloads; this list names them individually because that is what a reader looking for one operation searches for.
 
 Outbound values:
 
@@ -166,6 +172,8 @@ The hot path is request-context admission: session lookup, expiry/revoke check, 
 
 Each small module receives a separate reviewable commit with unit tests before the composition adapter.
 
+**These six list positions are not batch numbers, and the two stop agreeing after position 3.** [`01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md) groups them into five batches: `M00-B1` is item 1 and `M00-B2` is item 2, but `M00-B3 request-context` lands items 3 and 4 together, `M00-B4 ports-and-fakes` lands items 5 and 6 together, and `M00-B5 api-admission-integration` is a composition batch that appears nowhere in this list. A `M00-B4` reference elsewhere therefore means `session-port` *and* `control-evidence`, not position 4. The roadmap owns the grouping; this section owns only the decomposition.
+
 ## 14. First approved batch — `M00-B1 identity-types`
 
 [`platform-identity/v0`](../../contracts/platform-identity.md) is the exact construction contract for the first small module. It freezes six opaque nominal ID kinds, a shared bounded grammar, deterministic non-echoing errors, Serde behavior and convergence of the existing invocation-local tenant/user values.
@@ -178,7 +186,7 @@ Each small module receives a separate reviewable commit with unit tests before t
 
 ## 15. Second approved batch — `M00-B2 session-domain`
 
-[`platform-session/v0`](../../contracts/platform-session.md) is the exact contract for the second small module. It freezes the pure, replayable lifecycle kernel for one session: immutable open scope, resolved idle/absolute/credential deadline algebra, the open/refresh/expire/revoke transition table, expected-revision event ordering, deterministic decision/evolution/replay, typed non-echoing failures, and the credential and dependency negative space.
+[`platform-session/v0`](../../contracts/platform-session.md) is the exact contract for the second small module. It freezes the pure, replayable lifecycle kernel for one session: immutable open scope, resolved idle/absolute/credential deadline algebra, the open/refresh/expire/revoke transition table, expected-revision event ordering, deterministic decision/evolution/replay, typed non-echoing failures, the credential and dependency negative space, and — in its §4.1 and §5.1 — the exact public command/event topology, constructor signatures, accessors, derive set and Serde tagging that this blueprint's §3 and §4 name only semantically.
 
 The contract is **accepted and unimplemented**. `crates/platform-core/src/session.rs` and `crates/platform-core/tests/platform_session.rs` do not exist; `AUTH-017`, `AUTH-018`, `AUTH-019` and `AUTH-020` are active rows at status `planned` with the exact future bindings in that contract's §12. `planned` is a non-pass state, so nothing in this section is evidence of behavior.
 

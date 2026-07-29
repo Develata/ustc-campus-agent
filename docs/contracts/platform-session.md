@@ -4,7 +4,7 @@
 
 - `Status`: Accepted `M00-B2 session-domain` contract; no implementation exists yet
 - `Version`: `platform-session/v0`
-- `Last Review`: `2026-07-28`
+- `Last Review`: `2026-07-29`
 - `Owning Blueprint`: [`M00 Platform Control and Identity`](../plan/modules/10-platform-control-identity.md)
 - `Depends On`: implemented [`platform-identity/v0`](platform-identity.md) values and [`module-boundaries.md`](module-boundaries.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for authority partition
@@ -29,7 +29,7 @@ Authentication adapters produce bounded `SessionCredentialEvidence`; `M00-B4 ses
 
 ## 2. Required public semantic values
 
-The implementation must expose nominal, private-field Rust values with exactly the names, fields and invariants below. The names are frozen by acceptance of this contract; changing one is a `platform-session/v0` change under §16, not an implementation detail. No field or invariant may be silently dropped.
+The implementation must expose nominal Rust values with exactly the names, fields and invariants below; §2.0 fixes which of them are private-field structs and which are public enums, because Rust does not offer the same closure for both. The names are frozen by acceptance of this contract; changing one is a `platform-session/v0` change under §16, not an implementation detail. No field or invariant may be silently dropped.
 
 ### 2.0 Binding to the merged `platform-identity/v0` implementation
 
@@ -47,13 +47,28 @@ spelled without renaming. `platform-identity/v0` §4 requires that every governe
 
 **B2 mints no seventh identity kind, and structurally cannot.** The `identity_value!` generator is private to `identity.rs`, so it is unreachable from a sibling module. `AuthAdapterId` and `CredentialEvidenceDigest` are `platform-session/v0` values defined by this contract, not `platform-identity/v0` values, and they do not widen, alias or re-spell one.
 
-**Representation is part of the rule, inherited from `platform-identity/v0` §4.** Every B2 value carrying a validated invariant is a **named-field struct with private fields**, never a tuple struct. A tuple struct's constructor is a *value*, not only syntax: `let ctor = AuthAdapterId; ctor(text)` fills the private field while writing no construction expression a scan can find, and that was demonstrated against real evidence during B1. A named-field struct has no constructor function item, so a struct literal — syntax, which cannot be bound, aliased, passed or returned — is the only way to produce one.
+**Representation is part of the rule, inherited from `platform-identity/v0` §4, and it is a rule about structs.** **Every public B2 struct is a named-field struct with private fields**, never a tuple struct — stated for all of them rather than only for those carrying a validated invariant, because the property it buys is uniform and costs nothing. A tuple struct's constructor is a *value*, not only syntax: `let ctor = AuthAdapterId; ctor(text)` fills the private field while writing no construction expression a scan can find, and that was demonstrated against real evidence during B1. A named-field struct has no constructor function item at all, so a struct literal — syntax, which cannot be bound, aliased, passed or returned — is the only way to produce one, whatever that struct happens to validate.
 
-**One checked constructor per value.** Each value has exactly one inherent validating constructor and no public unchecked path, no `Default`, no `Deref`, no mutable backing access and no cross-kind conversion. String-backed values use `parse(value: impl Into<String>) -> Result<Self, SessionValueError>`, matching `platform-identity/v0` §4. Integer-backed and aggregate values use the exact constructor named with them below.
+**The rule stops at structs because Rust gives it nowhere else to stand.** This contract also freezes seven public enums — `SessionStatus`, `SessionExpiryCause`, `SessionCommand`, `SessionEvent`, `SessionValueErrorKind`, `SessionDomainError` and `EventDerivedField` — and an enum variant's fields are exactly as public as the enum itself, with no per-variant privacy to ask for. A universal "every B2 value has private fields" sentence would therefore not be a strict rule but an **unsatisfiable** one, and an unsatisfiable rule specifies nothing: an implementer cannot obey it and a reviewer cannot tell a deliberate shape from a violation. `platform-identity/v0` scopes the identical rule the identical way — its §4 states it for the six ID kinds, its §5 states `IdentityValueErrorKind` as a public enum owning its variants and payloads — and B2 inherits that scoping rather than widening it. `#[non_exhaustive]` is not the escape: it would buy external non-constructibility at the cost of forcing `..` and `_` arms on every consumer of sets whose whole purpose (§2.4, §9) is exhaustive reading, and §2.5 and §11.1 freeze an attribute closure that does not contain it.
+
+What an enum must satisfy instead is a property of the **set**, not of a field, and is stated where each is defined: it is closed, carries exactly the variants and payloads listed, and its payloads are non-secret (§9). Where a caller's ability to name a variant might be mistaken for authority, the section that defines the enum says what actually holds — §2.4 for `SessionStatus`, §4.1 for the two wrapper enums.
+
+**One constructor per constructible struct, checked exactly when checking is meaningful at that point.** Construction is partitioned three ways, and the partition is frozen:
+
+1. **Structs a caller may build.** `SessionInstant`, `SessionDuration`, `AuthAdapterId`, `CredentialEvidenceDigest`, `SessionCredentialEvidence`, `SessionPolicy`, the four command structs of §4.1 and the four event structs of §5.1 each have exactly one inherent constructor and no second path.
+2. **Structs a caller may not build.** `SessionSnapshot` and `SessionValueError` have **no** public constructor at all. A snapshot arises only from validated evolution and replay (§8); an error arises only from a rejecting validator inside the module. This is not an omission from rule 1 — they are read-only outputs, and §10 records the same fact as negative space.
+3. **Enums.** The seven above are constructed by naming a variant, which is Rust's own construction path and admits no inherent constructor in its place.
+
+Across all three: no public unchecked path, no `Default`, no `Deref`, no mutable backing access and no cross-kind conversion. Under rule 1, where the value owns an invariant that constructor is checked: string-backed values use `parse(value: impl Into<String>) -> Result<Self, SessionValueError>`, matching `platform-identity/v0` §4, and integer-backed and aggregate values use the exact constructor named with them below. The command and event families of §§4.1 and 5.1 instead take a **total** constructor returning `Self`, and those sections state the specific reason for each family — reasons of precedence and of decidable-but-not-meaningful comparison, not a claim that no constructible input is ever wrong.
+
+Two rules govern any constructor added later, and they are separate:
+
+1. a constructor whose error arm no input can reach must not exist, because it forces an `expect` at every construction site and reads to the next reviewer like a checked path;
+2. a constructor must not check a relation whose *correctness* depends on state the value cannot see. Such a check is decidable but not meaningful: it enforces agreement between two caller-supplied fields that may both be wrong, and it silently removes from the input space exactly the adversarial values the aggregate guard has to be able to reject. §5.1 is the worked case.
 
 **Serde delegates rather than re-implements.** No B2 value implements a hand-written `Visitor`, a `visit_*` method or `deserialize_any`. Each `Deserialize` deserializes the canonical primitive once through that primitive's own implementation and hands the result to the same checked constructor, so whichever entry point a deserializer chooses there is exactly one construction path. Aggregate structs carry `#[serde(deny_unknown_fields)]`; enums carry `#[serde(rename_all = "snake_case")]`.
 
-**An aggregate deserializes through its constructor, not field by field.** `deny_unknown_fields` plus per-field delegation validates every field and still admits a struct that no constructor would have built, because a cross-field invariant belongs to no field. Any aggregate carrying such an invariant therefore decodes a private shadow struct and hands it to the named constructor; the derived field-by-field decode is insufficient and is forbidden for those values. This is load-bearing rather than stylistic: §9.2 removes two error variants on the argument that a malformed evidence or policy cannot reach `decide` or `evolve`, and that argument is only true if every deserialization path routes through the constructor that enforces the invariant.
+**An aggregate carrying a cross-field invariant deserializes through its constructor, not field by field.** `deny_unknown_fields` plus per-field delegation validates every field and still admits a struct that no constructor would have built, because a cross-field invariant belongs to no field. Any aggregate carrying such an invariant therefore decodes a private shadow struct and hands it to the named constructor; the derived field-by-field decode is insufficient and is forbidden for those values. In this contract that is exactly one value — `SessionCredentialEvidence`, whose credential window spans two fields — and §5.1 records why no event joins it. The rule is load-bearing rather than stylistic: §9.2 removes two error variants on the argument that a malformed evidence or policy cannot reach `decide` or `evolve`, and that argument is only true if every deserialization path routes through the constructor that enforces the invariant.
 
 **Errors follow the merged B1 shape.** `SessionValueError` mirrors `IdentityValueError`: a small `Copy` value naming the Rust value kind that rejected the input plus one `SessionValueErrorKind`, with no `source`, no rejected-input field and no input-derived rendering. §9 names the decision/evolution taxonomy separately.
 
@@ -136,10 +151,12 @@ SessionCredentialEvidence::new(
 
 `Deserialize` decodes a private shadow struct and hands it to that constructor, per §2.0, because the temporal invariant below spans two fields and so belongs to none of them.
 
+**A missing `credential_not_after` is a rejection, not an absent deadline.** This is the one place where `deny_unknown_fields` plus per-field delegation does not give what §10's two-halves argument promises, so it is specified rather than left to the derive: serde's derived `Deserialize` fills a *missing* field of `Option` type with `None` instead of failing, and it does so inside the shadow struct too. The consequence is not cosmetic. A persisted payload that simply omits the field would decode as "this credential never expires", deleting the `Credential` term from §3's `min(...)` and disarming §3's already-expired-evidence open check — a downgrade performed by omission, on the one field whose whole purpose is to cap a session's life. So the shadow struct must reject an absent `credential_not_after` and accept an explicit null as the only spelling of "no credential deadline", which an explicit field attribute achieves and the bare derive does not. Serialization is the matching half: the field is always written, and `skip_serializing_if` is forbidden on it, so no B2-produced payload can ever be the omitted form. §13 binds the fixture.
+
 Invariants:
 
 - all fields are private and construction/Serde is validating;
-- unknown or missing fields fail closed;
+- unknown fields fail closed, and so do missing ones — including `credential_not_after`, which needs an explicit rule because serde's derived decode gives `Option` fields the opposite default;
 - `credential_not_after`, when present, is strictly later than `authenticated_at`;
 - no raw credential, token, cookie, provider subject, email, username, display name, role, secret reference value or arbitrary adapter payload is retained;
 - the digest and adapter ID may appear in internal replay evidence, but no validation, decision, evolution or serialization error ever echoes rejected source text or secret-derived material;
@@ -188,6 +205,8 @@ Absolute
 Idle
 ```
 
+**Both are public enums, so a caller may name `SessionStatus::Active` or assemble `SessionStatus::Expired { .. }` from instants and a cause it already holds.** That is not a hole, and no section of this contract claims otherwise. Neither value carries authority by itself; a status is authoritative only as a *field of a snapshot*, and the invariant that holds is exactly this: **a caller-built `SessionStatus` cannot be injected into, substituted inside or read back out of a `SessionSnapshot` as that snapshot's own status.** The snapshot's fields are private, it has no public constructor, no `Deserialize` and no setter, and §8's evolution is its only producer. What must be unforgeable is the snapshot, and that is what is closed. `SessionStatus` also appears as a payload of `SessionDomainError::TerminalSession`, where it is a reported fact rather than an input, for the same reason.
+
 `SessionSnapshot` contains exactly:
 
 ```text
@@ -210,6 +229,8 @@ revision:               u64
 
 All fields are private and read-only. Tenant, user, session, adapter, evidence digest, authentication time, credential deadline, policy durations and policy-absolute expiry are immutable after open. `revision` is the last applied event sequence and starts at `1` after `SessionOpened`.
 
+§2.5 freezes this type's traits and accessors along with every other B2 type's.
+
 Adding, removing or reinterpreting a persisted/public snapshot field requires a versioned contract and acceptance update; implementations cannot append convenience or framework state to this snapshot.
 
 **`effective_expires_at` is not a validity predicate, and the snapshot exposes one so that no consumer has to invent it.** A revoked session keeps its `effective_expires_at` unchanged — §8 preserves it — so that field alone still reads as "not yet expired" while `status` says `Revoked`. The obvious consumer test `observed_at < effective_expires_at` is therefore correct for `Active`, correct for `Expired`, and **wrong exactly for `Revoked`**: it fails open on the logout/revocation path, which is the security-critical one catalog `AUTH-008` names. That is the worst shape of defect, because it passes casual testing.
@@ -220,9 +241,57 @@ The one sanctioned validity question is therefore part of this contract:
 SessionSnapshot::admits_at(&self, observed_at: SessionInstant) -> bool
 ```
 
-It returns `true` only when `status` is `Active` **and** `observed_at < effective_expires_at`. `M00-B3`'s request-context admission is the intended consumer; it asks this and does not recompute.
+**The question it answers is frozen as *current admission*, never historical validity.** It asks "may this snapshot admit an operation observed at `observed_at`?" It does not answer "was this session valid at instant `t`?", and B2 offers no method that does. The distinction decides the method's shape rather than decorating it: the two readings want opposite answers for a stale instant, and one method serving both would have to take the permissive answer, which is the answer no admission path may use. A later audit or forensic reconstruction that genuinely needs the historical question answers it by replaying the event sequence under §8, which is the only place the past is authoritative.
+
+It returns `true` only when all three of these hold:
+
+```text
+status == Active
+observed_at >= last_transition_at
+observed_at < effective_expires_at
+```
+
+**The middle conjunct makes the read model fail closed on stale time**, and it is load-bearing for the same reason the first one is. `M00-B3`'s admission path supplies `observed_at` from an adapter observation, exactly as a command does, and §7 rejects a command whose `observed_at` precedes `last_transition_at` as `NonMonotoneTime`. A read model that admitted that same instant would be *more permissive than the decide path it guards*: a replayed stale observation, or a snapshot that has advanced past the instant a caller is still holding, would be admitted on evidence the state machine itself refuses. The concrete shape is a session refreshed or observed forward at `t₁` and an admission asked at `t₀ < t₁`, which a status-plus-upper-bound predicate answers `true`. Fail closed instead: an instant the aggregate has already moved past is not evidence of present admission.
+
+The conjunct never makes a live session unreachable. §8's `Active` invariant `effective_expires_at > last_transition_at` guarantees the admitting window `[last_transition_at, effective_expires_at)` is non-empty for every `Active` snapshot. So `admits_at` is `true` at exactly `last_transition_at` and `false` at exactly `effective_expires_at`: the lower bound admits, the upper bound expires, matching §3's rule that equality is expired. A freshly opened session has `last_transition_at == opened_at`, so an observation before open is refused by the same conjunct rather than by a separate rule.
+
+`M00-B3`'s request-context admission is the intended consumer; it asks this and does not recompute.
 
 The internal evidence digest is not part of a client-safe projection by default. B3/B4 define later projections explicitly rather than serializing the whole domain snapshot across module boundaries.
+
+### 2.5 Frozen trait and accessor closure
+
+A public algebra whose derive lists do not close is not frozen, only described: `#[derive(Eq)]` on a struct whose field type never received `Eq` does not compile, and a contract that names the outer derive while leaving the inner one to taste has specified nothing. So the closure is stated once, exhaustively, for every public B2 type.
+
+| Type | Derived | Hand-written |
+|---|---|---|
+| `SessionInstant`, `SessionDuration` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Serialize`, `Deserialize` | — |
+| `AuthAdapterId` | `Debug`, `Clone`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Serialize`, `Deserialize` | — |
+| `CredentialEvidenceDigest` | `Clone`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Serialize`, `Deserialize` | `Debug` — redacting, see §10 |
+| `SessionCredentialEvidence` | `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize` | `Deserialize` — shadow struct, §2.2 |
+| `SessionPolicy` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Serialize`, `Deserialize` | — |
+| `SessionExpiryCause` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Serialize`, `Deserialize` | — |
+| `SessionStatus` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Serialize` | — |
+| `SessionSnapshot` | `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize` | — |
+| the four commands, `SessionCommand` | `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize` | — |
+| the four events, `SessionEvent` | `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize`, `Deserialize` | — |
+| `SessionValueErrorKind`, `SessionDomainError`, `EventDerivedField` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq` | `Display`, `Error` on the two error types |
+| `SessionValueError` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq` | `Display`, `Error` |
+
+`SessionId`, `TenantId` and `UserId` bring their own derives from `platform-identity/v0` §4; B2 neither adds to them nor relies on any trait that contract does not already give them.
+
+Four consequences of the table are load-bearing rather than incidental, and are stated so a reader does not have to re-derive them:
+
+- **`Copy` closes downward.** `SessionDomainError` is `Copy` and carries `TerminalSession { status: SessionStatus }` and `EventDerivedFieldMismatch { field: EventDerivedField }`, so both of those are `Copy`; `SessionStatus` in turn carries only `SessionInstant` and `SessionExpiryCause`, so both of those are too. `Copy` also requires `Clone`, which is why every `Copy` row above lists it.
+- **`PartialEq`/`Eq` close downward from `SessionSnapshot`.** §8's replay obligation is structural equality of every field, and it cannot be stated otherwise. Note that the snapshot stores adapter, digest, instants and durations *flattened* rather than holding a `SessionCredentialEvidence` or a `SessionPolicy`, so those two aggregates get `PartialEq`/`Eq` from the command and event families that do hold them, not from the snapshot.
+- **No B2 type derives `Hash`, `Default`, `Deref` or `PartialOrd`/`Ord` beyond the four scalar rows above.** Nothing in this contract keys a map or sorts a session, and `Default` is prohibited outright by §10.
+- **The error types are `Copy` and carry no borrowed data**, which is what lets §9 keep them small and non-echoing.
+
+**Accessors are uniform, and they are a struct rule.** Every public B2 struct exposes exactly one read-only accessor per field, named exactly as the field, returning the field by value where its type is `Copy` and by shared reference otherwise. There is no setter, no `_mut`, no owned-field extraction, no whole-struct destructuring accessor and no accessor that returns a field not named above. The seven public enums expose no accessors at all: their variants and payloads are read by pattern matching, which is what makes the closed-set property of §2.0 legible at the use site.
+
+The only public **methods** — associated functions taking a `self` receiver — that are not field accessors are `SessionSnapshot::admits_at`, the `as_str`/`as_millis`/`as_unix_millis` readers named in §§2.1–2.2, the `value_kind()`/`kind()` readers of §9.1, and the three uniform projections each of `SessionCommand` and `SessionEvent` in §§4.1 and 5.1. The constructors of §2.0's rule 1 take no receiver and are therefore not methods; that section is where they are enumerated, and no public associated function exists outside these two lists.
+
+**`SessionStatus`'s Serde representation is frozen too**, because it is a public serialized read model and leaving one of the three serialized shapes unfrozen while freezing the other two would be arbitrary. It is externally tagged with `#[serde(rename_all = "snake_case")]`, so `Active` serializes as the string `"active"` and the two struct variants as `{"expired": {...}}` and `{"revoked": {...}}`, with their fields under exactly the names §2.4 lists.
 
 ## 3. Deadline algebra
 
@@ -304,9 +373,7 @@ RevokeSession {
 }
 ```
 
-Command values have private fields and one checked constructor each — `OpenSession::new(...)`, `RefreshSession::new(...)`, `ExpireSession::new(...)`, `RevokeSession::new(...)` — returning `Result<Self, SessionValueError>`. No command carries a raw credential, arbitrary metadata map, downstream permission, UI state, database handle or framework session object.
-
-**Commands implement `Serialize` but not `Deserialize`.** §10 admits Serde only where command handling and event *replay* need it, and replay reads events, never commands. Making that explicit converts a rule someone must remember into one the compiler enforces: §2.2 requires that untrusted callers cannot invoke `OpenSession` with self-asserted evidence, and with no `Deserialize` there is no way to decode one from a transport payload at all. A future ingress maps its own validated DTO through these constructors, which is where the admission decision belongs.
+The four command structs have private fields and exactly one constructor each; the `SessionCommand` wrapper enum is §2.0's third construction case and §4.1 states why its variant payload is public. No command carries a raw credential, arbitrary metadata map, downstream permission, UI state, database handle or framework session object. §4.1 freezes the exact Rust shape.
 
 `expected_revision` is optimistic-concurrency intent. B2 validates it during pure decision; B4 later binds the same value to journal/repository compare-and-append. B2 does not claim that an in-memory decision alone persisted anything.
 
@@ -315,6 +382,69 @@ The command set deliberately has no generic `SetState`, `Touch`, `Patch`, `Resto
 `ExpireSession` is an M00-internal lifecycle command issued only through the future B4 session application/port path. It is not an inbound cross-module command, is never decoded directly from M10, and does not expand the M00 blueprint's public input list.
 
 For an accepted open, `SessionOpened.opened_at` is exactly `OpenSession.observed_at`; the evolved snapshot initializes `last_transition_at` to that same instant.
+
+### 4.1 Frozen public algebra
+
+The semantic set above is realized as exactly four named-field structs plus one wrapper enum:
+
+```text
+struct OpenSession    { session_id, credential_evidence, policy, observed_at, expected_revision }
+struct RefreshSession { session_id, observed_at, expected_revision }
+struct ExpireSession  { session_id, observed_at, expected_revision }
+struct RevokeSession  { session_id, observed_at, expected_revision }
+
+enum SessionCommand {
+    Open(OpenSession),
+    Refresh(RefreshSession),
+    Expire(ExpireSession),
+    Revoke(RevokeSession),
+}
+```
+
+**Structs, not tuple structs; wrapper variants, not inlined fields.** §2.0's named-field rule is stated for every public B2 struct, so it binds the four command structs whether or not they validate anything. It does **not** extend to `SessionCommand`'s variants, which are single-field tuple variants, and the reason is not that a variant constructor is somehow unlike a tuple-struct constructor — it is a bindable function value in the same way. The reason is that §2.0's objection is specifically to *filling a private field* without writing a construction expression, and an enum variant has no private field to fill: its payload is public, as the next paragraph says, and the payload's own privacy is enforced one level down by `OpenSession` itself. A bound `SessionCommand::Open` can therefore produce nothing that its argument did not already legitimize.
+
+Inlining each command's fields into the enum instead would be the real loss: it would erase the four nominal types whose field sets §16 freezes, and it would put private fields directly under a tuple-shaped constructor, which is the combination §2.0 rules out.
+
+**Payload reachability is intended and is not a hole.** Enum variant fields are public in Rust, so a caller may both build `SessionCommand::Open(open)` from a command it validly constructed and match a `&SessionCommand` back down to `&OpenSession`. Neither bypasses anything: the payload's own fields stay private and the wrapper carries no invariant. This contract therefore makes no claim of a "private variant" anywhere, because Rust has none to offer.
+
+**Constructors are total**, taking fields in the order listed:
+
+```text
+OpenSession::new(session_id: SessionId, credential_evidence: SessionCredentialEvidence,
+                 policy: SessionPolicy, observed_at: SessionInstant,
+                 expected_revision: u64) -> Self
+RefreshSession::new(session_id: SessionId, observed_at: SessionInstant,
+                    expected_revision: u64) -> Self
+ExpireSession::new(session_id: SessionId, observed_at: SessionInstant,
+                   expected_revision: u64) -> Self
+RevokeSession::new(session_id: SessionId, observed_at: SessionInstant,
+                   expected_revision: u64) -> Self
+```
+
+Every argument is an already-validated nominal value or a `u64` denoting an instant or a revision claim, so nothing a constructor could reject remains — for three of the four. `RefreshSession`, `ExpireSession` and `RevokeSession` carry only a session identity, an instant and a revision claim, and every question about them (is the revision current? is the observation stale? is the session terminal?) is a fact about the *aggregate*, which a constructor holding one command cannot see. §7 decides each at the only point where the aggregate is in hand.
+
+**`OpenSession` is the case that needs an argument, and it is a precedence argument rather than a decidability one.** §3's open failures — `opened_at < authenticated_at`, an already-expired `credential_not_after`, checked-add overflow, a derived deadline that is not strictly future — are all computable from `OpenSession`'s own fields, so a checked constructor *could* reject them. It must not, for two reasons that point the same way:
+
+1. **It would invert §7.** That section's open precedence puts `SessionAlreadyExists` second and `RevisionMismatch` third, ahead of time ordering, credential expiry and overflow arithmetic. A constructor necessarily runs before all of them, because the command must exist before it can be decided against an aggregate. So a checked `OpenSession::new` would answer a lower-precedence question first, and an input that is both stale-timed *and* aimed at an existing session would report the wrong one of the two — exactly what §7's closing rule forbids: "No lower-precedence failure may hide a higher-precedence one."
+2. **It would split one failure across both §9 taxonomies.** `InvalidTimeOrder`, `CredentialEvidenceExpired` and `DeadlineOverflow` are `SessionDomainError` variants. Reporting them from a constructor means either a value constructor returning a domain error, or duplicate variants in `SessionValueError` — and §9 exists precisely to keep the two taxonomies split along §7's precedence line.
+
+So all four constructors are declared `-> Self`, and §8's open evolution re-derives every one of those invariants from the event, which §8 already requires. This is a deliberate placement of a reachable check, not a claim that nothing is checkable.
+
+**Accessors and traits** are §2.5's uniform rule and command rows, applied here without exception: one read-only accessor per field, named exactly as the field, by value for the `Copy` field types and by shared reference for `SessionId`, `SessionCredentialEvidence` and `SessionPolicy`.
+
+`SessionCommand` additionally exposes the three projections §7's precedence needs uniformly across command kinds, so identity and revision checks are written once rather than per variant:
+
+```text
+SessionCommand::session_id(&self) -> &SessionId
+SessionCommand::observed_at(&self) -> SessionInstant
+SessionCommand::expected_revision(&self) -> u64
+```
+
+`OpenSession`'s derived `Debug` is safe despite the credential evidence it carries: it delegates, ultimately reaching `CredentialEvidenceDigest`'s hand-written redacting `Debug` (§10), so the digest is redacted once, at the value that *is* the digest, rather than separately at every holder.
+
+**Serde representation.** `SessionCommand` is externally tagged — serde's default, stated because it is frozen rather than incidental — and carries `#[serde(rename_all = "snake_case")]`, so its variants serialize under exactly the tags `open`, `refresh`, `expire` and `revoke`. Each command struct carries `#[serde(deny_unknown_fields)]` and serializes its fields under their exact names.
+
+**Commands implement `Serialize` but not `Deserialize`.** §10 admits Serde only where command handling and event *replay* need it, and replay reads events, never commands. Making that explicit converts a rule someone must remember into one the compiler enforces: §2.2 requires that untrusted callers cannot invoke `OpenSession` with self-asserted evidence, and with no `Deserialize` there is no way to decode one from a transport payload at all. A future ingress maps its own validated DTO through these constructors, which is where the admission decision belongs.
 
 ## 5. Events
 
@@ -351,9 +481,9 @@ SessionRevoked {
 }
 ```
 
-Every event sequence is the exact next positive integer. Event fields are private. External callers cannot construct an accepted snapshot by setting fields directly.
+Every event sequence is the exact next positive integer. The four event structs have private fields; the `SessionEvent` wrapper enum is §2.0's third construction case, on §4.1's terms. External callers cannot construct an accepted snapshot by setting fields directly.
 
-Events implement both `Serialize` and `Deserialize`, because replay reads them back. Each has one checked constructor, and `SessionExpired`'s is the only one with a cross-field invariant — `observed_at >= expired_at` — so it is the one event that deserializes through a shadow struct per §2.0.
+Events implement both `Serialize` and `Deserialize`, because replay reads them back. §5.1 freezes the exact Rust shape.
 
 A `sequence` is **not** validated at construction. Whether a sequence is the exact next integer is a question about the aggregate, not about the event, and §8 answers it with `EventSequenceMismatch`; there is deliberately no `SessionValueErrorKind` variant for a zero or out-of-order sequence, because a value-level check could only ever repeat what the aggregate must decide anyway.
 
@@ -362,6 +492,78 @@ Events retain only bounded provenance. They never contain raw credentials, secre
 `SessionRefreshed.effective_expires_at` plus `SessionExpired.expired_at` and `cause` are redundant verification fields: evolution recomputes them from prior state and rejects a mismatch. `expired_at` is the effective deadline at which the session became invalid, while `observed_at` is when expiry was detected and persisted; a late observation must not rewrite historical validity. Their presence makes persisted evidence inspectable without allowing a forged derived value to become authority.
 
 Final stable platform-facing event/error names and reason codes remain owned by B4 `control-evidence`; these domain events are the state-machine authority that such projections must map one-to-one.
+
+### 5.1 Frozen public algebra
+
+```text
+struct SessionOpened    { sequence, session_id, credential_evidence, policy, opened_at }
+struct SessionRefreshed { sequence, session_id, observed_at, effective_expires_at }
+struct SessionExpired   { sequence, session_id, observed_at, expired_at, cause }
+struct SessionRevoked   { sequence, session_id, observed_at }
+
+enum SessionEvent {
+    Opened(SessionOpened),
+    Refreshed(SessionRefreshed),
+    Expired(SessionExpired),
+    Revoked(SessionRevoked),
+}
+```
+
+Topology, payload reachability and the named-field rule are exactly as §4.1 states for commands, for the same reasons.
+
+**All four constructors are total**, taking fields in the order listed:
+
+```text
+SessionOpened::new(sequence: u64, session_id: SessionId,
+                   credential_evidence: SessionCredentialEvidence,
+                   policy: SessionPolicy, opened_at: SessionInstant) -> Self
+SessionRefreshed::new(sequence: u64, session_id: SessionId,
+                      observed_at: SessionInstant,
+                      effective_expires_at: SessionInstant) -> Self
+SessionExpired::new(sequence: u64, session_id: SessionId, observed_at: SessionInstant,
+                    expired_at: SessionInstant, cause: SessionExpiryCause) -> Self
+SessionRevoked::new(sequence: u64, session_id: SessionId,
+                    observed_at: SessionInstant) -> Self
+```
+
+**`SessionExpired`'s totality is a decision, not an omission.** A draft revision gave it a checked constructor rejecting `observed_at < expired_at`. That is withdrawn. It opened an error channel belonging to neither §9 taxonomy — `SessionValueErrorKind` has no variant for it, and `SessionDomainError` is the decision/evolution taxonomy, not a construction one — and the available repairs were all worse than the defect: a new value-error variant for one event's self-consistency, a third error type, or a Serde-only message with no typed peer.
+
+It is withdrawn on a stronger ground than taxonomy tidiness, and the ground is **not** that the comparison is undecidable — `observed_at >= expired_at` compares two `u64`-backed fields of one struct and is perfectly decidable. It is that the comparison is decidable *without being meaningful*, which is §2.0's second constructor rule. `expired_at` is a **derived** field whose correctness means "exactly equals the aggregate's pre-existing effective deadline" (§8). An event holding two caller-supplied instants does not know that deadline, so a constructor comparing them enforces agreement between two numbers that may both be forged, while admitting every pair that is consistently wrong.
+
+What that check costs is concrete. §13 requires a persisted `SessionExpired` whose `observed_at` precedes the effective deadline, with sequence, `SessionId` and **every derived field exact**, to be rejected as `EventTimeOutsideValidity`. Exactness of `expired_at` is what makes that fixture the load-bearing one, and it forces `observed_at < expired_at` — so a checked constructor makes precisely that fixture unconstructible. The claim is not that the `EventTimeOutsideValidity` arm would be wholly dead: §13's forged-*low* `expired_at` case reaches it from the other side, and §8 reaches it through `SessionRefreshed` and `SessionRevoked` as well. The claim is narrower and sufficient — only an event with an exact `expired_at` can show that guard 1 rejects on its own rather than being shadowed by guard 2, and a checked constructor is the one thing that removes that event from the input space.
+
+The invariant is enforced where it is decidable. §8's `Active`/`SessionExpired` guards run in exactly this order, so two implementations report the same failure for a multiply-forged event:
+
+1. `observed_at >= effective_expires_at`, else `EventTimeOutsideValidity`;
+2. `expired_at == effective_expires_at`, else `EventDerivedFieldMismatch { ExpiredAt }`;
+3. `cause` equals the §3 tie-precedence result, else `EventDerivedFieldMismatch { ExpiryCause }`.
+
+Together those imply `observed_at >= expired_at` for every event evolution accepts, which is the property the withdrawn constructor was reaching for — obtained from the aggregate that can actually establish it.
+
+**No event owns a cross-field invariant, so no event needs §2.0's shadow-struct decode**; `SessionCredentialEvidence` is the only value in this contract that does, and it qualifies because its credential window is a relation between two fields the value fully owns.
+
+**Owning one is narrower than computing one, and `SessionOpened` is the case that shows the difference.** It carries `credential_evidence`, `policy` and `opened_at`, which is exactly enough to evaluate all four of §3's open failure conditions — `opened_at < authenticated_at`, an already-expired `credential_not_after`, checked-add overflow, and a derived deadline that is not strictly later than `opened_at`. Those relations are computable from the struct alone, and this contract says so plainly rather than claiming there was nothing here to check. The constructor is nonetheless total, for the two reasons §4.1 gives for `OpenSession`, in the same order:
+
+1. **It would invert §8.** For an empty aggregate, evolution requires `sequence == 1` before it revalidates any open invariant. A constructor necessarily runs before evolution sees an aggregate at all, so a checked `SessionOpened::new` would answer the lower-precedence open-invariant question ahead of `EventSequenceMismatch` — the same inversion §4.1 refuses for `OpenSession` against §7.
+2. **It would make §8's own re-derivation unfalsifiable.** §8 requires evolution to revalidate every §2–§3 open invariant *from the persisted event* rather than trust it, and §9.2 keeps `InvalidTimeOrder`, `CredentialEvidenceExpired` and `DeadlineOverflow` as reachable variants. A checked constructor removes from the input space every event that could exercise that requirement — and by §2.0's shadow-struct rule it would close the Serde path too, since it would then own a cross-field invariant — leaving §8's obligation untestable and those three variants dead on the evolve path. That is precisely the dead-arm defect §9.2 refused when it removed `InvalidCredentialEvidence` and `InvalidSessionPolicy`. `evolve` owns the domain-error taxonomy, and a malformed persisted `SessionOpened` must remain constructible so that fail-closed evolution can be shown rejecting it.
+
+The remaining three events own nothing to check. `SessionRevoked` carries no derived field at all. `SessionRefreshed` and `SessionExpired` each carry one, and a relation between a derived field and an instant beside it is decidable without being meaningful — §2.0's second rule, worked in full for `SessionExpired` above and identical in shape for `SessionRefreshed`, whose `effective_expires_at` is correct only against a deadline the event cannot see.
+
+Events therefore derive `Deserialize` with `#[serde(deny_unknown_fields)]`. That is not an *unchecked* decode in §10's sense: every field is a `u64` or a nominal value whose own `Deserialize` delegates to its checked constructor, so the invalid-value half is closed field by field and `deny_unknown_fields` closes the unknown-field half. What remains — sequence order, cross-session identity, derived-field agreement, event time inside the guard window — is an aggregate question, and §8 answers all of it.
+
+**Accessors** follow §4.1: one read-only accessor per field, named exactly as the field, by value for `Copy` fields and by reference otherwise. `SessionEvent` exposes the three projections §8 needs uniformly:
+
+```text
+SessionEvent::sequence(&self) -> u64
+SessionEvent::session_id(&self) -> &SessionId
+SessionEvent::observed_at(&self) -> SessionInstant
+```
+
+`observed_at` maps `SessionEvent::Opened` to that event's `opened_at`, which §4 already fixes as exactly the open command's `observed_at`.
+
+**Accessors and traits** are the §2.5 rows for the event family; nothing here adds to or departs from that closure. `SessionOpened`'s derived `Debug` is safe by the same delegation §4.1 states for `OpenSession`.
+
+**Serde representation.** `SessionEvent` is externally tagged with `#[serde(rename_all = "snake_case")]`, so its variants serialize under exactly `opened`, `refreshed`, `expired` and `revoked`. `SessionExpiryCause` carries the same `rename_all`, giving exactly `credential`, `absolute` and `idle`. Each event struct carries `#[serde(deny_unknown_fields)]` and serializes its fields under their exact names.
 
 ## 6. Transition table
 
@@ -409,7 +611,7 @@ B2 defines no resurrection. Opening a new session requires a new `SessionId` and
 
 For `RefreshSession`, `ExpireSession` and `RevokeSession` on an existing aggregate, command decision uses this global precedence:
 
-1. malformed command/value shape is rejected by constructors before decision;
+1. malformed value shape is rejected by the §2 value constructors before a command can be built, and so before decision — the command constructors themselves are total (§4.1) and reject nothing;
 2. command `session_id` mismatch;
 3. `expected_revision` mismatch;
 4. terminal session mutation;
@@ -424,7 +626,7 @@ Item 8's `DeadlineOverflow` is reachable and belongs here rather than at open: `
 
 For open, precedence is:
 
-1. malformed evidence/policy/value shape;
+1. malformed evidence/policy/value shape, rejected by the §2 value constructors before `OpenSession::new` is reachable;
 2. existing aggregate returns `SessionAlreadyExists`;
 3. on an empty aggregate, non-zero `expected_revision` returns `RevisionMismatch { expected: command value, actual: 0 }`;
 4. authentication/open time ordering;
@@ -479,7 +681,7 @@ For every existing aggregate, evolution first requires exact next sequence, exac
 | `Active` | `SessionOpened` | never legal | fail closed |
 | `Expired` or `Revoked` | any event | never legal | fail closed |
 
-`SessionExpired.observed_at` must be greater than or equal to `SessionExpired.expired_at`. The refresh and revoke apply guards use the same effective-expiry function as command decision, and the expire guard additionally uses the same §3 cause function; evolution may not accept a persisted event that `decide` could never have emitted. No event can replace tenant/user/session/adapter/evidence/policy scope or change a terminal state.
+`SessionExpired.observed_at` is greater than or equal to `SessionExpired.expired_at` for every event this table accepts. That is a *consequence* of the three guards in the `SessionExpired` row, run in the order §5.1 fixes, not a fourth check and not a constructor invariant: the first guard puts `observed_at` at or after the effective deadline and the second pins `expired_at` to that same deadline. §5.1 states why the property is enforced here rather than at construction. The refresh and revoke apply guards use the same effective-expiry function as command decision, and the expire guard additionally uses the same §3 cause function; evolution may not accept a persisted event that `decide` could never have emitted. No event can replace tenant/user/session/adapter/evidence/policy scope or change a terminal state.
 
 **An apply-guard violation has its own named failure.** A forged or corrupted event can carry an exact sequence, an exact `SessionId`, a forward `observed_at` and — for `SessionRevoked`, which has no derived field at all — nothing else to check, while still sitting on the wrong side of the effective deadline for its kind. None of `EventSequenceMismatch`, `SessionIdMismatch`, `NonMonotoneTime` or `EventDerivedFieldMismatch` describes that, and `IllegalEventForState` would contradict this table, which lists the pair as legal. It is `EventTimeOutsideValidity`, and it covers all three `Active` rows: a `SessionRefreshed` or `SessionRevoked` whose `observed_at` is at or after the effective deadline, and a `SessionExpired` whose `observed_at` precedes it.
 
@@ -497,7 +699,7 @@ There are exactly two taxonomies, split along §7's own precedence: value constr
 
 ### 9.1 Construction — `SessionValueError`
 
-`SessionValueError` mirrors `IdentityValueError`: a small `Copy` value carrying exactly the static Rust value-kind name that rejected the input and one `SessionValueErrorKind`, with private fields, exactly two read-only accessors `value_kind()` and `kind()`, and no `source`. `SessionValueErrorKind` is the public enum owning exactly:
+`SessionValueError` mirrors `IdentityValueError`: a small `Copy` value carrying exactly the static Rust value-kind name that rejected the input and one `SessionValueErrorKind`, with private fields, no public constructor per §2.0's rule 2, exactly two read-only accessors `value_kind()` and `kind()`, and no `source`. `SessionValueErrorKind` is the public enum owning exactly:
 
 ```text
 Empty
@@ -537,7 +739,7 @@ EventDerivedFieldMismatch { field: EventDerivedField }
 
 Field roles are pinned so two implementations cannot report them oppositely. In `RevisionMismatch`, `expected` is the caller's claim and `actual` is the aggregate's truth, as §6.1 already fixes. In `EventSequenceMismatch` the roles are the same shape: `expected` is the derived `next_revision` and `actual` is the event's own `sequence`.
 
-`EventTimeOutsideValidity` is the §8 apply-guard failure: the event's `observed_at` is on the wrong side of the effective deadline for that event kind. It is payload-free — the two instants involved are already in the caller's own snapshot and event.
+`EventTimeOutsideValidity` is the §8 apply-guard failure: the event's `observed_at` is on the wrong side of the effective deadline for that event kind. It is payload-free — the two instants involved are already in the caller's own snapshot and event. It is also the variant that carries `SessionExpired`'s `observed_at >= expired_at` property, which §5.1 declines to check at construction because an event alone cannot know the deadline that makes the comparison meaningful. No third error channel exists for that case, and none may be introduced for it.
 
 The draft revision of this contract also listed `InvalidCredentialEvidence` and `InvalidSessionPolicy` here. They are deliberately **not** domain variants: `SessionCredentialEvidence` and `SessionPolicy` have validating constructors and validating Serde, so a malformed one cannot be built, cannot be deserialized and therefore cannot reach `decide` or `evolve` — including from a persisted event, whose fields are already those types. Retaining an unreachable variant would be a permanent dead arm that no adversarial fixture could exercise, and §13 requires every fixture to affect an executable assertion. The corresponding real failures are `SessionValueErrorKind::MalformedDigest`, `ZeroDuration` and `CredentialWindowNotAfterAuthentication` in §9.1.
 
@@ -562,28 +764,35 @@ The exact B2 Serde surface is:
 - nominal scalar values, `SessionCredentialEvidence`, `SessionPolicy` and events implement validating `Serialize` and `Deserialize`, which is what event replay needs;
 - commands implement `Serialize` only, per §4;
 - deserialization delegates to the same decision-independent value validators; unknown and missing fields fail closed;
-- `SessionSnapshot` and `SessionStatus` are serialization-only read models: they implement no public `Deserialize`, `Default` or direct constructor and can arise only from validated `SessionOpened` evolution plus legal replay;
+- `SessionSnapshot` is a serialization-only read model: it implements no public `Deserialize`, `Default` or direct constructor, and can arise only from validated `SessionOpened` evolution plus legal replay;
+- `SessionStatus` is serialization-only in the same sense — no `Deserialize`, no `Default` — but it is a public enum, so a caller may name a variant, and this contract does not pretend otherwise. §2.4 states the property that actually holds: what cannot be forged is a `SessionSnapshot` carrying a caller-chosen status, and the snapshot's private fields, absent constructor and absent `Deserialize` are what close it;
 - `SessionValueError`, `SessionValueErrorKind`, `SessionDomainError` and `EventDerivedField` implement neither `Serialize` nor `Deserialize`; B4 owns stable external error/event projections.
 
-Mechanically that means `#[serde(deny_unknown_fields)]` on every aggregate struct, `#[serde(rename_all = "snake_case")]` on every enum, and no hand-written visitor anywhere, exactly as §2.0 requires. A derived unchecked field decode on an authority-bearing value is forbidden: `deny_unknown_fields` closes the unknown-field half, and delegation to the checked constructor closes the invalid-value half. Neither closes the other, so both are required.
+Mechanically that means `#[serde(deny_unknown_fields)]` on every aggregate struct, `#[serde(rename_all = "snake_case")]` on every enum **that derives Serde** — the three error enums derive none, and a bare `serde` attribute without the derive in scope does not compile — and no hand-written visitor anywhere, exactly as §2.0 requires. A derived **unchecked** field decode on an authority-bearing value is forbidden: `deny_unknown_fields` closes the unknown-field half, and delegation to the checked constructor closes the invalid-value half. Neither closes the other, so both are required.
+
+"Unchecked" is the operative word, and §§4.1 and 5.1 make the boundary exact rather than leaving it to judgement. A derived decode whose every field is itself a validating `Deserialize` *is* checked, field by field, and is what events use. What is forbidden is a decode that reaches a private field without passing that field's own validator, and a derived decode of an aggregate whose invariant spans fields — which §2.0 routes through a shadow struct instead, for the one value that has one.
 
 Serde proves only shape and invariant validity, never credential authenticity or caller admission. B3/B4/B5 composition must not expose `OpenSession` deserialization as an untrusted transport endpoint. Derived unchecked decoding is forbidden on every authority-bearing value.
 
 External compile-fail/API proofs must show that callers cannot:
 
 - construct or mutate snapshots/events through public fields;
-- set `revision`, deadlines, status or expiry cause directly;
+- set `revision`, deadlines, status or expiry cause directly on a `SessionSnapshot` or an event struct;
 - replace tenant/user/session/evidence/policy after open;
 - default a session into an active state;
 - convert one identity kind into another;
 - obtain mutable backing access;
-- bypass evidence/command validation through public fields or an unchecked constructor;
+- bypass a value's validation through public fields or a second, unchecked constructor;
 - pass raw credential text to any B2 evidence constructor or conversion API;
 - call a public unchecked constructor or generic state setter.
 
+"Unchecked constructor" here means a second construction path on a value that *has* an invariant — an `AuthAdapterId` or `SessionCredentialEvidence` reachable without its validator. It does not refer to the deliberately total command and event constructors of §§4.1 and 5.1, which are each the single path to their value and skip no check that belongs to them; §§4.1 and 5.1 record where those checks live instead.
+
 Read-only, zero-copy accessors are allowed. `Display` for client/log use must not expose credential evidence internals.
 
-**`Debug` redaction is owned by B2, not deferred.** Every value carrying an `evidence_digest` — `SessionCredentialEvidence`, `SessionOpened` and `SessionSnapshot` — implements `Debug` by hand and renders that field as a fixed redaction token rather than its bytes. An earlier revision deferred this to B4 `control-evidence`, which does not exist; that would have left an implementer with no rule to satisfy while the repository's default convention is a derived `Debug`, and a derived `Debug` prints the digest on every `assert_eq!` failure, panic message and trace line. It would also have made B2 weaker than its own sibling: `AUTH-014` governs B1's identity errors on `Display` **and** `Debug`. B4 may later widen redaction to further surfaces; it is not a prerequisite for this one.
+**`Debug` redaction is owned by B2, not deferred.** The obligation is a property of the whole module: no `Debug` rendering of any B2 value may contain the digest bytes. It is discharged at exactly one place — `CredentialEvidenceDigest` itself implements `Debug` by hand and renders a fixed redaction token instead of its bytes. Every value that can reach a digest reaches it only through that type, so `SessionCredentialEvidence`, `SessionSnapshot`, `OpenSession`, `SessionOpened`, `SessionCommand` and `SessionEvent` all derive `Debug` and inherit the redaction, which is why §2.5 lists a derived `Debug` for each of them.
+
+Redacting at the digest rather than at its holders is the point, not a convenience. A hand-written `Debug` repeated at each holder is one forgotten holder away from leaking, and the set of holders grows with every later batch; a redaction on the type itself cannot be forgotten by a holder that has not been written yet. `Display` is not implemented on `CredentialEvidenceDigest` at all, so there is no second rendering path to keep in step. An earlier revision deferred this to B4 `control-evidence`, which does not exist; that would have left an implementer with no rule to satisfy while the repository's default convention is a derived `Debug`, and a derived `Debug` prints the digest on every `assert_eq!` failure, panic message and trace line. It would also have made B2 weaker than its own sibling: `AUTH-014` governs B1's identity errors on `Display` **and** `Debug`. B4 may later widen redaction to further surfaces; it is not a prerequisite for this one.
 
 ## 11. Dependency and side-effect boundary
 
@@ -669,7 +878,7 @@ Prove that open pins exact tenant/user/session/adapter/evidence/policy scope; de
 
 ### `AUTH-018` — refresh/expire/revoke precedence
 
-Prove that refresh extends only idle expiry, never credential/policy-absolute expiry or scope; equality is expired; `Credential > Absolute > Idle` resolves equal deadlines; late observation preserves the effective `expired_at`; expired sessions cannot refresh/relabel; revoke blocks immediately; and terminal states cannot mutate or resurrect.
+Prove that refresh extends only idle expiry, never credential/policy-absolute expiry or scope; equality is expired; `Credential > Absolute > Idle` resolves equal deadlines; late observation preserves the effective `expired_at`; expired sessions cannot refresh/relabel; revoke blocks immediately; terminal states cannot mutate or resurrect; and `admits_at` answers current admission under §2.4's three conjuncts, refusing a revoked session, a stale observation and the expiry boundary alike.
 
 ### `AUTH-019` — expected revision and deterministic replay
 
@@ -698,12 +907,20 @@ Acceptance of this contract does not bind these; the implementation does. `AUTH-
 - event sequence gap, duplicate and reorder;
 - cross-session event injection, and a decide-side `SessionIdMismatch` where the command names a different session than the supplied state;
 - forged refreshed deadline, effective `expired_at` and expiry cause;
-- a persisted `SessionRefreshed` and a persisted `SessionRevoked` whose `observed_at` is at or after the effective deadline, and a persisted `SessionExpired` whose `observed_at` precedes it — each `EventTimeOutsideValidity`, each with sequence, `SessionId` and every derived field otherwise exact, so no other variant can answer;
+- a persisted `SessionRefreshed` and a persisted `SessionRevoked` whose `observed_at` is at or after the effective deadline, and a persisted `SessionExpired` whose `observed_at` precedes it — each `EventTimeOutsideValidity`, each with sequence, `SessionId` and every derived field otherwise exact. Each must also satisfy `observed_at >= last_transition_at`, or §8's earlier universal non-decreasing-time check answers `NonMonotoneTime` first and the fixture proves nothing about the row guard it was written for. That constraint is satisfiable in every case because the `Active` invariant leaves the window `[last_transition_at, effective_expires_at)` non-empty;
+- that same `SessionExpired` reached two ways, proving §5.1's totality decision rather than assuming it: **direct construction** with `observed_at` strictly less than `expired_at`, which must *succeed* because the constructor is total, and **deserialization** of the byte-equal payload, which must succeed identically — with both results then rejected by `evolve` as the same `EventTimeOutsideValidity`. A test that only exercised the evolve path would still pass if an implementer quietly reintroduced a fallible constructor and a third error channel;
+- a `SessionExpired` whose `expired_at` is forged *below* the true effective deadline, with `last_transition_at <= observed_at < effective_expires_at` and `observed_at` above the forged value — which the total constructor also admits, and which `evolve` rejects as `EventTimeOutsideValidity` rather than `EventDerivedFieldMismatch`, pinning §5.1's guard order. Without the `last_transition_at` bound this case is reachable through `NonMonotoneTime` instead and pins nothing;
+- conversely, reaching `EventDerivedFieldMismatch { ExpiredAt }` or `{ ExpiryCause }` at all requires `observed_at >= effective_expires_at`, since guard 1 answers first otherwise; the forged-derived-field fixtures above must be built that way or they silently test guard 1 twice;
 - late expiry observation that must retain the earlier effective deadline;
 - expiry observed exactly at and strictly after each deadline, with equal derived `expired_at` but distinct `observed_at`;
 - a refresh whose own deadline arithmetic overflows because `effective_expires_at` sits at `u64::MAX`, returning `DeadlineOverflow`;
 - deserialization of a `SessionCredentialEvidence` payload whose `credential_not_after` is not strictly later than `authenticated_at`, rejected as `CredentialWindowNotAfterAuthentication` — this is the fixture that proves §2.0's shadow-struct rule is in force and that §9.2's removal of `InvalidCredentialEvidence` was safe;
-- `admits_at` false for a revoked session at an instant strictly before its preserved `effective_expires_at`, and true only while `Active` and before that deadline;
+- deserialization of a `SessionCredentialEvidence` payload that **omits** `credential_not_after` entirely, which must be rejected, alongside one that spells it as an explicit null, which must be accepted as "no credential deadline". These are the fixtures for §2.2's downgrade-by-omission rule, and they fail against the bare derive rather than against a plausible mistake: serde's default for a missing `Option` field is `None`, so an implementation that skips the explicit attribute passes every other fixture in this list;
+- round-tripping a `SessionCredentialEvidence` that has no credential deadline, confirming the serialized form writes the field rather than skipping it;
+- `admits_at` false for a revoked session at an instant strictly before its preserved `effective_expires_at`, and for an expired one;
+- `admits_at` false for an `Active` snapshot observed strictly before `opened_at`;
+- `admits_at` false for an `Active` snapshot that has been refreshed, observed strictly between `opened_at` and `last_transition_at` — the stale-time case a status-plus-upper-bound predicate wrongly admits, and the one that distinguishes §2.4's three-conjunct rule from the two-conjunct one;
+- `admits_at` at both boundaries of an `Active` snapshot: true at exactly `last_transition_at`, false at exactly `effective_expires_at`;
 - replay after each legal prefix and across the full lifecycle;
 - dual-fault precedence cases, including a terminal session whose `current_revision` is `u64::MAX`, which must return `TerminalSession` and not `RevisionOverflow`;
 - secret-like canary strings absent from every error, `Display` and `Debug` surface, and from every serialized event/snapshot surface where forbidden — `Debug` included because §10 makes its redaction a B2 obligation.
@@ -740,9 +957,24 @@ The eight conditions this contract carried while it was a draft are now discharg
 3. `AUTH-017..020` are in the long-horizon catalog and are active `planned` matrix rows with the exact future bindings in §12;
 4. the repository checker registers this contract as a fail-closed key file and cross-validates §12 against the active matrix, so a stale or missing projection carrier fails the run;
 5. transition, deadline and error precedence received independent blocker review across three lanes — contract/dependency direction, acceptance evidence, and semantics/security — and every accepted finding is folded into this revision, including a frozen error set that could not express a specified apply-guard rejection, a precedence list that contradicted §6.3 at `u64::MAX`, `Debug` redaction deferred to an unstarted batch, an unowned digest-provenance obligation, a read model that was fail-open for `Revoked`, and an incomplete §11.1 carrier list;
-6. public type names and Serde shapes are frozen in §2 against the merged B1 API;
+6. public type names and Serde shapes are frozen in §2, §4.1 and §5.1 against the merged B1 API;
 7. no current-status carrier claims B2 implementation evidence — every affected carrier says `planned`, and `M00` stays `partial-evidence`;
 8. documentation and checker gates pass on the exact final head.
+
+A second merge-review round returned `NO-GO` on the revision that discharged those eight, and required four repairs before acceptance. Each is folded in above, and each is recorded here rather than only in a pull-request comment, because a reader of this contract otherwise cannot tell a deliberate shape from an arbitrary one:
+
+1. **`admits_at` was underspecified and fail-open on stale time.** §2.4 now freezes the question it answers as *current admission* rather than historical validity, and adds the conjunct `observed_at >= last_transition_at`, so the read model is never more permissive than the decide path it guards. §13 binds before-open, before-last-transition and both-boundary fixtures.
+2. **The public command and event families had semantic field lists but no Rust-representable algebra.** §4.1 and §5.1 now freeze struct-versus-variant topology, wrapper-variant payload reachability, exact constructor signatures and the external Serde tagging for `OpenSession`/`RefreshSession`/`ExpireSession`/`RevokeSession`/`SessionCommand` and `SessionOpened`/`SessionRefreshed`/`SessionExpired`/`SessionRevoked`/`SessionEvent`, and §2.5 closes the trait and accessor set over **every** public B2 type — because a derive list that names an outer `Eq` while leaving the field type's `Eq` unstated does not compile and therefore freezes nothing. The M00 blueprint's public-input list is aligned to those names in the same change.
+3. **`SessionExpired`'s checked constructor implied an error channel in neither §9 taxonomy.** It is withdrawn: §5.1 makes the constructor total and §8 enforces `observed_at >= expired_at` as a consequence of ordered apply guards. The reason is that the comparison is decidable but not *meaningful* at construction — only the aggregate knows the deadline that gives `expired_at` a correct value — and that enforcing it removes §13's exact-derived-field fixture from the input space. No new error type, variant or Serde-only message was introduced, and §13 binds a direct-construction and a deserialization fixture so the decision is executable rather than asserted.
+4. **Command constructors returned an unreachable `Result`.** All four command and all four event constructors are now total. For five of the eight nothing was computable at construction; for `OpenSession`, `SessionOpened` and `SessionExpired` something was, and §§4.1 and 5.1 state the specific reason each check belongs to `decide`/`evolve` instead — precedence inversion, against §7 for the first and §8 for the second, and decidable-but-not-meaningful comparison for the third. §2.0 records both governing rules for any constructor added later, and deliberately does not record the weaker claim that a total constructor implies nothing was checkable.
+
+Two independent review lanes then read the repaired revision before it was offered back, and three of their findings changed substance rather than wording. The trait closure of repair 2 did not compile as first written — `SessionCredentialEvidence` and `SessionPolicy` are stored flattened in `SessionSnapshot`, so §2.4's transitive `PartialEq`/`Eq` clause never reached them — which is why §2.5 is an exhaustive table rather than a transitive rule. Repair 3's first justification claimed the `EventTimeOutsideValidity` arm would be *permanently* dead under a checked constructor, which this round's own forged-low fixture refutes; the claim is now the narrower and sufficient one. And §2.2's "missing fields fail closed" was false for `credential_not_after`, because serde's derived decode reads an absent `Option` field as `None` — a downgrade by omission on the field that caps a session's life, now specified explicitly and bound by two fixtures.
+
+A third merge-review round returned `NO-GO` on one contract-representability blocker plus one adjacent reasoning defect, and both are folded in above.
+
+The blocker was that §2.0's representation and construction rules were written as universal statements over "every B2 value", and **no Rust program satisfies them**. An enum variant's fields are exactly as public as its enum, so `SessionStatus`, `SessionExpiryCause`, `SessionCommand`, `SessionEvent` and the three error enums cannot have private fields at all; `SessionSnapshot` and `SessionValueError` deliberately have no public constructor, so "each value has exactly one" was false in the other direction; and §10 compounded it by asserting that `SessionStatus` itself could arise only from evolution, which is false for a public enum and was never the property that mattered. An unsatisfiable rule is worse than a missing one, because it leaves an implementer nothing to obey and a reviewer nothing to measure. §2.0 now scopes representation to public structs, says why the rule stops there and why `#[non_exhaustive]` is not the escape, and partitions construction three ways — buildable structs, unbuildable structs, enums. §2.4 states the invariant that does hold, that a caller-built status cannot be injected into a snapshot. §2.5, §4.1 and §10 are reconciled to the same scoping, and §10 states the two read models separately.
+
+The adjacent defect was in the totality reasoning rather than in the algebra: §5.1 and this section claimed nothing beyond `SessionExpired` was checkable at event construction, while `SessionOpened` carries exactly the fields §3's four open conditions are computed from. The signature stays total, now on stated grounds — a checked one would answer ahead of §8's sequence check, and would remove from the input space every event that could falsify §8's obligation to re-derive open invariants from the persisted event, killing three `SessionDomainError` variants on the evolve path. The count in repair 4 above is corrected with it. Neither correction changes a name, field set, transition, precedence order, deadline formula, error variant or Serde shape, so neither is a `platform-session/v0` change under §16.
 
 This contract is therefore accepted, and accepted is the *entry* condition for implementation, not evidence of it. What acceptance authorizes is exactly one thing: `M00-B2 session-domain` may be implemented against this specification, under `module-work-policy/v1.3` §3 Path B, on its own branch, with its own review and its own exact-head CI.
 
