@@ -7,6 +7,7 @@
 pub mod identity;
 pub mod invocation;
 pub mod market;
+pub mod session;
 
 /// Human-facing product name.
 pub const PRODUCT_NAME: &str = "USTC Campus Agent";
