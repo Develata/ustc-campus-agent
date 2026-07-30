@@ -172,10 +172,11 @@ Alias bindings are rejected rather than resolved. No sibling source may `use` or
 
 Cross-file bindings of an admitted kind are therefore admitted by **enumeration**, never by pattern. Two independent carriers must both admit one, and neither substitutes for the other: it appears in the governed source's item allowlist like any other item, **and** it appears in the dedicated cross-file-binding exception that otherwise refuses every `use` or `type` naming an admitted kind or the identity module path. That second rule is keyed by exact file name together with exact normalized text, in both the repository checker and the mirroring Rust guard. It must stay an enumeration: relaxing it to a prefix, regex or predicate over `crate::identity::` would re-open precisely the alias class this section exists to close. Each admitted binding is additionally spelled without renaming, and sits in a source whose own item, `impl`, macro, derive and attribute surfaces are frozen on exactly the terms above — that accounting is what makes an import safe, so an import outside it is not.
 
-Two bindings are admitted:
+Three bindings are admitted:
 
 1. `invocation.rs`'s tenant/user compatibility re-export named in §6, which exists today;
-2. the non-renaming `use crate::identity::{SessionId, TenantId, UserId};` taken by the `M00-B2` session module under [`platform-session/v0`](platform-session.md) §2.0, which re-exports nothing, implements nothing for an admitted kind, and gains no access to the private `identity_value!` generator. That module now exists at `crates/platform-core/src/session.rs`, and both carriers were extended to admit exactly this file with exactly this text when it landed. A third binding, `market/installation.rs`'s `use crate::identity::{TenantId, UserId};`, is enumerated on the same terms.
+2. the non-renaming `use crate::identity::{SessionId, TenantId, UserId};` taken by the `M00-B2` session module under [`platform-session/v0`](platform-session.md) §2.0, which re-exports nothing, implements nothing for an admitted kind, and gains no access to the private `identity_value!` generator. That module now exists at `crates/platform-core/src/session.rs`, and both carriers were extended to admit exactly this file with exactly this text when it landed;
+3. `market/installation.rs`'s `use crate::identity::{TenantId, UserId};`, is enumerated on the same terms.
 
 Enumerating a further binding is drift of this **registration** and must be mirrored in both carriers, exactly as an import-list change to `invocation.rs` is. It changes no accepted byte grammar, maximum length, error precedence, Serde shape or nominal kind set, so it is not a `platform-identity/v0` change under §9 — the same distinction §5 draws for the `IdentityValueError` representation. Re-exporting an admitted kind from a third source *would* give a kind a second public path and is refused; §6's re-export is a compatibility exception that is not extended.
 
@@ -229,7 +230,7 @@ One asymmetry is deliberate and stated rather than papered over: the dependency 
 
 That last carrier is also the reason every acceptance row in §8 runs the repository checker before its Rust leg. **A Rust test cannot prove that it ran.** Redirecting the `[[test]] platform_identity` target, or renaming a bound function, makes `--exact` match nothing, which cargo reports as `running 0 tests` at exit zero — and any guard written inside the suite is exactly what has been replaced. Only an out-of-band carrier can detect that, so the checker that pins the manifest target set and the bound function names is part of each binding rather than a separate courtesy check.
 
-Adding to this surface changes `platform-identity/v0` under §9.
+Adding externally reachable API to any of the six governed identity kinds, or changing any criterion in §9, changes `platform-identity/v0`. Extending only the enumerated source/module/import registration for a sibling that neither re-exports an admitted kind nor adds an implementation for one is registration drift, not a version change; it must still be mirrored in both carriers on the same revision.
 
 ## 5. Deterministic validation errors
 
