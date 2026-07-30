@@ -61,7 +61,7 @@ The thin client displays and submits intent. Backend modules perform every truth
 |---|---|---|---|
 | `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity value types only |
 | `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | daemon help/version skeleton |
-| `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | typed package/catalog + capability-registry + bounded managed-installation fake + pure resolver/fixtures |
+| `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | typed package/catalog + capability-registry + bounded managed-installation fake + bounded reviewed-grant aggregate/replay/semantic repository + pure resolver/fixtures |
 | `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel |
 | `M40` | Tool Gateway/Execution | exact tool correlation, authorization order, intent/executor/receipt/result | protocol values + fake conformance |
 | `M50` | Model Provider | typed profiles, provider protocol, stream/final/usage/estimator | planned |
@@ -179,6 +179,7 @@ Implemented evidence:
 - `crates/platform-core/src/invocation.rs`: pure package/install/grant/tool projection and recheck;
 - `crates/platform-core/src/market/capability.rs`: typed immutable capability-registry loading, derived policy and permission-change classification without grant issuance;
 - `crates/platform-core/src/market/installation.rs`: pure managed-installation aggregate/replay and semantic in-memory repository without durable persistence or production enable-evidence issuance;
+- `crates/platform-core/src/market/grant.rs`: pure reviewed-grant aggregate/decide/evolve/replay and semantic in-memory repository without durable persistence or production grant issuance;
 - `crates/agent-tool-protocol`: Plugin-neutral tool values;
 - `apps/ustc-agentd/tests`: fake resolver/gateway/executor composition proof;
 - `crates/course-planning` + CLI: deterministic offline Course Planning spike;

@@ -1,8 +1,8 @@
 use ustc_campus_agent_core::invocation::{CapabilityClass, CapabilityId, ConfirmationPolicy};
 use ustc_campus_agent_core::market::capability::{
     AutoGrantDisposition, CapabilityPolicyChange, CapabilityRegistryLoadError, CapabilityStatus,
-    DataClass, EffectClass, RiskClass, ScopeKind, compare_capability_policy,
-    load_capability_registry,
+    DataClass, EffectClass, RiskClass, ScopeKind, compare_capability_definitions,
+    compare_capability_policy, load_capability_registry,
 };
 
 const REGISTRY: &[u8] = include_bytes!("../../../market/capabilities/registry.json");
@@ -838,5 +838,233 @@ fn empty_registry_loads_with_zero_definitions() {
         registry
             .find(&parsed_capability_id("campus.public_rules.read"))
             .is_none()
+    );
+}
+
+#[test]
+fn definition_classifier_preserves_existing_policy_matrix() {
+    let id = parsed_capability_id("campus.public_rules.read");
+
+    let active_public = public_read_value();
+    let deprecated_public = capability_value(
+        "campus.public_rules.read",
+        "Read",
+        "PublicCampusFact",
+        "CampusPublic",
+        "Never",
+        "Allow",
+        "Deprecated",
+    );
+    let revoked_public = capability_value(
+        "campus.public_rules.read",
+        "Read",
+        "PublicCampusFact",
+        "CampusPublic",
+        "Never",
+        "Allow",
+        "Revoked",
+    );
+    let linkout_public = capability_value(
+        "campus.public_rules.read",
+        "Linkout",
+        "PublicCampusFact",
+        "CampusPublic",
+        "FirstPartyDefaultOnly",
+        "Allow",
+        "Active",
+    );
+    let active_tenant = capability_value(
+        "campus.public_rules.read",
+        "Read",
+        "UserProfile",
+        "TenantPrivateUser",
+        "Never",
+        "Ask",
+        "Active",
+    );
+    let deprecated_tenant = capability_value(
+        "campus.public_rules.read",
+        "Read",
+        "UserProfile",
+        "TenantPrivateUser",
+        "Never",
+        "Ask",
+        "Deprecated",
+    );
+
+    let cases: &[(serde_json::Value, serde_json::Value)] = &[
+        (active_public.clone(), active_public.clone()),
+        (active_public.clone(), deprecated_public.clone()),
+        (deprecated_public.clone(), active_public.clone()),
+        (active_public.clone(), revoked_public.clone()),
+        (active_public.clone(), linkout_public.clone()),
+        (active_public.clone(), active_tenant.clone()),
+        (active_tenant.clone(), deprecated_tenant.clone()),
+        (deprecated_tenant.clone(), active_public.clone()),
+    ];
+
+    for (old_value, new_value) in cases {
+        let old_reg = registry_from_value(old_value);
+        let new_reg = registry_from_value(new_value);
+        let old_def = old_reg.find(&id);
+        let new_def = new_reg.find(&id);
+        let registry_result = compare_capability_policy(&old_reg, &new_reg, &id);
+        let definition_result = compare_capability_definitions(old_def, new_def);
+        assert_eq!(
+            registry_result, definition_result,
+            "definition classifier must agree with registry comparator"
+        );
+    }
+}
+
+#[test]
+fn definition_classifier_handles_none_added_removed_revoked_and_all_axes() {
+    let id = parsed_capability_id("campus.public_rules.read");
+
+    let active = registry_from_value(&public_read_value());
+    let active_def = active.find(&id).expect("active definition exists");
+
+    let deprecated = registry_from_value(&capability_value(
+        "campus.public_rules.read",
+        "Read",
+        "PublicCampusFact",
+        "CampusPublic",
+        "Never",
+        "Allow",
+        "Deprecated",
+    ));
+    let deprecated_def = deprecated.find(&id).expect("deprecated definition exists");
+
+    let revoked = registry_from_value(&capability_value(
+        "campus.public_rules.read",
+        "Read",
+        "PublicCampusFact",
+        "CampusPublic",
+        "Never",
+        "Allow",
+        "Revoked",
+    ));
+    let revoked_def = revoked.find(&id).expect("revoked definition exists");
+
+    let policy_axes_changed = registry_from_value(&capability_value(
+        "campus.public_rules.read",
+        "Read",
+        "UserProfile",
+        "TenantPrivateUser",
+        "Never",
+        "Ask",
+        "Active",
+    ));
+    let policy_axes_changed_def = policy_axes_changed
+        .find(&id)
+        .expect("policy-axes-changed definition exists");
+
+    let axis_changed = registry_from_value(&capability_value(
+        "campus.public_rules.read",
+        "Linkout",
+        "PublicCampusFact",
+        "CampusPublic",
+        "FirstPartyDefaultOnly",
+        "Allow",
+        "Active",
+    ));
+    let axis_changed_def = axis_changed
+        .find(&id)
+        .expect("axis-changed definition exists");
+
+    assert_eq!(
+        compare_capability_definitions(None, None),
+        CapabilityPolicyChange::Unchanged
+    );
+    assert_eq!(
+        compare_capability_definitions(None, Some(active_def)),
+        CapabilityPolicyChange::ExpansionRequiresReapproval
+    );
+    assert_eq!(
+        compare_capability_definitions(Some(active_def), None),
+        CapabilityPolicyChange::RemovedOrRevoked
+    );
+    assert_eq!(
+        compare_capability_definitions(Some(active_def), Some(revoked_def)),
+        CapabilityPolicyChange::RemovedOrRevoked
+    );
+    assert_eq!(
+        compare_capability_definitions(Some(active_def), Some(active_def)),
+        CapabilityPolicyChange::Unchanged
+    );
+    assert_eq!(
+        compare_capability_definitions(Some(active_def), Some(deprecated_def)),
+        CapabilityPolicyChange::Narrowed
+    );
+    assert_eq!(
+        compare_capability_definitions(Some(deprecated_def), Some(active_def)),
+        CapabilityPolicyChange::ExpansionRequiresReapproval
+    );
+    assert_eq!(
+        compare_capability_definitions(Some(active_def), Some(policy_axes_changed_def)),
+        CapabilityPolicyChange::ExpansionRequiresReapproval
+    );
+    assert_eq!(
+        compare_capability_definitions(Some(active_def), Some(axis_changed_def)),
+        CapabilityPolicyChange::ExpansionRequiresReapproval
+    );
+}
+
+#[test]
+fn definition_classifier_uses_complete_definition_not_digest_or_caller_hint() {
+    let id = parsed_capability_id("campus.public_rules.read");
+
+    let active = registry_from_value(&public_read_value());
+    let active_def = active.find(&id).expect("active definition exists");
+
+    let deprecated = registry_from_value(&capability_value(
+        "campus.public_rules.read",
+        "Read",
+        "PublicCampusFact",
+        "CampusPublic",
+        "Never",
+        "Allow",
+        "Deprecated",
+    ));
+    let deprecated_def = deprecated.find(&id).expect("deprecated definition exists");
+
+    let axis_changed = registry_from_value(&capability_value(
+        "campus.public_rules.read",
+        "Linkout",
+        "PublicCampusFact",
+        "CampusPublic",
+        "FirstPartyDefaultOnly",
+        "Allow",
+        "Active",
+    ));
+    let axis_changed_def = axis_changed
+        .find(&id)
+        .expect("axis-changed definition exists");
+
+    assert_ne!(
+        active_def.definition_digest(),
+        deprecated_def.definition_digest(),
+        "fixture must produce distinct digests"
+    );
+    assert_ne!(
+        active_def.definition_digest(),
+        axis_changed_def.definition_digest(),
+        "fixture must produce distinct digests"
+    );
+
+    assert_eq!(
+        compare_capability_definitions(Some(active_def), Some(deprecated_def)),
+        CapabilityPolicyChange::Narrowed,
+        "complete definition axes drive classification, not digest inequality alone"
+    );
+    assert_eq!(
+        compare_capability_definitions(Some(active_def), Some(axis_changed_def)),
+        CapabilityPolicyChange::ExpansionRequiresReapproval,
+        "axis change must be classified as expansion, not narrowed"
+    );
+    assert_eq!(
+        compare_capability_definitions(Some(deprecated_def), Some(active_def)),
+        CapabilityPolicyChange::ExpansionRequiresReapproval,
+        "status reactivation is an expansion regardless of other axis agreement"
     );
 }

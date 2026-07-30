@@ -2,15 +2,15 @@
 
 ## Metadata
 
-- `Status`: Accepted `market-lifecycle/v0` contract; historical `B1-0` established the contract, while canonical `M20-B1` package/catalog, `M20-B2` capability-registry and bounded `M20-B3-s1` managed-installation aggregate/in-memory repository evidence are implemented; durable installation/grant/update repositories and production composition remain planned; pure invocation resolver and call-time recheck are adopted as items 7–8
+- `Status`: Accepted `market-lifecycle/v0` contract; historical `B1-0` established the contract, while canonical `M20-B1` package/catalog, `M20-B2` capability-registry, bounded `M20-B3-s1` managed-installation aggregate/in-memory repository evidence and bounded `M20-B4` pure grant aggregate/semantic in-memory repository/replay evidence are implemented; durable installation/grant/update repositories and production composition remain planned; pure invocation resolver and call-time recheck are adopted as items 7–8
 - `Version`: `market-lifecycle/v0`
-- `Last Review`: `2026-07-29`
+- `Last Review`: `2026-07-30`
 - `Owning Plan`: [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)
 - `Large-module Blueprint`: [`../plan/modules/30-market-package-lifecycle.md`](../plan/modules/30-market-package-lifecycle.md)
 - `Counterpart Contracts`: [`plugin-package.md`](plugin-package.md), [`invocation-resolution.md`](invocation-resolution.md), [`permissions.md`](permissions.md), [`agent-plugin-boundary.md`](agent-plugin-boundary.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for state ownership, [`agent-runtime.md`](agent-runtime.md) for run/effect state, and [`invocation-resolution.md`](invocation-resolution.md) for the adopted projection/recheck decision shapes
-- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); `M20-B2` and `M20-B3-s1` are supporting domain evidence only, mint no production grant/enable evidence and promote no acceptance row
-- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` package validation/catalog metadata; `crates/platform-core/src/market/capability.rs` for the bounded `M20-B2` capability registry; `crates/platform-core/src/market/installation.rs` for the bounded `M20-B3-s1` managed-installation aggregate and semantic in-memory repository; `crates/platform-core/src/invocation.rs` for adopted resolver/recheck items 7–8; later durable lifecycle may split `market.rs` when cohesion or size requires it
+- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); `M20-B2`, `M20-B3-s1` and the bounded `M20-B4` grant implementation are supporting domain evidence only, mint no production grant/enable evidence and promote no acceptance row; B5 authority assembly and production composition remain required
+- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` package validation/catalog metadata; `crates/platform-core/src/market/capability.rs` for the bounded `M20-B2` capability registry; `crates/platform-core/src/market/installation.rs` for the bounded `M20-B3-s1` managed-installation aggregate and semantic in-memory repository; `crates/platform-core/src/market/grant.rs` for the bounded `M20-B4` pure grant aggregate, replay evidence and semantic in-memory repository; `crates/platform-core/src/invocation.rs` for adopted resolver/recheck items 7–8; later durable lifecycle may split `market.rs` when cohesion or size requires it
 
 ## 1. Scope and authority
 
@@ -342,6 +342,505 @@ Installation MUST NOT imply a grant. Grant creation, replacement and revoke MUST
 
 A staged update that adds capabilities, widens object scope, changes capability class, source policy or execution identity, or otherwise increases authority MUST NOT auto-apply or auto-enable. Exact unchanged permissions MAY be eligible for later rollout policy, but still require an exact tested update target and a durable receipt.
 
+### M20-B4 grant-domain surface
+
+This subsection owns the exact public contract of the implemented bounded `M20-B4` grant-domain slice: a pure grant aggregate plus a semantic in-memory repository fake under `crate::market::grant`, with decide/evolve/replay and focused Rust evidence. The contract and bounded implementation are accepted as supporting domain evidence only. This slice mints no production grant, assembles no `EnablePreconditionEvidence`, creates no invocation candidate, executes no tool, writes no M30 intent and implements no M90 persistence. It specializes `M20-LC-007` and `M20-LC-008` without claiming B5 authority assembly or production composition.
+
+#### Module boundary and reused authority
+
+The Rust module boundary is `crate::market::grant` under `crates/platform-core/src/market/grant.rs`, with `crates/platform-core/src/market.rs` declaring `pub mod grant;`. The existing `market.rs`, `market::capability` and `market::installation` implementations MUST NOT be moved or rewritten. Public grant lifecycle paths live under `crate::market::grant`.
+
+No Serde derives or public wire deserialization are admitted for grant-domain values. No new framework, database or network dependency is admitted.
+
+The slice MUST reuse, not alias or rewrap, exact existing nominal types from `crate::identity` (`TenantId`, `UserId`) and from `crate::invocation` (`CatalogRevision`, `PackageId`, `PackageVersion`, `InstallationId`, `InstallationRevision`, `CapabilityId`, `ObjectScope`, `ConfirmationPolicy`, `GrantSnapshotId`, `GrantVersion`, `GrantState`, `CapabilityGrantSnapshot`, `Sha256Digest`), and from `crate::market::capability` (`CapabilityDefinition`, `CapabilityPolicyChange`, `CapabilityRegistry`, `CapabilityRegistryRevision`, `CapabilityStatus`, `ScopeKind`, `compare_capability_definitions`), plus `crate::market::ValidatedPackageManifest` and `crate::market::installation::{InstallationSnapshot, ManagedInstallationState}`. The existing `GrantSnapshotId` is the immutable grant stream/snapshot-lineage identity used by the adopted resolver; it stays stable for one grant aggregate. `GrantVersion` distinguishes every accepted state transition. B4 MUST NOT add a second `GrantId` or change the existing invocation structs.
+
+One bounded prerequisite extension is admitted in `crate::market::capability`:
+
+```rust
+pub fn compare_capability_definitions(
+    old: Option<&CapabilityDefinition>,
+    new: Option<&CapabilityDefinition>,
+) -> CapabilityPolicyChange;
+```
+
+It owns the existing `None`/added/removed/revoked and axis-change semantics. Existing `compare_capability_policy` MUST delegate to it. B4 `decide`/`evolve`/`replay` call this helper; they MUST NOT copy its classification table or trust a caller-supplied `CapabilityPolicyChange`.
+
+#### Public declaration surface
+
+The bounded implementation MUST name exactly these public items; fields remain private unless this subsection explicitly says otherwise:
+
+```text
+GrantConstructionError
+GrantDecisionError
+GrantReplayError
+GrantCommandId
+GrantApprovalId
+GrantEventSequence
+GrantScope
+GrantInvalidationReason
+GrantChangeClass
+GrantAdmissionEvidence
+GrantCommand
+GrantEventKind
+GrantEvent
+GrantAggregate
+GrantSnapshot                    // type alias to GrantAggregate
+decide
+evolve
+replay
+GrantRepository
+GrantCommandReceipt
+GrantCommandOutcome
+GrantRepositoryError
+InMemoryGrantRepository
+```
+
+No public Serde construction, public struct fields, `Default` for authority-bearing values, unchecked constructor, arbitrary insertion hook, generic record store, time/network/database/framework type or caller-supplied authority boolean is admitted.
+
+#### Checked IDs and sequence
+
+The existing `GrantSnapshotId` is reused with private fields, but Issue/admission construction adds one exact semantic grammar check:
+
+```text
+grant:[A-Za-z0-9._:-]{1,122}
+```
+
+The generic invocation parser alone is not sufficient evidence of B4 identity validity. A noncanonical existing `GrantSnapshotId` is rejected before any command/event is built.
+
+The existing `GrantVersion` is reused with private fields. Expected versions supplied to non-Issue command constructors MUST have the exact canonical form:
+
+```text
+grant-version:[1-9][0-9]*
+```
+
+The decimal suffix MUST parse as nonzero `u64`, with no sign, whitespace, leading zero or overflow. Accepted event versions are still derived only from `GrantEventSequence`; external expected versions never mint post-state authority.
+
+`GrantCommandId` is private-field checked text with exact grammar:
+
+```text
+grant-cmd:[A-Za-z0-9._:-]{1,118}
+```
+
+`GrantApprovalId` is private-field checked text with exact grammar:
+
+```text
+grant-approval:[A-Za-z0-9._:-]{1,113}
+```
+
+It identifies a trusted explicit review decision. Model output cannot mint or request it. Possession of the string alone is not sufficient to construct admission evidence because the evidence constructor is not public.
+
+`GrantEventSequence` is a private `u64`; the first accepted event is `1`; zero is invalid; the successor uses checked arithmetic and overflow fails closed.
+
+Version rule: after every accepted event,
+
+```text
+GrantVersion = "grant-version:<event-sequence>"
+```
+
+`evolve` independently recomputes the version and rejects forged redundant values.
+
+#### Closed grant scope algebra
+
+`GrantScope` is a private-field value with only these constructors:
+
+```rust
+pub fn campus_public() -> Result<GrantScope, GrantConstructionError>;
+
+pub fn tenant_private_user(
+    tenant_id: TenantId,
+    user_id: UserId,
+) -> Result<GrantScope, GrantConstructionError>;
+```
+
+Read-only accessors expose `scope_kind`, `object_scope`, and optional tenant/user bindings. Exact forms:
+
+- `CampusPublic` maps to existing `ObjectScope::parse("scope:campus-public")`.
+- `TenantPrivateUser` stores the exact tenant/user values and maps to `scope:tenant-user:sha256:<64 lowercase hex>`.
+- The tenant-user hash input is domain separator `market-grant-tenant-user-scope/v0\0`, followed by tenant ID and user ID, each as unsigned 64-bit big-endian UTF-8 byte length plus exact bytes.
+- No Unicode normalization occurs.
+- `OperatorAdministrative` has no B4 constructor and fails closed.
+- No constructor accepts an arbitrary `ObjectScope` string.
+- Admission evidence and command decision MUST reject a tenant-private scope whose tenant/user differs from the grant authority binding.
+
+#### Explicit admission evidence
+
+`GrantAdmissionEvidence` is public as a read-only value because future B5 code must carry it, but its minting constructor is exactly `pub(in crate::market)`. External callers cannot assert approval.
+
+The constructor signature is exactly:
+
+```rust
+#[allow(clippy::too_many_arguments)]
+pub(in crate::market) fn from_authority_bindings(
+    snapshot_id: GrantSnapshotId,
+    approval_id: GrantApprovalId,
+    installation: &InstallationSnapshot,
+    package: &ValidatedPackageManifest,
+    capability_id: CapabilityId,
+    scope: GrantScope,
+    confirmation_policy: ConfirmationPolicy,
+    registry: &CapabilityRegistry,
+) -> Result<Self, GrantConstructionError>;
+```
+
+The constructor internally extracts tenant/user/installation identity, exact installation revision, catalog/package pin and capability-manifest digest. Read-only accessors use the exact binding names plus `catalog_revision`, `package_id`, `package_version`, `package_digest`, `capability_definition`, `capability_registry_revision`, `capability_definition_digest` and `evidence_digest`; no mutable accessor exists.
+
+It binds all of:
+
+```text
+GrantSnapshotId
+GrantApprovalId
+TenantId
+UserId
+InstallationId
+expected InstallationRevision
+CatalogRevision
+PackageId
+PackageVersion
+package Sha256Digest
+CapabilityId
+GrantScope
+ConfirmationPolicy
+capability-manifest Sha256Digest
+CapabilityRegistryRevision
+complete cloned CapabilityDefinition binding, including its Sha256Digest
+evidence Sha256Digest
+```
+
+The evidence digest uses domain separator `market-grant-admission-evidence/v0\0` and length-prefixed canonical fields, including every exact `CapabilityDefinition` axis and enum tag.
+
+The constructor receives the actual typed `InstallationSnapshot`, `ValidatedPackageManifest`, and `CapabilityRegistry` plus the exact `CapabilityId`, not separately caller-supplied installation/package/registry bindings and not caller-supplied risk/scope/status booleans. It cross-checks the installation package pin against the manifest, requires the capability in the exact manifest, performs exact registry lookup, and internally clones the registry revision and found `CapabilityDefinition`. It MUST reject:
+
+- missing identity coherence;
+- noncanonical B4 `GrantSnapshotId`;
+- terminal `ManagedInstallationState::Revoked|Uninstalled`;
+- installation/manifest package ID, version, package digest or capability-manifest digest mismatch; catalog revision is bound only from the installation pin and is not attributed to `ValidatedPackageManifest`;
+- capability absent from the exact package manifest;
+- capability missing from the exact registry;
+- non-`Active` capability definition;
+- `ScopeKind` mismatch;
+- `OperatorAdministrative`;
+- tenant/user mismatch;
+- `ConfirmationPolicy::Allow` when the definition default is `Ask`;
+- any evidence-digest mismatch during decision/replay.
+
+Issue accepts only an active actual capability definition from the supplied registry and a nonterminal exact installation/package binding. These typed inputs prove coherence only: `ValidatedPackageManifest` remains non-authoritative declaration data, and B4 does not prove that the catalog revision is currently published/runnable or that the installation snapshot is transaction-current. B5 MUST obtain these carriers from the active catalog/installation repositories in one authority-assembly transaction. Replace compares the aggregate's prior complete definition with the evidence's actual complete definition via `compare_capability_definitions`; neither the command nor the evidence carries a caller-selected change classification.
+
+B4 admits **explicit reviewed grants only**. It does not implement auto-grant issuance. `AutoGrantDisposition` remains B2 policy input for a later separately authorized composition/bootstrap contract. There is no B4 `AutoGrant`, `Trusted`, `Approved(bool)` or equivalent bypass.
+
+#### Grant change classification
+
+`GrantChangeClass` is exactly:
+
+```rust
+pub enum GrantChangeClass {
+    Unchanged,
+    Narrowed,
+    ReapprovalRequired,
+}
+```
+
+For replacement, grant code first obtains `CapabilityPolicyChange` from `compare_capability_definitions(Some(old), Some(new))` and then computes:
+
+- exact scope, confirmation policy, capability-manifest digest and definition digest with computed `CapabilityPolicyChange::Unchanged` is `Unchanged`; registry revision may advance without changing this classification;
+- `Allow -> Ask` or `CapabilityPolicyChange::Narrowed`, with no other expansion, is `Narrowed`;
+- `Ask -> Allow`, capability-manifest change, computed `CapabilityPolicyChange::ExpansionRequiresReapproval` or any other widening is `ReapprovalRequired`;
+- a missing/revoked/non-active new capability definition cannot construct replacement evidence at all; the existing grant is narrowed through MarkStale/Revoke rather than Replace;
+- scope change is not classified for in-stream replacement: it is rejected as `ScopeChangeRequiresNewGrant` and requires revoke plus a new `GrantSnapshotId`/Issue flow;
+- every Replace requires a fresh `GrantApprovalId`, even when unchanged or narrowed;
+- `ReapprovalRequired` therefore cannot be accepted through an automatic path.
+
+#### State graph
+
+The aggregate uses existing `GrantState` exactly:
+
+```text
+Issue    : absence                 -> Active
+Replace  : Active|Stale|Expired    -> Active
+MarkStale: Active                  -> Stale
+Expire   : Active|Stale            -> Expired
+Revoke   : Active|Stale|Expired    -> Revoked
+```
+
+Rules:
+
+- `Revoked` is terminal for that `GrantSnapshotId`.
+- Regrant after revoke uses a new `GrantSnapshotId` and a fresh explicit approval.
+- Replace requires exact expected version, exact same scope, fresh complete evidence and a fresh approval ID.
+- MarkStale carries one closed `GrantInvalidationReason`.
+- Repeated same-state transitions are rejected; they are not silent no-ops.
+- No command widens scope or changes tenant/user/installation/capability identity in place.
+- State narrowing is immediate for future projections and current call-time recheck; historical projections remain immutable.
+
+`GrantInvalidationReason` is exactly:
+
+```rust
+pub enum GrantInvalidationReason {
+    CapabilityManifestChanged,
+    CapabilityDefinitionChanged,
+    InstallationChanged,
+    PolicyChanged,
+}
+```
+
+#### Commands and errors
+
+`GrantCommand` is a private-action, private-field value. Checked associated constructors are exactly:
+
+```rust
+pub fn issue(
+    command_id: GrantCommandId,
+    evidence: GrantAdmissionEvidence,
+) -> Result<Self, GrantConstructionError>;
+
+pub fn replace(
+    command_id: GrantCommandId,
+    expected_version: GrantVersion,
+    evidence: GrantAdmissionEvidence,
+) -> Result<Self, GrantConstructionError>;
+
+pub fn mark_stale(
+    command_id: GrantCommandId,
+    snapshot_id: GrantSnapshotId,
+    expected_version: GrantVersion,
+    reason: GrantInvalidationReason,
+) -> Result<Self, GrantConstructionError>;
+
+pub fn expire(
+    command_id: GrantCommandId,
+    snapshot_id: GrantSnapshotId,
+    expected_version: GrantVersion,
+) -> Result<Self, GrantConstructionError>;
+
+pub fn revoke(
+    command_id: GrantCommandId,
+    snapshot_id: GrantSnapshotId,
+    expected_version: GrantVersion,
+) -> Result<Self, GrantConstructionError>;
+```
+
+Every command carries `GrantCommandId` and `GrantSnapshotId`. Issue and Replace obtain the snapshot identity only from their `GrantAdmissionEvidence`; there is no second caller-supplied identity to disagree with it. Every non-Issue command carries exact expected `GrantVersion`. Read-only accessors are exactly `command_id` and `snapshot_id`; actions/payloads remain private.
+
+`GrantConstructionError` is exactly:
+
+```text
+InvalidCommandId
+InvalidApprovalId
+InvalidSnapshotId
+InvalidGrantVersion
+InvalidEventSequence
+ScopeConstructionFailed
+CrossTenantScope
+InstallationTerminal
+PackageBindingMismatch
+CapabilityNotDeclared
+CapabilityMissing
+CapabilityInactive
+ScopeKindMismatch
+ConfirmationPolicyTooPermissive
+ForbiddenAdministrativeScope
+EvidenceIncoherent
+```
+
+`GrantDecisionError` is exactly:
+
+```text
+AggregateMissing
+AggregateAlreadyPresent
+AuthorityConflict
+ApprovalAlreadyConsumed
+SnapshotIdMismatch
+TerminalState
+VersionMismatch
+AdmissionEvidenceMismatch
+ScopeChangeRequiresNewGrant
+IllegalTransition
+SequenceOverflow
+```
+
+`AuthorityConflict` and `ApprovalAlreadyConsumed` are repository-semantic `GrantDecisionError` receipts; pure single-aggregate `decide` never queries global indexes and never emits those two variants. The repository may synthesize and persist those typed rejected outcomes before invoking `decide`.
+
+Decision precedence is split across the semantic repository and pure aggregate decision:
+
+```text
+global command-id exact replay/conflict
+→ Issue/Replace consumed-approval uniqueness
+→ Issue current-authority-tuple uniqueness
+→ aggregate missing/already present as applicable
+→ snapshot identity
+→ terminal state
+→ expected version
+→ admission evidence / fresh approval / scope immutability
+→ legal transition
+→ sequence overflow
+```
+
+Errors expose stable categories only. `Debug`/`Display` MUST NOT disclose rejected IDs, approval IDs, tenant/user values or source payloads.
+
+#### Events, aggregate and replay
+
+`GrantEventKind` is exactly:
+
+```rust
+Issued
+Replaced
+MarkedStale
+Expired
+Revoked
+```
+
+`GrantEvent` is a private-payload envelope carrying:
+
+```text
+GrantEventSequence
+post GrantVersion
+GrantCommandId
+GrantSnapshotId
+private typed payload
+```
+
+Its read-only accessors are exactly `sequence`, `post_version`, `command_id`, `snapshot_id`, `kind`, `change_class -> Option<GrantChangeClass>` and `invalidation_reason -> Option<GrantInvalidationReason>`.
+
+Issue carries every initial binding. Replace carries complete replacement authority, fresh approval and `GrantChangeClass`. MarkStale carries its exact reason. No event contains arbitrary prose or raw secret material.
+
+`GrantAggregate` has private fields and read-only accessors for:
+
+```text
+GrantSnapshotId
+TenantId
+UserId
+InstallationId
+last admitted InstallationRevision
+last admitted catalog revision, package ID/version/digest
+CapabilityId
+GrantScope
+ConfirmationPolicy
+capability-manifest digest
+capability-registry revision
+complete last admitted CapabilityDefinition binding and its digest
+last GrantApprovalId
+GrantState
+GrantVersion
+last GrantEventSequence
+```
+
+`GrantSnapshot` is a type alias to `GrantAggregate`.
+
+Pure functions follow the same shape as installation:
+
+```rust
+pub fn decide(
+    current: Option<&GrantAggregate>,
+    command: &GrantCommand,
+) -> Result<GrantEvent, GrantDecisionError>;
+
+pub fn evolve(
+    current: Option<GrantAggregate>,
+    event: &GrantEvent,
+) -> Result<GrantAggregate, GrantReplayError>;
+
+pub fn replay<'a>(
+    events: impl IntoIterator<Item = &'a GrantEvent>,
+) -> Result<Option<GrantAggregate>, GrantReplayError>;
+```
+
+Replay errors MUST distinguish:
+
+```text
+InitialEventNotIssued
+SequenceGap
+SequenceDuplicate
+SequenceOverflow
+DuplicateCommandId
+DuplicateApprovalId
+PostTerminalEvent
+IllegalTransition
+VersionMismatch
+SnapshotIdentityMismatch
+AuthorityBindingMismatch
+AdmissionEvidenceMismatch
+```
+
+Replay independently verifies version, identity, scope, approval, complete capability-definition bindings, computed policy-change class and evidence redundant fields. Every persisted event MUST be reachable through `decide`.
+
+#### Resolver projection
+
+`GrantAggregate::to_resolver_snapshot()` returns existing `CapabilityGrantSnapshot` with:
+
+- stable aggregate `GrantSnapshotId`;
+- current `GrantVersion`;
+- exact tenant/user/installation/capability/scope/confirmation/manifest bindings;
+- exact current `GrantState`.
+
+It does not invoke the resolver and does not prove installation enablement, catalog validity, policy admission, source/execution admission or production readiness.
+
+#### Semantic repository and idempotency
+
+The semantic repository port is exactly:
+
+```rust
+pub trait GrantRepository {
+    fn execute(
+        &mut self,
+        command: GrantCommand,
+    ) -> Result<GrantCommandReceipt, GrantRepositoryError>;
+
+    fn load_exact(
+        &self,
+        id: &GrantSnapshotId,
+    ) -> Result<Option<GrantSnapshot>, GrantRepositoryError>;
+
+    fn load_current_for_authority(
+        &self,
+        tenant_id: &TenantId,
+        user_id: &UserId,
+        installation_id: &InstallationId,
+        capability_id: &CapabilityId,
+        scope: &GrantScope,
+    ) -> Result<Option<GrantSnapshot>, GrantRepositoryError>;
+
+    fn event_history(
+        &self,
+        id: &GrantSnapshotId,
+    ) -> Result<Vec<GrantEvent>, GrantRepositoryError>;
+}
+```
+
+The in-memory fake keeps:
+
+- aggregate/event streams by `GrantSnapshotId`;
+- global `GrantCommandId -> {complete command, receipt}` ledger;
+- global consumed `GrantApprovalId -> {GrantSnapshotId, evidence digest}` index for accepted Issue/Replace only;
+- one current non-revoked grant per exact `(tenant,user,installation,capability,scope)` authority tuple;
+- a narrowly named one-shot pre-commit failure injection.
+
+Repository laws:
+
+- identical command ID plus identical complete command returns the exact prior receipt with no append;
+- same command ID plus different command returns `CommandConflict` before inspecting current state;
+- accepted and domain-rejected commands both persist receipts;
+- persistence failure occurs before aggregate/event/receipt/current-index/approval-index mutation and records nothing;
+- a `GrantApprovalId` already consumed by any accepted Issue/Replace returns a persisted `GrantDecisionError::ApprovalAlreadyConsumed` receipt for a different command; rejected commands and persistence failures never consume approval;
+- issuing a second non-revoked current grant for the exact authority tuple returns an `Ok(GrantCommandReceipt)` with persisted `GrantDecisionError::AuthorityConflict`; it records no grant event/aggregate/index mutation, and exact retry returns that same rejection even if the other grant is later revoked;
+- stale and expired grants remain current denial-side authority; revoke releases the current tuple for a new grant identity while preserving old history;
+- `load_current_for_authority` returns zero or one exact current grant and fails closed on corrupt multiplicity;
+- no arbitrary insert/list/query API is admitted.
+
+`GrantCommandOutcome` is exactly accepted `{event,snapshot}` or rejected `{error}`.
+
+`GrantRepositoryError` is exactly:
+
+```rust
+CommandConflict
+InjectedPersistenceFailure
+CorruptEventHistory(GrantReplayError)
+CorruptAuthorityIndex
+DecisionRejected(GrantDecisionError)
+```
+
+#### B4 explicit non-claims
+
+The accepted B4 contract is accompanied by bounded implementation evidence in `grant.rs`, `InMemoryGrantRepository`, `market::grant::tests` and the external grant test. That evidence does not enable installations, assemble `EnablePreconditionEvidence`, create invocation candidates, execute tools, write M30 intents, implement M90 persistence, or implement auto-grant issuance. Existing acceptance statuses remain unchanged; B5 authority assembly is still required to obtain the active catalog/installation carriers in one transaction before a production grant can be issued.
+
 ## 5. Update and rollback
 
 ### M20-LC-009 — update and rollback pin exact targets
@@ -408,10 +907,10 @@ Package update, disable or revoke MUST change only future projections and curren
 This contract does not own:
 
 - anonymous browse/detail delivery through M10/M80 application/query adapters remains planned (`MARKET-001`); the `M20-B1` (historical `B1-1`) anonymous metadata domain read model is implemented but is not delivery evidence;
-- durable installation/grant/enable/disable/upgrade mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); the bounded `M20-B3-s1` managed-installation aggregate and semantic in-memory repository are implemented but issue no production enable evidence;
+- durable installation/grant/enable/disable/upgrade mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); the bounded `M20-B3-s1` managed-installation aggregate and semantic in-memory repository are implemented but issue no production enable evidence; the bounded `M20-B4` pure grant aggregate, semantic in-memory repository and replay evidence are implemented but mint no production grant and promote no acceptance row;
 - a production database/repository transaction or TOCTOU closure (planned);
 - provider, network, MCP, daemon HTTP/SSE or UI adapters;
 - external tool execution, durable journal or crash recovery;
 - M30 `EffectIntent`, M40 executor dispatch, or M51 process isolation.
 
-Current repository status: the pure P0a invocation resolver and call-time recheck with typed in-memory snapshots and synthetic fixtures are implemented and adopted (`MARKET-005`/`MARKET-006`). `M20-B1` implements the bounded typed package-manifest loader, canonical declaration digests and immutable anonymous catalog metadata domain read model in `crate::market`. `M20-B2` implements the typed immutable capability-registry loader/read model, exact digests, derived risk/auto-grant policy and permission-change classification without creating grants. `M20-B3-s1` implements the pure managed-installation aggregate, decide/evolve/replay, exact pins/configuration, terminal transitions, deny-side resolver projection and atomic semantic in-memory repository without a production enable-evidence issuer. No production database, grant aggregate, update/rollback, application composition or M10/M80 browse delivery exists yet, and no current first-party manifest is made runnable by these bounded slices. Future implementation slices and their intended bindings are listed in [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv) and remain `planned` until their exact evidence exists.
+Current repository status: the pure P0a invocation resolver and call-time recheck with typed in-memory snapshots and synthetic fixtures are implemented and adopted (`MARKET-005`/`MARKET-006`). `M20-B1` implements the bounded typed package-manifest loader, canonical declaration digests and immutable anonymous catalog metadata domain read model in `crate::market`. `M20-B2` implements the typed immutable capability-registry loader/read model, exact digests, derived risk/auto-grant policy and permission-change classification without creating grants. `M20-B3-s1` implements the pure managed-installation aggregate, decide/evolve/replay, exact pins/configuration, terminal transitions, deny-side resolver projection and atomic semantic in-memory repository without a production enable-evidence issuer. `M20-B4` implements the bounded pure grant aggregate, explicit admission evidence, decide/evolve/replay, resolver projection and atomic semantic in-memory repository under `crate::market::grant`; this supporting evidence mints no production grant and promotes no acceptance row. No production database, durable grant/update/rollback repository, B5 authority assembly, application composition or M10/M80 browse delivery exists yet, and no current first-party manifest is made runnable by these bounded slices. Future production/integration slices and their intended bindings are listed in [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv) and remain `planned` until their exact evidence exists.
