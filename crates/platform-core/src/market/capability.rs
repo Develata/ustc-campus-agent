@@ -383,17 +383,16 @@ pub fn load_capability_registry(
     })
 }
 
-/// Pure policy-change comparison for one capability id across two validated
-/// registries.
+/// Pure definition-to-definition policy-change classifier. Owns the complete
+/// `None`/added/removed/revoked and axis-change semantics; both the registry
+/// comparator and the grant domain call this helper so no classification table
+/// is duplicated.
 #[must_use]
-pub fn compare_capability_policy(
-    old: &CapabilityRegistry,
-    new: &CapabilityRegistry,
-    id: &CapabilityId,
+pub fn compare_capability_definitions(
+    old: Option<&CapabilityDefinition>,
+    new: Option<&CapabilityDefinition>,
 ) -> CapabilityPolicyChange {
-    let old_definition = old.find(id);
-    let new_definition = new.find(id);
-    match (old_definition, new_definition) {
+    match (old, new) {
         (None, None) => CapabilityPolicyChange::Unchanged,
         (None, Some(_)) => CapabilityPolicyChange::ExpansionRequiresReapproval,
         (Some(_), None) => CapabilityPolicyChange::RemovedOrRevoked,
@@ -407,6 +406,17 @@ pub fn compare_capability_policy(
             }
         }
     }
+}
+
+/// Pure policy-change comparison for one capability id across two validated
+/// registries.
+#[must_use]
+pub fn compare_capability_policy(
+    old: &CapabilityRegistry,
+    new: &CapabilityRegistry,
+    id: &CapabilityId,
+) -> CapabilityPolicyChange {
+    compare_capability_definitions(old.find(id), new.find(id))
 }
 
 fn classify_policy_change(
