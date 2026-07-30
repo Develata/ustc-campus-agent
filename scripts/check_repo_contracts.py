@@ -2120,6 +2120,8 @@ PLATFORM_SESSION_TEST = "crates/platform-core/tests/platform_session.rs"
 PLATFORM_CAPABILITY_TEST = "crates/platform-core/tests/market_capability_registry.rs"
 PLATFORM_INSTALLATION_TEST = 'crates/platform-core/tests/market_installation_lifecycle.rs'
 PLATFORM_INSTALLATION_SOURCE = 'crates/platform-core/src/market/installation.rs'
+PLATFORM_GRANT_SOURCE = "crates/platform-core/src/market/grant.rs"
+PLATFORM_GRANT_TEST = "crates/platform-core/tests/market_grant_lifecycle.rs"
 PLATFORM_IDENTITY_KINDS = (
     "TenantId",
     "UserId",
@@ -2387,10 +2389,12 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/lib.rs',
  'src/market.rs',
  'src/market/capability.rs',
+ 'src/market/grant.rs',
  'src/market/installation.rs',
  'src/session.rs',
  'tests/invocation_resolution.rs',
  'tests/market_capability_registry.rs',
+ 'tests/market_grant_lifecycle.rs',
  'tests/market_installation_lifecycle.rs',
  'tests/market_package_catalog.rs',
  'tests/platform_identity.rs',
@@ -2399,6 +2403,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'tests/support/invocation_fixture_executor.rs')
 PLATFORM_IDENTITY_ADMITTED_REEXPORT = "pub use crate::identity::{TenantId, UserId};"
 PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
+PLATFORM_GRANT_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT = (
     "use crate::identity::{SessionId, TenantId, UserId};"
 )
@@ -2413,6 +2418,7 @@ PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT = (
 PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
     (PLATFORM_INVOCATION_SOURCE, PLATFORM_IDENTITY_ADMITTED_REEXPORT),
     (PLATFORM_INSTALLATION_SOURCE, PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT),
+    (PLATFORM_GRANT_SOURCE, PLATFORM_GRANT_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT),
 )
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
@@ -2422,8 +2428,9 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'invocation.rs': (),
  'lib.rs': ('identity', 'invocation', 'market', 'session'),
- 'market.rs': ('capability', 'installation'),
+ 'market.rs': ('capability', 'grant', 'installation'),
  'market/capability.rs': (),
+ 'market/grant.rs': (),
  'market/installation.rs': (),
  'session.rs': ()}
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
@@ -2465,6 +2472,7 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
             '#[cfg(test)] mod tests',
             'use super::*;'),
  'market.rs': ('pub mod capability;',
+               'pub mod grant;',
                'pub mod installation;',
                'use crate::invocation::{ CapabilityId, CatalogRevision, ComponentKind, PackageId, '
                'PackageVersion, Sha256Digest, };',
@@ -2482,6 +2490,31 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                           'use std::fmt;',
                           '#[cfg(test)] mod tests',
                           'use super::*;'),
+ 'market/grant.rs': ('use crate::identity::{TenantId, UserId};',
+                     'use crate::invocation::{ CapabilityGrantSnapshot, CapabilityId, '
+                     'CatalogRevision, ConfirmationPolicy, GrantSnapshotId, GrantState, '
+                     'GrantVersion, InstallationId, InstallationRevision, ObjectScope, '
+                     'PackageId, PackageVersion, Sha256Digest, };',
+                     'use crate::market::ValidatedPackageManifest;',
+                     'use crate::market::capability::{ AutoGrantDisposition, '
+                     'CapabilityDefinition, CapabilityPolicyChange, CapabilityRegistry, '
+                     'CapabilityRegistryRevision, CapabilityStatus, DataClass, EffectClass, '
+                     'ScopeKind, compare_capability_definitions, };',
+                     'use crate::market::installation::{InstallationSnapshot, '
+                     'ManagedInstallationState};',
+                     'use std::collections::{BTreeMap, BTreeSet};',
+                     'use std::error::Error;',
+                     'use std::fmt;',
+                     'pub type GrantSnapshot = GrantAggregate;',
+                     '#[cfg(test)] mod tests',
+                     'use super::*;',
+                     'use crate::invocation::{ComponentId, ComponentKind, ComponentVersion, '
+                     'ExecutionIdentity};',
+                     'use crate::market::capability::load_capability_registry;',
+                     'use crate::market::installation::{ InstallationCommand, '
+                     'InstallationCommandId, InstallationConfiguration, '
+                     'InstallationPackagePin, InstalledComponentPin, };',
+                     'use crate::market::load_package_manifest;'),
  'market/installation.rs': ('use crate::identity::{TenantId, UserId};',
                             'use crate::invocation::{ CatalogRevision, ComponentId, ComponentKind, '
                             'ComponentVersion, ExecutionIdentity, InstallationId, '
@@ -2512,6 +2545,7 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
  'lib.rs': (),
  'market.rs': (),
  'market/capability.rs': (),
+ 'market/grant.rs': ('category_error', 'parsed'),
  'market/installation.rs': (),
  'session.rs': ()}
 # Macro INVOCATION names are pinned too, not screened for `include!`. A splicing macro can be
@@ -2523,6 +2557,9 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_
  'lib.rs': ('assert', 'assert_eq', 'include_str', 'panic'),
  'market.rs': ('matches', 'write'),
  'market/capability.rs': ('assert', 'assert_eq', 'matches'),
+ 'market/grant.rs': ('assert', 'assert_eq', 'category_error', 'concat', 'format',
+                     'include_bytes', 'matches', 'panic', 'parsed', 'unreachable', 'vec',
+                     'write'),
  'market/installation.rs': ('assert_eq', 'format', 'matches', 'panic', 'vec', 'write'),
  'session.rs': ('assert', 'assert_eq', 'matches', 'panic', 'write')}
 PLATFORM_IDENTITY_ADMITTED_TEST_MACRO_INVOCATIONS = (
@@ -2537,6 +2574,48 @@ PLATFORM_IDENTITY_ADMITTED_TEST_MACRO_INVOCATIONS = (
     "panic",
     "stringify",
     "vec",
+)
+PLATFORM_GRANT_ADMITTED_IDENTITY_MACRO_ARGUMENTS = (
+    ("parsed", "TenantId,"),
+    ("parsed", "TenantId,"),
+    ("parsed", "TenantId,"),
+    ("parsed", "UserId,"),
+)
+# Macro names alone are a set and therefore admit duplicates. Freeze every invocation count, then
+# freeze `parsed!` arguments separately because that helper constructs typed authority values.
+# The latter closes same-count type substitutions without turning arbitrary assertion bodies into
+# repository-contract authority.
+PLATFORM_GRANT_ADMITTED_MACRO_INVOCATION_COUNTS = (
+    ("assert", 8),
+    ("assert_eq", 54),
+    ("category_error", 3),
+    ("concat", 1),
+    ("format", 9),
+    ("include_bytes", 2),
+    ("matches", 8),
+    ("panic", 2),
+    ("parsed", 54),
+    ("unreachable", 1),
+    ("vec", 1),
+    ("write", 1),
+)
+PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS = (
+    ("CapabilityId,", 4),
+    ("CatalogRevision,", 1),
+    ("ComponentId,", 1),
+    ("ComponentVersion,", 1),
+    ("ExecutionIdentity,", 1),
+    ("GrantApprovalId,", 5),
+    ("GrantApprovalId, approval", 1),
+    ("GrantCommandId,", 15),
+    ("GrantCommandId, command", 1),
+    ("GrantSnapshotId,", 9),
+    ("GrantSnapshotId, snapshot", 1),
+    ("GrantVersion,", 7),
+    ("InstallationCommandId,", 2),
+    ("InstallationId,", 1),
+    ("TenantId,", 3),
+    ("UserId,", 1),
 )
 # Rejecting sibling implementations whose self type NAMES a governed kind is still a blacklist.
 # A blanket `impl<T> Extension for T` names no kind and covers all six, so the sibling `impl`
@@ -2561,6 +2640,34 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'capability.rs': ('impl CapabilityDefini
                  'impl fmt::Display for $name',
                  'impl fmt::Display for IdentityValueError',
                  'impl-arg Into<String>'),
+ 'grant.rs': ('impl Error for $kind',
+              'impl Error for GrantRepositoryError',
+              'impl Fixture',
+              'impl GrantAdmissionEvidence',
+              'impl GrantAggregate',
+              'impl GrantApprovalId',
+              'impl GrantCommand',
+              'impl GrantCommandId',
+              'impl GrantCommandReceipt',
+              'impl GrantEvent',
+              'impl GrantEventSequence',
+              'impl GrantRepository for InMemoryGrantRepository',
+              'impl GrantScope',
+              'impl InMemoryGrantRepository',
+              'impl fmt::Debug for GrantAdmissionEvidence',
+              'impl fmt::Debug for GrantAggregate',
+              'impl fmt::Debug for GrantApprovalId',
+              'impl fmt::Debug for GrantCommand',
+              'impl fmt::Debug for GrantCommandId',
+              'impl fmt::Debug for GrantCommandOutcome',
+              'impl fmt::Debug for GrantCommandReceipt',
+              'impl fmt::Debug for GrantEvent',
+              'impl fmt::Debug for InMemoryGrantRepository',
+              'impl fmt::Display for $kind',
+              'impl fmt::Display for GrantRepositoryError',
+              'impl-arg Into<String>',
+              'impl-arg Into<String>',
+              "impl-arg IntoIterator<Item = &'a GrantEvent>"),
  'installation.rs': ('impl ConfigurationKey',
                      'impl ConfigurationRevision',
                      'impl EnablePreconditionEvidence',
@@ -2663,7 +2770,14 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'capability.rs': ('impl CapabilityDefini
 # `type`, so the item allowlist above cannot see it.
 # Kept as a second, independent carrier alongside the `extern` item accounting above.
 PLATFORM_CORE_FORBIDDEN_SOURCE_PATTERNS = (("extern crate", r"\bextern\s+crate\b"),)
-PLATFORM_CAPABILITY_TEST_FUNCTIONS = ('current_registry_loads_with_exact_eight_definitions', 'enum_risk_and_compatibility_mappings_are_exact', 'source_size_and_malformed_json_fail_closed', 'duplicate_json_keys_fail_closed', 'duplicate_capability_ids_fail_closed', 'invalid_capability_id_grammar_fail_closed', 'missing_extra_and_unknown_fields_fail_closed', 'invalid_schema_version_and_registry_revision_fail_closed', 'forbidden_and_incoherent_combinations_fail_closed', 'auto_grant_candidacy_and_deprecated_revoked_exclusions', 'deterministic_ordering_and_permutation_independent_digest', 'fixed_definition_and_registry_digest_vectors', 'one_field_change_alters_definition_digest', 'registry_revision_does_not_change_definition_digests', 'policy_change_comparator_branches_and_precedence', 'errors_do_not_leak_rejected_source_fragments', 'empty_registry_loads_with_zero_definitions')
+PLATFORM_CAPABILITY_TEST_FUNCTIONS = ('current_registry_loads_with_exact_eight_definitions', 'enum_risk_and_compatibility_mappings_are_exact', 'source_size_and_malformed_json_fail_closed', 'duplicate_json_keys_fail_closed', 'duplicate_capability_ids_fail_closed', 'invalid_capability_id_grammar_fail_closed', 'missing_extra_and_unknown_fields_fail_closed', 'invalid_schema_version_and_registry_revision_fail_closed', 'forbidden_and_incoherent_combinations_fail_closed', 'auto_grant_candidacy_and_deprecated_revoked_exclusions', 'deterministic_ordering_and_permutation_independent_digest', 'fixed_definition_and_registry_digest_vectors', 'one_field_change_alters_definition_digest', 'registry_revision_does_not_change_definition_digests', 'policy_change_comparator_branches_and_precedence', 'errors_do_not_leak_rejected_source_fragments', 'empty_registry_loads_with_zero_definitions', 'definition_classifier_preserves_existing_policy_matrix', 'definition_classifier_handles_none_added_removed_revoked_and_all_axes', 'definition_classifier_uses_complete_definition_not_digest_or_caller_hint')
+PLATFORM_GRANT_TEST_FUNCTIONS = (
+    'checked_grant_ids_versions_and_sequences_are_canonical',
+    'closed_scope_algebra_projects_exact_public_and_tenant_private_scopes',
+    'non_issue_commands_validate_snapshot_and_expected_version',
+    'empty_replay_and_repository_queries_are_deterministic',
+    'public_errors_are_category_only_and_secret_safe',
+)
 PLATFORM_INSTALLATION_TEST_FUNCTIONS = ('configuration_values_are_canonical_bounded_and_secret_safe',
  'package_pins_are_exact_canonical_and_duplicate_safe',
  'legal_install_configure_revoke_and_uninstall_transitions_are_explicit',
@@ -2704,6 +2818,56 @@ PLATFORM_INSTALLATION_ADMITTED_DERIVES = ('Clone, Copy',
  'Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
  'Debug, Default')
 PLATFORM_INSTALLATION_ADMITTED_UNCLASSIFIED_PUBLIC = ('pub(in crate::market) fn fr',)
+PLATFORM_GRANT_ADMITTED_DERIVES = (
+ 'Clone, PartialEq, Eq', 'Clone, PartialEq, Eq', 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq', 'Clone, PartialEq, Eq', 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Debug, Clone, Copy, PartialEq, Eq', 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq', 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq', 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Debug, Clone, PartialEq, Eq', 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq', 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq', 'Debug, Clone, PartialEq, Eq, PartialOrd, Ord')
+PLATFORM_GRANT_ADMITTED_UNCLASSIFIED_PUBLIC = ('pub(in crate::market) fn fr',)
+PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS = (
+ 'pub const fn approval_id', 'pub const fn capability_definition',
+ 'pub const fn capability_definition', 'pub const fn capability_definition_digest',
+ 'pub const fn capability_definition_digest', 'pub const fn capability_id',
+ 'pub const fn capability_id', 'pub const fn capability_manifest_digest',
+ 'pub const fn capability_manifest_digest', 'pub const fn capability_registry_revision',
+ 'pub const fn capability_registry_revision', 'pub const fn catalog_revision',
+ 'pub const fn catalog_revision', 'pub const fn command_id', 'pub const fn command_id',
+ 'pub const fn command_id', 'pub const fn confirmation_policy',
+ 'pub const fn confirmation_policy', 'pub const fn evidence_digest',
+ 'pub const fn expected_installation_revision', 'pub const fn get',
+ 'pub const fn installation_id', 'pub const fn installation_id',
+ 'pub const fn installation_revision', 'pub const fn last_approval_id',
+ 'pub const fn last_sequence', 'pub const fn object_scope', 'pub const fn outcome',
+ 'pub const fn package_digest', 'pub const fn package_digest', 'pub const fn package_id',
+ 'pub const fn package_id', 'pub const fn package_version', 'pub const fn package_version',
+ 'pub const fn post_version', 'pub const fn scope', 'pub const fn scope',
+ 'pub const fn scope_kind', 'pub const fn sequence', 'pub const fn snapshot_id',
+ 'pub const fn snapshot_id', 'pub const fn snapshot_id', 'pub const fn snapshot_id',
+ 'pub const fn snapshot_id', 'pub const fn state', 'pub const fn tenant_id',
+ 'pub const fn tenant_id', 'pub const fn tenant_id', 'pub const fn user_id',
+ 'pub const fn user_id', 'pub const fn user_id', 'pub const fn version',
+ 'pub enum GrantChangeClass', 'pub enum GrantCommandOutcome',
+ 'pub enum GrantConstructionError', 'pub enum GrantDecisionError',
+ 'pub enum GrantEventKind', 'pub enum GrantInvalidationReason',
+ 'pub enum GrantReplayError', 'pub enum GrantRepositoryError', 'pub fn as_str',
+ 'pub fn as_str', 'pub fn campus_public', 'pub fn change_class', 'pub fn decide',
+ 'pub fn evolve', 'pub fn expire', 'pub fn fail_next_commit_for_testing',
+ 'pub fn invalidation_reason', 'pub fn issue', 'pub fn kind', 'pub fn mark_stale',
+ 'pub fn new', 'pub fn new', 'pub fn parse', 'pub fn parse', 'pub fn replace',
+ 'pub fn replay', 'pub fn revoke', 'pub fn tenant_private_user',
+ 'pub fn to_resolver_snapshot', 'pub struct GrantAdmissionEvidence',
+ 'pub struct GrantAggregate', 'pub struct GrantApprovalId', 'pub struct GrantCommand',
+ 'pub struct GrantCommandId', 'pub struct GrantCommandReceipt', 'pub struct GrantEvent',
+ 'pub struct GrantEventSequence', 'pub struct GrantScope',
+ 'pub struct InMemoryGrantRepository', 'pub trait GrantRepository',
+ 'pub type GrantSnapshot')
 PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn capability_manifest_digest',
  'pub const fn capability_manifest_digest',
  'pub const fn catalog_revision',
@@ -3026,8 +3190,34 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive'
  'lib.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'market.rs': ('derive', 'must_use', 'serde'),
  'market/capability.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
+ 'market/grant.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'market/installation.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'session.rs': ('cfg', 'derive', 'must_use', 'serde', 'test')}
+# `market/grant.rs` carries lint-affecting `allow` attributes, so names alone are not enough:
+# freeze the complete normalized attribute-body multiset. Counts are literal reviewed evidence,
+# not a minimum or a projection generated from the governed source at checker runtime.
+PLATFORM_GRANT_ADMITTED_ATTRIBUTE_COUNTS = (
+    ((False, "allow", "allow(clippy::large_enum_variant)"), 1),
+    ((False, "allow", "allow(clippy::new_without_default)"), 1),
+    ((False, "allow", "allow(clippy::too_many_arguments)"), 1),
+    ((False, "allow", "allow(dead_code)"), 1),
+    ((False, "cfg", "cfg(test)"), 1),
+    ((False, "derive", "derive(Clone, PartialEq, Eq)"), 6),
+    ((False, "derive", "derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)"), 2),
+    ((False, "derive", "derive(Debug, Clone, Copy, PartialEq, Eq)"), 6),
+    (
+        (
+            False,
+            "derive",
+            "derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)",
+        ),
+        1,
+    ),
+    ((False, "derive", "derive(Debug, Clone, PartialEq, Eq)"), 5),
+    ((False, "derive", "derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)"), 1),
+    ((False, "must_use", "must_use"), 59),
+    ((False, "test", "test"), 15),
+)
 PLATFORM_IDENTITY_ADMITTED_TEST_ATTRIBUTE_NAMES = ("test",)
 # Pinning dependency NAMES pins nothing about what those names resolve to. `semver = { path =
 # "crates/fake-semver" }` keeps the admitted name while Cargo compiles an attacker-authored
@@ -5591,6 +5781,100 @@ def _check_market_installation_surface(market_code: str, issues: list[str]) -> b
     return True
 
 
+def _check_market_grant_surface(market_code: str, issues: list[str]) -> None:
+    """Pins the reviewed M20-B4-I grant authority and its bound external evidence."""
+    grant_path = ROOT / PLATFORM_GRANT_SOURCE
+    if not re.search(r"^\s*pub\s+mod\s+grant\s*;", market_code, flags=re.MULTILINE):
+        fail("market grant module declaration missing from crates/platform-core/src/market.rs", issues)
+    if not grant_path.is_file():
+        fail(f"market grant carrier missing: {PLATFORM_GRANT_SOURCE}", issues)
+        return
+    governed = strip_rust_comments_and_literals(grant_path.read_text(encoding="utf-8"))
+    label = PLATFORM_GRANT_SOURCE
+    if re.search(r"\bcfg_attr\b", governed):
+        fail(f"platform-core source must not carry cfg_attr: {label}", issues)
+    if re.search(RUST_INNER_ATTRIBUTE_PATTERN, governed):
+        fail(f"platform-core source must not carry an inner attribute: {label}", issues)
+    for carrier, pattern in PLATFORM_CORE_FORBIDDEN_SOURCE_PATTERNS + PLATFORM_CORE_FORBIDDEN_SPLICE_PATTERNS:
+        if re.search(pattern, governed):
+            fail(f"platform-core source must not carry {carrier!r}: {label}", issues)
+    items, unterminated = rust_item_declarations(governed)
+    if unterminated:
+        fail(f"unterminated platform-core item declaration in {label}: {unterminated}", issues)
+    admitted_items = list(PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS["market/grant.rs"])
+    if items != admitted_items:
+        fail(f"market grant item declarations drifted: expected {admitted_items} actual={items}", issues)
+    attributes, unterminated_attributes = rust_attributes(governed)
+    if unterminated_attributes:
+        fail(f"unterminated attribute in {label}: {unterminated_attributes}", issues)
+    observed_attribute_counts = tuple(
+        sorted((attribute, attributes.count(attribute)) for attribute in set(attributes))
+    )
+    if observed_attribute_counts != PLATFORM_GRANT_ADMITTED_ATTRIBUTE_COUNTS:
+        fail(
+            "market grant attribute inventory drifted: expected "
+            f"{PLATFORM_GRANT_ADMITTED_ATTRIBUTE_COUNTS} actual={observed_attribute_counts}",
+            issues,
+        )
+    public_declarations, unclassified_public = rust_public_declarations(governed)
+    if tuple(unclassified_public) != PLATFORM_GRANT_ADMITTED_UNCLASSIFIED_PUBLIC:
+        fail(
+            "market grant has an unclassified public declaration: "
+            f"expected {PLATFORM_GRANT_ADMITTED_UNCLASSIFIED_PUBLIC} actual={unclassified_public}",
+            issues,
+        )
+    if public_declarations != sorted(PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS):
+        fail(f"market grant public declaration surface drifted: actual={public_declarations}", issues)
+    impl_declarations, unclassified_impls = rust_impl_declarations(governed)
+    if unclassified_impls:
+        fail(f"market grant has an unclassified impl declaration: {unclassified_impls}", issues)
+    if impl_declarations != sorted(PLATFORM_CORE_ADMITTED_SIBLING_IMPLS["grant.rs"]):
+        fail(f"market grant implementation surface drifted: actual={impl_declarations}", issues)
+    derives = sorted(rust_derive_bodies(governed))
+    if derives != sorted(PLATFORM_GRANT_ADMITTED_DERIVES):
+        fail(f"market grant derive surface drifted: {derives}", issues)
+    definitions = rust_macro_definitions(governed)
+    if definitions != sorted(PLATFORM_CORE_ADMITTED_SIBLING_MACROS["market/grant.rs"]):
+        fail(f"market grant macro definitions drifted: actual={definitions}", issues)
+    invocations, unterminated_macros = rust_macro_invocation_arguments(governed)
+    if unterminated_macros:
+        fail(f"unterminated platform-core macro invocation in {label}: {sorted(unterminated_macros)}", issues)
+    invoked = tuple(sorted({name for name, _ in invocations}))
+    admitted_invocations = tuple(sorted(PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS["market/grant.rs"]))
+    if invoked != admitted_invocations:
+        fail(f"market grant macro invocations drifted: expected {admitted_invocations} actual={invoked}", issues)
+    observed_invocation_counts = tuple(
+        sorted(
+            (name, sum(1 for invoked_name, _ in invocations if invoked_name == name))
+            for name in invoked
+        )
+    )
+    if observed_invocation_counts != PLATFORM_GRANT_ADMITTED_MACRO_INVOCATION_COUNTS:
+        fail(
+            "market grant macro invocation counts drifted: expected "
+            f"{PLATFORM_GRANT_ADMITTED_MACRO_INVOCATION_COUNTS} "
+            f"actual={observed_invocation_counts}",
+            issues,
+        )
+    parsed_arguments = tuple(argument for name, argument in invocations if name == "parsed")
+    observed_parsed_argument_counts = tuple(
+        sorted(
+            (argument, parsed_arguments.count(argument))
+            for argument in set(parsed_arguments)
+        )
+    )
+    if observed_parsed_argument_counts != PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS:
+        fail(
+            "market grant parsed macro arguments drifted: expected "
+            f"{PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS} "
+            f"actual={observed_parsed_argument_counts}",
+            issues,
+        )
+    _check_bound_rust_test_file(
+        PLATFORM_GRANT_TEST, PLATFORM_GRANT_TEST_FUNCTIONS, "market grant", issues
+    )
+
+
 def check_platform_identity_implementation(issues: list[str]) -> None:
     source_path = ROOT / PLATFORM_IDENTITY_SOURCE
     test_path = ROOT / PLATFORM_IDENTITY_TEST
@@ -5618,6 +5902,7 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
     )
     market_code = strip_rust_comments_and_literals(market_path.read_text(encoding="utf-8"))
     _check_market_installation_surface(market_code, issues)
+    _check_market_grant_surface(market_code, issues)
     test_code = strip_rust_comments_and_literals(test_path.read_text(encoding="utf-8"))
 
     if not re.search(r"^\s*pub mod identity;$", lib_code, flags=re.MULTILINE):
@@ -5997,14 +6282,34 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
                 issues,
             )
         if source_key != "identity.rs":
-            for name, argument in invocations:
-                for kind in PLATFORM_IDENTITY_KINDS:
-                    if re.search(rf"\b{kind}\b", argument):
-                        fail(
-                            "platform identity kind passed to a macro outside the M00 "
-                            f"identity module: {label}: {name}!({argument})",
-                            issues,
-                        )
+            identity_macro_arguments = tuple(
+                sorted(
+                    (name, argument)
+                    for name, argument in invocations
+                    if any(
+                        re.search(rf"\b{kind}\b", argument)
+                        for kind in PLATFORM_IDENTITY_KINDS
+                    )
+                )
+            )
+            if source_key == "market/grant.rs":
+                admitted_identity_macro_arguments = tuple(
+                    sorted(PLATFORM_GRANT_ADMITTED_IDENTITY_MACRO_ARGUMENTS)
+                )
+                if identity_macro_arguments != admitted_identity_macro_arguments:
+                    fail(
+                        "market grant identity macro arguments drifted: expected "
+                        f"{admitted_identity_macro_arguments} "
+                        f"actual={identity_macro_arguments}",
+                        issues,
+                    )
+            else:
+                for name, argument in identity_macro_arguments:
+                    fail(
+                        "platform identity kind passed to a macro outside the M00 "
+                        f"identity module: {label}: {name}!({argument})",
+                        issues,
+                    )
 
     package_root = ROOT / "crates/platform-core"
     actual_sources = tuple(

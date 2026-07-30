@@ -2805,6 +2805,12 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def installation_test_path(self) -> Path:
         return self.root / checker.PLATFORM_INSTALLATION_TEST
 
+    def grant_path(self) -> Path:
+        return self.root / checker.PLATFORM_GRANT_SOURCE
+
+    def grant_test_path(self) -> Path:
+        return self.root / checker.PLATFORM_GRANT_TEST
+
     def admit_installation_surface(self) -> None:
         path = self.installation_path()
         if not path.is_file():
@@ -2859,6 +2865,178 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def test_admitted_market_installation_surface_passes(self) -> None:
         self.admit_installation_surface()
         self.assertEqual(self.check_identity(), [])
+
+    def test_admitted_current_market_grant_surface_passes(self) -> None:
+        self.assertEqual(self.check_identity(), [])
+
+    # Grant mutation map: carrier missing -> carrier diagnostic.
+    def test_missing_market_grant_nested_file_fails_closed(self) -> None:
+        self.grant_path().unlink()
+        self.assert_rejected(self.check_identity(), "market grant carrier missing")
+
+    # Module declaration missing -> declaration diagnostic.
+    def test_missing_market_grant_module_declaration_fails_closed(self) -> None:
+        self.rewrite(self.market_path(), "pub mod grant;\n", "")
+        self.assert_rejected(self.check_identity(), "market grant module declaration missing")
+
+    # Ignored external tests -> exact attribute-envelope diagnostic.
+    def test_market_grant_ignored_tests_fail_closed(self) -> None:
+        text = self.grant_test_path().read_text(encoding="utf-8")
+        test_count = text.count("#[test]\nfn ")
+        self.assertEqual(test_count, len(checker.PLATFORM_GRANT_TEST_FUNCTIONS))
+        self.grant_test_path().write_text(
+            text.replace("#[test]\nfn ", "#[ignore]\n#[test]\nfn "), encoding="utf-8"
+        )
+        self.assert_rejected(self.check_identity(), "market grant acceptance test")
+        self.assert_rejected(self.check_identity(), "attribute envelope drifted")
+
+    # Missing registration -> exact executable-test count diagnostic.
+    def test_market_grant_missing_bound_test_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_test_path(),
+            "#[test]\nfn checked_grant_ids_versions_and_sequences_are_canonical()",
+            "fn checked_grant_ids_versions_and_sequences_are_canonical()",
+        )
+        self.assert_rejected(
+            self.check_identity(), "market grant acceptance test registration drift"
+        )
+
+    # Public rename -> bidirectional public declaration inventory.
+    def test_market_grant_public_surface_rename_fails_closed(self) -> None:
+        self.rewrite(self.grant_path(), "pub struct GrantApprovalId", "pub struct GrantApprovalKey")
+        self.assert_rejected(self.check_identity(), "market grant public declaration surface drifted")
+
+    # Extra public item -> bidirectional public declaration inventory.
+    def test_market_grant_extra_public_surface_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_path(),
+            "pub trait GrantRepository {",
+            "pub struct ExtraGrantSurface;\n\npub trait GrantRepository {",
+        )
+        self.assert_rejected(self.check_identity(), "market grant public declaration surface drifted")
+
+    # Private visibility widening -> bidirectional public declaration inventory.
+    def test_market_grant_visibility_widening_fails_closed(self) -> None:
+        self.rewrite(self.grant_path(), "struct AuthorityKey {", "pub struct AuthorityKey {")
+        self.assert_rejected(self.check_identity(), "market grant public declaration surface drifted")
+
+    # Dependency import addition -> exact source-order item inventory.
+    def test_market_grant_dependency_import_drift_fails_closed(self) -> None:
+        self.rewrite(self.grant_path(), "use std::fmt;", "use std::fmt;\nuse std::time::SystemTime;")
+        self.assert_rejected(self.check_identity(), "market grant item declarations drifted")
+
+    # Checked-in allowlist omission -> bidirectional public declaration inventory.
+    def test_market_grant_omitted_allowlist_entry_fails_closed(self) -> None:
+        old = checker.PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS
+        self.addCleanup(setattr, checker, "PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS", old)
+        removed = list(old)
+        removed.remove("pub struct GrantApprovalId")
+        setattr(checker, "PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS", tuple(removed))
+        self.assert_rejected(self.check_identity(), "market grant public declaration surface drifted")
+
+    # Identity alias spelling -> exact item and cross-file binding inventories.
+    def test_market_grant_identity_import_alias_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_path(),
+            "use crate::identity::{TenantId, UserId};",
+            "use crate::identity::{TenantId as Tenant, UserId};",
+        )
+        self.assert_rejected(self.check_identity(), "market grant item declarations drifted")
+        self.assert_rejected(
+            self.check_identity(), "platform identity value alias or import outside the M00 identity module"
+        )
+
+    # Attribute multiplicity is exact: an extra lint suppression must not hide in an admitted name.
+    def test_market_grant_extra_allow_attribute_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_path(),
+            "pub enum GrantConstructionError {",
+            "#[allow(unused_imports)]\npub enum GrantConstructionError {",
+        )
+        self.assert_rejected(
+            self.check_identity(), "market grant attribute inventory drifted"
+        )
+
+    # Attribute bodies are exact: replacing one admitted lint suppression is also drift.
+    def test_market_grant_allow_attribute_body_drift_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_path(),
+            "    #[allow(dead_code)]\n",
+            "    #[allow(unused_imports)]\n",
+        )
+        self.assert_rejected(
+            self.check_identity(), "market grant attribute inventory drifted"
+        )
+
+    # Adding Debug to a manually redacted authority type -> exact derive inventory.
+    def test_market_grant_authority_derive_drift_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_path(),
+            "#[derive(Clone, PartialEq, Eq)]\npub struct GrantAdmissionEvidence",
+            "#[derive(Debug, Clone, PartialEq, Eq)]\npub struct GrantAdmissionEvidence",
+        )
+        self.assert_rejected(self.check_identity(), "market grant derive surface drifted")
+
+    # Identity-bearing macro multiplicity is an exact multiset, not membership.
+    def test_market_grant_identity_macro_multiplicity_drift_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_path(),
+            '            let tenant = parsed!(TenantId, "tenant:grant-tests");\n',
+            '            let tenant = parsed!(TenantId, "tenant:grant-tests");\n'
+            '            let extra = parsed!(TenantId, "tenant:extra");\n',
+        )
+        self.assert_rejected(
+            self.check_identity(), "market grant identity macro arguments drifted"
+        )
+
+    # Non-identity `parsed!` calls are also an exact multiset, not an identity-only exception.
+    def test_market_grant_non_identity_parsed_multiplicity_drift_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_path(),
+            '            let capability = parsed!(CapabilityId, "campus.public_plan.read");\n',
+            '            let capability = parsed!(CapabilityId, "campus.public_plan.read");\n'
+            '            let extra = parsed!(GrantVersion, "grant-version:999");\n',
+        )
+        issues = self.check_identity()
+        self.assert_rejected(issues, "market grant macro invocation counts drifted")
+        self.assert_rejected(issues, "market grant parsed macro arguments drifted")
+
+    # A same-count parsed type substitution must fail even though the macro-name count is stable.
+    def test_market_grant_parsed_argument_substitution_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_path(),
+            '            let capability = parsed!(CapabilityId, "campus.public_plan.read");\n',
+            '            let capability = parsed!(GrantVersion, "grant-version:999");\n',
+        )
+        self.assert_rejected(
+            self.check_identity(), "market grant parsed macro arguments drifted"
+        )
+
+    # Counts are exact for every admitted macro, not only for `parsed!`.
+    def test_market_grant_non_parsed_macro_count_drift_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_path(),
+            '            let package = load_package_manifest(PACKAGE).expect("reviewed package");\n',
+            '            let package = load_package_manifest(PACKAGE).expect("reviewed package");\n'
+            "            assert!(true);\n",
+        )
+        self.assert_rejected(
+            self.check_identity(), "market grant macro invocation counts drifted"
+        )
+
+    # Invocation-name drift -> exact macro invocation inventory.
+    def test_market_grant_macro_invocation_drift_fails_closed(self) -> None:
+        self.rewrite(
+            self.grant_path(),
+            "category_error!(GrantConstructionError,",
+            "category_error_changed!(GrantConstructionError,",
+        )
+        self.assert_rejected(self.check_identity(), "market grant macro invocations drifted")
+
+    # Definition-name drift -> exact macro definition inventory.
+    def test_market_grant_macro_definition_drift_fails_closed(self) -> None:
+        self.rewrite(self.grant_path(), "macro_rules! parsed {", "macro_rules! parsed_changed {")
+        self.assert_rejected(self.check_identity(), "market grant macro definitions drifted")
 
     def test_missing_market_installation_nested_file_fails_closed(self) -> None:
         self.admit_installation_surface()
@@ -5388,7 +5566,7 @@ class PlatformSessionImplementationTests(unittest.TestCase):
             self.assertRegex(admitted_file, r"\Acrates/platform-core/src/[a-z_/]+\.rs\Z")
             self.assertRegex(admitted_text, r"\A(?:pub )?use crate::identity::\{[^}]*\};\Z")
             self.assertNotIn(" as ", admitted_text)
-        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 3)
+        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 4)
 
     def test_forbidden_dependency_carrier_fails_closed(self) -> None:
         # A path-qualified call inside a function body declares no item, so the item allowlist
