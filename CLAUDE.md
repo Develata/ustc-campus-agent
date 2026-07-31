@@ -57,7 +57,7 @@ Directory names do not match package names — use these with `-p`:
 
 ## Architecture
 
-Four call layers plus an object plane (`AGENTS.md` §Repository architecture and authority): interaction shell (future Dioxus client / operator CLI) → application interface (M10 ingress in `ustc-agentd`) → flow coordination (M00-admitted services, harness runs, use cases) → execution domain (resolvers, gateway, executors, source pipeline). The object plane names durable state; it is not a fifth caller.
+Four call layers plus an object plane (`AGENTS.md` §Repository architecture and authority): interaction shell (M80 framework-neutral typed client core over the M10-owned client-protocol carrier, with peer Dioxus Web/Android, future `ustc-agent` user/automation CLI and inbound MCP adapters; `ustc-agentctl` remains operator-only) → application interface (M10 ingress in `ustc-agentd`) → flow coordination (M00-admitted services, harness runs, use cases) → execution domain (resolvers, gateway, executors, source pipeline). M10 never depends on M80 client-core. Peer clients never spawn or parse one another as their production path; inbound MCP is distinct from M51 outbound MCP. The object plane names durable state; it is not a fifth caller.
 
 The system is frozen as **13 independently owned large modules**. `docs/plan/modules/00-module-map.md` is the registry; `docs/contracts/module-boundaries.md` says what may cross each boundary. Note the numbering offset — module IDs and blueprint filenames differ by one decade (`M00` → `modules/10-platform-control-identity.md`, `M10` → `modules/20-application-api-host.md`, … `M90` → `modules/90-infrastructure-operations.md`). The authoritative mapping is `MODULE_BLUEPRINTS` in `scripts/check_repo_contracts.py`.
 

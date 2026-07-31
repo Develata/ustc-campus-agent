@@ -1,172 +1,248 @@
-# Dioxus Fullstack multi-client contract
+# Typed multi-client core and peer shell contract
 
 ## Metadata
 
-- `Status`: Accepted target architecture; no Dioxus dependency or client/server Fullstack slice implemented yet
-- `Version`: `client-shell/v1`
-- `Last Review`: `2026-07-25`
-- `Owning Plan`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md)
-- `Large-module Blueprints`: [`M10`](../plan/modules/20-application-api-host.md), [`M80`](../plan/modules/80-dioxus-multi-client.md), [`M90`](../plan/modules/90-infrastructure-operations.md)
-- `Decision`: [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md)
-- `Counterpart Interfaces`: [`interfaces.md`](interfaces.md)
-- `Acceptance`: planned `WEB-*`, `I18N-*`, `CLIENT-*`, applicable `DEP-*`
+- `Status`: Accepted target architecture; no client-core, user CLI, inbound MCP adapter or Dioxus client implemented
+- `Version`: `client-shell/v2`
+- `Last Review`: `2026-07-31`
+- `Owning Plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
+- `Counterpart Plans`: [`M10 Application Ingress Host`](../plan/modules/20-application-api-host.md), [`platform authority`](../plan/03-platform-authority.md)
+- `Decisions`: [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md), [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
+- `Counterpart Interfaces`: [`interfaces.md`](interfaces.md), [`cli.md`](cli.md), [`module-boundaries.md`](module-boundaries.md)
+- `Acceptance`: planned `CLIENT-007` through `CLIENT-010`; long-horizon `CLIENT-001` through `CLIENT-006`, `WEB-*` and applicable `DEP-*`
 
-## 1. Purpose and required targets
+## 1. Purpose
 
-USTC Campus Agent uses Dioxus Fullstack as the long-lived first-party application stack. The required product targets are:
+USTC Campus Agent uses one framework-neutral typed client core beneath three peer outer adapters:
+
+```text
+                         M10 admitted application API
+                    versioned call/result/error/event seam
+                                      │
+                           framework-neutral client core
+                     ┌────────────────┼────────────────┐
+                     │                │                │
+              Dioxus Web/Android   ustc-agent      inbound MCP
+              presentation shell   user/automation external Agent tools/resources
+```
+
+The common core owns client-side transport semantics, compatibility reaction, authentication ports, correlation/idempotency propagation, event reconnect and safe projection reduction. It does not own server/domain decisions.
+
+Peer adapters reuse code through the typed core. They do not invoke one another as subprocesses. In particular, Dioxus Web/Android MUST NOT use `GUI → ustc-agent executable → server` as its production path.
+
+`ustc-agentctl` remains a separate operator/developer CLI and is not part of this contract's least-privilege user/automation surface.
+
+## 2. Required client surfaces
+
+### 2.1 Dioxus
+
+Required product targets remain:
 
 - Web/PWA;
 - a native Linux Fullstack server deployed through Docker Compose;
 - Android.
 
-Web is implemented and proven first. Android is a mandatory peer target once the shared Web ingress, event and recovery contract is executable. iOS and desktop are later scope.
+Web is proven first. Android is a mandatory peer target after the shared ingress/event/recovery path is executable. iOS and desktop are later.
 
-The Fullstack application shares Rust components, presentation state, endpoint values and generated client calls while keeping platform authority on the server:
+Dioxus owns routes, accessible components, forms, presentation reduction, Web SSR/CSR/hydration and target adapters. It may use generated Dioxus server-function calls when they preserve this contract's M00/M10 admission and result semantics.
+
+### 2.2 `ustc-agent`
+
+`ustc-agent` is the user-facing and automation-facing headless client. It consumes explicit versioned M10 HTTP/JSON and typed event streams through client-core. Its noninteractive machine modes are stable public contracts; they are not debug printouts.
+
+The initial CLI is read-oriented and least privilege. It does not inherit `ustc-agentctl` administrative commands or credentials.
+
+### 2.3 Inbound MCP adapter
+
+The inbound MCP adapter exposes selected USTC Campus Agent tools/resources to external Agent clients. It maps MCP protocol values at the outer boundary, invokes admitted M10 operations through client-core, and maps bounded typed outcomes back to MCP.
+
+This direction is distinct from M51:
 
 ```text
-shared Dioxus components / routes / presentation reducer
-        ├── Web SSR/CSR + hydration + PWA
-        ├── Android WebView package
-        ├── iOS later
-        └── desktop later
-                 │
-                 │ versioned server functions / HTTP / typed streams
-                 ▼
-M10 ingress in ustc-agentd
-        │ admission + application command/query mapping
-        ▼
-server-owned domain/runtime state
+external Agent → inbound MCP adapter → client-core → M10
+platform M40   → M51 outbound MCP binding/executor → external MCP server
 ```
 
-Changing the Dioxus renderer or target adapter must not change platform domain contracts. Changing Agent or Plugin internals must not require client rewrites while the supported first-party ingress contract remains compatible.
-
-## 2. What Dioxus Fullstack owns
-
-Dioxus Fullstack provides the application-level integration of:
-
-- shared Rust UI components, routes and presentation reducer;
-- Web SSR, page delivery, hydration/CSR and assets;
-- Android packaging of the shared application;
-- Axum-compatible typed server-function declarations and generated client calls;
-- typed forms, request/response values, errors, SSE/stream/WebSocket handles;
-- target adapters for session storage, external navigation, notifications, archive and platform facts.
-
-It does not own databases, caches, sessions, mailers or platform domain semantics merely because they are reachable from an Axum handler.
+The two surfaces share neither lifecycle authority nor credential/session state merely because both speak MCP.
 
 ## 3. Authority boundary
 
-The shared app owns only presentation facts:
+The client core and outer adapters MAY own:
 
 ```text
-Route / PageId
-ViewModel / FormDraft
-ClientIntentCorrelation
-ApiConnectionState
-EventCursor and reduced server projection
-PresentationState:
-  Initial | Loading | Ready | Empty | Error | Offline | ReauthRequired | UpgradeRequired
-TargetCapabilityState
-Theme/locale/accessibility preferences
+client build/target/protocol support
+validated server endpoint
+client auth-profile reference
+request correlation/idempotency identity
+connection/reconnect state
+last accepted event cursor
+safe reduced server projection
+form draft / command input
+presentation/serialization preferences
+MCP-visible selected capability projection
 ```
 
-It must not own or decide:
+They MUST NOT own or decide:
 
 - tenant/user/session authority;
-- Market package/install/grant state;
+- package/install/grant state;
 - HarnessRun/AgentRun transitions;
 - Agent tool routing or Plugin execution;
 - source/revision/publication truth;
 - effect intent/receipt or audit truth;
-- canonical product calculations or mutations.
+- canonical product calculation or mutation;
+- operator/admin authorization.
 
-Client cache and optimistic UI are projections. They may show `pending`, but cannot claim an authoritative transition before the server accepts it.
+Client cache, CLI output and MCP results are projections. They may report `pending`, but cannot report authoritative success before a typed M10 result/event establishes it.
 
-## 4. Fullstack ingress contract
+## 4. Directional boundary values
 
-A Dioxus server function is an Axum-compatible HTTP endpoint and a generated Rust client call. It is a valid first-party ingress adapter, not merely SSR plumbing.
-
-A first-party request follows:
-
-```text
-Web/Android typed call
-→ version/size/shape decode
-→ M00 actor/session admission
-→ M10 authorization, precondition/idempotency and audit context
-→ one owning application command/query port
-→ typed result/error/event projection
-→ Web/Android reducer
-```
-
-A server function MAY call an application command/query port after all M00/M10 gates pass. It MUST NOT call concrete repositories, database clients, Plugin executors, provider SDKs, domain internals or durable journals directly.
-
-Public REST/SSE endpoints may coexist for CLI, integrations or intentionally public resources. They are peer transport adapters over the same application ports. They do not duplicate business logic or create a second authority.
-
-`ClientApi` names the semantic first-party client facade. Its Dioxus implementation SHOULD use generated server-function calls and typed stream handles rather than a parallel hand-written request layer. Exact public/heterogeneous routes remain registered in [`interfaces.md`](interfaces.md).
-
-## 5. Source and artifact topology
-
-Start with one cohesive Fullstack application surface and internal modules. One source/workspace does not mean one artifact:
+`B-M80-M10-CALL` carries request instances produced by M80 client behavior under the M10-owned versioned `client-protocol` schema:
 
 ```text
-apps/ustc-client/                  # shared Dioxus Fullstack application source
-  src/app/                         # routes/components/view models
-  src/ingress/                     # shared declarations + generated client facade
-  src/platform/                    # web/android; iOS/desktop later
-  assets/
-
-apps/ustc-agentd/                  # server composition root
-  attaches Dioxus SSR/assets/server functions to Axum
-  supplies admitted application ports and infrastructure
+ClientBuild / ClientTarget / ClientProtocolVersion
+AuthenticatedClientSession projection
+ClientRequestCorrelation / IdempotencyKey
+versioned query or command intent
+current precondition identity
+reconnect cursor where applicable
 ```
 
-The exact Cargo package/feature shape is finalized by the first implementation slice. Begin with modules and target features; extract a shared crate only for a real independent consumer, privilege/deployment boundary or measured build isolation.
-
-Dioxus component/router/signal/WebView types terminate in the Fullstack application boundary. Domain/runtime/Plugin crates do not depend on Dioxus. Server-only ingress adapters may depend on Dioxus/Axum transport types plus public application ports, never concrete backend adapters.
-
-Separate build/release surfaces are mandatory:
-
-- server feature/native Linux image for Docker Compose;
-- Web assets/WASM and optional SSR/hydration;
-- Android package and signing/release metadata;
-- later iOS/desktop artifacts.
-
-## 6. Inputs, outputs and events
-
-Inputs from M10/application ingress include:
+`B-M10-M80-RESULT` carries M10-produced values:
 
 ```text
-versioned response/error/event DTOs
-server/application compatibility envelope
-monotone event cursor
-server-owned run/market/product projections
-minimum/supported client version facts
+versioned accepted/denied result
+stable safe error
+compatibility envelope / UpgradeRequired
+server-owned read projection
+correlation/idempotency outcome
 ```
 
-Outputs from Web/Android include:
+`B-M10-M80-EVENT` carries M10-produced values:
 
 ```text
-versioned query/command DTOs
-user intent and current preconditions
-idempotency/correlation identity
-reconnect cursor
-client build/target/protocol identity
+versioned event projection
+monotone cursor
+heartbeat/resync/refresh outcome
+terminal versus nonterminal state
 ```
 
-The shared reducer handles at least:
+Shared Rust source does not merge authority. M10 owns the public wire schema and result/event production; M80 owns client behavior and produces request instances that conform to that schema. `client-core` depends on the M10-owned protocol carrier, while M10 server code never depends on `client-core`. M10 still cannot reinterpret client intent as a domain command until admission succeeds.
 
-- initial/loading/ready/empty/error/offline states;
-- monotone event sequence and reconnect cursor;
-- stale projection and reauthentication;
-- pending intent without invented success;
-- upgrade-required/incompatible-server outcomes;
-- terminal run state distinct from transport disconnect.
+Unknown versions, variants or non-monotone cursors fail closed and yield refresh, resync or upgrade—not a nearby interpretation.
 
-Unknown schema/event variants or non-monotone sequences fail closed and request refresh or upgrade; they are not silently interpreted as a nearby state.
+## 5. Common client-core behavior
 
-## 7. Platform ports
+For every peer adapter, M80 `client-core` consumes the M10-owned framework-neutral `client-protocol` values and performs the same semantic sequence:
 
-Shared components access target capability only through narrow typed ports:
+```text
+validate local endpoint/profile/protocol
+→ obtain target-appropriate admitted session projection
+→ send client build/target/protocol and bounded request
+→ preserve correlation/idempotency/precondition identity
+→ receive typed accepted/denied/compatibility outcome
+→ subscribe/resume from monotone event cursor when required
+→ reduce safe server projection
+→ reconcile timeout-after-possible-acceptance before retry
+```
 
+The core exposes typed operations and failures. It does not expose command-line strings, Dioxus signals/components or MCP SDK objects.
+
+Required common failure classes include:
+
+```text
+InvalidClientInput
+InvalidEndpoint
+AuthenticationRequired
+Forbidden
+CapabilityUnavailable
+IncompatibleProtocol / UpgradeRequired
+StalePrecondition
+Conflict
+RateLimited
+TransportUnavailable
+TimeoutOutcomeUnknown
+MalformedOrUnknownServerValue
+CursorRequiresRefresh
+ServerDenied
+```
+
+Transport and shell adapters may add outer failure detail, but cannot weaken or silently remap these semantics.
+
+## 6. Dioxus Fullstack boundary
+
+One shared Dioxus application provides:
+
+```text
+shared components / routes / presentation reducer
+        ├── Web SSR/CSR + hydration + PWA
+        ├── Android WebView package
+        ├── iOS later
+        └── desktop later
+```
+
+A Dioxus server function is an Axum-compatible M10 HTTP endpoint and generated client call. Its server-only body MAY:
+
+1. extract admitted request/session facts;
+2. validate version, bounds, authorization, idempotency and preconditions;
+3. call one public application command/query port;
+4. map the typed result/error/event.
+
+It MUST NOT call concrete repositories, databases, Plugin/MCP executors, provider SDKs or journals directly.
+
+Dioxus component/router/signal/WebView types terminate in the Dioxus outer adapter. They do not enter client-core, M10 application ports or backend contracts.
+
+## 7. User CLI contract
+
+`ustc-agent` human mode may provide readable rendering. Machine mode MUST provide:
+
+- an explicit versioned JSON result envelope or NDJSON event stream;
+- protocol data only on stdout;
+- redacted diagnostics only on stderr;
+- stable exit classes mapped from typed client failures;
+- `--non-interactive` behavior with no prompt or terminal dependency;
+- bounded output and deterministic ordering where the owning result contract is ordered;
+- explicit build/server/protocol identity in diagnostic or result metadata;
+- typed cancellation and reconciliation rather than process-kill-as-cancellation.
+
+Secrets MUST NOT be accepted in argv, printed in output or inherited from `ustc-agentctl` operator configuration. Human and machine renderers consume the same typed result; neither reparses the other's output.
+
+The exact command tree is owned by [`cli.md`](cli.md) and enters implementation only with active planned acceptance rows and future bindings.
+
+## 8. Inbound MCP contract
+
+The inbound MCP adapter MAY expose only explicitly registered selected tools/resources whose underlying M10 operation is admitted for the delegated profile. It MUST:
+
+- advertise bounded names, descriptions, schemas and result sizes;
+- bind every request to external caller/session plus delegated tenant/user/profile context;
+- revalidate current server capability and authorization on every call;
+- preserve typed denial and no-fallback behavior;
+- label returned campus/source content as data, not executable instruction;
+- return provenance/freshness/uncertainty fields when the owning product result carries them;
+- keep operator/admin commands absent;
+- reach no domain module, repository, ToolGateway executor or M51 session directly.
+
+The adapter is not a second Agent loop. External Agents may call deterministic resources/tools or an explicitly admitted central Agent operation; the adapter itself does not own planning, model invocation or run completion.
+
+## 9. Authentication and credentials
+
+Each peer uses a target-appropriate `ClientAuthPort`:
+
+- Web: browser-appropriate session handling;
+- Android: secure token/session storage through `SecureSessionPort`;
+- `ustc-agent`: a least-privilege user auth profile/reference outside argv and machine output;
+- inbound MCP: an explicitly delegated user/service profile scoped to selected tools/resources.
+
+No adapter receives raw operator credentials, provider secrets, Plugin credentials, raw USTC passwords or CAS sessions. Authentication failure reaches no application operation.
+
+A shared token cache across peer adapters is not implied. Shared semantics and separate secure storage are compatible.
+
+## 10. Platform ports, configuration and deployment
+
+Shared/client-core code accesses target capability only through narrow typed ports:
+
+- `ClientTransport` and `ClientEventTransport`: versioned M10 calls/events only;
+- `ClientAuthPort`: target-appropriate admitted session projection;
 - `ExternalNavigation`: browser tab or Android Custom Tab for USTC/iCourse link-out;
 - `NotificationPort`: opt-in local notification projection, never task-completion authority;
 - `SecureSessionPort`: browser-appropriate session and Android secure credential/token storage;
@@ -174,125 +250,131 @@ Shared components access target capability only through narrow typed ports:
 - `PlatformInfo`: build, target and capability facts;
 - `ServerEndpointPort`: validated HTTPS server origin for independently packaged clients.
 
-Shared UI cannot invoke filesystem, WebView JavaScript, keychain/keystore, notifications or process APIs directly. Unsupported capability returns a typed unavailable state.
+Framework-neutral client-core cannot directly invoke filesystem, WebView JavaScript, keychain/keystore, notifications, process or MCP/terminal APIs. Unsupported capability returns a typed unavailable state.
 
-## 8. Lifecycle and target order
+Public client configuration contains only validated server HTTPS origin, supported protocol/schema versions, client build/target identity, non-secret capability facts, bounded transport defaults and presentation/serialization defaults. `ustc-agent` and inbound MCP add only profile references, never raw credentials or operator config.
+
+The Docker Compose profile owns the server process, dependencies, readiness, persistent volumes, migration/backup/restore and reverse-proxy/TLS wiring. It does not own Android, CLI or MCP artifacts. Dioxus Fullstack does not provide database/cache/session/mailer implementations; these remain explicit M90/Axum infrastructure choices.
+
+## 11. Lifecycle and concurrency
 
 ```text
-app/page bootstrap
-→ validate client build/protocol/server compatibility
-→ restore admitted session through target port
-→ load server projection
-→ Initial/Loading
-→ Ready | Empty | Error | Offline | ReauthRequired | UpgradeRequired
-→ submit correlated user intent
-→ Pending presentation only
-→ accept typed response/events
-→ reduce monotone authoritative projection
-→ reconnect/refresh/re-auth/upgrade when required
+bootstrap
+→ validate config/build/protocol
+→ establish admitted session
+→ compatibility/capability preflight
+→ Ready | Offline | ReauthRequired | UpgradeRequired
+→ submit correlated operation
+→ Pending
+→ typed result/events
+→ reconcile or terminal projection
 ```
 
-Target order:
+Multiple concurrent operations remain separated by correlation identity. A shell may stop observing without cancelling the accepted server operation. Cancellation is a separate typed intent. Reconnect uses the last server cursor and follows the server's resync policy.
 
-1. **Web/PWA** — prove Fullstack server start, page/asset delivery, optional SSR/hydration, authentication, typed query/command, event reconnect, accessibility and responsive behavior.
-2. **Android required target** — reuse components/reducer/server functions; prove emulator and real-device launch, validated HTTPS endpoint, secure session, reconnect, lifecycle, Custom Tab and release package.
-3. **iOS later** — enter scope only with macOS/Xcode/signing/device acceptance.
-4. **Desktop optional later** — enter scope when a real window/local integration need exists.
+The inbound MCP session, CLI process and Dioxus page lifecycle are transport/session projections only. None is a HarnessRun or AgentRun identity.
 
-Compilation alone never proves target support.
+## 12. Failure and recovery
 
-## 9. Mobile/server compatibility
+- API unavailable: explicit unavailable state; no hidden local execution fallback.
+- Timeout after possible acceptance: query/reconcile by correlation or idempotency identity before retry.
+- Unsupported version: `UpgradeRequired` before unsafe dispatch.
+- Unknown event/result: fail closed and refresh/upgrade.
+- Cursor gap/expiry: explicit resync or full projection reload.
+- Reauthentication: use the adapter auth port; preserve no raw secret in common state.
+- CLI partial/malformed machine frame: non-success; consumers cannot accept partial bytes as complete.
+- MCP disconnect: does not cancel an accepted platform operation.
+- Dioxus renderer/WebView failure: backend truth remains unchanged.
+- Unsafe Markdown/HTML/tool content: sanitize or emit bounded typed content.
 
-Shared source types prevent mismatch only for artifacts built from the same revision. Installed Android clients can lag the server, so every independently deployed boundary has an explicit compatibility policy:
+## 13. Source and artifact topology
 
-- versioned server-function route/DTO/error/event contract;
-- stable unknown-field/unknown-variant behavior;
-- client build and protocol identity on admission;
-- supported version window and migration policy;
-- typed `UpgradeRequired` before unsafe application dispatch;
-- compatibility fixtures for at least one supported older Android protocol;
-- no server rollout that silently reinterprets a request from an installed client.
+Start with modules until actual boundaries justify crates/artifacts. The accepted target shape is:
 
-Web may deploy atomically with the server; Android compatibility is still tested independently.
+```text
+future crates/client-protocol/   # M10-owned versioned wire DTO/error/event/compatibility carrier
+future crates/client-core/       # M80-owned client behavior and fakes
+future apps/ustc-agent/          # user/automation CLI
+future apps/ustc-client/         # Dioxus Web/Android source
+future inbound MCP adapter       # exact package/process placement chosen by first slice
+apps/ustc-agentctl/              # existing separate operator/developer CLI
+apps/ustc-agentd/                # M10 server composition and ingress
+```
 
-## 10. Failure and security
+The three real peer consumers justify a client-core crate when its first retained slice lands. Do not create empty crates/binaries before exact accepted batch contracts and active planned acceptance bindings exist.
 
-- API/server unavailable: preserve safe drafts, show explicit offline state, invent no success.
-- Timeout after possible acceptance: query by correlation/idempotency identity before retry.
-- Reauthentication: use the target `SecureSessionPort`; no raw password storage in shared app state.
-- Unsupported client/server protocol: return `UpgradeRequired` before application mutation.
-- Renderer/WebView failure: backend truth remains unchanged.
-- Unsafe Markdown/HTML/tool output: sanitize or render as bounded text/artifact.
-- Unsupported native capability: typed unavailable state, no arbitrary bridge fallback.
-- Server-function adapter import/reach-through: fail dependency/architecture checks.
-- Logs exclude raw credentials, prompts, private profile data and tool payloads.
+One workspace does not mean one artifact. Server, Web assets, Android package, CLI binary and any MCP process/entrypoint have independent packaging, version and release evidence.
 
-## 11. Configuration and deployment
+## 14. Dependency confinement
 
-Public client configuration contains only:
+The final dependency shape MUST satisfy:
 
-- validated server HTTPS origin;
-- supported protocol/schema versions;
-- client build/target identity;
-- non-secret feature/capability facts;
-- presentation defaults.
+```text
+M10 client-protocol
+  owns versioned wire DTO/error/event/compatibility schemas
+  must not depend on M80 client-core or any outer adapter
 
-The Docker Compose profile owns the server process, dependencies, readiness, persistent volumes, migration/backup/restore and reverse-proxy/TLS wiring. It does not own the Android artifact. The Android package points to the deployed server and uses target secure-session facilities.
+M80 client-core
+  may depend on M10 client-protocol + narrow transport abstractions
+  must not depend on Dioxus, CLI parser, terminal, MCP SDK,
+  backend domain implementations, repositories, executors, providers or journals
 
-Dioxus Fullstack does not provide database/cache/session/mailer implementations; these remain explicit M90/Axum infrastructure choices.
+Dioxus adapter
+  may depend on client-core + Dioxus target features
 
-## 12. Scope and decomposition
+ustc-agent
+  may depend on client-core + CLI/rendering/auth-profile adapters
 
-**Required initial product scope**
+inbound MCP adapter
+  may depend on client-core + MCP protocol adapter
+```
 
-- exact-pinned Dioxus/DX feature set after source revalidation;
-- one Fullstack app source with server, Web and Android target features;
-- Web/PWA page/asset delivery and typed first-party query/command/event journey;
-- Docker Compose server startup/readiness/restart/read-back;
-- Android emulator plus real-device journey against the deployed server;
-- stable errors, compatibility envelope, reconnect and upgrade-required behavior;
-- accessible responsive shared UI with target-specific QA.
+No peer shell may import or spawn another peer shell as its production path. `ustc-agentctl` and M51 are forbidden dependencies of user CLI/MCP/Dioxus client targets.
 
-**Later**
+## 15. Compatibility
 
-- iOS target after macOS/Xcode/signing/device gate;
-- desktop packaging after a real native capability requirement;
-- opt-in notifications and local archive;
-- richer public REST/SSE surfaces over unchanged application ports.
+Every independently deployed request carries client build/target/protocol identity. The server declares supported versions and minimum client requirements. An installed Android artifact, CLI binary or MCP adapter may lag the server and therefore receives typed compatibility behavior.
 
-**Small-module decomposition**
+Shared source protects only artifacts built from the same revision. It does not replace:
 
-1. `fullstack-contract` — versioned DTO/error/event/compatibility values.
-2. `server-function-ingress` — Dioxus/Axum declarations and admitted M10 mapping.
-3. `event-client` — typed SSE/stream cursor/reconnect/version handling.
-4. `app-state` — deterministic presentation reducer.
-5. `routes` — navigation and page composition.
-6. `design-system` — accessible reusable display/form components.
-7. `market-ui` — browse/detail/install intent only.
-8. `agent-ui` — finite run/plan/tool/review projection and intents.
-9. product UI modules — typed M70/M71/M72 projections only.
-10. `platform-web` — browser/PWA/session behavior.
-11. `platform-android` — endpoint/session/lifecycle/Custom Tab/package behavior.
-12. later `platform-ios` and `platform-desktop` peers.
-13. `client-conformance` — fake ingress/event/compatibility fixtures shared across targets.
+- versioned DTO/error/event schemas;
+- stable unknown-field/unknown-variant rules;
+- at least one supported older-client fixture;
+- typed unsupported-version rejection before application dispatch;
+- explicit migration and rollout policy.
 
-## 13. Replacement and acceptance
+Web may deploy atomically with the server, but still exercises equivalent semantic fixtures.
 
-The boundary is accepted only when:
+## 16. Conformance and acceptance
 
-- Web/PWA passes `CLIENT-001`, applicable `WEB-*`, one typed server-function query/command and one typed event stream;
-- Android passes `CLIENT-002` on emulator and real device against the deployed server;
-- archive/memory and offline behavior pass `CLIENT-003/004`;
-- installed-client/server compatibility and typed upgrade behavior pass `CLIENT-005`;
-- server-function admission and no-repository/executor reach-through pass `CLIENT-006`;
-- Docker Compose Fullstack read-back passes the applicable `DEP-*` case;
-- equivalent server fixtures reduce to equivalent semantic state on Web and Android;
-- replacing Dioxus transport/UI does not change domain/runtime/Plugin crates or persisted authority schemas.
+The framework-neutral conformance suite runs every peer adapter against equivalent fake-M10 cases:
 
-## 14. Current status
+- normal read result;
+- accepted mutation and pending event projection;
+- authentication/policy denial;
+- stale precondition/conflict;
+- timeout-after-possible-acceptance reconciliation;
+- monotone reconnect and cursor refresh;
+- cancellation distinct from transport/process closure;
+- supported older protocol;
+- unsupported/unknown protocol;
+- bounded malformed/untrusted result.
 
-Implemented now: none of the Dioxus application, server-function ingress, HTTP/SSE host, Web journey, Android package, auth/session flow or Compose Fullstack profile.
+`CLIENT-007` proves shared typed-core and peer equivalence. `CLIENT-008` proves no shell-out path and operator privilege isolation. `CLIENT-009` proves the user CLI machine contract. `CLIENT-010` proves the least-privilege inbound MCP boundary.
 
-Accepted now: Dioxus Fullstack as the long-lived Web/Android stack; Web-first then mandatory Android rollout; Axum-compatible server functions as admitted first-party ingress; optional public HTTP peer adapters; target ports; independent artifact/version compatibility; authority and dependency constraints.
+These rows remain `planned` until executable bindings pass. Existing long-horizon Dioxus `CLIENT-001` through `CLIENT-006`, `WEB-*` and deployment cases remain non-active until projected into the active matrix.
 
-This contract does not claim a runnable client or promote planned acceptance rows into the active matrix.
+## 17. Current status
+
+Accepted now:
+
+- one framework-neutral client core beneath Dioxus, `ustc-agent` and inbound MCP peer adapters;
+- separate `ustc-agentctl` operator surface;
+- no GUI-to-CLI production subprocess path;
+- M10 remains the admitted application boundary and backend authority remains unchanged;
+- inbound MCP and M51 outbound MCP are directionally separate;
+- required Web/PWA, Docker Compose server and Android targets remain unchanged.
+
+Implemented now: none of the client core, user CLI, inbound MCP adapter, Dioxus application, public ingress, typed stream, auth/session service, Web journey or Android package.
+
+This contract does not make any client operational or promote a planned acceptance row to pass.

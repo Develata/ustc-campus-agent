@@ -1,8 +1,8 @@
 # ADR-0009: Use Dioxus Fullstack for the long-lived Web and Android application
 
-- `Status`: Accepted; amended for mandatory Android and first-party Fullstack ingress
+- `Status`: Accepted; amended for mandatory Android and first-party Fullstack ingress; complemented by [`ADR-0010`](0010-typed-client-peer-adapters.md)
 - `Date`: `2026-07-24`
-- `Last Amendment`: `2026-07-25`
+- `Last Amendment`: `2026-07-31`
 - `Depends on`: [`ADR-0004`](0004-runtime-reference-strategy.md), [`ADR-0007`](0007-finite-agent-harness.md), [`ADR-0008`](0008-agent-plugin-tool-boundary.md)
 
 ## Context
@@ -15,7 +15,7 @@ The official `0.7` documentation describes Web as the best-supported target and 
 
 ## Decision
 
-Adopt [`client-shell/v1`](../contracts/client-shell.md):
+Adopt the Dioxus portion of [`client-shell/v2`](../contracts/client-shell.md):
 
 ```text
 shared Dioxus Fullstack application and presentation model
@@ -37,7 +37,9 @@ platform-owned domain/runtime authorities
 
 The Dioxus application is Fullstack infrastructure, not merely a renderer. Its first-party Web and Android clients MAY use versioned Dioxus server functions as their canonical typed ingress. A server function is an Axum-compatible HTTP endpoint and MAY call one admitted application command/query port after `M00`/`M10` authentication, authorization, request bounds, idempotency/precondition and audit rules pass.
 
-A server function MUST NOT call concrete repositories, databases, Plugin executors, provider SDKs or domain/runtime internals directly. It cannot own or redefine identity, Market/install/grant state, HarnessRun/AgentRun transitions, Agent tool protocol, Plugin execution, source truth, receipts or audit. Public REST/SSE endpoints, when needed for CLI or heterogeneous integrations, are peer transport adapters over the same application ports rather than a second implementation of business semantics.
+A server function MUST NOT call concrete repositories, databases, Plugin executors, provider SDKs or domain/runtime internals directly. It cannot own or redefine identity, Market/install/grant state, HarnessRun/AgentRun transitions, Agent tool protocol, Plugin execution, source truth, receipts or audit. Explicit REST/SSE endpoints for the real `ustc-agent` and inbound MCP heterogeneous consumers are peer transport adapters over the same application ports rather than a second implementation of business semantics.
+
+[`ADR-0010`](0010-typed-client-peer-adapters.md) extends the client topology without weakening this Dioxus decision: Dioxus, `ustc-agent` and inbound MCP consume one framework-neutral typed client core as peer adapters; Dioxus Web/Android never spawn or parse the CLI as their production path.
 
 One source/workspace produces separate artifacts:
 
@@ -72,7 +74,7 @@ Benefits:
 - shared routes, components, presentation reducer, request/response/event types and typed errors;
 - generated client calls for Axum-compatible server-function endpoints instead of a separately maintained TypeScript API client;
 - Web SSR/hydration and Android reuse without duplicating platform authority;
-- optional public HTTP adapters remain possible over the same application ports;
+- explicit user/integration HTTP adapters serve `ustc-agent` and inbound MCP over the same application ports;
 - Dioxus remains confined to the Fullstack application boundary, so domain/runtime evolution stays independent.
 
 Costs and risks:

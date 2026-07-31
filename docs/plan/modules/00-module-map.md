@@ -4,8 +4,8 @@
 
 - `Layer`: Large-module architecture
 - `Status`: Accepted current skeleton
-- `Version`: `module-map/v2`
-- `Last Review`: `2026-07-26`
+- `Version`: `module-map/v3`
+- `Last Review`: `2026-07-31`
 - `Owning Constitution`: [`../00-engineering-constitution.md`](../00-engineering-constitution.md)
 - `Counterpart Contract`: [`../../contracts/module-boundaries.md`](../../contracts/module-boundaries.md)
 - `Counterpart Tasks`: [`../../tasks/00-module-work-policy.md`](../../tasks/00-module-work-policy.md), [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md)
@@ -27,7 +27,7 @@ A large module is an independently owned and independently testable part. “Lar
 | `M70` | USTC ChangeRadar | `design-only` | semantic change candidates/events, board scope, approval and feed behavior | generic source authority, other product state | manifest/design only |
 | `M71` | USTC Affairs Navigator | `design-only` | reviewed tree/procedure artifacts, lookup, supersession and publication journey | generic source authority, full-corpus RAG as truth | manifest/design only |
 | `M72` | Campus Opportunity Graph | `bounded-spike` | opportunity facts, qualification/dependency/conflict, tenant profile projection and planning journeys | public source authority, cross-user profile state | offline Course Planning spike only |
-| `M80` | Dioxus Fullstack Multi-client | `planned` | mandatory Web/PWA and Android routes/components/presentation state, SSR/hydration, generated first-party client facade and target adapters; later iOS/desktop | domain calculation/mutation, direct repository/executor access, Agent/Market/Plugin/source authority | architecture accepted; no Fullstack app |
+| `M80` | Client Core and Interaction Shells | `planned` | framework-neutral typed client behavior; peer Dioxus Web/Android, `ustc-agent` user/automation CLI and inbound MCP adapters; later iOS/desktop | domain calculation/mutation, direct repository/executor access, Agent/Market/Plugin/source authority, operator `ustc-agentctl`, outbound M51 execution, peer-shell subprocess dependencies | architecture accepted; no client-core or peer adapter implementation |
 | `M90` | Platform Infrastructure and Operations | `governance-baseline` | repository implementations for storage, journal, evidence, clock, queue, config, secrets, telemetry and Docker Compose deployment/recovery wiring | domain transition rules and product policy | CI/checker baseline only |
 
 `State key` is the machine-checked implementation-evidence posture shared with every module blueprint and the roadmap lane registry:
@@ -46,11 +46,15 @@ The registry is the current large-module ownership boundary. New top-level modul
 ## 2. Dependency direction
 
 ```text
-M80 Dioxus Web/Android clients
-  └── versioned server-function/HTTP call ──► M10 Application Ingress Host
+M80 peer interaction shells
+  ├── Dioxus Web/Android presentation
+  ├── ustc-agent user/automation CLI
+  └── inbound MCP tools/resources
+          │ shared typed client core
+          └── versioned server-function/HTTP/stream call ──► M10 Application Ingress Host
 
 M10 Application Ingress Host
-  └── typed result/error/event ──► M80 presentation reducer
+  └── typed result/error/event ──► M80 client core and outer-adapter projection
 
 M10 Application Ingress Host
   └── admitted typed application calls ──► M00 / M20 / M30 / M60 / M70 / M71 / M72
@@ -77,23 +81,28 @@ M90 Platform Infrastructure and Operations
 
 Dependency rules:
 
-1. `M80` client target code never imports domain crates or storage/executor/provider clients.
-2. `M10` maps Dioxus server-function/public transport to application commands; it does not reimplement module decisions or force a loopback HTTP hop.
-3. `M30` and `M40` depend on the Plugin-neutral tool protocol, not on each other's implementation; `ustc-agentd` orders their public operations.
-4. `M40` coordinates existing decisions but does not mint grants, run phases or receipts by itself.
-5. `M50` and `M51` normalize external protocols and never own platform state transitions.
-6. `M70`, `M71` and `M72` may depend on `M60` contracts but not on each other's internals.
-7. `M90` implements ports; domain modules do not import database/cloud/runtime-specific state as authority.
-8. Cross-module integration tests live at `apps/ustc-agentd` or another explicitly declared composition test surface.
-9. Cyclic large-module dependencies are forbidden.
+1. `M80` client-core and target code never import domain crates or storage/executor/provider clients. Dioxus, `ustc-agent` and inbound MCP are peers and never spawn or parse one another as their production path; `ustc-agentctl` remains outside M80.
+2. `M10` maps Dioxus server-function/public HTTP/stream transport to application commands; it does not reimplement module decisions or force a loopback HTTP hop.
+3. Inbound MCP (`external Agent → M80 → M10`) is directionally distinct from M51 outbound MCP execution (`M40 → M51 → external MCP server`); neither imports the other's session or credential state.
+4. `M30` and `M40` depend on the Plugin-neutral tool protocol, not on each other's implementation; `ustc-agentd` orders their public operations.
+5. `M40` coordinates existing decisions but does not mint grants, run phases or receipts by itself.
+6. `M50` and `M51` normalize external protocols and never own platform state transitions.
+7. `M70`, `M71` and `M72` may depend on `M60` contracts but not on each other's internals.
+8. `M90` implements ports; domain modules do not import database/cloud/runtime-specific state as authority.
+9. Cross-module integration tests live at `apps/ustc-agentd` or another explicitly declared composition test surface.
+10. Cyclic large-module dependencies are forbidden.
 
 ## 3. Composition surfaces
 
 | Surface | Purpose | Allowed knowledge |
 |---|---|---|
 | `apps/ustc-agentd` | production composition root, Dioxus SSR/assets/server-function and public HTTP/stream host | public contracts of all attached backend modules plus M10 transport adapters |
-| `apps/ustc-agentctl` | operator/development commands and deterministic smoke | public application/domain commands only |
-| `apps/ustc-client` (future) | shared Dioxus Fullstack source and Web/Android target builds | client DTO/error/event/compatibility contracts and target ports only; server-only dispatch supplied through M10 |
+| `apps/ustc-agentctl` | operator/development commands and deterministic smoke | separately admitted public application/domain/operator commands; not an M80 peer client |
+| `crates/client-protocol` (future) | M10-owned framework-neutral versioned wire DTO/error/event and compatibility carrier | no transport, presentation, command parser, MCP SDK or backend implementation; M80 produces request instances but does not redefine schema |
+| `crates/client-core` (future) | M80-owned framework-neutral user-client behavior and fake-M10 conformance | M10-owned client-protocol values plus M80 auth/transport/reconnect abstractions; no outer-framework or backend implementation |
+| `apps/ustc-agent` (future) | ordinary-user and noninteractive automation CLI | client-core, CLI parser/rendering and user auth-profile adapter only |
+| inbound MCP adapter (future) | selected external-Agent tools/resources | client-core plus MCP outer protocol mapping; no M51/domain/operator reach-through |
+| `apps/ustc-client` (future) | shared Dioxus Web/Android Fullstack source | client-core, presentation state, Dioxus target adapters and M10 server-function declarations only |
 | module standalone tests | independent acceptance against fakes | owning module internals plus fake public counterparts |
 | `apps/ustc-agentd/tests` | cross-module ordering and wiring proof | public contracts, never private fields |
 
@@ -138,7 +147,7 @@ module plan and public boundary
 
 Unrelated large modules do not have to finish together. For example:
 
-- `M80` may implement a complete client state reducer against a fake `M10` server.
+- `M80` may implement a complete framework-neutral client core plus CLI/MCP/Dioxus conformance against a fake `M10` server before any backend product module is complete.
 - `M30` may complete a finite harness against fake `M50` and `M40` ports.
 - `M60` may replay approved source fixtures without `M70`/`M71`/`M72` being complete.
 - `M20` may complete install/disable/revoke semantics without a Dioxus Market page.
@@ -159,7 +168,7 @@ These implementations do not freeze unfinished module APIs. Before further imple
 
 ## 7. MVP and later boundary
 
-The initial product needs one honest attached path through selected parts of `M10`, `M20`, `M30`, `M40`, `M50`, `M60`, one or more first-party product modules and `M80`, supported by `M90`. Web proves the path first; the required target set is not accepted until the Docker Compose Fullstack server and Android peer pass their own gates.
+The initial product needs one honest attached path through selected parts of `M10`, `M20`, `M30`, `M40`, `M50`, `M60`, one or more first-party product modules and `M80`, supported by `M90`. M80 may prove its framework-neutral core early through bounded read-only `ustc-agent` and inbound-MCP slices against the same admitted API semantics, while Web remains the first graphical proof. The required target set is not accepted until the Docker Compose Fullstack server and Android peer also pass their own gates.
 
 The long-term skeleton reserves all registered modules, but later scope does not become MVP work merely because a module plan mentions it. Each module plan separately marks:
 

@@ -25,13 +25,16 @@ They share `M60` Campus Trust/Source facts. They do not share package version, i
 ## 2. Four call layers
 
 ```text
-Interaction shell
-  M80 Dioxus Fullstack Web/PWA → mandatory Android → later iOS/desktop
-  CLI/integration callers
+Interaction shell — M80 peer adapters
+  Dioxus Web/PWA + Android; later iOS/desktop
+  ustc-agent user/automation CLI
+  inbound MCP selected tools/resources
+          │ M80 framework-neutral typed client core
+          │ M10-owned versioned client-protocol values
           │ typed intent / safe projection
           ▼
 Application interface
-  M10 ustc-agentd Dioxus server functions + HTTP + typed streams
+  M10 ustc-agentd Dioxus server functions + explicit HTTP + typed streams
           │ admitted typed command/query/event
           ▼
 Flow coordination
@@ -53,7 +56,7 @@ M90 infrastructure implementations
   repositories/journals/evidence/clock/queue/secrets/HTTP/telemetry/deployment
 ```
 
-The thin client displays and submits intent. Backend modules perform every truth-affecting calculation and mutation. `M90` makes module rules durable; it does not define them.
+The thin peer clients display/serialize server projections and submit intent through one typed client core. They do not spawn one another, and `ustc-agentctl` remains a separate operator surface. Backend modules perform every truth-affecting calculation and mutation. `M90` makes module rules durable; it does not define them. Inbound MCP (`external Agent → M80 → M10`) is distinct from M51 outbound MCP execution.
 
 ## 3. Large-module map
 
@@ -70,34 +73,37 @@ The thin client displays and submits intent. Backend modules perform every truth
 | `M70` | ChangeRadar | semantic change review/event/feed | manifest/design only |
 | `M71` | Affairs Navigator | reviewed procedure tree/artifacts/search | manifest/design only |
 | `M72` | Opportunity Graph | reviewed opportunities, private profiles, qualification/planning | offline Course Planning spike |
-| `M80` | Dioxus Fullstack Multi-client | required Web/Android UI/routes/view state/SSR/hydration/generated client facade; later iOS/desktop | accepted design, no crate/dependency |
+| `M80` | Client Core and Interaction Shells | framework-neutral client behavior and peer Dioxus Web/Android, `ustc-agent` and inbound MCP adapters; later iOS/desktop | accepted architecture, no client-core or peer implementation |
 | `M90` | Infrastructure/Operations | ports for storage/journal/evidence/config/secrets/HTTP/telemetry and Docker Compose deployment | CI/checker only |
 
 “Current evidence” is not module completion. See the module blueprint exit gate and acceptance matrix.
 
-## 4. Dioxus and API boundary
+## 4. Typed client peers and API boundary
 
 Accepted topology:
 
 ```text
-one shared Dioxus application
-  ├── Web/PWA first
-  ├── SSR/hydration/page hosting
-  ├── Android mandatory next target
-  ├── iOS target adapter later
-  └── desktop target adapter later
+M80 framework-neutral client core
+  ├── one shared Dioxus application
+  │     ├── Web/PWA first graphical proof
+  │     ├── SSR/hydration/page hosting
+  │     ├── Android mandatory graphical peer
+  │     └── later iOS/desktop
+  ├── ustc-agent ordinary-user/automation CLI
+  └── inbound MCP selected tools/resources
           │
-          │ versioned server functions / HTTP / typed streams
+          │ versioned server functions / explicit HTTP / typed streams
+          │ M10-owned client-protocol values
           ▼
 M10 ingress / ustc-agentd
-          │
+          │ admitted application command/query/event
           ▼
 backend module application interfaces
 ```
 
-Dioxus server functions are Axum-compatible M10 ingress adapters and SHOULD back the generated first-party `ClientApi` facade. After compatibility, identity, authorization, bounds, idempotency/precondition and audit admission, they may call one public application command/query port. They cannot call concrete repositories/databases, executors, provider SDKs or journals directly. Optional public HTTP adapters call the same application ports and do not duplicate business logic.
+Dioxus, `ustc-agent` and inbound MCP are outer peers over one M80 client semantic core. M10 owns the framework-neutral versioned wire schema; M80 core consumes it, and M10 never depends on client-core. The peers do not invoke or parse one another as subprocesses. Dioxus server functions and explicit HTTP/SSE routes are M10 peer ingress adapters. After compatibility, identity, authorization, bounds, idempotency/precondition and audit admission, each may call one public application command/query port. No client or ingress adapter calls concrete repositories/databases, executors, provider SDKs or journals directly.
 
-The Docker Compose profile runs the native server and dependencies, serves Web assets/SSR and exposes admitted HTTPS endpoints. Android is a separate signed artifact that reuses the client contract but may lag server deployments, so compatibility/upgrade behavior is explicit.
+The Docker Compose profile runs the native server and dependencies, serves Web assets/SSR and exposes admitted HTTPS endpoints. Android, `ustc-agent` and the inbound MCP adapter are independently deployable and may lag server deployments, so compatibility/upgrade behavior is explicit. `ustc-agentctl` remains operator/developer-only. M51 remains the opposite platform-to-external-MCP execution path.
 
 ## 5. Agent/tool path
 
@@ -188,6 +194,7 @@ Implemented evidence:
 
 Not implemented:
 
+- framework-neutral client-core, `ustc-agent` user/automation CLI or inbound MCP adapter;
 - Dioxus Fullstack app or dependency, Compose Fullstack server profile, Web journey or Android artifact;
 - Fullstack/public ingress, typed stream or auth/session service;
 - production durable Market installations/grants/authority adapters, update/rollback and lifecycle/effect-intent composition;

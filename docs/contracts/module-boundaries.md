@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current contract
-- `Version`: `module-boundaries/v1.1`
-- `Last Review`: `2026-07-26`
+- `Version`: `module-boundaries/v2`
+- `Last Review`: `2026-07-31`
 - `Owning Plan`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
 - `Task Policy`: [`../tasks/00-module-work-policy.md`](../tasks/00-module-work-policy.md)
 
@@ -20,15 +20,16 @@ This registry defines what may cross each large-module boundary. It does not pre
 6. Public contracts are versioned before persistence or multiple independent consumers make compatibility necessary.
 7. Fake counterparts implement the same public contract and are required before large-module standalone acceptance.
 8. Cyclic large-module code dependencies are forbidden.
+9. M10 owns the versioned client wire schema; M80 owns client behavior and produces conforming request instances. A shared M10 protocol carrier cannot depend on M80 client-core or outer adapter types.
 
 ## 2. Current boundary registry
 
 | Boundary ID | Producer/owner | Consumer | Values/operation | Status |
 |---|---|---|---|---|
 | `B-M00-M10-ACTOR` | `M00` | `M10` | `AuthenticatedActor`, `PlatformRequestContext`, session denial | planned |
-| `B-M80-M10-CALL` | `M80` | `M10` | versioned Dioxus server-function/HTTP request, client build/target/protocol, user intent, precondition and correlation/idempotency identity | accepted contract; implementation planned |
-| `B-M10-M80-RESULT` | `M10` | `M80` | versioned response/error/projection plus compatibility or `UpgradeRequired` outcome | accepted contract; implementation planned |
-| `B-M10-M80-EVENT` | `M10` | `M80` | typed server event/stream value, monotone cursor and reconnect/resync outcome | accepted contract; implementation planned |
+| `B-M80-M10-CALL` | M80 produces request instances; M10 owns the versioned wire schema | `M10` | versioned client-core request from Dioxus, `ustc-agent` or inbound MCP; client build/target/protocol, admitted session projection, typed intent, precondition and correlation/idempotency identity | accepted contract; implementation planned |
+| `B-M10-M80-RESULT` | `M10` | `M80` | versioned response/error/projection plus compatibility or `UpgradeRequired` outcome reduced/rendered by the calling peer adapter | accepted contract; implementation planned |
+| `B-M10-M80-EVENT` | `M10` | `M80` | typed server event/stream value, monotone cursor and reconnect/resync outcome shared semantically across peer adapters | accepted contract; implementation planned |
 | `B-M10-APP-CALL` | `M10` | owning backend application module | one admitted typed application command/query; no transport or Dioxus type | planned per ingress |
 | `B-APP-M10-RESULT` | owning backend application module | `M10` | typed application result/error/event projection; no concrete adapter handle | planned per ingress |
 | `B-M20-M40-PROJECTION` | `M20` | `M40` | immutable tool projection, private route and current authorization result | partial implementation |
@@ -46,29 +47,40 @@ This registry defines what may cross each large-module boundary. It does not pre
 
 `B-M10-APP-CALL` and `B-APP-M10-RESULT` are boundary families, not universal command/result bags. Each server function or public route declares one owning application module and exact value contract. Dioxus/Axum transport types terminate in the M10 adapter.
 
-## 3. Client boundary
+## 3. Client-core and peer-shell boundary
 
-`M80` may receive:
+M80 owns one framework-neutral client core plus Dioxus, `ustc-agent` and inbound MCP outer adapters. `ustc-agentctl` is a separate operator/developer surface and is not reachable through these peer clients.
 
-- API/version/build information;
+M80 may receive:
+
+- API/version/build and server capability information;
 - server/client compatibility and minimum-supported-version outcomes;
 - safe Market/install/run/product projections;
 - stable error codes and user-safe messages;
 - monotone event sequence/cursor;
 - exact intent preconditions and server capability availability.
 
-`M80` may send:
+M80 may send:
 
-- user-entered form values under the route schema;
+- user/automation/MCP input under the registered operation schema;
 - one typed user intent;
 - current projection/precondition identity;
 - correlation/idempotency identity;
 - client build/target/protocol identity;
 - reconnect cursor.
 
-It must not receive or send domain repositories, grant internals, executor routes/config, provider secrets, raw audit payloads or mutable server objects. Client-side calculations may support display only; backend/application modules recompute every truth-affecting decision.
+It must not receive or send domain repositories, grant internals, executor routes/config, provider secrets, raw audit payloads, mutable server objects, operator credentials or M51 session handles. Client-side calculations may support display, framing and safe local validation only; backend/application modules recompute every truth-affecting decision.
 
-A Dioxus server function is a valid M10 HTTP ingress adapter. After M00/M10 admission it may issue `B-M10-APP-CALL` and map `B-APP-M10-RESULT`; it may not reach a concrete repository, executor, provider SDK or journal. Independently deployed Android clients require compatibility fixtures and typed rejection before an unsupported request reaches `B-M10-APP-CALL`.
+Dioxus server functions and explicit HTTP/SSE routes are valid peer M10 ingress adapters. After M00/M10 admission they may issue `B-M10-APP-CALL` and map `B-APP-M10-RESULT`; they may not reach concrete repositories, executors, providers or journals. M10 and M80 may both consume the M10-owned framework-neutral protocol carrier; M80 client-core depends on it, while M10 never depends on client-core. Dioxus, `ustc-agent` and inbound MCP share client-core semantics and fake-M10 fixtures but never spawn or parse one another as their production path.
+
+The MCP directions are exact:
+
+```text
+external Agent → M80 inbound MCP adapter → client-core → M10
+M40 → M51 outbound MCP binding/executor → external MCP server
+```
+
+The inbound adapter cannot invoke M51 or inherit operator commands/credentials. Independently deployed Android, CLI and inbound-MCP artifacts require compatibility fixtures and typed rejection before an unsupported request reaches `B-M10-APP-CALL`.
 
 ## 4. Agent–Plugin boundary
 
@@ -142,7 +154,7 @@ Compatible additive changes still require:
 - fixture and registry update;
 - acceptance evidence for old and new peers where both remain supported.
 
-Web may deploy atomically with the server. Android does not; its installed-version compatibility window is therefore an explicit boundary obligation even when both sides share Rust source types.
+Web may deploy atomically with the server. Android, `ustc-agent` and inbound MCP do not necessarily do so; each independently deployed artifact therefore has an explicit compatibility obligation even when shared Rust types exist.
 
 In-flight runs/calls keep their pinned contract/snapshot. New versions affect new calls/turns/runs under explicit policy.
 

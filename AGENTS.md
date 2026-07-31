@@ -34,7 +34,7 @@ This file governs all work in this repository. Read this file, then `README.md`,
 - Apply the constitution's priority order. In this repository, lower-priority work must not weaken tenant isolation, source authority, grants, deterministic validation, receipts, audit evidence or recoverability.
 - Define contracts before implementation for public APIs, CLI commands, schemas, permissions, source import, and Agent run state.
 - Keep Platform authority in Rust domain code. Framework checkpoints, model transcripts, adapters, and browser/UI state cannot overwrite grants, approvals, receipts, audit, or source revisions.
-- Keep the Dioxus Fullstack boundary thin. Web/PWA, Docker Compose server and Android are required targets; iOS/desktop are later. Client code renders server-owned state and submits typed intent. An admitted Dioxus server function MAY call one public application command/query port, but neither client nor server-function adapters may own domain calculation/mutation or reach concrete repositories, executors, providers or journals. Product authority remains in explicit backend/application modules.
+- Keep every client boundary thin. `M10` owns one framework-neutral versioned client-protocol carrier; `M80` owns one framework-neutral typed client core over it plus peer Dioxus Web/Android, `ustc-agent` user/automation CLI and inbound MCP adapters. M10 MUST NOT depend on M80 client-core. Peers reuse code and conformance fixtures but MUST NOT spawn or parse one another as their production path. `ustc-agentctl` remains a separate operator/developer privilege surface, and inbound MCP is distinct from M51 outbound MCP execution. Web/PWA, Docker Compose server and Android are required targets; iOS/desktop are later. Clients render or serialize server-owned state and submit typed intent. An admitted Dioxus server function or public adapter MAY call one public application command/query port, but neither client nor ingress adapter may own domain calculation/mutation or reach concrete repositories, executors, providers or journals. Product authority remains in explicit backend/application modules.
 - Current stable foundations include Rust tooling, HTTP/SSE, JSON, SemVer, SHA-256 and Git. High-level framework/SDK/database/runtime types terminate at owned adapters and do not define platform objects or authority.
 - Remote `main` remains protected. A dedicated large-module branch and PR is the default path. An exact-scope declared small module MAY instead take one independent feature branch and protected-main PR when it meets every admission criterion in [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md) §3 Path B; failing any criterion falls back to the default path, and no task brief may self-declare an exception. During the current solo skeleton phase, Develata MAY explicitly allow local `main` work for root interfaces and composition scaffolding, but this does not bypass remote branch protection, review, or Develata authorization under the work policy.
 - Do not perform remote operations without current Develata authorization as defined in [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md) §3. An active campaign grant covers only operations named by its canonical task authority; tags, releases, publication and GitHub visibility remain operation-specific unless that grant explicitly names them.
@@ -49,7 +49,9 @@ The current repository call topology is:
 
 ```text
 1. Interaction shell
-   Dioxus Web/PWA + Android, later iOS/desktop, or operator CLI
+   M80 typed client core with peer Dioxus Web/PWA + Android,
+   ustc-agent user/automation CLI and inbound MCP adapter;
+   later iOS/desktop. ustc-agentctl remains operator-only.
         ↓
 2. Application interface
    M10 ingress in ustc-agentd: server functions / HTTP / typed streams / commands

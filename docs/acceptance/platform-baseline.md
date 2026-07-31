@@ -406,6 +406,10 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `CLIENT-004` | offline/relay unavailable state is explicit, no hidden execution switch | browser-automation | release |
 | `CLIENT-005` | current server remains compatible with the declared supported older Android protocol and returns typed `UpgradeRequired` before dispatch for an unsupported client | rust-integration | release |
 | `CLIENT-006` | every Dioxus server function passes M00/M10 admission and one application port; dependency/conformance checks prevent repository, executor, provider SDK or journal reach-through | rust-integration | release |
+| `CLIENT-007` | M10 owns one framework-neutral versioned client-protocol carrier and never depends on M80 client-core; Dioxus, `ustc-agent` and inbound MCP consume one M80 framework-neutral typed client core over that carrier; equivalent fake-M10 request/result/error/event, reconnect, cancellation and compatibility cases reduce to equivalent semantic client state | rust-integration | PR |
+| `CLIENT-008` | no GUI/service production path spawns or parses a peer CLI, and Dioxus/user-CLI/inbound-MCP dependency plus credential/command registries cannot reach `ustc-agentctl`, backend domain implementations, M51, repositories or executors | rust-cli-smoke | PR |
+| `CLIENT-009` | real `ustc-agent` read and stream paths preserve versioned JSON/NDJSON stdout, redacted stderr, stable exit classes, least-privilege auth, compatibility, cursor reconnect, cancellation distinction and timeout reconciliation | rust-cli-real-host | integration |
+| `CLIENT-010` | inbound MCP discovery/invocation maps only reviewed bounded tools/resources through client-core and M10, binds delegated caller/tenant/grant state, instruction-isolates results and reaches no operator, domain or outbound-M51 authority | external-conformance | integration |
 
 ## 18. Reliability, deployment and recovery — `REL-*`, `DEP-*`
 

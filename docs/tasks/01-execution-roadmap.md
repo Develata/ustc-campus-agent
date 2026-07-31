@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Status`: Current delivery and task-splitting order
-- `Version`: `module-roadmap/v2.3`
+- `Version`: `module-roadmap/v2.4`
 - `Last Review`: `2026-07-31`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
@@ -26,7 +26,7 @@ The module skeleton review is complete. Concrete implementation remains contract
 
 Before any of these grows, its owner compares current code with the new module blueprint and records `adopt | amend | retain as spike | remove`. Documentation alone does not promote any planned acceptance row.
 
-Contract/fixture-only root scaffolding may begin after the completed S0 review, subject to the owning module's contract-ready gate. A minimal Dioxus initialization before active Fullstack/API/client/deployment acceptance rows exists only as an explicitly disposable, non-mergeable spike; retained server/Web/Android scaffold work starts only after exact planned rows and future bindings are added to `matrix.tsv`. Neither form may pre-implement product logic.
+Contract/fixture-only root scaffolding may begin after the completed S0 review, subject to the owning module's contract-ready gate. M80 client-core/CLI/inbound-MCP retained work starts only under exact batches bound to planned `CLIENT-007`–`CLIENT-010`; these rows now admit proposal/implementation slicing but do not prove any artifact. A minimal Dioxus initialization before active Fullstack/Web/deployment bindings exists only as an explicitly disposable, non-mergeable spike; retained server/Web/Android scaffold work still waits for exact `WEB-*`/deployment rows and future bindings in `matrix.tsv`. Neither form may pre-implement product logic.
 
 <!-- AUTONOMOUS_CAMPAIGN_GRANT:BEGIN -->
 ### Active autonomous module campaign authorization
@@ -75,7 +75,7 @@ Foundation contracts
 ├── M00 Platform Control/Identity
 ├── M10 Application Ingress Host
 ├── M90 Infrastructure/Operations
-└── M80 Dioxus Fullstack Web/Android may develop against fake M10
+└── M80 client-core with peer Dioxus/ustc-agent/inbound-MCP adapters may develop against fake M10
 
 Independent runtime/market lanes
 ├── M20 Market/Package Lifecycle
@@ -98,7 +98,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 | Module | State key | Current state | Current module target | Owner | Merge gate |
 |---|---|---|---|---|---|
 | `M00` Platform Control/Identity | `partial-evidence` | identity-types and session-domain implemented; request-context/ports planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
-| `M10` Application Ingress Host | `skeleton` | skeleton | Dioxus server-function/public route/DTO/error/event/compatibility host | unassigned | black-box Fullstack/HTTP/stream conformance and no reach-through |
+| `M10` Application Ingress Host | `skeleton` | skeleton | Dioxus server-function plus explicit `ustc-agent`/inbound-MCP HTTP/SSE route, DTO/error/event/compatibility host | unassigned | black-box peer-client HTTP/stream conformance and no reach-through |
 | `M20` Market/Package | `partial-evidence` | typed package/catalog + capability-registry + bounded managed-installation fake + bounded reviewed-grant aggregate/replay/semantic repository + pure resolver evidence | M10/M80 browse delivery + durable installation/grant/update/composition around audited resolver | unassigned | `MARKET-*` current-scope rows |
 | `M30` Agent Harness/Runtime | `partial-evidence` | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |
 | `M40` Tool Gateway/Execution | `partial-evidence` | protocol/fake proof | durable intent/executor/receipt composition | unassigned | `AGENT-018/019`, `MARKET-007` |
@@ -108,7 +108,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 | `M70` ChangeRadar | `design-only` | design only | one semantic change + feed | unassigned | `RADAR-*` current-scope rows |
 | `M71` Affairs Navigator | `design-only` | design only | one reviewed procedure board | unassigned | `PROC-*` current-scope rows |
 | `M72` Opportunity Graph | `bounded-spike` | planner spike | honest source/profile/Market integration | unassigned | `COURSE-*` current-scope rows |
-| `M80` Dioxus Fullstack | `planned` | no code | Web/PWA first plus mandatory Android shared journey | Kimi K3 + Claude Opus 5 lead Windows UI/design; GPT review/local optimization | exact active Fullstack/API/`CLIENT-*`/`WEB-*` rows added, then Web and Android passing |
+| `M80` Client Core and Interaction Shells | `planned` | no code | framework-neutral client core plus peer `ustc-agent`, inbound MCP and required Dioxus Web/Android journeys | client/core/CLI/MCP unassigned; Kimi K3 + Claude Opus 5 lead Windows UI/design; GPT review/local optimization | `CLIENT-007`–`CLIENT-010` for retained headless slices; exact active `WEB-*`/deployment rows plus Web and Android passing for Dioxus |
 | `M90` Infrastructure | `governance-baseline` | CI only | config/store/journal/evidence + Docker Compose Fullstack restore profile | unassigned | Compose Web/Android target profile restore/read-back |
 
 Team assignment updates only the `Owner` cells and issue links. It does not change module ownership semantics.
@@ -123,7 +123,7 @@ Team assignment updates only the `Owner` cells and issue links. It does not chan
 
 - adopt full engineering constitution and mandatory work loop;
 - define large-module ownership and dependency direction;
-- define Dioxus Fullstack Web/Android shell, admitted server-function ingress and explicit optional public API boundary;
+- define one M80 framework-neutral typed client core with peer Dioxus Web/Android, `ustc-agent` user/automation and inbound MCP adapters; keep `ustc-agentctl` operator-only, forbid GUI→CLI and keep M10 ingress explicit;
 - classify existing code as partial evidence.
 
 ### `S0-2` Boundary and task contracts
@@ -163,16 +163,16 @@ Current completion scope excludes production USTC/CAS login. A labelled demo/aut
 
 ## 6. M10 lane — Application Ingress Host
 
-- `M10-B1 ingress-registry`: server-function/public route/version/error/event registry and DTO rules.
+- `M10-B1 ingress-registry`: server-function plus explicit `ustc-agent`/inbound-MCP route/version/error/event registry, DTO rules and the framework-neutral M10-owned `client-protocol` carrier.
 - `M10-B2 request-admission`: bounds, `M00` actor mapping, client build/protocol compatibility and preconditions.
 - `M10-B3 server-function-adapter`: Axum-compatible first-party ingress with dependency reach-through checks.
 - `M10-B4 dispatch-and-errors`: one ingress maps to one owned application operation and stable result/error.
 - `M10-B5 event-stream`: monotone typed stream/SSE cursor, reconnect and backpressure.
 - `M10-B6 server-lifecycle`: Dioxus SSR/assets/ingress attachment, preflight, readiness, graceful drain and black-box tests.
-- `M10-B7 client-contract`: freeze the Web/Android subset plus supported-version/upgrade behavior required by `M80`.
-- `M10-B8 public-adapter`: add explicit REST/SSE only for a real heterogeneous consumer.
+- `M10-B7 client-contract`: freeze the shared Dioxus/CLI/MCP semantic subset plus supported-version/upgrade behavior required by `M80`.
+- `M10-B8 user-integration-http-adapter`: implement the explicit REST/SSE subset consumed by real `ustc-agent` and inbound MCP adapters; no generic arbitrary-operation endpoint.
 
-Handlers contain mapping and coordination only. Domain validation remains in owning modules.
+Handlers contain mapping and coordination only. Domain validation remains in owning modules. Dioxus, user CLI and inbound MCP are transport peers over the same admitted application operations; the inbound MCP adapter is not M51.
 
 ## 7. M20 lane — Market and Package Lifecycle
 
@@ -297,24 +297,29 @@ M70 ChangeRadar source/revision/diff foundation
 
 The three packages keep independent versions, enable/disable and acceptance even when they share M60 facts.
 
-## 14. M80 lane — Dioxus Fullstack Multi-client
+## 14. M80 lane — Client Core and Interaction Shells
 
-`M80-B1` may begin against a fake `M10` after `B-M80-M10-CALL`, `B-M10-M80-RESULT` and `B-M10-M80-EVENT` freeze only as a disposable, non-mergeable initialization spike. Before it becomes retained scaffold or `M80-B2+` starts, exact planned Fullstack/API/`CLIENT-*`/`WEB-*`/deployment rows with future bindings must be active in `matrix.tsv`.
+`CLIENT-007` through `CLIENT-010` now provide active planned future bindings for headless client slicing. They do not prove implementation. `M10-B1` must first freeze the exact M10-owned `client-protocol` carrier; `M80-B1` consumes that exact carrier and its fake-M10 implements the same contract rather than inventing a client-owned protocol. `M80-B1`–`M80-B5` may become retained only under exact batch contracts and independent evidence against fake then real M10. Dioxus initialization remains disposable/non-mergeable until exact active `WEB-*` and deployment bindings admit the retained Web/Android scaffold.
 
-- `M80-B1 initialization`: revalidate and exact-pin Dioxus/DX; minimal server/Web/Android target features and toolchain smoke; no product/domain code.
-- `M80-B2 fullstack-contract`: versioned DTO/error/event/compatibility mapping with unknown-version behavior.
-- `M80-B3 server-function-client`: generated query/command calls, correlation and typed stream cursor/reconnect.
-- `M80-B4 app-state`: deterministic thin presentation reducer including `UpgradeRequired`.
-- `M80-B5 design-system`: accessible shared UI/form/display components.
-- `M80-B6 market-run-journey`: one complete fake then real M10 journey.
-- `M80-B7 web-pwa`: page/assets, SSR/hydration or explicit CSR, responsive/accessibility/console/network proof.
-- `M80-B8 compose-fullstack`: attach native server build to M90 Compose profile and prove restart/read-back.
-- `M80-B9 android`: emulator plus real-device HTTPS/session/lifecycle/reconnect/Custom Tab/package proof.
-- `M80-B10 version-skew`: supported older Android protocol plus typed unsupported-version rejection.
-- `M80-B11 ios`: later peer target adapter/signing/device proof.
-- `M80-B12 desktop`: optional later peer target adapter and packaging proof.
+- `M80-B0 architecture-contract`: accepted typed peer-client amendment; no code or implementation-status promotion.
+- `M80-B1 client-contract-adoption`: consume the M10-owned `client-protocol` carrier without redefining its wire schema; map validated shell intent into conforming request instances; freeze fake-M10 fixtures and unknown-version behavior.
+- `M80-B2 client-core`: create the M80-owned core over `client-protocol` with endpoint/profile validation, auth port, query/command transport, correlation/idempotency, typed failure, cursor reconnect, cancellation and timeout reconciliation; M10 and outer-framework/backend implementations are forbidden dependencies.
+- `M80-B3 peer-conformance`: adapter-independent fake-M10 normal/denial/conflict/reconnect/cancel/version-skew fixtures plus dependency/command/credential confinement.
+- `M80-B4 ustc-agent-read-client`: create the ordinary-user binary and one real read-only server/capability/product path with stable JSON/NDJSON, stderr and exit-class behavior; no operator command.
+- `M80-B5 inbound-mcp-read-adapter`: one reviewed selected read-only tool/resource through client-core and M10 with delegated profile, bounds and no domain/operator/M51 reach-through; exact package/process placement freezes here.
+- `M80-B6 dioxus-initialization`: revalidate and exact-pin Dioxus/DX; minimal server/Web/Android target features and toolchain smoke; no product/domain code.
+- `M80-B7 dioxus-fullstack-contract`: generated query/command calls and typed event mapping over the same client semantics.
+- `M80-B8 app-state`: deterministic thin presentation reducer including `UpgradeRequired`.
+- `M80-B9 design-system`: accessible shared UI/form/display components.
+- `M80-B10 market-run-journey`: one complete fake then real M10 graphical journey.
+- `M80-B11 web-pwa`: page/assets, SSR/hydration or explicit CSR, responsive/accessibility/console/network proof.
+- `M80-B12 compose-fullstack`: attach native server build to M90 Compose profile and prove restart/read-back.
+- `M80-B13 android`: emulator plus real-device HTTPS/session/lifecycle/reconnect/Custom Tab/package proof.
+- `M80-B14 version-skew`: supported older Android/CLI/MCP protocol plus typed unsupported-version rejection.
+- `M80-B15 ios`: later peer target adapter/signing/device proof.
+- `M80-B16 desktop`: optional later peer target adapter and packaging/sidecar decision proof.
 
-Every product calculation/mutation is re-evaluated by backend modules. Client code only displays and submits intent.
+Every truth-affecting calculation/mutation is re-evaluated by backend modules. Client-core and outer adapters only validate local shape, transport typed intent and reduce/render/serialize server projections. No peer shell spawns or parses another peer executable as its production path. `ustc-agentctl` remains outside M80, and inbound MCP remains opposite in direction from M51 outbound MCP execution.
 
 ## 15. M90 lane — Infrastructure and Operations
 
@@ -336,9 +341,9 @@ Start with one restorable demo deployment. Do not add multi-cloud/container orch
 
 ### A0 — Root skeleton
 
-`M00` admitted context + `M10` Fullstack ingress/event host + fake application modules + `M80` fake Web/Android-compatible client journey.
+`M00` admitted context + `M10` server-function/HTTP/event host + fake application modules + `M80` client-core conformance with one fake `ustc-agent`/inbound-MCP read path; Dioxus Web/Android assembly enters only under its own active bindings.
 
-Prerequisite: exact active acceptance rows and future bindings exist for every retained M00/M10/M80 scaffold. A disposable initialization spike cannot satisfy A0 or enter the module merge packet.
+Prerequisite: exact active acceptance rows and future bindings exist for every retained M00/M10/M80 scaffold. `CLIENT-007`–`CLIENT-010` satisfy only the headless/client-core projection; a disposable Dioxus initialization spike cannot satisfy A0 or enter the module merge packet.
 
 ### A1 — Market/tool skeleton
 

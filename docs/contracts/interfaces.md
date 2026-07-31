@@ -2,7 +2,7 @@
 
 This registry names draft public surfaces before implementation. [`module-boundaries.md`](module-boundaries.md) owns the large-module crossing rules; this file owns the concrete application/API/tool surface registry. Implementation PRs must update this document or create a more specific contract before changing surfaces.
 
-The implemented single-node Agent state/event contract is defined in [`agent-runtime.md`](agent-runtime.md). The planned finite user-task lifecycle is defined in [`agent-harness.md`](agent-harness.md). The Agent–Plugin seam is [`agent-plugin-boundary/v0`](agent-plugin-boundary.md). The future Dioxus Fullstack presentation boundary is [`client-shell/v1`](client-shell.md). None makes the application endpoints below operational.
+The implemented single-node Agent state/event contract is defined in [`agent-runtime.md`](agent-runtime.md). The planned finite user-task lifecycle is defined in [`agent-harness.md`](agent-harness.md). The Agent–Plugin seam is [`agent-plugin-boundary/v0`](agent-plugin-boundary.md). The future typed multi-client boundary is [`client-shell/v2`](client-shell.md). None makes the application endpoints below operational.
 
 ## Application HTTP endpoints — draft
 
@@ -10,7 +10,8 @@ An endpoint may be implemented as a versioned Dioxus server function, an explici
 
 | Route | Method | Purpose | Status |
 |---|---:|---|---|
-| `/api/health` | GET | service health and version | planned |
+| `/api/health` | GET | service health, build and protocol version | planned |
+| `/api/client/capabilities` | GET | bounded client-protocol and selected user-capability projection; no operator registry | planned |
 | `/api/market/packages` | GET | list visible packages | planned |
 | `/api/market/packages/{id}` | GET | package details | planned |
 | `/api/installations` | POST | install exact package version with grants | planned |
@@ -21,9 +22,16 @@ An endpoint may be implemented as a versioned Dioxus server function, an explici
 | `/api/agent/runs/{id}:cancel` | POST | request typed cancellation under current phase/effect semantics | planned |
 | `/api/agent/runs/{id}/events` | GET/SSE | stream harness/node/model/tool/review state projections | planned |
 
-First-party Dioxus Web/Android clients consume admitted M10 ingress through a typed `ClientApi` facade whose implementation SHOULD use generated server-function calls and typed stream handles. A server function is an Axum-compatible M10 adapter: after version, bounds, identity, authorization, idempotency/precondition and audit admission, it may call one public application command/query port. It MUST NOT call concrete repositories, databases, Plugin executors, provider SDKs or journals directly. Public/heterogeneous routes are peer transport adapters over the same application ports, not duplicate business implementations.
+M80 Dioxus Web/Android, `ustc-agent` and inbound MCP adapters are peer clients over one M80-owned framework-neutral typed client core. M10 owns the versioned wire DTO/error/event/compatibility schema, represented by a framework-neutral `client-protocol` carrier when extracted; M80 core consumes that carrier and M10 never depends on client-core. Dioxus SHOULD use generated server-function calls and typed stream handles where those preserve the same contract. `ustc-agent`, inbound MCP and other admitted heterogeneous clients use the explicit endpoint subset above. A server function or HTTP/SSE route is an Axum-compatible M10 adapter: after version, bounds, identity, authorization, idempotency/precondition and audit admission, it may call one public application command/query port. It MUST NOT call concrete repositories, databases, Plugin executors, provider SDKs or journals directly. Public/heterogeneous routes are peer transport adapters over the same application ports, not duplicate business implementations. No peer client spawns or parses another peer executable as its production path.
 
-Every independently deployed request carries client build/target/protocol identity. Unsupported Android/server combinations return a typed compatibility or `UpgradeRequired` outcome before application dispatch. Shared Rust source does not waive deployed-version compatibility.
+| Client adapter | Direction | Admitted transport | Constraint |
+|---|---|---|---|
+| Dioxus Web/Android | user → platform | generated server function / typed events or equivalent M10 transport | presentation only; no CLI/process bridge |
+| `ustc-agent` | user/script → platform | explicit versioned HTTP/JSON and SSE | least-privilege user profile; stable JSON/NDJSON machine output |
+| inbound MCP | external Agent → platform | selected MCP tools/resources mapped through client-core to explicit M10 routes | no operator registry, direct domain call or M51 reach-through |
+| M51 outbound MCP | platform → external MCP server | M51 binding/session/executor contract | opposite direction; not an M80 client adapter |
+
+Every independently deployed request carries client build/target/protocol identity. Unsupported Android, CLI or MCP-adapter/server combinations return a typed compatibility or `UpgradeRequired` outcome before application dispatch. Shared Rust source does not waive deployed-version compatibility.
 
 ## Agent tool protocol — H0 values implemented, production execution planned
 
@@ -37,7 +45,9 @@ Every independently deployed request carries client build/target/protocol identi
 
 `AgentToolsetView`, `AgentToolCall` and the digest/code subset of `AgentToolResult` are concrete Rust types in `crates/agent-tool-protocol` and are exercised by a composition-root fake gateway/executor. `PluginExecutionRequest`, transport, durable receipt composition, bounded content/artifact result expansion and any HTTP/MCP wire format remain planned; no generic extension ABI is implied.
 
-## MCP/tool surface — Course Planning draft
+## Candidate inbound MCP/resource registry — Course Planning draft
+
+These names are candidate selected M80 inbound tools/resources for an external Agent. Each must map through client-core to an explicitly registered M10 application operation and pass `CLIENT-010`; the table does not authorize M51 outbound execution, a direct M72 call or an operator command.
 
 | Tool | Purpose | Mutates external systems |
 |---|---|---:|
