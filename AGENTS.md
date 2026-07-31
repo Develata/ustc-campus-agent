@@ -36,8 +36,8 @@ This file governs all work in this repository. Read this file, then `README.md`,
 - Keep Platform authority in Rust domain code. Framework checkpoints, model transcripts, adapters, and browser/UI state cannot overwrite grants, approvals, receipts, audit, or source revisions.
 - Keep the Dioxus Fullstack boundary thin. Web/PWA, Docker Compose server and Android are required targets; iOS/desktop are later. Client code renders server-owned state and submits typed intent. An admitted Dioxus server function MAY call one public application command/query port, but neither client nor server-function adapters may own domain calculation/mutation or reach concrete repositories, executors, providers or journals. Product authority remains in explicit backend/application modules.
 - Current stable foundations include Rust tooling, HTTP/SSE, JSON, SemVer, SHA-256 and Git. High-level framework/SDK/database/runtime types terminate at owned adapters and do not define platform objects or authority.
-- Remote `main` remains protected. A dedicated large-module branch and PR is the default path. An exact-scope declared small module MAY instead take one independent feature branch and protected-main PR when it meets every admission criterion in [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md) §3 Path B; failing any criterion falls back to the default path, and no task brief may self-declare an exception. During the current solo skeleton phase, Develata MAY explicitly allow local `main` work for root interfaces and composition scaffolding, but this does not bypass remote branch protection, review, or current-operation push approval.
-- Do not push, tag, publish, or change GitHub visibility without explicit Develata approval.
+- Remote `main` remains protected. A dedicated large-module branch and PR is the default path. An exact-scope declared small module MAY instead take one independent feature branch and protected-main PR when it meets every admission criterion in [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md) §3 Path B; failing any criterion falls back to the default path, and no task brief may self-declare an exception. During the current solo skeleton phase, Develata MAY explicitly allow local `main` work for root interfaces and composition scaffolding, but this does not bypass remote branch protection, review, or Develata authorization under the work policy.
+- Do not perform remote operations without current Develata authorization as defined in [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md) §3. An active campaign grant covers only operations named by its canonical task authority; tags, releases, publication and GitHub visibility remain operation-specific unless that grant explicitly names them.
 - Do not use `git add -A`; stage exact files only.
 - No secrets or real personal data in commits, fixtures, logs, screenshots, or Pages.
 - For docs-only changes, run `python3 scripts/check_repo_contracts.py` and `git diff --check`.
@@ -105,7 +105,7 @@ In addition to the constitution's completion principle, a repository slice is do
 - an applicable client/CLI/API/runtime path is exercised, or explicitly recorded as not applicable;
 - review has no unresolved accepted blocker;
 - exact staged paths and cached diff are inspected before commit;
-- push, merge, release, publication and visibility changes occur only under current Develata authorization.
+- push and merge occur only under operation-specific or active-campaign Develata authorization; release, publication and visibility changes remain operation-specific unless the canonical campaign grant explicitly names them.
 
 ## Collaboration model
 
@@ -122,7 +122,7 @@ A "large module" is defined by independence, not line count. It owns one coheren
 
 Small modules MAY be committed incrementally on the large-module branch, and that remains the normal path for coupled batches and for final composition. An exact-scope declared small module MAY instead be pushed and merged through its own feature branch and protected-main PR before the large module's exit gate, but only when it is independently contract-ready, independently evidenced, status-honest and currently authorized — the admission criteria live in [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md) §3 Path B and are not restated here.
 
-Merging such a PR records bounded partial evidence only. It normally moves a `planned` large module no further than an honest `partial-evidence`, and it never establishes `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted` — those remain controlled by the large module's own standalone and assembly gates. Every remote operation still requires protected-`main` review and current Develata authorization. Cross-module integration code belongs in `ustc-agentd` or another declared composition surface, never as a hidden dependency inside one module.
+Merging such a PR records bounded partial evidence only. It normally moves a `planned` large module no further than an honest `partial-evidence`, and it never establishes `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted` — those remain controlled by the large module's own standalone and assembly gates. Every remote operation still requires protected-`main` review and Develata authorization under the operation-specific or source-controlled campaign mechanism in the work policy. Cross-module integration code belongs in `ustc-agentd` or another declared composition surface, never as a hidden dependency inside one module.
 
 ## Public transition guard
 

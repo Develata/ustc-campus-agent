@@ -10,7 +10,7 @@ This private repository uses [`docs/guides/contributing.md`](docs/guides/contrib
 4. Keep one semantic intent per PR and stage exact paths only.
 5. Run the owning gates and include real output/not-run state.
 6. Request review from the owner of the touched contract.
-7. Do not push, tag, publish or change visibility without explicit Develata approval.
+7. Perform remote operations only under the operation-specific or active-campaign Develata authorization defined by [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md) §3; tags, releases, publication and visibility remain operation-specific unless a grant explicitly names them.
 
 ## Commit style
 

@@ -74,7 +74,7 @@ Every nontrivial PR includes:
 - Do not trust another agent's success claim without real output/read-back.
 - Review current staged/worktree state, not a stale pre-fix snapshot.
 - Use exact-path staging; never `git add -A`.
-- Do not push, tag, publish or change visibility without explicit Develata authorization.
+- Perform remote operations only under the operation-specific or active-campaign Develata authorization defined by [`../tasks/00-module-work-policy.md`](../tasks/00-module-work-policy.md) §3; tags, releases, publication and visibility remain operation-specific unless a grant explicitly names them.
 
 ## Handoff
 

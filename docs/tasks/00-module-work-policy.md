@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current task policy
-- `Version`: `module-work-policy/v1.3`
-- `Last Review`: `2026-07-26`
+- `Version`: `module-work-policy/v1.4`
+- `Last Review`: `2026-07-31`
 - `Owning Constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module Registry`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
 - `Boundary Registry`: [`../contracts/module-boundaries.md`](../contracts/module-boundaries.md)
@@ -68,7 +68,7 @@ one large module
 → authorized merge to protected main
 ```
 
-Use Path A when batches are coupled, the public boundary is unresolved, integration must be reviewed atomically, or any Path B criterion below is unmet. Under Path A a small module may be committed before the large module is complete, and remote push/merge waits for the large module's exit gate and current Develata authorization.
+Use Path A when batches are coupled, the public boundary is unresolved, integration must be reviewed atomically, or any Path B criterion below is unmet. Under Path A a small module may be committed before the large module is complete, and remote push/merge waits for the large module's exit gate plus operation-specific or active-campaign Develata authorization under the campaign rules below.
 
 ### Path B — independently gated small-module path
 
@@ -79,7 +79,7 @@ one declared small-module batch
 → implementation and independent standalone evidence
 → truthful plan/contract/acceptance/status projections
 → final gate and independent review
-→ current-operation authorized push
+→ authorized push
 → protected-main PR
 → authorized merge as bounded/partial evidence
 ```
@@ -97,7 +97,7 @@ A small module is admitted to Path B only when **all** of the following are true
 7. every implementation and status projection it affects is updated honestly in the same slice;
 8. the large-module state is not inflated — normally at most `partial-evidence` after the first retained small module, and never `StandaloneReady` until §7 passes;
 9. final independent review has no unresolved blocker;
-10. Develata authorizes the current push and merge operations; authorization is never standing;
+10. Develata authorizes push and merge either for the current operation or through an active source-controlled campaign grant that satisfies the rules below;
 11. remote `main` protection, exact-path staging and PR CI are unchanged.
 
 Failure of any single criterion falls back to Path A. A task brief, issue or agent instruction cannot self-declare an exception.
@@ -105,6 +105,45 @@ Failure of any single criterion falls back to Path A. A task brief, issue or age
 #### What a Path B merge does and does not prove
 
 A Path B merge records bounded partial evidence for exactly the declared slice. It normally moves a `planned` large module no further than an honest `partial-evidence` in the module registry. It never establishes `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted`; `StandaloneReady` remains bound to the full standalone gate in §7, and later readiness remains bound to §8 and §9.
+
+<!-- CAMPAIGN_AUTHORIZATION_POLICY:BEGIN -->
+#### Source-controlled campaign authorization
+
+Remote-operation authorization has exactly two admitted forms:
+
+1. an operation-specific instruction from Develata; or
+2. an `active` campaign grant recorded in the canonical execution roadmap or another source-controlled task authority linked from it.
+
+An issue, taskbook, agent instruction or implementation branch cannot grant authority to itself. Only Develata may create, activate, amend, relocate, pause or revoke a campaign grant. The grant MUST carry an immutable campaign ID and approved base commit, name its finite repository/module/batch and path scope, allowed push/PR/merge operations, controller and sole merge authority, required gates, stop conditions, completion/revocation conditions and review trigger.
+
+Campaign authorization never covers mutation of its own authority surface. Creating or changing this policy block, an active grant block, their checker/digest/mutation tests, root authorization projections, GitHub workflow/CODEOWNERS files or branch-protection settings requires operation-specific Develata approval. A campaign may update ordinary module-status text elsewhere in a roadmap only when its finite path scope names that carrier and the grant block remains byte-exact.
+
+A campaign grant MAY separately authorize a `proposal-only` lane before a legal merge path exists. Such a lane MAY create a bounded checkout, edit only finite named paths, create local commits, push an exact reviewed commit and open/update a Draft PR. It MUST NOT merge, contain retained implementation, mark a planned acceptance row implemented, or present an unsettled plan/contract proposal as accepted authority. Settling the proposal requires operation-specific Develata approval and a new or amended grant before merge or implementation.
+
+A campaign grant MAY separately authorize an `audit-only` lane for behavior-neutral reconciliation of current code against current plans/contracts. Such a lane MAY merge only taskbook, roadmap or blueprint audit evidence inside finite named paths. It MUST NOT retain implementation, promote acceptance posture, accept or amend a contract, or change topology, authority, permission, lifecycle, protocol, ordering or runtime behavior. It follows the same source binding, local gates, independent review, PR CI, repair accounting, prospective-tree and post-main proof below, but Path A/Path B implementation admission is not claimed; an `amend` conclusion pauses before the authoritative or code change.
+
+An active campaign grant MAY authorize iterative branch pushes, pull requests and protected-`main` merges for a retained-implementation delivery lane without repeated prompts only while every operation remains inside the recorded scope and all of these conditions hold:
+
+1. each slice is rebound to the exact authoritative `main` commit and tree after the previous merge and post-merge CI;
+2. the slice passes Path A or every Path B admission criterion independently;
+3. its accepted contract/taskbook selects one bounded implementation with no unresolved authority, permission, lifecycle, protocol or public-behavior choice;
+4. before each candidate push, local gates pass, the exact changed-path set and outgoing commit range are audited, and independent review of that commit has no unresolved blocker;
+5. the controller pushes that exact commit, creates or updates the admitted PR form, then requires every exact-head CI context to succeed before merge;
+6. a CI/review repair push is allowed only after the canonical taskbook records the blocker and repair round and conditions 1–4 are rerun for the new commit; the new exact head restarts condition 5, while round `2` with the same blocker pauses rather than pushes;
+7. immediately before merge, the merge authority reads live `main` as `M0` and the reviewed head as `H`, requires `behind_by=0` and merge-base `M0`, proves the prospective merge tree equals the reviewed `H` tree, then reads live `main` again as `M1` and requires `M1 == M0`; otherwise it rebases onto the new exact base, reruns review/gates/CI and restarts the snapshot;
+8. the merge authority verifies the merged tree plus exact-main post-merge CI before activating the next slice.
+
+The controller MUST pause before the next source or remote mutation and ask Develata when any of the following occurs:
+
+- the controller must ask the user to choose among behavior, authority, permission, lifecycle, protocol, scope or risk alternatives;
+- independent reviewers disagree about public behavior or authority ownership and the governing contract does not resolve the disagreement;
+- debugging requires live user interaction, unplanned instrumentation/data access, or source changes outside the declared paths/contracts;
+- the same semantic blocker or required-gate failure survives two documented repair-and-review rounds recorded in the active taskbook or PR body;
+- the authoritative base moves unexpectedly, shared governance carriers diverge, or the prospective merge tree cannot be proved mechanically equal to the reviewed tree;
+- a security, privacy, source-permission, secret, destructive, production, publication or release decision falls outside the named grant.
+
+A campaign grant never waives the repository's existing Develata-approval gates for product topology, authority ownership, permission semantics, lifecycle states or runtime state-machine changes. Tags, releases, public publication, visibility changes, branch-protection changes, credential handling and production infrastructure mutations remain excluded unless the grant names them explicitly.
+<!-- CAMPAIGN_AUTHORIZATION_POLICY:END -->
 
 ### Rules for both paths
 
@@ -193,7 +232,7 @@ A large module is merge-ready when:
 - applicable real feature smoke passes or is honestly not applicable;
 - no dirty/foreign files enter the commit range;
 - PR describes module boundary, small-module commits, evidence, risks and deferred work;
-- Develata authorizes current push/merge operations.
+- Develata authorizes push/merge through an operation-specific instruction or an active campaign grant under §3.
 
 Merge does not imply every future/later item in the blueprint is implemented.
 
