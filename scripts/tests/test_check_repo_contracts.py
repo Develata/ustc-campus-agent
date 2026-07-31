@@ -277,6 +277,315 @@ class DocsTopologyContractTests(unittest.TestCase):
         checker.check_key_files_present_and_nonempty(issues)
         return issues
 
+    def check_campaign_authorization(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_campaign_authorization(issues)
+        return issues
+
+    def rewrite_campaign_matrix_status(self, case_id: str, status: str) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        header = lines[0].split("\t")
+        status_index = header.index("status")
+        found = False
+        for index, line in enumerate(lines[1:], start=1):
+            cells = line.split("\t")
+            if cells[0] == case_id:
+                cells[status_index] = status
+                lines[index] = "\t".join(cells)
+                found = True
+                break
+        self.assertTrue(found, f"missing matrix row {case_id}")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_current_campaign_authorization_passes(self) -> None:
+        self.assertEqual(self.check_campaign_authorization(), [])
+
+    def test_campaign_matrix_binding_status_drift_fails_closed(self) -> None:
+        self.rewrite_campaign_matrix_status("HARNESS-001", "implemented")
+        self.assertTrue(
+            any(
+                "campaign acceptance binding status drift for HARNESS-001" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_campaign_matrix_binding_missing_row_fails_closed(self) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        path.write_text(
+            "\n".join(line for line in lines if not line.startswith("AGENT-018\t")) + "\n",
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "campaign acceptance matrix row missing: AGENT-018" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_campaign_catalog_binding_missing_row_fails_closed(self) -> None:
+        self.replace_once(
+            checker.AUTONOMOUS_CAMPAIGN_CATALOG_PATH,
+            "| `HARNESS-002` |",
+            "| `HARNESS-099` |",
+        )
+        self.assertTrue(
+            any(
+                "campaign long-horizon catalog row count drift for HARNESS-002" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_campaign_catalog_only_id_cannot_be_admitted_silently(self) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text
+            + "HARNESS-002\tharness\tclarification remains bounded\tfuture H0 tests\tpr\tplanned\tbackend\n",
+            encoding="utf-8",
+        )
+        self.assertTrue(
+            any(
+                "campaign catalog-only ID unexpectedly admitted to matrix: HARNESS-002"
+                in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_missing_campaign_policy_marker_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/tasks/00-module-work-policy.md",
+            checker.CAMPAIGN_AUTHORIZATION_POLICY_BEGIN,
+            "<!-- removed policy marker -->",
+        )
+        self.assertTrue(
+            any(
+                "campaign authorization policy marker count drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_duplicate_campaign_policy_block_fails_closed(self) -> None:
+        path = self.root / "docs/tasks/00-module-work-policy.md"
+        text = path.read_text(encoding="utf-8")
+        start = text.index(checker.CAMPAIGN_AUTHORIZATION_POLICY_BEGIN)
+        finish = text.index(checker.CAMPAIGN_AUTHORIZATION_POLICY_END) + len(
+            checker.CAMPAIGN_AUTHORIZATION_POLICY_END
+        )
+        path.write_text(f"{text}\n{text[start:finish]}\n", encoding="utf-8")
+        self.assertTrue(
+            any(
+                "campaign authorization policy marker count drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_campaign_policy_content_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/tasks/00-module-work-policy.md",
+            "Only Develata may create, activate, amend, relocate, pause or revoke",
+            "An agent may create, activate, amend, relocate, pause or revoke",
+        )
+        self.assertTrue(
+            any(
+                "campaign authorization policy exact block drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_missing_autonomous_grant_marker_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/tasks/01-execution-roadmap.md",
+            checker.AUTONOMOUS_CAMPAIGN_GRANT_END,
+            "<!-- removed grant marker -->",
+        )
+        self.assertTrue(
+            any(
+                "autonomous campaign grant marker count drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_duplicate_autonomous_grant_block_fails_closed(self) -> None:
+        path = self.root / "docs/tasks/01-execution-roadmap.md"
+        text = path.read_text(encoding="utf-8")
+        start = text.index(checker.AUTONOMOUS_CAMPAIGN_GRANT_BEGIN)
+        finish = text.index(checker.AUTONOMOUS_CAMPAIGN_GRANT_END) + len(
+            checker.AUTONOMOUS_CAMPAIGN_GRANT_END
+        )
+        path.write_text(f"{text}\n{text[start:finish]}\n", encoding="utf-8")
+        self.assertTrue(
+            any(
+                "autonomous campaign grant marker count drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_autonomous_grant_status_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/tasks/01-execution-roadmap.md",
+            "- `Status`: `active`",
+            "- `Status`: `paused`",
+        )
+        self.assertTrue(
+            any(
+                "autonomous campaign grant exact block drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_autonomous_grant_base_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/tasks/01-execution-roadmap.md",
+            "b7911859454e659b2fd426ac475958a22b92e5a8",
+            "0000000000000000000000000000000000000000",
+        )
+        self.assertTrue(
+            any(
+                "autonomous campaign grant exact block drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_autonomous_grant_scope_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/tasks/01-execution-roadmap.md",
+            "| `M40-B0` |",
+            "| `M50-B1` |",
+        )
+        self.assertTrue(
+            any(
+                "autonomous campaign grant exact block drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_campaign_checker_remains_invoked_from_main(self) -> None:
+        checker_source = CHECKER_PATH.read_text(encoding="utf-8")
+        main_body = checker_source.split("\ndef main() -> int:", 1)
+        self.assertEqual(len(main_body), 2)
+        self.assertEqual(
+            sum(
+                line.strip() == "check_campaign_authorization(issues)"
+                for line in main_body[1].splitlines()
+            ),
+            1,
+        )
+
+    def test_campaign_checker_ci_binding_drift_fails_closed(self) -> None:
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            "python3 scripts/check_repo_contracts.py",
+            "python3 scripts/check_repo_contracts_disabled.py",
+        )
+        self.assertTrue(
+            any(
+                "campaign authorization aggregate checker CI binding drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_campaign_ci_step_disable_fails_closed(self) -> None:
+        self.replace_once(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            "      - name: Contract unit tests\n"
+            "        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'",
+            "      - name: Contract unit tests\n"
+            "        if: false\n"
+            "        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'",
+        )
+        self.assertTrue(
+            any(
+                "campaign authorization CI workflow exact digest drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_campaign_mutation_test_ci_binding_drift_fails_closed(self) -> None:
+        self.replace_once(
+            ".github/workflows/ci.yml",
+            "python3 -m unittest discover -s scripts/tests -p 'test_*.py'",
+            "python3 -m unittest discover -s scripts/disabled-tests -p 'test_*.py'",
+        )
+        self.assertTrue(
+            any(
+                "campaign authorization mutation-test CI binding drift" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_missing_campaign_taskbook_fails_closed(self) -> None:
+        (self.root / checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M00-B3"]).unlink()
+        self.assertTrue(
+            any(
+                "campaign taskbook missing for M00-B3" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_duplicate_campaign_taskbook_field_fails_closed(self) -> None:
+        self.replace_once(
+            checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M00-B3"],
+            "- `Status`: `queued`",
+            "- `Status`: `queued`\n- `Status`: `active`",
+        )
+        self.assertTrue(
+            any(
+                "campaign taskbook field count drift for M00-B3 Status" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_invalid_campaign_taskbook_status_fails_closed(self) -> None:
+        self.replace_once(
+            checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M20-B6"],
+            "- `Status`: `queued`",
+            "- `Status`: `running-unsafely`",
+        )
+        self.assertTrue(
+            any(
+                "campaign taskbook invalid status for M20-B6" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_active_campaign_taskbook_requires_exact_source(self) -> None:
+        self.replace_once(
+            checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M30-B0"],
+            "- `Status`: `queued`",
+            "- `Status`: `active`",
+        )
+        self.assertTrue(
+            any(
+                "campaign taskbook active/completed lane has pending source for M30-B0" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_campaign_taskbook_round_two_requires_pause(self) -> None:
+        self.replace_once(
+            checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M40-B0"],
+            "- `Repair round`: `0`",
+            "- `Repair round`: `2`",
+        )
+        self.assertTrue(
+            any(
+                "campaign taskbook round 2 must be paused for M40-B0" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
+    def test_paused_campaign_taskbook_requires_stop_reason(self) -> None:
+        rel = checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M40-B0"]
+        self.replace_once(rel, "- `Status`: `queued`", "- `Status`: `paused`")
+        self.assertTrue(
+            any(
+                "campaign taskbook paused lane has no stop reason for M40-B0" in issue
+                for issue in self.check_campaign_authorization()
+            )
+        )
+
     def test_current_docs_topology_passes(self) -> None:
         self.assertEqual(self.check_docs_topology(), [])
 
@@ -5199,6 +5508,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
 
     EXPECTED_MAIN_CALLS = (
         "check_key_files_present_and_nonempty(issues)",
+        "check_campaign_authorization(issues)",
         "check_docs_topology(issues)",
         "check_no_retired_docs_references(issues)",
         "check_markdown_links(issues)",

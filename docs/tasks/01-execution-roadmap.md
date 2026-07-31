@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current delivery and task-splitting order
-- `Version`: `module-roadmap/v2.2`
-- `Last Review`: `2026-07-30`
+- `Version`: `module-roadmap/v2.3`
+- `Last Review`: `2026-07-31`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module map`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
@@ -27,6 +27,46 @@ The module skeleton review is complete. Concrete implementation remains contract
 Before any of these grows, its owner compares current code with the new module blueprint and records `adopt | amend | retain as spike | remove`. Documentation alone does not promote any planned acceptance row.
 
 Contract/fixture-only root scaffolding may begin after the completed S0 review, subject to the owning module's contract-ready gate. A minimal Dioxus initialization before active Fullstack/API/client/deployment acceptance rows exists only as an explicitly disposable, non-mergeable spike; retained server/Web/Android scaffold work starts only after exact planned rows and future bindings are added to `matrix.tsv`. Neither form may pre-implement product logic.
+
+<!-- AUTONOMOUS_CAMPAIGN_GRANT:BEGIN -->
+### Active autonomous module campaign authorization
+
+- `Campaign ID`: `USTC-MODULES-2026-07-W1`
+- `Grantor`: Develata
+- `Status`: `active`
+- `Approved base`: `b7911859454e659b2fd426ac475958a22b92e5a8`
+- `Controller and sole merge authority`: Deve Hermes
+- `Allowed remote operations`: create/update non-protected feature branches, push exact reviewed commits, create/update Draft PRs for proposal-only rows, create/update reviewable PRs for audit-only rows, and merge only the auto-merge-admitted rows below after every required gate succeeds
+- `Execution default`: Dongfengyun fresh exact-`main` checkouts; never reset or repurpose a foreign, dirty or local-ahead checkout
+- `Concurrency`: at most two implementation workers plus one read-only audit worker; shared governance carriers and full Rust gates are serialized or use one declared fan-in owner
+- `Mutable state authority`: the exact taskbook named in each row owns lane status, bound source, repair round, blocker identity, stop reason and next mutation; the controller reads it back before every mutation, while PR bodies carry discovery/evidence links only
+- `Mutable state discovery`: for a `queued` lane read the protected-`main` taskbook; after the first push require exactly one open PR whose body carries `Campaign-ID: USTC-MODULES-2026-07-W1`, the exact `Campaign-Lane`, and `Taskbook-Commit` equal to that PR head, then read the taskbook from that head; zero or multiple matches pause the lane
+- `Repair-round state`: each lane starts at `0`; its canonical taskbook records every bounded repair-and-review round, and round `2` with the same blocker or required-gate failure pauses that lane
+- `Current stop reason`: `none`
+- `Completion`: this grant ends when all four rows below are merged, explicitly paused/rejected, or superseded by operation-specific Develata instruction; it does not roll into another batch automatically
+- `Revocation`: any direct Develata pause/revoke instruction takes precedence immediately; changing the recorded status or scope requires operation-specific approval
+- `Review trigger`: rebind and re-evaluate after every exact-main post-merge CI run; continue without a new prompt only while no observable stop condition from the work policy is present
+
+#### Required ordered gates for each W1 candidate
+
+1. read back the row's canonical taskbook and bind a fresh clean checkout to one 40-hex source commit;
+2. run `python3 scripts/check_repo_contracts.py`, `python3 -m unittest discover -s scripts/tests -p 'test_*.py'`, and `git diff --check <bound-source>...HEAD` on the candidate;
+3. bind one independent blocker review to the exact commit, changed-path set and outgoing range;
+4. push that reviewed commit and create/update the row's admitted Draft or reviewable PR;
+5. require exact-head GitHub contexts `rust` and `docs-and-contracts` to succeed before merge; a failed-head repair first updates the taskbook round and repeats steps 1–4 for the replacement commit;
+6. for an admitted merge, execute the unchanged-live-`main` prospective-tree proof from the work policy and verify exact-main post-merge CI before another lane mutates.
+
+| Lane | Mode and evidence binding | Auto-merge boundary | Finite allowed paths |
+|---|---|---|---|
+| `M00-B3` | proposal-only; acceptance IDs are intentionally absent, and the packet must propose exact planned IDs/future bindings before implementation admission | no contract acceptance or retained implementation; pause for Develata before settling actor, policy or admission authority | `docs/tasks/campaign-w1-m00-b3.md`; `docs/plan/modules/10-platform-control-identity.md`; `docs/contracts/platform-session.md`; `docs/acceptance/matrix.tsv`; ordinary non-grant sections of `docs/tasks/01-execution-roadmap.md` |
+| `M20-B6` | proposal-only; reconcile planned `MARKET-004` and `PKG-020` with exact update/rollback command, state, error, event and future-binding evidence | no contract acceptance or retained implementation; pause for Develata before settling permission expansion, rollback or lifecycle states | `docs/tasks/campaign-w1-m20-b6.md`; `docs/plan/modules/30-market-package-lifecycle.md`; `docs/contracts/market-lifecycle.md`; `docs/acceptance/matrix.tsv`; ordinary non-grant sections of `docs/tasks/01-execution-roadmap.md` |
+| `M30-B0` | audit-only; reconcile matrix-planned `HARNESS-001` and `HARNESS-003` plus catalog-only, non-admitted `HARNESS-002`, then record one evidence-bound disposition without readiness promotion | auto-merge only when it changes no acceptance posture, Agent/Harness lifecycle or runtime state-machine behavior | `docs/tasks/campaign-w1-m30-b0.md`; `docs/plan/modules/40-agent-harness-runtime.md`; ordinary non-grant sections of `docs/tasks/01-execution-roadmap.md` |
+| `M40-B0` | audit-only; reconcile matrix-implemented `AGENT-017`, matrix-planned `AGENT-018`, and catalog-only, non-admitted `AGENT-003`, `AGENT-004`, `AGENT-009`, `AGENT-010`, `AGENT-011`, `AGENT-012`, `AGENT-013` | auto-merge only when it changes no acceptance posture, public protocol, execution ordering or executor behavior | `docs/tasks/campaign-w1-m40-b0.md`; `docs/plan/modules/50-tool-gateway-execution.md`; ordinary non-grant sections of `docs/tasks/01-execution-roadmap.md` |
+
+Campaign-authorized work MUST NOT alter this grant block, the campaign-authorization policy block, their checker/digest/mutation tests, root authorization projections, `.github/workflows/`, `.github/CODEOWNERS`, branch protection or collaborator settings. It also excludes tags/releases, public visibility/publication, real-source credentials or protected fixtures, production deployment/infrastructure mutation and actual M80 presentation design.
+
+The controller pauses before further mutation upon any user-choice request; reviewer disagreement on public behavior/authority not resolved by contract; debugging that needs live interaction, unplanned instrumentation/data, or out-of-scope paths; the same blocker/gate failure after two recorded rounds; or inability to prove a mechanical prospective merge tree against unchanged live `main`. This grant does not approve a new product topology, authority owner, permission semantic, lifecycle state machine, runtime state machine or protocol behavior.
+<!-- AUTONOMOUS_CAMPAIGN_GRANT:END -->
 
 ## 2. Assembly shape
 

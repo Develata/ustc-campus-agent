@@ -62,6 +62,49 @@ VALID_S0_REVIEW_STATUSES = {"InReview", "Complete"}
 VALID_S0_REVIEW_OUTCOMES = {"Pending", "Pass", "Conditional", "Reject"}
 VALID_S0_REVIEW_DISPOSITIONS = {"Pending", "Accept", "ConditionalAccept", "Reject"}
 S0_COMPLETE_REVIEW_LANES_CELL = "`architecture`; `authority`; `delivery`"
+CAMPAIGN_AUTHORIZATION_POLICY_PATH = "docs/tasks/00-module-work-policy.md"
+CAMPAIGN_AUTHORIZATION_POLICY_BEGIN = "<!-- CAMPAIGN_AUTHORIZATION_POLICY:BEGIN -->"
+CAMPAIGN_AUTHORIZATION_POLICY_END = "<!-- CAMPAIGN_AUTHORIZATION_POLICY:END -->"
+CAMPAIGN_AUTHORIZATION_POLICY_SHA256 = (
+    "c93f351de3c5ae9735c1c4c97194735bc60f0e59ec4dc5992607c81e3151db6c"
+)
+AUTONOMOUS_CAMPAIGN_GRANT_PATH = "docs/tasks/01-execution-roadmap.md"
+AUTONOMOUS_CAMPAIGN_GRANT_BEGIN = "<!-- AUTONOMOUS_CAMPAIGN_GRANT:BEGIN -->"
+AUTONOMOUS_CAMPAIGN_GRANT_END = "<!-- AUTONOMOUS_CAMPAIGN_GRANT:END -->"
+AUTONOMOUS_CAMPAIGN_GRANT_SHA256 = (
+    "aafea72513ad63226eba21587a68b54b7d2a4525c54a9229241f2c6d5042bcc2"
+)
+AUTONOMOUS_CAMPAIGN_ID = "USTC-MODULES-2026-07-W1"
+AUTONOMOUS_CAMPAIGN_TASKBOOKS = {
+    "M00-B3": "docs/tasks/campaign-w1-m00-b3.md",
+    "M20-B6": "docs/tasks/campaign-w1-m20-b6.md",
+    "M30-B0": "docs/tasks/campaign-w1-m30-b0.md",
+    "M40-B0": "docs/tasks/campaign-w1-m40-b0.md",
+}
+AUTONOMOUS_CAMPAIGN_MATRIX_BINDINGS = {
+    "MARKET-004": "planned",
+    "PKG-020": "planned",
+    "HARNESS-001": "planned",
+    "HARNESS-003": "planned",
+    "AGENT-017": "implemented",
+    "AGENT-018": "planned",
+}
+AUTONOMOUS_CAMPAIGN_CATALOG_ONLY_IDS = (
+    "HARNESS-002",
+    "AGENT-003",
+    "AGENT-004",
+    "AGENT-009",
+    "AGENT-010",
+    "AGENT-011",
+    "AGENT-012",
+    "AGENT-013",
+)
+AUTONOMOUS_CAMPAIGN_CATALOG_PATH = "docs/acceptance/platform-baseline.md"
+CAMPAIGN_CI_WORKFLOW_PATH = ".github/workflows/ci.yml"
+CAMPAIGN_CI_WORKFLOW_SHA256 = (
+    "a812c3a467803a8a8199461e538c3cf1feed657bbc82cff0718f472b5a6e3572"
+)
+VALID_CAMPAIGN_LANE_STATUSES = {"queued", "active", "paused", "completed", "rejected"}
 S0_REVIEW_AUTHORITY_LINKS = (
     "../../AGENTS.md",
     "../plan/00-engineering-constitution.md",
@@ -216,6 +259,10 @@ KEY_FILES = [
     "docs/tasks/00-module-work-policy.md",
     "docs/tasks/01-execution-roadmap.md",
     "docs/tasks/02-s0-architecture-review.md",
+    "docs/tasks/campaign-w1-m00-b3.md",
+    "docs/tasks/campaign-w1-m20-b6.md",
+    "docs/tasks/campaign-w1-m30-b0.md",
+    "docs/tasks/campaign-w1-m40-b0.md",
     "docs/guides/contributing.md",
     "docs/guides/development.md",
     "docs/guides/github-pages-brief.md",
@@ -801,6 +848,224 @@ def check_key_files_present_and_nonempty(issues: list[str]) -> None:
             rel = path.relative_to(ROOT).as_posix()
             if rel not in registered:
                 fail(f"current contract not registered as key file: {rel}", issues)
+
+
+def exact_marked_block(
+    rel: str,
+    begin: str,
+    end: str,
+    expected_sha256: str,
+    label: str,
+    issues: list[str],
+) -> str | None:
+    path = ROOT / rel
+    if not path.is_file():
+        fail(f"{label} carrier missing: {rel}", issues)
+        return None
+    text = path.read_text(encoding="utf-8")
+    begin_count = text.count(begin)
+    end_count = text.count(end)
+    if begin_count != 1 or end_count != 1:
+        fail(
+            f"{label} marker count drift: begin={begin_count} end={end_count}",
+            issues,
+        )
+        return None
+    start = text.index(begin)
+    finish = text.index(end)
+    if finish <= start:
+        fail(f"{label} marker order drift", issues)
+        return None
+    block = text[start : finish + len(end)]
+    actual_sha256 = hashlib.sha256(block.encode("utf-8")).hexdigest()
+    if actual_sha256 != expected_sha256:
+        fail(
+            f"{label} exact block drift: expected={expected_sha256} actual={actual_sha256}",
+            issues,
+        )
+    return block
+
+
+def check_campaign_taskbook_state(issues: list[str]) -> None:
+    required_fields = (
+        "Campaign ID",
+        "Lane",
+        "Status",
+        "Bound source commit",
+        "Repair round",
+        "Current blocker identity",
+        "Stop reason",
+        "Last transition evidence",
+        "Next allowed mutation",
+    )
+    grant_link = (
+        "- `Grant carrier`: "
+        "[`01-execution-roadmap.md`](01-execution-roadmap.md#active-autonomous-module-campaign-authorization)"
+    )
+    for lane, rel in AUTONOMOUS_CAMPAIGN_TASKBOOKS.items():
+        path = ROOT / rel
+        if not path.is_file():
+            fail(f"campaign taskbook missing for {lane}: {rel}", issues)
+            continue
+        text = path.read_text(encoding="utf-8")
+        values: dict[str, str] = {}
+        for field in required_fields:
+            pattern = re.compile(rf"^- `{re.escape(field)}`:\s*(.+?)\s*$", re.MULTILINE)
+            matches = pattern.findall(text)
+            if len(matches) != 1:
+                fail(
+                    f"campaign taskbook field count drift for {lane} {field}: {len(matches)}",
+                    issues,
+                )
+                continue
+            values[field] = matches[0]
+        if text.count(grant_link) != 1:
+            fail(f"campaign taskbook grant link drift for {lane}", issues)
+        if values.get("Campaign ID") != f"`{AUTONOMOUS_CAMPAIGN_ID}`":
+            fail(f"campaign taskbook campaign identity drift for {lane}", issues)
+        if values.get("Lane") != f"`{lane}`":
+            fail(f"campaign taskbook lane identity drift for {lane}", issues)
+
+        status_match = re.fullmatch(r"`([^`]+)`", values.get("Status", ""))
+        status = status_match.group(1) if status_match else ""
+        if status not in VALID_CAMPAIGN_LANE_STATUSES:
+            fail(f"campaign taskbook invalid status for {lane}: {values.get('Status')!r}", issues)
+
+        source_match = re.fullmatch(
+            r"`(pending-governance-main|[0-9a-f]{40})`",
+            values.get("Bound source commit", ""),
+        )
+        source = source_match.group(1) if source_match else ""
+        if not source_match:
+            fail(f"campaign taskbook invalid bound source for {lane}", issues)
+        if status in {"active", "completed"} and source == "pending-governance-main":
+            fail(f"campaign taskbook active/completed lane has pending source for {lane}", issues)
+
+        round_match = re.fullmatch(r"`([0-2])`", values.get("Repair round", ""))
+        repair_round = int(round_match.group(1)) if round_match else -1
+        if not round_match:
+            fail(f"campaign taskbook invalid repair round for {lane}", issues)
+        if repair_round == 2 and status != "paused":
+            fail(f"campaign taskbook round 2 must be paused for {lane}", issues)
+        if status == "paused" and values.get("Stop reason") == "`none`":
+            fail(f"campaign taskbook paused lane has no stop reason for {lane}", issues)
+        for field in ("Current blocker identity", "Stop reason", "Last transition evidence", "Next allowed mutation"):
+            if not values.get(field, "").strip():
+                fail(f"campaign taskbook empty mutable state for {lane} {field}", issues)
+
+
+def check_campaign_acceptance_bindings(
+    grant_block: str | None, issues: list[str]
+) -> None:
+    if grant_block is None:
+        return
+    matrix_path = ROOT / "docs/acceptance/matrix.tsv"
+    if not matrix_path.is_file():
+        fail("campaign acceptance matrix carrier missing", issues)
+        return
+    lines = matrix_path.read_text(encoding="utf-8").splitlines()
+    if not lines:
+        fail("campaign acceptance matrix carrier empty", issues)
+        return
+    header = lines[0].split("\t")
+    if "case_id" not in header or "status" not in header:
+        fail("campaign acceptance matrix header drift", issues)
+        return
+    case_index = header.index("case_id")
+    status_index = header.index("status")
+    rows: dict[str, list[str]] = {}
+    for line in lines[1:]:
+        cells = line.split("\t")
+        if len(cells) != len(header):
+            continue
+        case_id = cells[case_index]
+        if case_id in rows:
+            fail(f"campaign acceptance matrix duplicate row: {case_id}", issues)
+            continue
+        rows[case_id] = cells
+
+    for case_id, expected_status in AUTONOMOUS_CAMPAIGN_MATRIX_BINDINGS.items():
+        if grant_block.count(f"`{case_id}`") != 1:
+            fail(f"campaign grant acceptance ID count drift: {case_id}", issues)
+        cells = rows.get(case_id)
+        if cells is None:
+            fail(f"campaign acceptance matrix row missing: {case_id}", issues)
+            continue
+        actual_status = cells[status_index]
+        if actual_status != expected_status:
+            fail(
+                f"campaign acceptance binding status drift for {case_id}: "
+                f"expected={expected_status} actual={actual_status}",
+                issues,
+            )
+
+    catalog_path = ROOT / AUTONOMOUS_CAMPAIGN_CATALOG_PATH
+    if not catalog_path.is_file():
+        fail("campaign long-horizon acceptance catalog missing", issues)
+        return
+    catalog = catalog_path.read_text(encoding="utf-8")
+    for case_id in AUTONOMOUS_CAMPAIGN_CATALOG_ONLY_IDS:
+        if grant_block.count(f"`{case_id}`") != 1:
+            fail(f"campaign grant catalog-only ID count drift: {case_id}", issues)
+        row_count = len(
+            re.findall(rf"^\| `{re.escape(case_id)}` \|", catalog, flags=re.MULTILINE)
+        )
+        if row_count != 1:
+            fail(
+                f"campaign long-horizon catalog row count drift for {case_id}: {row_count}",
+                issues,
+            )
+        if case_id in rows:
+            fail(f"campaign catalog-only ID unexpectedly admitted to matrix: {case_id}", issues)
+
+
+def check_campaign_authorization(issues: list[str]) -> None:
+    exact_marked_block(
+        CAMPAIGN_AUTHORIZATION_POLICY_PATH,
+        CAMPAIGN_AUTHORIZATION_POLICY_BEGIN,
+        CAMPAIGN_AUTHORIZATION_POLICY_END,
+        CAMPAIGN_AUTHORIZATION_POLICY_SHA256,
+        "campaign authorization policy",
+        issues,
+    )
+    grant_block = exact_marked_block(
+        AUTONOMOUS_CAMPAIGN_GRANT_PATH,
+        AUTONOMOUS_CAMPAIGN_GRANT_BEGIN,
+        AUTONOMOUS_CAMPAIGN_GRANT_END,
+        AUTONOMOUS_CAMPAIGN_GRANT_SHA256,
+        "autonomous campaign grant",
+        issues,
+    )
+    check_campaign_acceptance_bindings(grant_block, issues)
+    check_campaign_taskbook_state(issues)
+    ci_path = ROOT / CAMPAIGN_CI_WORKFLOW_PATH
+    if not ci_path.is_file():
+        fail("campaign authorization CI carrier missing", issues)
+        return
+    ci_text = ci_path.read_text(encoding="utf-8")
+    ci_sha256 = hashlib.sha256(ci_text.encode("utf-8")).hexdigest()
+    if ci_sha256 != CAMPAIGN_CI_WORKFLOW_SHA256:
+        fail(
+            "campaign authorization CI workflow exact digest drift: "
+            f"expected={CAMPAIGN_CI_WORKFLOW_SHA256} actual={ci_sha256}",
+            issues,
+        )
+    checker_command = "python3 scripts/check_repo_contracts.py"
+    command_count = ci_text.count(checker_command)
+    if command_count != 1:
+        fail(
+            "campaign authorization aggregate checker CI binding drift: "
+            f"expected 1 actual {command_count}",
+            issues,
+        )
+    unit_test_command = "python3 -m unittest discover -s scripts/tests -p 'test_*.py'"
+    unit_test_count = ci_text.count(unit_test_command)
+    if unit_test_count != 1:
+        fail(
+            "campaign authorization mutation-test CI binding drift: "
+            f"expected 1 actual {unit_test_count}",
+            issues,
+        )
 
 
 def check_docs_topology(issues: list[str]) -> None:
@@ -7976,6 +8241,7 @@ def check_platform_session_implementation(issues: list[str]) -> None:
 def main() -> int:
     issues: list[str] = []
     check_key_files_present_and_nonempty(issues)
+    check_campaign_authorization(issues)
     check_docs_topology(issues)
     check_no_retired_docs_references(issues)
     check_markdown_links(issues)
