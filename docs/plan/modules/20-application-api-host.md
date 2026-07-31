@@ -3,19 +3,19 @@
 ## Metadata
 
 - `Module ID`: `M10`
-- `Status`: Accepted blueprint; daemon skeleton exists, Fullstack/application ingress implementation planned
+- `Status`: Accepted blueprint amended for Dioxus, user CLI and inbound MCP peer clients; daemon skeleton exists, application ingress implementation planned
 - `Implementation State`: `skeleton`
-- `Version`: `m10-application-ingress/v1`
-- `Last Review`: `2026-07-25`
+- `Version`: `m10-application-ingress/v2`
+- `Last Review`: `2026-07-31`
 - `Composition`: `apps/ustc-agentd`
-- `Primary code area`: `apps/ustc-agentd/` plus shared Dioxus server-function declarations in the Fullstack application boundary
+- `Primary code area`: `apps/ustc-agentd/`, future M10-owned `crates/client-protocol/`, plus shared Dioxus server-function declarations in the Fullstack application boundary
 
 ## 1. Purpose
 
-`M10` is the admitted network/application boundary between first-party Dioxus clients, public integrations and backend modules. It owns:
+`M10` is the admitted network/application boundary between M80 peer clients, public integrations and backend modules. It owns:
 
 - Axum/Dioxus Fullstack server-function ingress for Web and Android;
-- versioned HTTP JSON endpoints when public or heterogeneous clients need them;
+- versioned HTTP JSON endpoints for `ustc-agent`, inbound MCP and other intentionally admitted heterogeneous clients;
 - typed SSE/stream event delivery;
 - authentication/session admission;
 - request/response/error/compatibility mapping;
@@ -23,6 +23,8 @@
 - one-ingress-to-one-application-operation dispatch.
 
 It translates and coordinates. It does not become a second implementation of domain rules.
+
+M10 owns the versioned public wire schema and compatibility carrier (`client-protocol` when extraction is justified). M80 produces request instances and consumes M10 results/events through that carrier, but cannot redefine the schema. M10 server code MUST NOT depend on M80 `client-core`; both sides may depend on the M10-owned protocol carrier, preventing a server↔client cycle.
 
 ## 2. Non-goals
 
@@ -51,7 +53,7 @@ M10 owns ingress, compatibility and event-delivery state only. Domain state rema
 
 ## 4. Public inputs and outputs
 
-First-party Web/Android inputs may arrive through generated Dioxus server-function clients. Public/integration inputs may arrive through explicit HTTP routes. Both carry admitted session context, bounded versioned values and optional idempotency/precondition identity.
+First-party Dioxus inputs may arrive through generated server-function clients. `ustc-agent`, inbound MCP and other admitted heterogeneous clients arrive through explicit versioned HTTP/SSE routes. Every path carries admitted session context, bounded versioned values and optional idempotency/precondition identity, and every path terminates at the same application command/query ownership.
 
 Outputs are typed accepted/denied responses, compatibility outcomes and monotone events/streams. Initial operation families remain those registered in [`../../contracts/interfaces.md`](../../contracts/interfaces.md):
 
@@ -143,9 +145,9 @@ Record ingress/route ID, protocol/API version, client build/target, request/corr
 
 ## 11. Extension and replacement
 
-Dioxus server functions, public REST/SSE, future CLI/internal transport and their serialization runtimes are peer ingress adapters over the same application ports. Adding or replacing one transport must not duplicate domain logic.
+Dioxus server functions, `ustc-agent`/inbound-MCP HTTP/SSE routes, other public REST/SSE routes and future internal transports are peer ingress adapters over the same application ports. Adding or replacing one transport must not duplicate domain logic or make one client shell a subprocess dependency of another.
 
-First-party clients may bind to versioned Dioxus server-function routes and typed event handles. Public clients bind only to endpoints explicitly marked public in the interface registry. Independently released Android clients retain a declared compatibility window; shared source types alone are not compatibility proof.
+Dioxus clients may bind to versioned generated server-function routes and typed event handles. `ustc-agent` and inbound MCP bind to only the explicit endpoint subset registered for their real heterogeneous consumption; the MCP adapter remains outside M10 and calls those routes through M80 client-core. Public clients bind only to endpoints explicitly marked public in the interface registry. Independently released Android, CLI and MCP artifacts retain declared compatibility windows; shared source types alone are not compatibility proof.
 
 ## 12. Performance path
 
@@ -155,9 +157,10 @@ Hot paths are request decode/admission, compatibility checks, read-model seriali
 
 **Required initial product scope**
 
-- health/build/protocol compatibility;
+- health/build/protocol compatibility for every admitted client target;
+- one explicit read-only HTTP/JSON operation consumed by `ustc-agent` and projected by one least-privilege inbound MCP tool/resource;
 - Dioxus Fullstack server-function query/command/event ingress for one real Web journey;
-- the same semantic ingress consumed by Android;
+- the same semantic client-core result/error/event behavior consumed by Android, CLI and inbound MCP where the operation applies;
 - read-only Market browse/detail;
 - minimal finite run create/read/cancel/events;
 - stable errors, request correlation, reconnect cursor and upgrade-required behavior;
@@ -184,7 +187,7 @@ Hot paths are request decode/admission, compatibility checks, read-model seriali
 2. `ingress-contract` — first-party/public request/response/event/compatibility values.
 3. `request-admission` — bounds, M00 actor, client version and precondition mapping.
 4. `server-function-adapter` — Dioxus/Axum endpoint declarations and dispatch.
-5. `public-http-adapter` — only routes with real heterogeneous consumers.
+5. `user-integration-http-adapter` — exact REST/SSE routes required by `ustc-agent`, inbound MCP or another named heterogeneous consumer.
 6. `application-dispatch` — one ingress to one use case.
 7. `error-projection` — stable safe error and upgrade envelopes.
 8. `event-stream` — cursor, heartbeat, reconnect and backpressure.
@@ -193,4 +196,4 @@ Hot paths are request decode/admission, compatibility checks, read-model seriali
 
 ## 15. Exit gate
 
-M10 is integration-ready when black-box tests prove versioning, malformed input, auth denial, supported/unsupported Android client versions, one accepted fake command, stable error mapping, monotone event reconnect and graceful shutdown. Dependency tests prove server-function adapters cannot reach concrete repositories/executors. It is accepted only after Web and Android complete the same semantic Fullstack journey against the Docker Compose server without direct backend access.
+M10 is integration-ready when black-box tests prove versioning, malformed input, auth denial, supported/unsupported client versions, one accepted fake command, stable error mapping, monotone event reconnect and graceful shutdown. Dependency tests prove every ingress adapter cannot reach concrete repositories/executors. It is accepted only after Web and Android complete the same semantic Fullstack journey, `ustc-agent` completes one real versioned read path, and one inbound MCP projection reaches that admitted path without operator/domain/M51 reach-through; all run against the Docker Compose server without direct backend access.

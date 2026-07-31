@@ -19,7 +19,7 @@ USTC Campus Agent uses a proportionate docs-as-code structure: detailed authorit
 |---|---|
 | [`plan/`](plan/) | How is the system engineered, which large modules exist, and who owns authority/failure/recovery? |
 | [`features/`](features/) | What does the user see and what is the honest journey/status? |
-| [`contracts/`](contracts/) | What exact harness/runtime, Agent–Plugin tool boundary, multi-client shell, schemas, CLI, interfaces, permissions and data models are exposed? |
+| [`contracts/`](contracts/) | What exact harness/runtime, Agent–Plugin tool boundary, typed client core/peer shells, schemas, CLI, interfaces, permissions and data models are exposed? |
 | [`acceptance/`](acceptance/) | What is active now, and which stable long-horizon proof cases must be retained for future scope? |
 | [`overview/`](overview/) | How do the layers fit together? |
 | [`tasks/`](tasks/) | How are large modules split, committed, independently accepted and assembled? |

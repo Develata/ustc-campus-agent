@@ -4,12 +4,12 @@
 
 - `Layer`: Product foundation
 - `Status`: Accepted
-- `Version`: `0.2.0`
-- `Last Review`: `2026-07-22`
+- `Version`: `0.3.0`
+- `Last Review`: `2026-07-31`
 - `Authority Owns`: product scope, formal first-party identities, non-goals and naming
 - `Authority Defers To`: chapters 03–08 for engineering mechanisms and typed contracts for exact fields
-- `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/01-ustc-affairs-navigator.md`, `docs/features/02-ustc-change-radar.md`, `docs/features/03-campus-opportunity-graph.md`
-- `Counterpart Acceptance`: `FP-*`, `MARKET-*` in `docs/acceptance/matrix.tsv`
+- `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/01-ustc-affairs-navigator.md`, `docs/features/02-ustc-change-radar.md`, `docs/features/03-campus-opportunity-graph.md`, `docs/features/05-headless-client-and-agent-integration.md`
+- `Counterpart Acceptance`: `FP-*`, `MARKET-*`, `CLIENT-007` through `CLIENT-010` in `docs/acceptance/matrix.tsv`
 - `Primary Code Areas`: `market/`, `plugins/first-party/`, `crates/platform-core/`
 
 ## 1. Decision
@@ -17,6 +17,8 @@
 USTC Campus Agent is a campus-scoped Agent platform, not a general-purpose Agent framework. Its product spine is Plugins Market-first: user-visible capabilities are inspected, installed, authorized, disabled, upgraded and audited through `PluginPackage` contracts.
 
 The project is a student competition prototype and is **not an official University of Science and Technology of China service**.
+
+The accepted product access shape includes Dioxus Web/PWA and Android, a separate ordinary-user/headless `ustc-agent` CLI, and selected least-privilege inbound MCP tools/resources for external Agents. These are peer adapters over one framework-neutral typed client core; the graphical client does not spawn the CLI. `ustc-agentctl` remains a separate operator/developer surface. This access shape does not move any product or platform authority into clients.
 
 ## 2. Three default first-party Plugins
 

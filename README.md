@@ -25,16 +25,20 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | Agent harness | finite HarnessRun over typed TaskGraph；model proposes, Rust validates；every model call passes context-budget preflight |
 | Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
 | Required delivery targets | Web/PWA + Docker Compose Fullstack server + Android；iOS 后续；desktop 按真实需求后续加入 |
-| Multi-client shell | Dioxus Fullstack；Web first、Android mandatory next；共享 server-function/API/event/reducer contract；client/server adapter 不拥有平台 authority |
+| Multi-client shell | `M10` owns framework-neutral versioned client-protocol；`M80` owns client core over it；Dioxus Web/Android、`ustc-agent` 与 inbound MCP 为 peer adapters；M10 不依赖 client-core，GUI 不 spawn CLI；client/server adapter 不拥有平台 authority |
+| CLI privilege split | `ustc-agentctl` 为 operator/developer；未来 `ustc-agent` 为 ordinary-user/headless automation；MCP 仅暴露 selected least-privilege tools/resources |
 
 ## Repository layout
 
 ```text
-apps/                     # runnable binaries and future Fullstack application source
+apps/                     # runnable binaries and future interaction-shell source
   ustc-agentd/            # service daemon skeleton
   ustc-agentctl/          # operator/developer CLI skeleton
-  ustc-client/            # future shared Dioxus Web/Android Fullstack source; created with first accepted Fullstack slice
+  ustc-agent/             # future ordinary-user/headless automation CLI
+  ustc-client/            # future shared Dioxus Web/Android Fullstack source
 crates/
+  client-protocol/        # future M10-owned framework-neutral versioned wire DTO/error/event carrier
+  client-core/            # future M80-owned client behavior and fake-M10 conformance
   platform-core/          # canonical domain invariants and authority decisions
   agent-runtime/          # Plugin-neutral node AgentRun; future finite harness state, graph, context and review kernel
   agent-tool-protocol/    # provider-neutral canonical tool values and sealed view/call/result envelopes

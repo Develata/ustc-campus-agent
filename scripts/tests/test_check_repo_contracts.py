@@ -609,6 +609,28 @@ class DocsTopologyContractTests(unittest.TestCase):
             self.check_key_files(),
         )
 
+    def test_peer_client_governance_files_are_registered_nonempty_key_files(self) -> None:
+        issues = self.check_key_files()
+        key_files = cast(list[str], getattr(checker, "KEY_FILES"))
+        for rel in (
+            "docs/features/05-headless-client-and-agent-integration.md",
+            "docs/adr/0010-typed-client-peer-adapters.md",
+        ):
+            self.assertIn(rel, key_files)
+            self.assertFalse(any(rel in issue for issue in issues), rel)
+
+    def test_missing_peer_client_governance_file_fails_closed(self) -> None:
+        for rel in (
+            "docs/features/05-headless-client-and-agent-integration.md",
+            "docs/adr/0010-typed-client-peer-adapters.md",
+        ):
+            with self.subTest(rel=rel):
+                path = self.root / rel
+                original = path.read_text(encoding="utf-8")
+                path.unlink()
+                self.assertIn(f"key file missing: {rel}", self.check_key_files())
+                path.write_text(original, encoding="utf-8")
+
     def test_platform_identity_contract_is_a_registered_nonempty_key_file(self) -> None:
         issues = self.check_key_files()
         self.assertFalse(any("platform-identity.md" in issue for issue in issues))
@@ -1044,8 +1066,8 @@ class ModuleRegistryContractTests(unittest.TestCase):
         text = path.read_text(encoding="utf-8")
         path.write_text(
             text.replace(
-                "`long-horizon:CLIENT-*`",
-                "`active:CLIENT-*`",
+                "`long-horizon:AUTH-013`",
+                "`active:AUTH-013`",
                 1,
             ),
             encoding="utf-8",
@@ -1064,7 +1086,7 @@ class ModuleRegistryContractTests(unittest.TestCase):
         text = path.read_text(encoding="utf-8")
         path.write_text(
             text.replace(
-                "`long-horizon:CLIENT-*`",
+                "`long-horizon:AUTH-013`",
                 "`long-horizon:MOBILE-*`",
                 1,
             ),

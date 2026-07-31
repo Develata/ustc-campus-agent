@@ -14,8 +14,8 @@ This matrix keeps the live documentation layers aligned:
 |---|---|---|---|
 | `00-engineering-constitution` | — | repository `AGENTS.md`, `tasks/00-module-work-policy.md` | `acceptance/gates.md`, repository checker |
 | `01-terminology` | all feature vocabulary | `contracts/module-boundaries.md`, Market schema/capability IDs | matrix/checker vocabulary |
-| `02-product-positioning` | `00-market-browse-install`, three first-party features | `plugin-package.md` | `MARKET-*`, `FP-*` |
-| `03-platform-authority` | `00-market-browse-install`, `04-bounded-agent-harness` | `platform-identity.md`, `platform-session.md`, `module-boundaries.md`, `agent-harness.md`, `agent-plugin-boundary.md`, `client-shell.md`, `interfaces.md`, `permissions.md` | `AUTH-*`, `HARNESS-*`, `AGENT-*`, `MARKET-*`, long-horizon client cases |
+| `02-product-positioning` | `00-market-browse-install`, three first-party features, `05-headless-client-and-agent-integration` | `plugin-package.md`, `client-shell.md`, `cli.md` | `MARKET-*`, `FP-*`, active `CLIENT-007`–`CLIENT-010` |
+| `03-platform-authority` | `00-market-browse-install`, `04-bounded-agent-harness`, `05-headless-client-and-agent-integration` | `platform-identity.md`, `platform-session.md`, `module-boundaries.md`, `agent-harness.md`, `agent-plugin-boundary.md`, `client-shell.md`, `interfaces.md`, `permissions.md` | `AUTH-*`, `HARNESS-*`, `AGENT-*`, `MARKET-*`, active `CLIENT-007`–`CLIENT-010`, long-horizon client cases |
 | `04-market-and-plugin-lifecycle` | `00-market-browse-install` | `plugin-package.md`, `market-lifecycle.md`, `permissions.md`, `invocation-resolution.md`, `agent-plugin-boundary.md` | `MARKET-*`, `PKG-*`, selected `AGENT-*`, `FP-*` |
 | `05-campus-trust-kernel` | all three first-party features | `source-import.md`, `data-models.md` | `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
 | `06-first-party-plugins` | three first-party features | manifests, `data-models.md`, `source-import.md` | `FP-*`, `PROC-*`, `RADAR-*`, `COURSE-*` |
@@ -28,7 +28,7 @@ This matrix keeps the live documentation layers aligned:
 |---|---|---|---|
 | `modules/00-module-map` | `module-boundaries.md` | all | every module must bind before implementation |
 | `M00 Platform Control/Identity` | `platform-identity.md`, `platform-session.md`, `B-M00-M10-ACTOR`, later request/causation values | cross-feature admission only | `active:AUTH-011`; `active:AUTH-012`; `active:AUTH-014`; `active:AUTH-015`; `active:AUTH-016`; `active:AUTH-017`; `active:AUTH-018`; `active:AUTH-019`; `active:AUTH-020`; `long-horizon:AUTH-013` |
-| `M10 Application Ingress Host` | `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT`, `B-M10-APP-CALL`, `B-APP-M10-RESULT`; server-function/public endpoint registry in `interfaces.md` | all real Web/Android/integration journeys | `gap`; `long-horizon:CLIENT-*`; `long-horizon:WEB-*` |
+| `M10 Application Ingress Host` | `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT`, `B-M10-APP-CALL`, `B-APP-M10-RESULT`; server-function/public endpoint registry in `interfaces.md` | Dioxus, `ustc-agent`, inbound MCP and other admitted integration journeys | `active:CLIENT-007`; `active:CLIENT-009`; `active:CLIENT-010`; `long-horizon:CLIENT-001`; `long-horizon:CLIENT-002`; `long-horizon:CLIENT-003`; `long-horizon:CLIENT-004`; `long-horizon:CLIENT-005`; `long-horizon:CLIENT-006`; `long-horizon:WEB-*` |
 | `M20 Market/Package` | `plugin-package.md`, `market-lifecycle.md`, `invocation-resolution.md`, package/install/grant/resolver contracts | `00-market-browse-install` | `active:MARKET-*`; `active:PKG-*`; `active:AGENT-*`; `active:FP-*` |
 | `M30 Agent Harness/Runtime` | `agent-harness.md`, `agent-runtime.md`, `B-M30-M50-MODEL`, `B-M20-M30-TOOLSET`, `B-M30-M40-CALL`, `B-COMP-M30-EFFECT`, `B-M40-M30-RESULT` | `04-bounded-agent-harness` | `active:HARNESS-*`; `active:AGENT-*` |
 | `M40 Tool Gateway/Execution` | `agent-plugin-boundary.md`, `invocation-resolution.md`, directional call/result/executor boundaries | tool/review states in harness journey | `active:AGENT-*`; `active:MARKET-*`; `active:PKG-*` |
@@ -38,7 +38,7 @@ This matrix keeps the live documentation layers aligned:
 | `M70 ChangeRadar` | typed semantic candidate/event/feed | `02-ustc-change-radar` | `active:RADAR-*`; `active:FP-*` |
 | `M71 Affairs Navigator` | procedure draft/artifact/search contracts | `01-ustc-affairs-navigator` | `active:PROC-*`; `active:FP-*` |
 | `M72 Opportunity Graph` | opportunity/profile/planner values | `03-campus-opportunity-graph` | `active:COURSE-*`; `active:FP-*` |
-| `M80 Dioxus Fullstack Multi-client` | `client-shell.md`, `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT` | required Web/PWA and Android presentation; later iOS/desktop | `gap`; `long-horizon:CLIENT-*`; `long-horizon:WEB-*` |
+| `M80 Client Core and Interaction Shells` | `client-shell.md`, `cli.md`, `B-M80-M10-CALL`, `B-M10-M80-RESULT`, `B-M10-M80-EVENT` | framework-neutral client core; peer Dioxus Web/Android, `ustc-agent` and inbound MCP; later iOS/desktop | `active:CLIENT-007`; `active:CLIENT-008`; `active:CLIENT-009`; `active:CLIENT-010`; `long-horizon:CLIENT-001`; `long-horizon:CLIENT-002`; `long-horizon:CLIENT-003`; `long-horizon:CLIENT-004`; `long-horizon:CLIENT-005`; `long-horizon:CLIENT-006`; `long-horizon:WEB-*` |
 | `M90 Infrastructure/Operations` | module-owned ports plus Docker Compose Fullstack deployment/recovery contracts | no independent product behavior | `active:RUNTIME-*`; `active:PUBLIC-*`; `long-horizon:CFG-*`; `long-horizon:REL-*`; `long-horizon:DEP-*` |
 
 The machine-checked acceptance projection uses only these code-formatted tokens:
