@@ -1,6 +1,6 @@
 # Market browse, install and control
 
-- `Status`: Planned user journey; typed manifest/catalog, capability-registry and bounded managed-installation domain evidence exist without API/browser delivery or runnable package composition
+- `Status`: Planned user journey; typed catalog/capability/installation/grant plus bounded transaction-current authority-assembly evidence exist without API/browser delivery, durable adapters or runnable package composition
 - `Owning plan`: `docs/plan/04-market-and-plugin-lifecycle.md`
 - `Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/market-lifecycle.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
 - `Acceptance`: `MARKET-*`, `PKG-019/020`, `AGENT-002`, `AGENT-017/018`, `FP-006`, `FP-015`, `FP-007`
@@ -63,4 +63,4 @@ Package installation or update never updates the Agent framework. The Agent cons
 
 ## Verification
 
-Current automated evidence validates the exact three manifests through the bounded typed Rust loader, pins canonical declaration/catalog digests, rejects duplicate/unknown/malformed input, and proves deterministic anonymous catalog metadata ordering/lookup. Rust evidence also covers exact identities, the typed immutable capability registry, the pure managed-installation aggregate/semantic in-memory repository, and the pure invocation resolver over synthetic in-memory authority snapshots. These are supporting domain proofs only: no production grant or enable-evidence issuer, durable repository, M10/M80 API/browser delivery, or application composition exists. Therefore `MARKET-001` through `MARKET-004` and the user journey remain planned, and no current package is runnable.
+Current automated evidence validates exact manifest/catalog identities, the immutable capability registry, pure installation/grant domains and the adopted invocation resolver. Bounded `market_authority_assembly` additionally proves separate catalog/installation/grant/policy carrier loads under one semantic read revision, service-owned projection/current assembly, immediate current denial and post-success precondition verification. These remain supporting proofs only: no production grant/enable issuer, durable adapter/database transaction, effect-intent coupling, M10/M80 delivery or application composition exists. Therefore `MARKET-001` through `MARKET-004`, `MARKET-007` and the user journey remain planned, and no current package is runnable.

@@ -141,8 +141,8 @@ Handlers contain mapping and coordination only. Domain validation remains in own
 - `M20-B2 capability-registry`: risk/data class and auto-grant eligibility. Bounded implementation evidence is complete; it creates no grants and promotes no acceptance row.
 - `M20-B3 installation-domain`: exact install/configure/enable/disable/revoke/uninstall. The bounded first slice `M20-B3-s1` implements a pure managed-installation aggregate plus a semantic in-memory repository fake under `platform-core`; it mints no production enable evidence, creates no durable state and promotes no acceptance row.
 - `M20-B4 grant-domain`: scope/version/reapproval and tenant checks. The exact public contract and bounded Rust implementation are complete under `crate::market::grant`: pure grant aggregate, explicit admission evidence, decide/evolve/replay, deny-side resolver projection and semantic in-memory repository fake. This supporting evidence mints no production grant, promotes no acceptance row and leaves durable authority assembly/composition to `M20-B5`.
-- `M20-B5 invocation-authority`: integrate audited projection/recheck with repository transaction/preconditions.
-- `M20-B6 update-rollback`: staged update, permission expansion and exact rollback.
+- `M20-B5 invocation-authority`: bounded implementation is complete under `crate::market::authority`: one semantic carrier-by-carrier read transaction, service-owned candidate/current assembly, shared call preflight, adopted resolver/recheck and post-success precondition verification. It creates no durable authority, production grant/enable evidence, effect intent or acceptance promotion.
+- `M20-B6 update-rollback`: next batch; staged update, permission expansion and exact rollback.
 - `M20-B7 composition`: attach read/mutation APIs and fake `M40` consumer.
 
 `M20` merge scope is complete only when browse and current lifecycle state are distinct and disable/revoke blocks discovery/calls. Historical `B1-0`/`B1-1` labels map to the lifecycle-contract establishment and `M20-B1` respectively; the earlier `B1-2`/`B1-3`/… sequence is superseded by the canonical `M20-B<n>`/slice references above.

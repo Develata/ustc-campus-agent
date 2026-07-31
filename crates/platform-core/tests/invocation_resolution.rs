@@ -1350,6 +1350,49 @@ fn valid_call_state() -> (ToolProjectionSnapshot, CurrentDenyState, ProposedTool
 }
 
 #[test]
+fn projected_call_preflight_and_authorize_share_exact_prefix_precedence() {
+    let (projection, mut current, call) = valid_call_state();
+    current.policy.emergency_blocked = true;
+    assert_eq!(
+        preflight_projected_call(&projection, &call),
+        Ok(&projection.entries()[0])
+    );
+
+    let mut invalid = call.clone();
+    invalid.model_visible_name.clear();
+    assert_eq!(
+        preflight_projected_call(&projection, &invalid),
+        Err(InvocationAuthorizationError::InvalidCall)
+    );
+    assert_eq!(
+        authorize_call(&projection, current.clone(), invalid),
+        Err(InvocationAuthorizationError::InvalidCall)
+    );
+
+    let mut missing = call.clone();
+    missing.model_visible_name = "not_projected".to_owned();
+    assert_eq!(
+        preflight_projected_call(&projection, &missing),
+        Err(InvocationAuthorizationError::ToolNotProjected)
+    );
+    assert_eq!(
+        authorize_call(&projection, current.clone(), missing),
+        Err(InvocationAuthorizationError::ToolNotProjected)
+    );
+
+    let mut wrong_dispatch = call;
+    wrong_dispatch.dispatch_key = "dispatch:wrong".to_owned();
+    assert_eq!(
+        preflight_projected_call(&projection, &wrong_dispatch),
+        Err(InvocationAuthorizationError::DispatchIdentityMismatch)
+    );
+    assert_eq!(
+        authorize_call(&projection, current, wrong_dispatch),
+        Err(InvocationAuthorizationError::DispatchIdentityMismatch)
+    );
+}
+
+#[test]
 fn call_authorization_uses_only_frozen_dispatch_and_current_narrowing() {
     let (projection, current, call) = valid_call_state();
     let authorized = authorize_call(&projection, current.clone(), call.clone());

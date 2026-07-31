@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Layer`: Product authority
-- `Status`: Schema/identity baseline, typed package-manifest/catalog read model, `M20-B2` capability registry, `M20-B3-s1` managed-installation aggregate/in-memory repository, bounded `M20-B4` pure grant aggregate/semantic repository/replay evidence and pure P0a resolver implemented; durable runtime lifecycle and composition planned
+- `Status`: Schema/identity baseline, typed package/catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` transaction-current authority assembly and pure resolver evidence implemented; durable runtime lifecycle and production composition planned
 - `Version`: `0.5.0`
 - `Last Review`: `2026-07-30`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
@@ -156,6 +156,7 @@ Implemented:
 - typed immutable capability-registry loading, exact registry/definition digests, derived risk and auto-grant eligibility, and permission-change classification under `crate::market::capability` (`M20-B2` bounded evidence only; no grant issuance).
 - pure managed-installation decide/evolve/replay, exact pins/configuration, terminal lifecycle, deny-side resolver projection and atomic semantic in-memory repository behavior under `crate::market::installation` (`M20-B3-s1` bounded evidence only; no durable store or production enable-evidence issuance).
 - pure reviewed-grant decide/evolve/replay, exact admission/scope/version/reapproval bindings, deny-side resolver projection and atomic semantic in-memory repository behavior under `crate::market::grant` (`M20-B4` bounded evidence only; no production grant issuer, durable store or acceptance promotion).
+- carrier-by-carrier catalog/installation/grant/policy reads under one semantic GAT transaction, service-owned candidate/current assembly, shared call preflight and post-success precondition verification under `crate::market::authority` (`M20-B5` bounded evidence only; no durable adapter, effect intent, production composition or acceptance promotion).
 - pure typed invocation resolution, immutable per-turn projection and synthetic `RunSpec` proof (`MARKET-005/006`).
 - Agent–Plugin dependency direction and composition-root cross-boundary proof (`AGENT-017`).
 
@@ -163,7 +164,7 @@ Planned:
 
 - M10/M80 anonymous catalog browse/detail API/browser delivery (`MARKET-001`);
 - durable installation/grant repositories and production transaction/TOCTOU closure;
-- grant issuance, production enable-evidence assembly and installation/grant-to-resolver composition;
+- grant issuance, production enable-evidence assembly, durable authority adapters and transaction coupling to effect intent;
 - Market browse/detail UI;
 - upgrade/revoke/rollback runtime.
 - production ToolGateway and executable Plugin tool-host packaging; the framework-neutral Agent tool protocol value subset is implemented.
@@ -174,7 +175,9 @@ Verification:
 - `docs/contracts/market-lifecycle.md`
 - `docs/contracts/invocation-resolution.md`
 - `crates/platform-core/src/market.rs`
+- `crates/platform-core/src/market/authority.rs`
 - `cargo test --locked -p ustc-campus-agent-core --test market_package_catalog`
+- `cargo test --locked -p ustc-campus-agent-core --test market_authority_assembly`
 - `market/schemas/plugin-package.schema.json`
 - `python3 scripts/check_repo_contracts.py`
 - `scripts/tests/test_check_repo_contracts.py`

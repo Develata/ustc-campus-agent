@@ -61,7 +61,7 @@ The thin client displays and submits intent. Backend modules perform every truth
 |---|---|---|---|
 | `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity value types only |
 | `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | daemon help/version skeleton |
-| `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | typed package/catalog + capability-registry + bounded managed-installation fake + bounded reviewed-grant aggregate/replay/semantic repository + pure resolver/fixtures |
+| `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | typed catalog/capability + bounded installation/grant domains + bounded transaction-current authority assembly + pure resolver/fixtures |
 | `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel |
 | `M40` | Tool Gateway/Execution | exact tool correlation, authorization order, intent/executor/receipt/result | protocol values + fake conformance |
 | `M50` | Model Provider | typed profiles, provider protocol, stream/final/usage/estimator | planned |
@@ -180,6 +180,7 @@ Implemented evidence:
 - `crates/platform-core/src/market/capability.rs`: typed immutable capability-registry loading, derived policy and permission-change classification without grant issuance;
 - `crates/platform-core/src/market/installation.rs`: pure managed-installation aggregate/replay and semantic in-memory repository without durable persistence or production enable-evidence issuance;
 - `crates/platform-core/src/market/grant.rs`: pure reviewed-grant aggregate/decide/evolve/replay and semantic in-memory repository without durable persistence or production grant issuance;
+- `crates/platform-core/src/market/authority.rs`: one semantic carrier-by-carrier authority read transaction, service-owned resolver/recheck assembly and post-success precondition evidence without durable adapters, effect intents or I/O;
 - `crates/agent-tool-protocol`: Plugin-neutral tool values;
 - `apps/ustc-agentd/tests`: fake resolver/gateway/executor composition proof;
 - `crates/course-planning` + CLI: deterministic offline Course Planning spike;
@@ -189,7 +190,7 @@ Not implemented:
 
 - Dioxus Fullstack app or dependency, Compose Fullstack server profile, Web journey or Android artifact;
 - Fullstack/public ingress, typed stream or auth/session service;
-- production durable Market installations/grants and lifecycle composition;
+- production durable Market installations/grants/authority adapters, update/rollback and lifecycle/effect-intent composition;
 - finite HarnessRun/TaskGraph/context/review supervisor;
 - real model provider/MCP/Plugin executor;
 - real source pipeline and first-party product integrations;
