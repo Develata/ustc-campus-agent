@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -2115,6 +2116,8 @@ PLATFORM_IDENTITY_TEST = "crates/platform-core/tests/platform_identity.rs"
 PLATFORM_CORE_LIB = "crates/platform-core/src/lib.rs"
 PLATFORM_INVOCATION_SOURCE = "crates/platform-core/src/invocation.rs"
 PLATFORM_MARKET_SOURCE = "crates/platform-core/src/market.rs"
+PLATFORM_AUTHORITY_SOURCE = "crates/platform-core/src/market/authority.rs"
+PLATFORM_AUTHORITY_TEST = "crates/platform-core/tests/market_authority_assembly.rs"
 PLATFORM_SESSION_SOURCE = "crates/platform-core/src/session.rs"
 PLATFORM_SESSION_TEST = "crates/platform-core/tests/platform_session.rs"
 PLATFORM_CAPABILITY_TEST = "crates/platform-core/tests/market_capability_registry.rs"
@@ -2388,11 +2391,13 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/invocation.rs',
  'src/lib.rs',
  'src/market.rs',
+ 'src/market/authority.rs',
  'src/market/capability.rs',
  'src/market/grant.rs',
  'src/market/installation.rs',
  'src/session.rs',
  'tests/invocation_resolution.rs',
+ 'tests/market_authority_assembly.rs',
  'tests/market_capability_registry.rs',
  'tests/market_grant_lifecycle.rs',
  'tests/market_installation_lifecycle.rs',
@@ -2404,6 +2409,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
 PLATFORM_IDENTITY_ADMITTED_REEXPORT = "pub use crate::identity::{TenantId, UserId};"
 PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 PLATFORM_GRANT_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
+PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT = (
     "use crate::identity::{SessionId, TenantId, UserId};"
 )
@@ -2419,6 +2425,7 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
     (PLATFORM_INVOCATION_SOURCE, PLATFORM_IDENTITY_ADMITTED_REEXPORT),
     (PLATFORM_INSTALLATION_SOURCE, PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_GRANT_SOURCE, PLATFORM_GRANT_ADMITTED_IDENTITY_IMPORT),
+    (PLATFORM_AUTHORITY_SOURCE, PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT),
 )
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
@@ -2428,7 +2435,8 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'invocation.rs': (),
  'lib.rs': ('identity', 'invocation', 'market', 'session'),
- 'market.rs': ('capability', 'grant', 'installation'),
+ 'market.rs': ('authority', 'capability', 'grant', 'installation'),
+ 'market/authority.rs': (),
  'market/capability.rs': (),
  'market/grant.rs': (),
  'market/installation.rs': (),
@@ -2471,7 +2479,8 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
             'pub mod session;',
             '#[cfg(test)] mod tests',
             'use super::*;'),
- 'market.rs': ('pub mod capability;',
+ 'market.rs': ('pub mod authority;',
+               'pub mod capability;',
                'pub mod grant;',
                'pub mod installation;',
                'use crate::invocation::{ CapabilityId, CatalogRevision, ComponentKind, PackageId, '
@@ -2482,6 +2491,28 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                'use std::error::Error;',
                'use std::fmt;',
                'type Value = UniqueStringMap;'),
+ 'market/authority.rs': ('use crate::identity::{TenantId, UserId};',
+                         'use crate::invocation::{ AuthorizedInvocation, '
+                         'CapabilityGrantSnapshot, CapabilityId, CatalogPackageRevision, '
+                         'CurrentDenyState, GrantSnapshotId, InstallationId, '
+                         'InvocationAuthorityCandidate, InvocationAuthorizationError, '
+                         'InvocationPolicySnapshot, InvocationResolver, InvocationTarget, '
+                         'ObjectScope, PluginInstallationSnapshot, ProjectionResolutionError, '
+                         'ProposedToolCall, ResolvedInvocation, ToolProjectionRequest, '
+                         'ToolProjectionSnapshot, authorize_call, preflight_projected_call, };',
+                         'use std::cell::Cell;',
+                         'use std::collections::{BTreeMap, BTreeSet};',
+                         'use std::error::Error;',
+                         'use std::fmt;',
+                         "type ReadTransaction<'a>: InvocationAuthorityReadTransaction where "
+                         "Self: 'a;",
+                         "type ReadTransaction<'a> = InMemoryAuthorityReadTransaction<'a>;",
+                         '#[cfg(test)] mod tests',
+                         'use super::*;',
+                         'use crate::invocation::{ CapabilityClass, CatalogRevision, '
+                         'ComponentId, GrantState, GrantVersion, ObjectScope, PackageId, '
+                         'PackageVersion, PolicyRevision, PolicySnapshotId, RunId, '
+                         'Sha256Digest, ToolId, TurnId, };'),
  'market/capability.rs': ('use crate::invocation::{CapabilityClass, CapabilityId, '
                           'ConfirmationPolicy, Sha256Digest};',
                           'use serde::Deserialize;',
@@ -2544,6 +2575,7 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
  'invocation.rs': ('authority_id',),
  'lib.rs': (),
  'market.rs': (),
+ 'market/authority.rs': ('parsed',),
  'market/capability.rs': (),
  'market/grant.rs': ('category_error', 'parsed'),
  'market/installation.rs': (),
@@ -2556,6 +2588,7 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_
  'invocation.rs': ('authority_id', 'format', 'write'),
  'lib.rs': ('assert', 'assert_eq', 'include_str', 'panic'),
  'market.rs': ('matches', 'write'),
+ 'market/authority.rs': ('assert', 'assert_eq', 'format', 'panic', 'parsed', 'vec', 'write'),
  'market/capability.rs': ('assert', 'assert_eq', 'matches'),
  'market/grant.rs': ('assert', 'assert_eq', 'category_error', 'concat', 'format',
                      'include_bytes', 'matches', 'panic', 'parsed', 'unreachable', 'vec',
@@ -2579,6 +2612,12 @@ PLATFORM_GRANT_ADMITTED_IDENTITY_MACRO_ARGUMENTS = (
     ("parsed", "TenantId,"),
     ("parsed", "TenantId,"),
     ("parsed", "TenantId,"),
+    ("parsed", "UserId,"),
+)
+PLATFORM_AUTHORITY_ADMITTED_IDENTITY_MACRO_ARGUMENTS = (
+    ("parsed", "TenantId,"),
+    ("parsed", "TenantId,"),
+    ("parsed", "UserId,"),
     ("parsed", "UserId,"),
 )
 # Macro names alone are a set and therefore admit duplicates. Freeze every invocation count, then
@@ -2621,7 +2660,23 @@ PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS = (
 # A blanket `impl<T> Extension for T` names no kind and covers all six, so the sibling `impl`
 # surface is an allowlist as well. These are M20 items; a genuine M20 addition is drift that
 # must be admitted here explicitly rather than arriving unseen.
-PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'capability.rs': ('impl CapabilityDefinition',
+PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevision',
+                  'impl CurrentGrantKey',
+                  'impl Error for AuthorityRepositoryError',
+                  'impl Error for InvocationRecheckError',
+                  'impl Error for ProjectionAssemblyError',
+                  'impl InMemoryInvocationAuthorityRepository',
+                  "impl InvocationAuthorityReadTransaction for InMemoryAuthorityReadTransaction<'_>",
+                  'impl InvocationAuthorityRepository for InMemoryInvocationAuthorityRepository',
+                  'impl InvocationAuthorityService<R>',
+                  'impl InvocationAuthorityService<R>',
+                  'impl fmt::Debug for AuthorityReadRevision',
+                  "impl fmt::Debug for InMemoryAuthorityReadTransaction<'_>",
+                  'impl fmt::Debug for InMemoryInvocationAuthorityRepository',
+                  'impl fmt::Display for AuthorityRepositoryError',
+                  'impl fmt::Display for InvocationRecheckError',
+                  'impl fmt::Display for ProjectionAssemblyError'),
+ 'capability.rs': ('impl CapabilityDefinition',
                    'impl CapabilityRegistry',
                    'impl CapabilityRegistryRevision',
                    'impl Error for CapabilityRegistryLoadError',
@@ -2778,6 +2833,149 @@ PLATFORM_GRANT_TEST_FUNCTIONS = (
     'empty_replay_and_repository_queries_are_deterministic',
     'public_errors_are_category_only_and_secret_safe',
 )
+PLATFORM_AUTHORITY_SOURCE_SHA256 = "7fa7210fd0cebca033fd9a597069dadf34af6cc084855ea3587afb413d89f672"
+PLATFORM_AUTHORITY_TEST_SHA256 = "ba92339afb73096309948638c10db75dcb2a3714c6cc5f369e17b11aa2648fc3"
+PLATFORM_AUTHORITY_ADMITTED_ATTRIBUTE_COUNTS = (
+    ((False, "cfg", "cfg(test)"), 1),
+    ((False, "derive", "derive(Clone)"), 1),
+    ((False, "derive", "derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)"), 1),
+    ((False, "derive", "derive(Clone, PartialEq, Eq, PartialOrd, Ord)"), 1),
+    ((False, "derive", "derive(Debug, Clone, Copy, PartialEq, Eq)"), 3),
+    ((False, "must_use", "must_use"), 3),
+    ((False, "test", "test"), 5),
+)
+PLATFORM_AUTHORITY_ADMITTED_DERIVES = (
+    "Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash",
+    "Debug, Clone, Copy, PartialEq, Eq",
+    "Debug, Clone, Copy, PartialEq, Eq",
+    "Debug, Clone, Copy, PartialEq, Eq",
+    "Clone, PartialEq, Eq, PartialOrd, Ord",
+    "Clone",
+)
+PLATFORM_AUTHORITY_ADMITTED_PUBLIC_DECLARATIONS = (
+    "pub const fn counter",
+    "pub const fn new",
+    "pub enum AuthorityRepositoryError",
+    "pub enum InvocationRecheckError",
+    "pub enum ProjectionAssemblyError",
+    "pub fn fail_next_precondition_for_testing",
+    "pub fn into_repository",
+    "pub fn recheck_invocation",
+    "pub fn replace_catalog_for_testing",
+    "pub fn replace_grant_for_testing",
+    "pub fn replace_installation_for_testing",
+    "pub fn replace_policy_for_testing",
+    "pub fn resolve_projection",
+    "pub fn try_from_counter",
+    "pub fn try_new",
+    "pub struct AuthorityReadRevision",
+    "pub struct InMemoryAuthorityReadTransaction",
+    "pub struct InMemoryInvocationAuthorityRepository",
+    "pub struct InvocationAuthorityService",
+    "pub trait InvocationAuthorityReadTransaction",
+    "pub trait InvocationAuthorityRepository",
+)
+PLATFORM_AUTHORITY_ADMITTED_MACRO_INVOCATION_COUNTS = (
+    ("assert", 2),
+    ("assert_eq", 11),
+    ("format", 2),
+    ("panic", 1),
+    ("parsed", 23),
+    ("vec", 7),
+    ("write", 3),
+)
+PLATFORM_AUTHORITY_ADMITTED_PARSED_ARGUMENT_COUNTS = (
+    ("CapabilityId,", 3),
+    ("CatalogRevision,", 1),
+    ("ComponentId,", 1),
+    ("GrantSnapshotId,", 1),
+    ("GrantVersion,", 1),
+    ("InstallationId,", 2),
+    ("ObjectScope,", 2),
+    ("PackageId,", 1),
+    ("PackageVersion,", 1),
+    ("PolicyRevision,", 1),
+    ("PolicySnapshotId,", 1),
+    ("RunId,", 1),
+    ("Sha256Digest, format!( , byte.to_string().repeat(64))", 1),
+    ("TenantId,", 2),
+    ("ToolId,", 1),
+    ("TurnId,", 1),
+    ("UserId,", 2),
+)
+PLATFORM_AUTHORITY_FUNCTION_BODY_SHA256 = {
+    "resolve_projection": ("86be5f40fb3b13ac296f4da07c78ba1d792ba4fba866d300440b801f2a4ba8ba",),
+    "recheck_invocation": ("a6504719b3433dc832800880e797cb6ece146b8862c0a17cee25662e7e045c0b",),
+    "verify_precondition": (
+        "41b805ea7ac014e23556e98bb374702a08344268f92489a02f0880849394a1e4",
+        "2938e403f34160bc3d3739a6e932b5fa1b51825f28b063f76aa70b4e3cc4f6bd",
+    ),
+    "begin_read": (
+        "41b805ea7ac014e23556e98bb374702a08344268f92489a02f0880849394a1e4",
+        "9e09e339d8f77741742aacb39116d041530b0e5dbf7602df9173cc47da31dcad",
+    ),
+}
+PLATFORM_INVOCATION_AUTHORITY_FUNCTION_BODY_SHA256 = {
+    "preflight_projected_call": ("e500cd0fe2befa0c9dd5c72644bb7b9861144934591952444b8f04aacf0b94d2",),
+    "authorize_call": ("da6cb882d0936c5acb1f9091c200ff34aaf124216aaee0e29594969c3894f439",),
+}
+PLATFORM_AUTHORITY_UNIT_TEST_FUNCTIONS = (
+    "repository_rejects_duplicate_keys_and_incoherent_current_index",
+    "transaction_loads_separate_carriers_under_one_revision",
+    "conflict_revision_exhaustion_and_debug_are_fail_closed",
+    "adopted_empty_projection_denial_precedes_pending_conflict",
+    "catalog_key_multiplicity_is_rejected_without_deriving_authority",
+)
+PLATFORM_AUTHORITY_TEST_FUNCTIONS = (
+    "projection_and_recheck_assemble_separate_carriers_under_one_verified_revision",
+    "projection_missing_catalog_installation_or_grant_keeps_exact_resolver_denial",
+    "post_success_transaction_conflict_returns_no_projection_or_authorized_invocation",
+    "resolver_or_recheck_denial_precedes_pending_verification_conflict",
+    "invalid_name_or_dispatch_preflight_precedes_repository_failure",
+    "disable_revoke_stale_expire_and_emergency_block_deny_current_use",
+    "historical_projection_is_immutable_after_current_authority_narrows",
+    "dispatch_argument_version_scope_and_schema_errors_remain_adopted_recheck_errors",
+)
+PLATFORM_INVOCATION_PREFIX_TEST = "projected_call_preflight_and_authorize_share_exact_prefix_precedence"
+PLATFORM_INVOCATION_PREFIX_TEST_BODY_SHA256 = "e479ca2296589b23729e4ad75d319514aa3ceea04bd815a46a8d4569558a857e"
+PLATFORM_AUTHORITY_STATUS_MARKERS = {
+    "docs/contracts/market-lifecycle.md": (
+        "bounded `M20-B5` transaction-current authority-assembly evidence are implemented",
+        "M20 remains `partial-evidence`, `MARKET-003`/`MARKET-007` remain `planned`",
+        "not a production catalog/publication authority, durable M90 transaction, grant/enable issuer or effect-intent/I/O boundary",
+    ),
+    "docs/contracts/invocation-resolution.md": (
+        "bounded `M20-B5` semantic repository-transaction consumer implemented",
+        "no durable or real application composition exists yet",
+    ),
+    "docs/features/00-market-browse-install.md": (
+        "bounded transaction-current authority-assembly evidence",
+        "`MARKET-001` through `MARKET-004`, `MARKET-007` and the user journey remain planned",
+    ),
+    "docs/plan/04-market-and-plugin-lifecycle.md": (
+        "bounded `M20-B5` transaction-current authority assembly",
+        "no durable adapter, effect intent, production composition or acceptance promotion",
+    ),
+    "docs/plan/modules/00-module-map.md": ("bounded transaction-current authority assembly",),
+    "docs/plan/modules/30-market-package-lifecycle.md": (
+        "bounded `M20-B5` semantic authority-read transaction/assembly",
+        "Remaining work is `M20-B6` `update-rollback` and `M20-B7`",
+    ),
+    "docs/tasks/01-execution-roadmap.md": (
+        "`M20-B5 invocation-authority`: bounded implementation is complete",
+        "`M20-B6 update-rollback`: next batch",
+    ),
+    "docs/overview/architecture.md": (
+        "bounded transaction-current authority assembly",
+        "without durable adapters, effect intents or I/O",
+    ),
+    "docs/acceptance/matrix.tsv": (
+        "MARKET-003\tmarket\tdisable revoke or emergency block denies discovery projection and invocation immediately\t",
+        "MARKET-007\tmarket\targuments and current deny-side authority are rechecked against the frozen projection before effect intent or outbound I/O\t",
+        "\tplanned\tbackend",
+        "\tplanned\tsecurity",
+    ),
+}
 PLATFORM_INSTALLATION_TEST_FUNCTIONS = ('configuration_values_are_canonical_bounded_and_secret_safe',
  'package_pins_are_exact_canonical_and_duplicate_safe',
  'legal_install_configure_revoke_and_uninstall_transitions_are_explicit',
@@ -3189,6 +3387,7 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive'
  'invocation.rs': ('derive', 'must_use'),
  'lib.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'market.rs': ('derive', 'must_use', 'serde'),
+ 'market/authority.rs': ('cfg', 'derive', 'must_use', 'test'),
  'market/capability.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'market/grant.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'market/installation.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
@@ -5875,6 +6074,156 @@ def _check_market_grant_surface(market_code: str, issues: list[str]) -> None:
     )
 
 
+def check_platform_authority_implementation(issues: list[str]) -> None:
+    source_path = ROOT / PLATFORM_AUTHORITY_SOURCE
+    test_path = ROOT / PLATFORM_AUTHORITY_TEST
+    invocation_path = ROOT / PLATFORM_INVOCATION_SOURCE
+    invocation_test_path = ROOT / "crates/platform-core/tests/invocation_resolution.rs"
+    if not all(path.is_file() for path in (source_path, test_path, invocation_path, invocation_test_path)):
+        fail("market authority source/test carrier missing", issues)
+        return
+
+    source = strip_rust_comments_and_literals(source_path.read_text(encoding="utf-8"))
+    test = strip_rust_comments_and_literals(test_path.read_text(encoding="utf-8"))
+    invocation = strip_rust_comments_and_literals(invocation_path.read_text(encoding="utf-8"))
+    invocation_test = strip_rust_comments_and_literals(
+        invocation_test_path.read_text(encoding="utf-8")
+    )
+
+    def digest(value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+    if digest(source) != PLATFORM_AUTHORITY_SOURCE_SHA256:
+        fail("market authority normalized source digest drifted", issues)
+    if digest(test) != PLATFORM_AUTHORITY_TEST_SHA256:
+        fail("market authority external test normalized digest drifted", issues)
+
+    public_declarations, unclassified_public = rust_public_declarations(source)
+    if unclassified_public:
+        fail(f"market authority has unclassified public declarations: {unclassified_public}", issues)
+    if tuple(public_declarations) != PLATFORM_AUTHORITY_ADMITTED_PUBLIC_DECLARATIONS:
+        fail(
+            "market authority public declaration surface drifted: "
+            f"expected={PLATFORM_AUTHORITY_ADMITTED_PUBLIC_DECLARATIONS} "
+            f"actual={tuple(public_declarations)}",
+            issues,
+        )
+
+    attributes, unterminated_attributes = rust_attributes(source)
+    if unterminated_attributes:
+        fail(f"market authority has unterminated attributes: {unterminated_attributes}", issues)
+    observed_attribute_counts = tuple(sorted(Counter(attributes).items()))
+    if observed_attribute_counts != PLATFORM_AUTHORITY_ADMITTED_ATTRIBUTE_COUNTS:
+        fail(
+            "market authority attribute multiset drifted: "
+            f"expected={PLATFORM_AUTHORITY_ADMITTED_ATTRIBUTE_COUNTS} "
+            f"actual={observed_attribute_counts}",
+            issues,
+        )
+    observed_derives = tuple(rust_derive_bodies(source))
+    if observed_derives != PLATFORM_AUTHORITY_ADMITTED_DERIVES:
+        fail(
+            "market authority derive surface drifted: "
+            f"expected={PLATFORM_AUTHORITY_ADMITTED_DERIVES} actual={observed_derives}",
+            issues,
+        )
+
+    invocations, unterminated_macros = rust_macro_invocation_arguments(source)
+    if unterminated_macros:
+        fail(f"market authority has unterminated macro invocations: {unterminated_macros}", issues)
+    observed_macro_counts = tuple(sorted(Counter(name for name, _ in invocations).items()))
+    if observed_macro_counts != PLATFORM_AUTHORITY_ADMITTED_MACRO_INVOCATION_COUNTS:
+        fail(
+            "market authority macro invocation counts drifted: "
+            f"expected={PLATFORM_AUTHORITY_ADMITTED_MACRO_INVOCATION_COUNTS} "
+            f"actual={observed_macro_counts}",
+            issues,
+        )
+    observed_parsed_counts = tuple(
+        sorted(Counter(argument for name, argument in invocations if name == "parsed").items())
+    )
+    if observed_parsed_counts != PLATFORM_AUTHORITY_ADMITTED_PARSED_ARGUMENT_COUNTS:
+        fail(
+            "market authority parsed macro arguments drifted: "
+            f"expected={PLATFORM_AUTHORITY_ADMITTED_PARSED_ARGUMENT_COUNTS} "
+            f"actual={observed_parsed_counts}",
+            issues,
+        )
+
+    def check_function_hashes(
+        code: str,
+        expected: dict[str, tuple[str, ...]],
+        label: str,
+    ) -> None:
+        functions, unterminated = rust_functions(code)
+        if unterminated:
+            fail(f"{label} has unterminated function bodies: {unterminated}", issues)
+        for name, admitted_hashes in expected.items():
+            observed_hashes = tuple(digest(body) for function, body in functions if function == name)
+            if observed_hashes != admitted_hashes:
+                fail(
+                    f"{label} function body drifted for {name}: "
+                    f"expected={admitted_hashes} actual={observed_hashes}",
+                    issues,
+                )
+
+    check_function_hashes(source, PLATFORM_AUTHORITY_FUNCTION_BODY_SHA256, "market authority")
+    check_function_hashes(
+        invocation,
+        PLATFORM_INVOCATION_AUTHORITY_FUNCTION_BODY_SHA256,
+        "invocation authority prefix",
+    )
+
+    source_test_names = tuple(
+        match.group(1)
+        for match in re.finditer(
+            r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(",
+            source,
+        )
+    )
+    if source_test_names != PLATFORM_AUTHORITY_UNIT_TEST_FUNCTIONS:
+        fail(
+            "market authority unit test inventory drifted: "
+            f"expected={PLATFORM_AUTHORITY_UNIT_TEST_FUNCTIONS} actual={source_test_names}",
+            issues,
+        )
+    _check_bound_rust_test_file(
+        PLATFORM_AUTHORITY_TEST,
+        PLATFORM_AUTHORITY_TEST_FUNCTIONS,
+        "market authority assembly",
+        issues,
+    )
+
+    prefix_body = _rust_function_body(invocation_test, PLATFORM_INVOCATION_PREFIX_TEST)
+    if prefix_body is None:
+        fail("invocation shared-prefix regression test missing", issues)
+    else:
+        if not re.search(
+            rf"#\s*\[\s*test\s*\]\s*fn\s+{PLATFORM_INVOCATION_PREFIX_TEST}\s*\(",
+            invocation_test,
+        ):
+            fail("invocation shared-prefix regression test is not active", issues)
+        if digest(prefix_body) != PLATFORM_INVOCATION_PREFIX_TEST_BODY_SHA256:
+            fail("invocation shared-prefix regression test body drifted", issues)
+
+    for relative, markers in PLATFORM_AUTHORITY_STATUS_MARKERS.items():
+        path = ROOT / relative
+        if not path.is_file():
+            fail(f"market authority status carrier missing: {relative}", issues)
+            continue
+        content = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in content:
+                fail(f"market authority status marker missing in {relative}: {marker!r}", issues)
+
+    matrix = (ROOT / "docs/acceptance/matrix.tsv").read_text(encoding="utf-8").splitlines()
+    rows = {fields[0]: fields for line in matrix[1:] if (fields := line.split("\t"))}
+    for case_id in ("MARKET-003", "MARKET-007"):
+        fields = rows.get(case_id)
+        if fields is None or len(fields) != 7 or fields[5] != "planned":
+            fail(f"{case_id} must remain a planned acceptance row after bounded B5", issues)
+
+
 def check_platform_identity_implementation(issues: list[str]) -> None:
     source_path = ROOT / PLATFORM_IDENTITY_SOURCE
     test_path = ROOT / PLATFORM_IDENTITY_TEST
@@ -6299,6 +6648,17 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
                 if identity_macro_arguments != admitted_identity_macro_arguments:
                     fail(
                         "market grant identity macro arguments drifted: expected "
+                        f"{admitted_identity_macro_arguments} "
+                        f"actual={identity_macro_arguments}",
+                        issues,
+                    )
+            elif source_key == "market/authority.rs":
+                admitted_identity_macro_arguments = tuple(
+                    sorted(PLATFORM_AUTHORITY_ADMITTED_IDENTITY_MACRO_ARGUMENTS)
+                )
+                if identity_macro_arguments != admitted_identity_macro_arguments:
+                    fail(
+                        "market authority identity macro arguments drifted: expected "
                         f"{admitted_identity_macro_arguments} "
                         f"actual={identity_macro_arguments}",
                         issues,
@@ -6745,6 +7105,7 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
     main_body = checker_path.read_text(encoding="utf-8").split("\ndef main() -> int:", 1)
     for required in (
         "check_platform_identity_implementation(issues)",
+        "check_platform_authority_implementation(issues)",
         # The semantic authority chain is worthless as a module-level function nobody calls.
         "check_platform_identity_grammar_authority(issues)",
     ):
@@ -7627,6 +7988,7 @@ def main() -> int:
     check_acceptance_catalog(issues)
     check_rust_doctest_gate(issues)
     check_platform_identity_grammar_authority(issues)
+    check_platform_authority_implementation(issues)
     check_platform_identity_implementation(issues)
     check_platform_session_contract(issues)
     check_platform_session_implementation(issues)

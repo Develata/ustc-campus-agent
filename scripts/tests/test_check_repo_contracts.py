@@ -5040,6 +5040,149 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
         )
 
 
+class PlatformAuthorityImplementationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        paths = (
+            checker.PLATFORM_AUTHORITY_SOURCE,
+            checker.PLATFORM_AUTHORITY_TEST,
+            checker.PLATFORM_INVOCATION_SOURCE,
+            "crates/platform-core/tests/invocation_resolution.rs",
+            *checker.PLATFORM_AUTHORITY_STATUS_MARKERS.keys(),
+        )
+        for relative in dict.fromkeys(paths):
+            source = REPO_ROOT / relative
+            destination = self.root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def path(self, relative: str) -> Path:
+        return self.root / relative
+
+    def rewrite(self, relative: str, old: str, new: str, occurrences: int = 1) -> None:
+        path = self.path(relative)
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(
+            text.count(old), occurrences, f"stale authority mutation target: {old!r}"
+        )
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def check(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_platform_authority_implementation(issues)
+        return issues
+
+    def assert_rejected(self, expected: str) -> None:
+        issues = self.check()
+        self.assertTrue(any(expected in issue for issue in issues), issues)
+
+    def test_market_authority_projection_passes_exact_repository_state(self) -> None:
+        self.assertEqual(self.check(), [])
+
+    def test_market_authority_success_body_bypass_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_AUTHORITY_SOURCE,
+            "        Ok(projection)\n",
+            "        Ok(projection.clone())\n",
+        )
+        self.assert_rejected("market authority normalized source digest drifted")
+        self.assert_rejected("market authority function body drifted for resolve_projection")
+
+    def test_market_authority_public_declaration_substitution_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_AUTHORITY_SOURCE,
+            "    pub fn into_repository(self) -> R {",
+            "    pub fn extract_repository(self) -> R {",
+        )
+        self.assert_rejected("market authority public declaration surface drifted")
+
+    def test_market_authority_same_count_derive_substitution_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_AUTHORITY_SOURCE,
+            "#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]",
+            "#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]",
+        )
+        self.assert_rejected("market authority derive surface drifted")
+
+    def test_market_authority_same_count_parsed_type_substitution_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_AUTHORITY_SOURCE,
+            '        let request = ToolProjectionRequest {\n            tenant_id: parsed!(TenantId, "tenant:synthetic"),',
+            '        let request = ToolProjectionRequest {\n            tenant_id: parsed!(UserId, "tenant:synthetic"),',
+        )
+        self.assert_rejected("market authority parsed macro arguments drifted")
+
+    def test_market_authority_ignored_external_test_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_AUTHORITY_TEST,
+            "#[test]\nfn projection_and_recheck_assemble_separate_carriers_under_one_verified_revision",
+            "#[test]\n#[ignore]\nfn projection_and_recheck_assemble_separate_carriers_under_one_verified_revision",
+        )
+        self.assert_rejected("market authority external test normalized digest drifted")
+        self.assert_rejected("market authority assembly tests must execute unconditionally")
+
+    def test_market_authority_vacuous_external_test_body_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_AUTHORITY_TEST,
+            "    assert_eq!(actual, expected);",
+            "    let _ = (actual, expected);",
+        )
+        self.assert_rejected("market authority external test normalized digest drifted")
+
+    def test_invocation_prefix_bypass_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_INVOCATION_SOURCE,
+            "    let entry = preflight_projected_call(projection, &call)?;",
+            "    let entry = &projection.entries()[0];",
+        )
+        self.assert_rejected("invocation authority prefix function body drifted for authorize_call")
+
+    def test_post_success_verification_removal_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_AUTHORITY_SOURCE,
+            "        transaction\n            .verify_precondition()\n            .map_err(ProjectionAssemblyError::Repository)?;",
+            "        transaction\n            .revision();",
+        )
+        self.assert_rejected("market authority function body drifted for resolve_projection")
+
+    def test_denial_masking_reorder_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_AUTHORITY_SOURCE,
+            "        let projection = InvocationResolver::resolve_projection(request, candidates)\n            .map_err(ProjectionAssemblyError::Resolution)?;",
+            "        let projection = { transaction.verify_precondition().map_err(ProjectionAssemblyError::Repository)?; InvocationResolver::resolve_projection(request, candidates).map_err(ProjectionAssemblyError::Resolution)? };",
+        )
+        self.assert_rejected("market authority function body drifted for resolve_projection")
+
+    def test_market_authority_status_nonclaim_deletion_fails_closed(self) -> None:
+        self.rewrite(
+            "docs/contracts/market-lifecycle.md",
+            "not a production catalog/publication authority, durable M90 transaction, grant/enable issuer or effect-intent/I/O boundary",
+            "not production-ready",
+        )
+        self.assert_rejected("market authority status marker missing")
+
+    def test_market_authority_acceptance_promotion_fails_closed(self) -> None:
+        matrix = self.path("docs/acceptance/matrix.tsv")
+        lines = matrix.read_text(encoding="utf-8").splitlines()
+        rewritten: list[str] = []
+        for line in lines:
+            if line.startswith("MARKET-003\t"):
+                fields = line.split("\t")
+                self.assertEqual(fields[5], "planned")
+                fields[5] = "implemented"
+                line = "\t".join(fields)
+            rewritten.append(line)
+        matrix.write_text("\n".join(rewritten) + "\n", encoding="utf-8")
+        self.assert_rejected("MARKET-003 must remain a planned acceptance row")
+
+
 class RepositoryCheckerRegistrationTests(unittest.TestCase):
     """Pin the exact call list of `main()`.
 
@@ -5068,6 +5211,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_acceptance_catalog(issues)",
         "check_rust_doctest_gate(issues)",
         "check_platform_identity_grammar_authority(issues)",
+        "check_platform_authority_implementation(issues)",
         "check_platform_identity_implementation(issues)",
         "check_platform_session_contract(issues)",
         "check_platform_session_implementation(issues)",
@@ -5566,7 +5710,7 @@ class PlatformSessionImplementationTests(unittest.TestCase):
             self.assertRegex(admitted_file, r"\Acrates/platform-core/src/[a-z_/]+\.rs\Z")
             self.assertRegex(admitted_text, r"\A(?:pub )?use crate::identity::\{[^}]*\};\Z")
             self.assertNotIn(" as ", admitted_text)
-        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 4)
+        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 5)
 
     def test_forbidden_dependency_carrier_fails_closed(self) -> None:
         # A path-qualified call inside a function body declares no item, so the item allowlist

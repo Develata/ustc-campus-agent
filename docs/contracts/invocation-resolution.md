@@ -2,13 +2,13 @@
 
 ## Metadata
 
-- `Status`: P0a deterministic resolver and synthetic proof fixtures implemented; no durable or real application consumer exists yet
+- `Status`: P0a deterministic resolver plus bounded `M20-B5` semantic repository-transaction consumer implemented; no durable or real application composition exists yet
 - `Version`: `invocation-resolution/v0`
-- `Last Review`: `2026-07-23`
+- `Last Review`: `2026-07-30`
 - `Owning Plan`: [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for state ownership, [`agent-plugin-boundary.md`](agent-plugin-boundary.md) for Agent/gateway/executor separation, [`agent-runtime.md`](agent-runtime.md) for run/effect state, and [`permissions.md`](permissions.md) for capability classes
 - `Acceptance`: implemented P0a `MARKET-005`, `MARKET-006`; supporting evidence only for future cross-boundary `MARKET-007` and later durable `MARKET-002`, `MARKET-003`; downstream implemented `AGENT-002`
-- `Primary Code`: `crates/platform-core/src/invocation.rs`; bounded cross-boundary proof in `apps/ustc-agentd/tests/resolved_run_spec.rs`; no real application consumer exists yet
+- `Primary Code`: `crates/platform-core/src/invocation.rs`; bounded B5 consumer in `crates/platform-core/src/market/authority.rs`; synthetic proofs in `crates/platform-core/tests/invocation_resolution.rs`, `crates/platform-core/tests/market_authority_assembly.rs` and `apps/ustc-agentd/tests/resolved_run_spec.rs`; no real application composition exists yet
 
 ## 1. Scope and authority
 
@@ -68,9 +68,9 @@ Each requested `InvocationTarget` binds:
 
 `InvocationPolicySnapshot` binds an immutable policy snapshot ID/revision, capability-registry classification, execution/source admission decision and any operator emergency block. Unknown classification or absent policy evidence is denial, not a default.
 
-At call time, `ProposedToolCall` binds the provider `tool_call_id`, frozen model-visible tool name, opaque projection-issued dispatch key, one constructed `CanonicalArgumentValueV0` and its claimed digest. The application adapter derives the visible name and dispatch key from the same frozen per-turn projection entry; it cannot synthesize a name-only dispatch. The caller supplies fresh installation, grant, catalog-revoke and emergency-policy snapshots as `CurrentDenyState`; this state may only preserve or deny an entry already present in the projection.
+At call time, `ProposedToolCall` binds the provider `tool_call_id`, frozen model-visible tool name, opaque projection-issued dispatch key, one constructed `CanonicalArgumentValueV0` and its claimed digest. The application adapter derives the visible name and dispatch key from the same frozen per-turn projection entry; it cannot synthesize a name-only dispatch. Direct P0a callers supply fresh installation, grant, catalog-revoke and emergency-policy snapshots as `CurrentDenyState`; bounded B5 instead constructs that same value from separate carriers loaded through one semantic read transaction. Either path may only preserve or deny an entry already present in the projection.
 
-These inputs are deliberately synthetic/in-memory in P0a. Later repositories may load them, but storage types do not decide the result and must not be accepted as already authorized.
+These inputs remain synthetic/in-memory evidence. Bounded `crate::market::authority` proves carrier-by-carrier repository loading, service-owned assembly and post-success revision verification, but its semantic fake is not a durable transaction or production adapter. Storage values still do not decide the result and are never accepted as already authorized.
 
 ### 2.1 Schema loader and validated AST boundary
 

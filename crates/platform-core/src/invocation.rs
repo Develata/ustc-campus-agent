@@ -1211,11 +1211,14 @@ impl fmt::Display for InvocationAuthorizationError {
 }
 impl Error for InvocationAuthorizationError {}
 
-pub fn authorize_call(
-    projection: &ToolProjectionSnapshot,
-    current: CurrentDenyState,
-    call: ProposedToolCall,
-) -> Result<AuthorizedInvocation, InvocationAuthorizationError> {
+/// Validates only the immutable call-envelope/name/dispatch prefix against a frozen projection.
+///
+/// This helper performs no current-authority recheck and its successful entry reference is not an
+/// authorization result. Callers must still use [`authorize_call`] before constructing any effect.
+pub fn preflight_projected_call<'a>(
+    projection: &'a ToolProjectionSnapshot,
+    call: &ProposedToolCall,
+) -> Result<&'a ResolvedInvocation, InvocationAuthorizationError> {
     if call.model_visible_name.is_empty() || call.dispatch_key.is_empty() {
         return Err(InvocationAuthorizationError::InvalidCall);
     }
@@ -1227,6 +1230,15 @@ pub fn authorize_call(
     if entry.dispatch_key != call.dispatch_key {
         return Err(InvocationAuthorizationError::DispatchIdentityMismatch);
     }
+    Ok(entry)
+}
+
+pub fn authorize_call(
+    projection: &ToolProjectionSnapshot,
+    current: CurrentDenyState,
+    call: ProposedToolCall,
+) -> Result<AuthorizedInvocation, InvocationAuthorizationError> {
+    let entry = preflight_projected_call(projection, &call)?;
     if current.policy.emergency_blocked {
         return Err(InvocationAuthorizationError::EmergencyBlocked);
     }
