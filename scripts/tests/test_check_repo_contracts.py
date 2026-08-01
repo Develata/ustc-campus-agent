@@ -538,9 +538,17 @@ class DocsTopologyContractTests(unittest.TestCase):
         )
 
     def test_invalid_campaign_taskbook_status_fails_closed(self) -> None:
+        rel = checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M20-B6"]
+        text = (self.root / rel).read_text(encoding="utf-8")
+        status_lines = [
+            line
+            for line in text.splitlines()
+            if line.startswith("- `Status`: `") and line.endswith("`")
+        ]
+        self.assertEqual(len(status_lines), 1, "missing or ambiguous taskbook status")
         self.replace_once(
-            checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M20-B6"],
-            "- `Status`: `queued`",
+            rel,
+            status_lines[0],
             "- `Status`: `running-unsafely`",
         )
         self.assertTrue(
