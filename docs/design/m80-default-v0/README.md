@@ -1,0 +1,178 @@
+# M80 Default v0 UI Design Packet
+
+> **Illustrative / No live backend** — 本 packet 全部 mockup、wireframe、prototype 与示例数据均为设计样例，不代表任何已实现后端、真实安装状态或验收结论。
+
+## Packet metadata
+
+| Field | Value |
+|---|---|
+| Packet | `m80-default-v0` |
+| Task | `M80-KIMI-K3-UI-BRIEF-V0` |
+| Status | `Proposal` |
+| Implementation evidence | none |
+| Readiness claim | none |
+| Source commit | `2f4de29032560ff3e13d9994b33a3aff14243f44` |
+| Source tree | `53e266c47fdb07d50a734faa24bb11ac4bc5527d` |
+| Source relation | 绑定 `origin/main` @ `2f4de29`（2026-08-02 第二轮 rebind 核验；首轮绑定 `5e9e5b9`，因 M20-B6 实现合入发生 drift，见 Source drift 记录） |
+| Publication | 2026-08-02 经 Deve-hermes operation-specific 授权，以 frozen review surface 发布于 `docs/design/m80-default-v0/`（Draft PR，非 merge-ready；governance slice 由同 PR 的 commit 1 提供） |
+| Working copy | 仓库外 `/home/deve/gitclone/ustc-campus-agent-design/m80-default-v0/`（非 Git root，仅为工作副本） |
+| Language | Chinese-first；英文仅作 optional secondary label |
+
+## 标签约定
+
+- `TRACKED FACT`：source commit 上可由 repository 证据直接核实的陈述。
+- `PROPOSAL`：本 packet 提出的设计决策，等待评审；不构成 accepted authority。
+- `ASSUMPTION`：为推进设计而做的显式假设，Stage B 需验证。
+- `UNRESOLVED`：owning contract 尚未决定的语义；本 packet 只给 presentation requirement，不定案。
+- `PROPOSED_SEMANTIC_INTENT`：未来 M10/M80 contract 的设计需求名称；**不是 API、不是 HTTP route、不是 DTO**。
+- `EXISTING_DOMAIN_TYPE`：source commit 上存在的 bounded Rust/domain 类型；**不自动表示存在可用 client carrier**。
+
+## Source drift 记录
+
+| 时间 | 检查 | 结果 |
+|---|---|---|
+| 2026-08-02 | 任务启动时 `git fetch origin` + rev-parse | 绑定上表 commit/tree；brief 原始绑定 `678590b0…` 已重绑。`UNVERIFIED`：该对象不在本仓库历史中（`git cat-file` 失败），「旧 M20-B6 branch commit」为合理推断而非可核实事实；重绑本身正确且必要 |
+| 2026-08-02 | 第一轮收尾复查 | 无 drift（见 §7） |
+| 2026-08-02 | 第二轮（review 补卷）中复查 | **检测到 drift**：`origin/main` 前进至 `2f4de29`（PR #33，`feat(market): implement M20-B6 package update lifecycle`），tree `53e266c4`。packet 已 rebind 并逐项复核受影响语义：B6 收窄 posture 不变；新增 bounded Rust 实现事实（tracked fact #6）；全部行号锚点重新核验更新 |
+| 2026-08-02 | 第二轮收尾复查 | `git fetch origin` 后 `origin/main` 为 `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`；rebind 后无新 drift（见 §7） |
+
+## 相对原 brief 的 tracked 修正
+
+1. `TRACKED FACT`：M20-B6 packet 随 `5e9e5b9` 合入 `docs/tasks/campaign-w1-m20-b6.md`，packet 内容仍声明 “proposed, not accepted authority”（:42）；**2026-08-02 PR #33（`2f4de29`）进一步合入 bounded Rust 实现** `crate::market::update` + `market_package_update` 测试——为 supporting domain/semantic-fake evidence only：不发 production grant/enable/update issuer、不切换 artifact、不构成 durable repository、不提升 MARKET-004/PKG-020（仍 `planned`）、M20 仍 `partial-evidence`（`docs/contracts/market-lifecycle.md:919-928`）。**设计语义前提（收窄 posture）经复核不变**：rollback 仅允许自 `AppliedPendingConfirmation`；`ConfirmAppliedUpdate` 进 terminal `Confirmed` 并关闭窗口；之后恢复旧版本须创建新 reverse update（新 plan + 新 approval）；Apply/Rollback 仅 Disabled 态（`InstalledDisabled`/`Disabled`；实现修复已将 owner decide/replay 与 update 统一为同一两态谓词）且原子地将 transaction-current Active grants 置 `Stale(InstallationChanged)`；`ConfirmAppliedUpdate` 不重新检查 configuration、grants、catalog policy、runtime health 或 executor state（`docs/tasks/campaign-w1-m20-b6.md` §1、:50、:436）。
+2. `TRACKED FACT`：brief 称 `InstallationCommand/Event/Snapshot`、`GrantCommand/Event/Snapshot` 为 existing types。实际 source 上存在 `InstallationCommand`（`crates/platform-core/src/market/installation.rs:750`）、`InstallationEventKind`（:899）、`InstallationCommandReceipt`（:1558）、`GrantCommand`（`crates/platform-core/src/market/grant.rs:424`）、`GrantEventKind`（:526）、`GrantCommandReceipt`（:945）、`GrantState`（`crates/platform-core/src/invocation.rs:110`）；**未发现名为 `InstallationSnapshot`/`GrantSnapshot` 的 pub 类型**。本 packet 引用 existing types 时以实际路径为准。
+3. `TRACKED FACT`：`RunEvent` 存在于 `crates/agent-runtime/src/lib.rs:361`，`RunEventKind` 于 :312，`RunSpec` 于 :38，`AgentRun` 于 :379；`AgentToolsetView` 于 `crates/agent-tool-protocol/src/lib.rs:176`；`ManagedInstallationState` 于 `crates/platform-core/src/market/installation.rs:538`；`GrantChangeClass` 于 `crates/platform-core/src/market/grant.rs:218`；`GrantInvalidationReason` 于 :210；`CapabilityPolicyChange` 于 `crates/platform-core/src/market/capability.rs:84`。
+4. `TRACKED FACT`：模块状态与 `docs/plan/modules/00-module-map.md:19-31` 一致：M00/M20/M30/M40 `partial-evidence`，M10 `skeleton`，M50/M51/M60 `planned`，M70/M71 `design-only`，M72 `bounded-spike`，M80 `planned`，M90 `governance-baseline`。`docs/contracts/market-lifecycle.md:919-928` 确认无 durable lifecycle/update repository、无 artifact switch、无 production composition、无 M10/M80 browse/API/UI delivery。
+5. `TRACKED FACT`：`docs/acceptance/matrix.tsv` 中 MARKET-004、PKG-020、RADAR-001/002、PROC-001/006/008、FP-001/002/007 均为 `planned`（MARKET-004/PKG-020 的 evidence 文字已更新为含 bounded B6 supporting evidence，但状态仍 planned）；planned 不是 pass。
+6. `TRACKED FACT`（B6 bounded 实现类型，rebind 新增）：`UpdateState`（`crates/platform-core/src/market/update.rs:259`）含 `AppliedPendingConfirmation`（:262）与 `Confirmed`（:263）；`UpdateChangeClass` 于 :269；`UpdateCommand` 于 :993；`UpdateCommandAction::ConfirmAppliedUpdate` 于 :926；集成测试 `crates/platform-core/tests/market_package_update.rs`。均为 bounded evidence，**不是 API、不是 client carrier**。
+
+## 设计结论（PROPOSAL）
+
+- 采用两阶段节奏：**Stage A**（本 packet）交付 IA、default template、semantic status system、核心 journey、action/slot seam 与两套视觉方向；**Stage B**（真实 vertical slice 之后）校准 exact copy、stream timing、density、真机生命周期并冻结 component API/tokens。
+- 页面中心是“学生此刻要理解或完成的事”，不是架构名词、聊天框或运维指标。
+- Signature：**Evidence spine / 证据脊柱**——procedure、change、opportunity、run detail 用同一种安静的 source→revision→decision→receipt 关系表达。
+- 推荐视觉方向：**Direction A — Quiet Evidence System** 为 core system；Direction B 的 warmth 仅进入 empty/onboarding/editorial illustration。理由见 `05-visual-directions-and-tokens.md`。
+- 拒绝：generic purple-gradient AI dashboard、three-equal-card hero、nested cards、全站 glass、把所有 noun 升为一级 tab。
+
+## 17 项 artifact traceability matrix
+
+| # | Artifact | Owning file/section | Status | 标签 | Stage A fidelity | Stage B calibration dependency | External ref | Reviewer disposition |
+|---:|---|---|---|---|---|---|---|---|
+| 1 | IA map | `01` §2 | Delivered | PROPOSAL | High-confidence structure | 真实使用可调 label/order，不动 authority | — | pending |
+| 2 | Desktop/PWA shell wireframes | `01` §3 | Delivered | PROPOSAL | Mid-fidelity（small/medium/desktop ASCII） | exact breakpoints 待真实内容 | — | pending |
+| 3 | Android shell wireframes | `01` §4 | Delivered | PROPOSAL | Mid-fidelity（portrait + medium） | 真机 lifecycle/touch tuning | — | pending |
+| 4 | Home default layout | `01` §5 | Delivered | PROPOSAL | High-fidelity default + empty/offline/attention variants | widget density/order 待真实数据 | — | pending |
+| 5 | Market browse/detail/install | `02` §2–§4 | Delivered | PROPOSAL | High-fidelity flow 至 complete-disabled | carrier/copy 待 M10/M20 vertical slice | — | pending |
+| 6 | Update/rollback review | `02` §5–§6 | Delivered | PROPOSAL（B6 narrowed 语义，bounded implemented domain evidence） | High-fidelity exact diff + disable-first + drift | B6 非 production/durable；eligibility/Confirmed 的 wire 边界未定案 | — | pending |
+| 7 | Installed Plugin state system | `02` §7 | Delivered | PROPOSAL | High-fidelity；8+ 状态变体 | runtime/callability projection contract 未定 | — | pending |
+| 8 | Agent thread/run | `03` §2–§3 | Delivered | PROPOSAL | Mid-high fidelity | exact events/timing 待 HarnessRun/stream | — | pending |
+| 9 | First-party entry patterns | `03` §4–§6 | Delivered | PROPOSAL | High-fidelity 每产品一个代表 detail + shared spine | 全部 product data/actions provisional | — | pending |
+| 10 | Layout customization | `04` §2 | Delivered | PROPOSAL | Mid-fidelity desktop+Android | generic schema 待 rule-of-three | — | pending |
+| 11 | Component/state inventory | `04` §3 | Delivered | PROPOSAL | Named primitives + anatomy + variants | component API 未冻结 | — | pending |
+| 12 | Design tokens | `05` 全卷 | Delivered | PROPOSAL | 两套 token 集 + 对比 + 推荐 + 实测对比度 | final values 待 browser/device 测试 | — | pending |
+| 13 | Interaction annotations | `04` §4 | Delivered | PROPOSAL | trigger/precondition/pending/confirmation/focus/recovery | exact timing/stream reconnect 待 Stage B | — | pending |
+| 14 | Accessibility annotations | `06` §2 | Delivered | PROPOSAL | 核心屏 keyboard/touch/reader/contrast/reduced-motion | 实现后真实 audit | — | pending |
+| 15 | State atlas | `04` §5 | Delivered | PROPOSAL | 全状态族（含 drift/consumed/partial-reconnect/version-skew） | 真实 copy 长度 | — | pending |
+| 16 | Clickable prototype | `07` 全卷 + `prototype/index.html` | **16A + 16B Delivered** | PROPOSAL | Storyboard：screen/state IDs + transition table + failure branch；16B：自包含静态 HTML（14 screens，hash 导航） | 16B 为设计演示物，非 retained frontend skeleton；Stage B 以真实实现校准 | 无外部 URL；文件在 packet 内 | pending |
+| 17 | Redline/handoff notes | `08` 全卷 | Delivered | PROPOSAL | spacing/type/layout/behavior specs | 无 Dioxus component/API 发明 | — | pending |
+
+Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delivered**。第一轮 16B deferred（无 no-code 工具）经独立 review 记录为 F4 scope 缺口；Develata 2026-08-02 决策以自包含静态 HTML 补齐（见 `07` §1 决策记录）。
+
+## 分卷索引
+
+| 文件 | 覆盖 artifact |
+|---|---|
+| `01-information-architecture-and-shells.md` | 1, 2, 3, 4 |
+| `02-market-and-lifecycle-journeys.md` | 5, 6, 7 |
+| `03-agent-and-first-party-journeys.md` | 8, 9 |
+| `04-components-states-and-interactions.md` | 10, 11, 13, 15 |
+| `05-visual-directions-and-tokens.md` | 12 |
+| `06-responsive-and-accessibility.md` | 14 |
+| `07-prototype-storyboard.md` | 16 |
+| `08-handoff-and-redlines.md` | 17 |
+| `09-onboarding-connectivity-and-settings.md` | required surfaces §6.1 / §6.18 + §9.5 client/system intents（第二轮补卷） |
+| `10-grant-diff-and-activity.md` | required surfaces §6.11 / §6.17（第二轮补卷） |
+| `prototype/index.html` | 16B clickable prototype（14 screens） |
+
+`assets/` 子目录（wireframes/mockups/prototype-exports）预留给未来外部 no-code tool 的静态 exports；本轮无外部资产，不创建空目录。所有线框以 ASCII 内联于各卷。
+
+## Candidate manifest（frozen review surface 文件清单）
+
+| Git path | Role |
+|---|---|
+| `docs/design/m80-default-v0/README.md` | packet index：metadata、标签约定、source drift、tracked 修正、17 项 traceability、分卷索引、Q1–Q11、F1–F10 disposition、§6 governance slice、§7 自查 |
+| `docs/design/m80-default-v0/01-information-architecture-and-shells.md` | artifacts 1–4：IA、Desktop/PWA shell、Android shell、Home default |
+| `docs/design/m80-default-v0/02-market-and-lifecycle-journeys.md` | artifacts 5–7：catalog/detail/update-rollback/installed-list/enable-disable-revoke-uninstall |
+| `docs/design/m80-default-v0/03-agent-and-first-party-journeys.md` | artifacts 8–9：Agent chat/run timeline + 三个 first-party journeys |
+| `docs/design/m80-default-v0/04-components-states-and-interactions.md` | artifacts 10/11/13/15：组件清单、状态族、destructive 模式、onboarding |
+| `docs/design/m80-default-v0/05-visual-directions-and-tokens.md` | artifact 12：Direction A/B + design tokens |
+| `docs/design/m80-default-v0/06-responsive-and-accessibility.md` | artifact 14：responsive + WCAG 2.2 AA（对比度实测表） |
+| `docs/design/m80-default-v0/07-prototype-storyboard.md` | artifact 16A：S01–S13 storyboard + 16B 交付说明 |
+| `docs/design/m80-default-v0/08-handoff-and-redlines.md` | artifact 17：handoff contract + redlines |
+| `docs/design/m80-default-v0/09-onboarding-connectivity-and-settings.md` | 第二轮补卷：first-run/connectivity/settings + 3 个 client/system intents |
+| `docs/design/m80-default-v0/10-grant-diff-and-activity.md` | 第二轮补卷：grant diff 六分组 + activity/audit + export/redaction |
+| `docs/design/m80-default-v0/prototype/index.html` | artifact 16B：**External disposable executable prototype · Deliverable 16B only · Non-product · Non-retained M80 frontend · No backend/API · No readiness evidence**（14 screens，hash 导航，纯静态） |
+
+共 11 个 Markdown + 1 个静态 prototype 文件；无其他静态 assets；无代码、无 fixture、无配置变更。
+
+## Open questions（UNRESOLVED 汇总）
+
+| # | Question | Owning module | UI 需求 shape |
+|---:|---|---|---|
+| Q1 | Rollback retention/window/eligibility 的最终 wire 规则（B6 收窄为 `AppliedPendingConfirmation` window，bounded implemented；packet 仍非 accepted authority） | M20 | server-projected eligible targets + reason；空/可用/不可用三态 |
+| Q2 | Package-pin change 后 grant inheritance/staleness 的 client 可见细节（B6 收窄为 Active→`Stale(InstallationChanged)` + fresh reactivation evidence，bounded implemented） | M20 | apply 后“权限需要复核” checkpoint |
+| Q3 | `ConfirmAppliedUpdate/Confirmed` 与 Enable/health/callability 的最终 client 边界（B6 收窄：confirmation 不绑 health/grant/callability，bounded implemented） | M20 | 四个独立 facets，不合并 “Ready” chip |
+| Q4 | M10 versioned client-protocol carrier 的 DTO/event/compatibility 形状 | M10 | 本 packet 全部 `PROPOSED_SEMANTIC_INTENT` |
+| Q5 | Stream/reconnect 的 cursor/resync/heartbeat 语义 | M10/M30 | cursor + resync 状态族；不定 timing |
+| Q6 | LayoutProfile 持久化 owner（server-sync/tenant-owned 未定） | M80 | local draft + proposed versioned profile |
+| Q7 | Provider/server settings 的用户可见面（是否 admitted） | M50/M90 | 只显示 safe status/profile refs；不设计 raw secret form |
+| Q8 | Today 聚合 read projection 的 composition owner | M10/M00 组装面 | 分 section freshness 标注的聚合投影 |
+| Q9 | ActionAvailability 的 vocabulary（reason code 集合、confirmation class 枚举） | 各 action owner | 每可变页 server 返回 action + reason + confirmation class |
+| Q10 | Grant diff 六分组 presentation vocabulary 与 domain 分类（`GrantChangeClass`/`CapabilityPolicyChange`）的 wire 映射与逐项 reason vocabulary（第二轮新增，`10` 卷 §1/§4） | M20 | 逐项 diff entries + 分类 + reason server-projected；UI 不映射回 domain 判定 |
+| Q11 | 匿名/受限只读 session 是否 admitted（第二轮新增，`09` 卷 §2.4） | M00/M10 | 决定 onboarding「稍后登录」是否存在；server 不投影则按钮不出现 |
+
+## §6 导入前置：governance slice（未授权，本轮未执行）
+
+`TRACKED FACT`：`scripts/check_repo_contracts.py:187` 的 `EXPECTED_DOC_DIRECTORIES` 对 `docs/` 做 exact topology 检查；直接新增 `docs/design/` 会使 contract gate 失败。导入本 packet 前需要一个单独授权的 exact-scope governance slice，涉及：
+
+- `docs/AGENTS.md`（声明 design/ 角色：subordinate presentation layer；proposal 不构成 authority；冲突时让位 plan/contracts/features/acceptance）
+- `docs/README.md`（Structure 表登记）
+- `docs/coverage-matrix.md`（登记 design projection）
+- 新建 `docs/design/AGENTS.md`（packet metadata、source binding、`Proposal/Reviewed/Superseded` 状态、标签约定、external asset 规则、authority deferral、promotion/supersession）
+- 新建 `docs/design/README.md`（真实 packet 索引，不建空分类树）
+- `scripts/check_repo_contracts.py` + `scripts/tests/test_check_repo_contracts.py`（expected topology 与 fail-closed mutation tests）
+
+本轮未被授权修改 scripts，故未执行；packet 在仓库外 workspace 维护。
+
+## §7 最终自查（2026-08-02 第二轮：review 补卷后更新）
+
+| 检查项 | 结果 |
+|---|---|
+| Source drift 复查 | 第二轮中检测到 drift：`origin/main` 前进至 `2f4de29`（PR #33，M20-B6 bounded 实现合入）；packet 已 rebind 至 `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`，受影响语义逐项复核（B6 posture 不变；disabled 两态谓词已统一；全部行号锚点更新）；收尾复查无新 drift |
+| M20-B6 状态重述 | packet 内容仍 “proposed, not accepted authority”（b6 :42），但语义已有 bounded Rust 实现（`crate::market::update`；supporting evidence only）；`02`/`07`/`10`/prototype 已全部改为 “bounded implemented domain evidence，非 production/durable” 表述 |
+| 独立 review 处置（2026-08-02 第一轮 review 汇报） | F1（4 缺失面）→ `09`/`10` 补卷；F2（2 薄面）→ `02` §7.1/§7.5 加厚；F3（3 intents）→ `09` §5；F4 → Develata 决策以 `prototype/index.html` 补齐 16B；F5/F6/F7/F8/F9 → 已修；F10 → 冻结待下一轮决策 |
+| 20/20 required surfaces | 第一轮 16/20；第二轮补齐 first-run/connectivity（`09` §2–§3）、grant diff（`10` §2）、activity/audit（`10` §3）、settings（`09` §4）；installed list 与 enable/disable/revoke/uninstall 加厚（`02` §7.1/§7.5） |
+| 17 项 artifact 映射 | 全部 Delivered（16 = 16A + 16B） |
+| brief §9.5 client/system intents | `GetClientCompatibility`/`GetServerReadiness`/`GetCurrentUserContext` 已补（`09` §5），全部 `PROPOSED_SEMANTIC_INTENT` |
+| tracked/proposal/assumption/unresolved 分离 | 各卷显式标注；UNRESOLVED 汇总为 Q1–Q11（新增 Q10 grant diff vocabulary、Q11 匿名 session） |
+| API/implementation/readiness invention | 无；prototype 无任何 API/route/DTO 声明，转场显式标注「演示/server 确认」 |
+| Design 越权为 domain authority | 无；`10` 卷明确六分组为 presentation vocabulary 且与 `GrantChangeClass`/`CapabilityPolicyChange` 区分（Q10） |
+| 每卷 `Illustrative / No live backend` | 11/11 文件具备（含 prototype banner） |
+| 对比度实测 | `05` 卷 §6：两方向 light/dark 全 role 计算（第一轮 review 独立复算 56 对全部吻合） |
+| Prototype 验证 | 14 screens 定义齐全；全部 hash 链接目标可解析；JS 语法校验通过 |
+| Stage B dependency | 各 artifact 行与各卷末尾标明 |
+| 仓库检查 | 两轮仓库零改动 → `check_repo_contracts.py` / `git diff --check` **not applicable**；governance slice 授权后执行完整 gates |
+
+### 本轮未实现/未验证
+
+- F10 视觉样例真实渲染 fidelity（文本级，冻结待下一轮决策）；
+- 真实 browser/device 的对比度、排印、touch、lifecycle 验证（Stage B）；
+- `docs/design/` governance slice（未授权 scripts 修改）与 packet 入库；
+- 各 `PROPOSED_SEMANTIC_INTENT` 的 carrier 校准（待 M10/M20 vertical slice）；
+- Prototype 未在真实浏览器做 a11y/键盘走查（Stage B）。
+
+### 需上提 plan/contract 的候选 proposal（均未上提，待 Develata 决定）
+
+1. Presentation state 永不成为 backend authority；fixed safety zones 不可定制；Web/Android semantic state 等价；action availability 必须 server-projected——未来可作为 M80 blueprint/client-shell contract 的 invariant 候选。
+2. `ActionAvailability` projection vocabulary（reason code/confirmation class）——Q9，owner 各 action 模块。
+3. Today 聚合 read projection 的 composition owner——Q8。
+4. Grant diff 六分组 presentation vocabulary 的 wire 映射需求——Q10，owner M20。

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<!--
+  M80 Default v0 — Clickable Prototype (Deliverable 16B)
+  Classification: External disposable executable prototype · Deliverable 16B only ·
+  Non-product · Non-retained M80 frontend · No backend/API · No readiness evidence.
+  Illustrative / No live backend — 全部数据为设计样例，无真实后端、无真实安装、无真实授权。
+  Status: Proposal · Source: 2f4de29032560ff3e13d9994b33a3aff14243f44
+  本文件为设计演示物，不是 retained frontend skeleton；不包含任何 API/route/DTO 声明。
+  所有"服务器确认（演示）"转场在真实系统中对应 server typed result/event。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>USTC Campus Agent — 设计原型（Illustrative / No live backend）</title>
+<style>
+:root{
+  --canvas:#FAF9F7; --surface:#FFFFFF; --subtle:#F2F0EC;
+  --ink:#1C1B1A; --muted:#5B5750; --divider:#E3E0DA;
+  --accent:#2E5A66; --danger:#8C3B33; --warning:#7A5C1E; --success:#3C6B4F;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  line-height:1.65;font-size:15px}
+.shell{max-width:760px;margin:0 auto;padding:0 20px 96px}
+.banner{background:var(--subtle);border-bottom:1px solid var(--divider);
+  padding:8px 20px;font-size:13px;color:var(--muted);text-align:center}
+header.top{display:flex;justify-content:space-between;align-items:baseline;
+  padding:28px 0 12px;border-bottom:1px solid var(--divider);margin-bottom:20px;gap:12px;flex-wrap:wrap}
+h1{font-size:22px;margin:0;font-weight:600}
+h2{font-size:16px;margin:28px 0 8px;font-weight:600}
+.scrid{font-size:12px;color:var(--muted);font-family:ui-monospace,monospace}
+.rows{border-top:1px solid var(--divider)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding:14px 4px;border-bottom:1px solid var(--divider)}
+.row .meta{font-size:13px;color:var(--muted)}
+.attn{border-left:3px solid var(--warning);padding-left:12px}
+button,.btn{font:inherit;font-size:14px;padding:8px 18px;border-radius:6px;
+  border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;
+  text-decoration:none;display:inline-block}
+button.sec,.btn.sec{background:transparent;color:var(--accent)}
+button.danger{background:var(--danger);border-color:var(--danger)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.note{font-size:13px;color:var(--muted);margin:10px 0}
+.warn{background:#FBF6EC;border:1px solid var(--divider);border-left:3px solid var(--warning);
+  padding:12px 14px;margin:14px 0;font-size:14px}
+.ok{background:#F1F6F2;border-left:3px solid var(--success);padding:12px 14px;margin:14px 0}
+ul.clean{list-style:none;padding:0;margin:8px 0}
+ul.clean li{padding:10px 4px;border-bottom:1px solid var(--divider)}
+label.ck{display:block;padding:10px 4px;border-bottom:1px solid var(--divider);cursor:pointer}
+label.ck .meta{font-size:13px;color:var(--muted);margin-left:24px}
+.actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px;flex-wrap:wrap}
+.step{font-size:13px;color:var(--muted);text-align:right}
+.demo{margin-top:28px;padding-top:12px;border-top:1px dashed var(--divider);font-size:13px;color:var(--muted)}
+.demo a{color:var(--accent)}
+footer{margin-top:40px;padding-top:12px;border-top:1px solid var(--divider);
+  font-size:12px;color:var(--muted);text-align:center}
+nav.idx{font-size:13px;margin:8px 0}
+nav.idx a{color:var(--accent);margin-right:8px;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="banner">Illustrative / No live backend — 设计原型 · 全部数据与转场为演示 · Status: Proposal</div>
+<div class="shell" id="app"></div>
+<script>
+"use strict";
+const $ = (h)=>{const d=document.createElement("div");d.innerHTML=h;return d};
+const IDX = `<nav class="idx">原型导航：
+<a href="#S01">S01 市场</a><a href="#S09">S09 我的插件</a><a href="#S10">S10 插件详情</a>
+<span class="scrid">完整流转见各页按钮；S0x 编号对应 07-prototype-storyboard.md §3</span></nav>`;
+const FOOT = `<footer>USTC Campus Agent 设计原型 · 学生竞赛项目，非学校官方服务 · Illustrative / No live backend</footer>`;
+const PENDING_NOTE = `<p class="note">※ 真实系统中此转场由 server typed result/event 确认；此处为演示。</p>`;
+
+const S = {};
+S.S01 = `
+<header class="top"><h1>插件市场</h1><span class="scrid">S01 · 状态: 正常（illustrative）</span></header>
+${IDX}
+<div class="rows">
+  <div class="row"><div><strong>USTC ChangeRadar</strong><div class="meta">校园官方信息源变化追踪（illustrative）· USTC Campus Agent 团队 · v0.4.0 · 未安装<br>权限摘要：读取 2 项校园信息源</div></div><a class="btn sec" href="#S02">查看详情</a></div>
+  <div class="row"><div><strong>USTC Affairs Navigator</strong><div class="meta">结构化办事指南（illustrative）· v0.3.1 · 已安装<br>权限摘要：读取办事流程数据</div></div><a class="btn sec" href="#S10">管理</a></div>
+  <div class="row"><div><strong>Campus Opportunity Graph</strong><div class="meta">机会匹配（开发中 · illustrative）· v0.2.0 · 已安装<br>权限摘要：读取机会数据 · 请求你的资料授权</div></div><a class="btn sec" href="#S10">管理</a></div>
+</div>
+<p class="note">「状态」列仅为 catalog 层事实；不显示 runtime health。</p>`;
+
+S.S02 = `
+<header class="top"><h1>USTC ChangeRadar</h1><a class="btn" href="#S03">审查安装</a></header>
+<p class="scrid">S02 · v0.4.0 · USTC Campus Agent 团队</p>
+<h2>这个插件做什么</h2><p>追踪经审核的校园信息源，发布语义化变化。（illustrative）</p>
+<h2>权限能力（Capabilities）</h2>
+<ul class="clean"><li>读取校园信息源（read · 低风险）<div class="meta">范围与风险由平台 registry 定义</div></li></ul>
+<h2>来源与信任</h2>
+<ul class="clean">
+<li>声明来源：market/ 目录内 reviewed manifest</li>
+<li>实现状态：design-only（当前无可执行组件）— 如实呈现</li>
+<li>版本历史 / digest：技术细节（折叠）</li>
+</ul>`;
+
+S.S03 = `
+<header class="top"><h1>安装 USTC ChangeRadar</h1><span class="step">步骤 1/4 · S03</span></header>
+<h2>将要安装的精确版本</h2>
+<ul class="clean">
+<li>包：ustc.change-radar</li>
+<li>版本：0.4.0（精确 pin，不会自动跟随新版）</li>
+<li>来源 digest：sha256:9f2c…（illustrative）</li>
+<li>组件清单：见技术细节（折叠）</li>
+</ul>
+<div class="actions"><a class="btn sec" href="#S02">取消</a><a class="btn" href="#S04">继续</a></div>`;
+
+S.S04 = `
+<header class="top"><h1>配置</h1><span class="step">步骤 2/4 · S04</span></header>
+<ul class="clean">
+<li>检查频率：每 6 小时 ▾（typed enum）</li>
+<li>通知板：默认公告板 ▾</li>
+<li>凭证引用：无（此插件不需要）<div class="meta">若需凭证：仅显示 SecretRef 状态，永不显示明文</div></li>
+</ul>
+<div class="actions"><a class="btn sec" href="#S03">上一步</a><a class="btn" href="#S05">继续</a></div>`;
+
+S.S05 = `
+<header class="top"><h1>权限审批</h1><span class="step">步骤 3/4 · S05</span></header>
+<p>此插件请求以下能力，逐项确认：</p>
+<label class="ck"><input type="checkbox" checked> <strong>读取校园信息源（read）</strong><div class="meta">范围：默认公告板 · 风险：低（registry 定义）</div></label>
+<label class="ck"><input type="checkbox"> <strong>向你推送变化通知（effect）</strong> ⚠<div class="meta">范围：本设备 · 风险：中 · 非默认选中</div></label>
+<p class="note">权限定义来自平台 registry；插件不能自定风险等级。拒绝单项的后果由服务器判定。</p>
+<div class="actions"><a class="btn sec" href="#S04">上一步</a><a class="btn" href="#S06">继续</a></div>`;
+
+S.S06 = `
+<header class="top"><h1>确认安装方案</h1><span class="step">步骤 4/4 · S06</span></header>
+<ul class="clean">
+<li>安装 ustc.change-radar 0.4.0（digest 9f2c…）</li>
+<li>配置 revision：cfg-…（摘要）</li>
+<li>授予能力：2 项（清单同上）</li>
+<li>安装后状态：已安装，未启用</li>
+</ul>
+<div class="warn">⚠ 批准仅对这一个方案有效；方案变化后需要重新审查。</div>
+<div class="actions"><a class="btn sec" href="#S05">返回</a><a class="btn" href="#S07">批准此安装方案</a></div>
+<div class="demo">失败分支演示：<a href="#S06a">S06a 方案已变化（plan drift）</a></div>`;
+
+S.S06a = `
+<header class="top"><h1>方案已变化</h1><span class="scrid">S06a · 失败分支</span></header>
+<div class="warn">⚠ 你审查的方案与当前方案不一致，之前的批准不再适用。</div>
+<p class="note">真实系统中由 server 事件投影；不会隐藏 diff，也不会自动重新批准。</p>
+<div class="actions"><a class="btn" href="#S03">重新生成方案并审查</a></div>`;
+
+S.S07 = `
+<header class="top"><h1>安装进行中…</h1><span class="scrid">S07 · pending（演示）</span></header>
+<p>请求已提交。你可以离开此页面，稍后从「我的插件」查看。</p>
+${PENDING_NOTE}
+<div class="actions"><a class="btn sec" href="#S09">离开，去我的插件</a><a class="btn" href="#S08">服务器确认：已安装（演示）</a></div>`;
+
+S.S08 = `
+<header class="top"><h1>✓ 已安装，尚未启用</h1><span class="scrid">S08 · terminal success（演示）</span></header>
+<div class="ok">USTC ChangeRadar 0.4.0 已安装。启用后插件才会开始工作；你可以随时在插件管理中启用。</div>
+<p class="note">安装完成与启用是两个独立动作；无静默启用。</p>
+<div class="actions"><a class="btn sec" href="#S09">稍后启用</a><a class="btn" href="#S09">前往插件管理</a></div>`;
+
+S.S09 = `
+<header class="top"><h1>我的插件</h1><a class="btn sec" href="#S01">浏览市场</a></header>
+<p class="scrid">S09 · 分组：需要你处理 → 已启用 → 已停用（illustrative）</p>
+${IDX}
+<h2>需要你处理（1）</h2>
+<div class="rows"><div class="row attn"><div><strong>USTC ChangeRadar</strong><div class="meta">已启用 · ⓘ 有可用更新 v0.5.0 · 需先停用（server reason · illustrative）</div></div><a class="btn sec" href="#S10">查看更新 →</a></div></div>
+<h2>已启用（2）</h2>
+<div class="rows">
+<div class="row"><div><strong>USTC ChangeRadar</strong><div class="meta">已安装，未启用（演示路径中的新装实例）</div></div><a class="btn sec" href="#S10">管理</a></div>
+<div class="row"><div><strong>校园机会图谱</strong><div class="meta">已启用 · 最后验证 2026-08-01</div></div><a class="btn sec" href="#S10">管理</a></div>
+</div>
+<h2>已停用（0）</h2><p class="note">— 无 —</p>`;
+
+S.S10 = `
+<header class="top"><h1>USTC ChangeRadar</h1><a class="btn" href="#S11">启用</a></header>
+<p class="scrid">S10 · 分层状态（六层分离呈现 · illustrative）</p>
+<ul class="clean">
+<li><strong>① 状态：已安装，未启用</strong> <span class="meta">（仅 lifecycle 事实）</span></li>
+<li>② 说明：服务器投影 · 等待启用</li>
+<li>权限　　✓ 2 项已授权（install 时批准）</li>
+<li>更新　　— 无可用更新</li>
+<li>运行时　— 未启用（不显示健康词汇）</li>
+<li>可调用性　ⓘ 未启用，不可调用</li>
+<li>新鲜度　安装于 2026-08-02（illustrative）</li>
+</ul>
+<h2>Danger zone</h2>
+<div class="actions" style="justify-content:flex-start"><button class="danger" disabled title="演示原型中不执行">撤销授权</button><button class="danger" disabled title="演示原型中不执行">卸载</button></div>
+<p class="note">destructive 动作为 typed confirmation；真实语义见 02 卷 §7.5。</p>`;
+
+S.S11 = `
+<header class="top"><h1>启用 USTC ChangeRadar？</h1><span class="scrid">S11 · Enable review</span></header>
+<ul class="clean">
+<li>启用后：插件将按已授权能力开始工作</li>
+<li>已授权：2 项（可在详情权限行查看）</li>
+<li>不影响：历史记录与配置保持不变</li>
+</ul>
+<div class="actions"><a class="btn sec" href="#S10">取消</a><a class="btn" href="#S12">启用插件</a></div>
+<div class="demo">失败分支演示：<a href="#S11a">S11a 暂时无法启用：权限需复核</a></div>`;
+
+S.S11a = `
+<header class="top"><h1>暂时无法启用</h1><span class="scrid">S11a · 失败分支</span></header>
+<div class="warn">原因：安装变更后权限需要复核（服务器判定）。</div>
+<p class="note">unavailable + server reason + 指向解决路径；不合并多个前置。</p>
+<div class="actions"><a class="btn sec" href="#S10">返回</a><a class="btn" href="#S13">复核权限</a></div>`;
+
+S.S12 = `
+<header class="top"><h1>✓ 已启用</h1><span class="scrid">S12 · server 确认（演示）</span></header>
+<div class="ok">USTC ChangeRadar 已开始工作。克制确认：inline 状态更新 + 动态记录，无庆祝动效。</div>
+${PENDING_NOTE}
+<div class="actions"><a class="btn" href="#S10">查看插件</a></div>`;
+
+S.S13 = `
+<header class="top"><h1>权限复核</h1><span class="scrid">S13 · grant re-review（B6 bounded domain evidence，非 production）</span></header>
+<p>因安装变更，以下授权已失效（服务器判定），需逐项重新批准：</p>
+<label class="ck"><input type="checkbox" checked> <strong>读取校园信息源（read）</strong><div class="meta">范围不变 → 重新批准（continuity；仍是 fresh approval）</div></label>
+<label class="ck"><input type="checkbox"> <strong>读取课程公告源（read）</strong> ⚠<div class="meta">新增 · 非默认选中</div></label>
+<p class="note">不提供「沿用旧授权」路径；逐项拒绝的后果由 server availability 投影。</p>
+<div class="actions"><a class="btn sec" href="#S10">返回</a><a class="btn" href="#S11">批准权限</a></div>`;
+
+function render(){
+  const id=(location.hash||"#S01").slice(1);
+  const app=document.getElementById("app");
+  app.innerHTML=(S[id]||S.S01)+FOOT;
+  window.scrollTo(0,0);
+}
+addEventListener("hashchange",render);
+render();
+</script>
+</body>
+</html>
