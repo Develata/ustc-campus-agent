@@ -18,7 +18,7 @@ A large module is an independently owned and independently testable part. “Lar
 |---|---|---|---|---|---|
 | `M00` | Platform Control and Identity | `partial-evidence` | tenant/user/session identity, request causation, application command envelope, platform-wide policy references | package internals, Agent loop, source parsing, UI | identity-types and session-domain implemented; request-context/ports planned |
 | `M10` | Application Ingress Host | `skeleton` | Dioxus/Axum server-function ingress, versioned public HTTP/typed streams where needed, auth/session/client-compatibility admission, mapping to application ports | domain decisions, direct database/executor rules, UI | skeleton only |
-| `M20` | Market and Package Lifecycle | `partial-evidence` | catalog package/component identity, install/configure/enable/disable/update/revoke/grant lifecycle, invocation authority snapshots | model loop, Plugin execution, client state | typed package/catalog + capability registry + bounded installation/grant domains + bounded transaction-current authority assembly + pure resolver evidence; durable lifecycle/composition planned |
+| `M20` | Market and Package Lifecycle | `partial-evidence` | catalog package/component identity, install/configure/enable/disable/update/revoke/grant lifecycle, invocation authority snapshots | model loop, Plugin execution, client state | typed package/catalog + capability registry + bounded installation/grant/update domains + bounded transaction-current authority assembly + pure resolver evidence; durable lifecycle, artifact switching, API/UI and B7 composition planned |
 | `M30` | Agent Harness and Runtime | `partial-evidence` | finite user-task/run phases, graph, budgets, context projection, provider/tool ports, replay and review | package lifecycle, executor implementation, transport/UI | node runtime kernel implemented; harness planned |
 | `M40` | Tool Gateway and Execution | `partial-evidence` | Agent tool protocol mapping, call correlation, current authorization ordering, intent/executor/receipt/result sequence | grants, Agent phases, package declarations | protocol values + fake conformance implemented |
 | `M50` | Model Provider Integration | `planned` | typed provider profiles, request/stream normalization, token estimation, timeout/cancel/error mapping | run authority, tool grants, prompt truth | planned |
@@ -160,6 +160,7 @@ Current code is retained as executable design evidence:
 
 - `crates/agent-runtime` is partial `M30` evidence for a node-local run kernel.
 - `crates/platform-core/src/invocation.rs` is partial `M20` evidence for pure invocation resolution.
+- `crates/platform-core/src/market/update.rs` and `crates/platform-core/tests/market_package_update.rs` are partial `M20` evidence for bounded update/rollback decisions and the semantic in-memory package-update repository; they are not durable production lifecycle, artifact-switch or B7 composition evidence.
 - `crates/agent-tool-protocol` and fake gateway tests are partial `M40` evidence.
 - `crates/course-planning` is partial `M72` evidence.
 - `scripts/check_repo_contracts.py` and CI are partial `M90` governance evidence.

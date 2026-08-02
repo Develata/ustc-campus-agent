@@ -18,7 +18,7 @@ This document schedules independent large modules and their small-module batches
 
 The module skeleton review is complete. Concrete implementation remains contract- and acceptance-gated. Existing code is retained as executable evidence:
 
-- `M20`: typed package/catalog, capability-registry, bounded managed-installation aggregate/in-memory repository, bounded reviewed-grant aggregate/replay/semantic in-memory repository, and pure invocation-resolver evidence;
+- `M20`: typed package/catalog, capability-registry, bounded managed-installation aggregate/in-memory repository, bounded reviewed-grant aggregate/replay/semantic in-memory repository, bounded package-update aggregate/semantic in-memory repository, and pure invocation-resolver evidence;
 - `M30`: node-local `AgentRun` kernel;
 - `M40`: Agent tool protocol and fake gateway/executor proof;
 - `M72`: offline Course Planning spike;
@@ -99,7 +99,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 |---|---|---|---|---|---|
 | `M00` Platform Control/Identity | `partial-evidence` | identity-types and session-domain implemented; request-context/ports planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
 | `M10` Application Ingress Host | `skeleton` | skeleton | Dioxus server-function plus explicit `ustc-agent`/inbound-MCP HTTP/SSE route, DTO/error/event/compatibility host | unassigned | black-box peer-client HTTP/stream conformance and no reach-through |
-| `M20` Market/Package | `partial-evidence` | typed package/catalog + capability-registry + bounded managed-installation fake + bounded reviewed-grant aggregate/replay/semantic repository + pure resolver evidence | M10/M80 browse delivery + durable installation/grant/update/composition around audited resolver | unassigned | `MARKET-*` current-scope rows |
+| `M20` Market/Package | `partial-evidence` | typed package/catalog + capability-registry + bounded managed-installation fake + bounded reviewed-grant aggregate/replay/semantic repository + bounded package-update aggregate/semantic repository + pure resolver evidence | M10/M80 browse delivery + durable installation/grant/update adapters, artifact switching and B7 composition around audited resolver | unassigned | `MARKET-*` current-scope rows |
 | `M30` Agent Harness/Runtime | `partial-evidence` | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |
 | `M40` Tool Gateway/Execution | `partial-evidence` | protocol/fake proof | durable intent/executor/receipt composition | unassigned | `AGENT-018/019`, `MARKET-007` |
 | `M50` Model Provider | `planned` | planned | typed profiles + one provider adapter | unassigned | provider conformance + real bounded turn |
@@ -182,8 +182,8 @@ Handlers contain mapping and coordination only. Domain validation remains in own
 - `M20-B3 installation-domain`: exact install/configure/enable/disable/revoke/uninstall. The bounded first slice `M20-B3-s1` implements a pure managed-installation aggregate plus a semantic in-memory repository fake under `platform-core`; it mints no production enable evidence, creates no durable state and promotes no acceptance row.
 - `M20-B4 grant-domain`: scope/version/reapproval and tenant checks. The exact public contract and bounded Rust implementation are complete under `crate::market::grant`: pure grant aggregate, explicit admission evidence, decide/evolve/replay, deny-side resolver projection and semantic in-memory repository fake. This supporting evidence mints no production grant, promotes no acceptance row and leaves durable authority assembly/composition to `M20-B5`.
 - `M20-B5 invocation-authority`: bounded implementation is complete under `crate::market::authority`: one semantic carrier-by-carrier read transaction, service-owned candidate/current assembly, shared call preflight, adopted resolver/recheck and post-success precondition verification. It creates no durable authority, production grant/enable evidence, effect intent or acceptance promotion.
-- `M20-B6 update-rollback`: next batch; staged update, permission expansion and exact rollback.
-- `M20-B7 composition`: attach read/mutation APIs and fake `M40` consumer.
+- `M20-B6 update-rollback`: bounded evidence complete for staged update, permission expansion, exact rollback and atomic in-memory package-update fake; no durable adapter, artifact switch, API/UI, current-call/in-flight composition or acceptance promotion.
+- `M20-B7 composition`: future attachment of read/mutation APIs, durable adapters/current API calls and fake `M40` consumer.
 
 `M20` merge scope is complete only when browse and current lifecycle state are distinct and disable/revoke blocks discovery/calls. Historical `B1-0`/`B1-1` labels map to the lifecycle-contract establishment and `M20-B1` respectively; the earlier `B1-2`/`B1-3`/… sequence is superseded by the canonical `M20-B<n>`/slice references above.
 

@@ -3,10 +3,10 @@
 ## Metadata
 
 - `Module ID`: `M20`
-- `Status`: Accepted blueprint; manifest/package-catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` semantic authority-read transaction/assembly and pure invocation-resolver evidence exist; durable installation/grant/update repositories and production composition remain planned
+- `Status`: Accepted blueprint; manifest/package-catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` semantic authority-read transaction/assembly, bounded `M20-B6` update/rollback domain plus semantic fake and pure invocation-resolver evidence exist; durable installation/grant/update repositories, artifact switching and production composition remain planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m20-market-package/v0`
-- `Last Review`: `2026-07-30`
+- `Last Review`: `2026-08-02`
 - `Owning Plan`: [`../04-market-and-plugin-lifecycle.md`](../04-market-and-plugin-lifecycle.md)
 - `Owning Lifecycle Contract`: [`../../contracts/market-lifecycle.md`](../../contracts/market-lifecycle.md)
 - `Primary code areas`: `market/`, cohesive Market modules under `crates/platform-core/` until extraction is justified
@@ -110,7 +110,7 @@ Publication never creates an installation. Installation never implies a grant. E
 - Partial install/bootstrap: no implied installed state; resume from explicit journal state.
 - Grant/version/scope mismatch: no projection or invocation.
 - Disable/revoke propagation uncertainty: deny new discovery/calls.
-- Failed update: retain exact tested rollback target; never silently widen permissions.
+- Failed bounded update transaction: retain the prior accepted installation pin and grant states inside the atomic semantic fake; future durable adapters must prove the same property with crash recovery and artifact-store rollback.
 - Projection cache loss: rebuild from reviewed catalog plus durable installation/grant state.
 - Resolution/store transaction race: close with a repository transaction/precondition or fail closed.
 
@@ -173,7 +173,7 @@ Existing `invocation.rs` is reviewed against items 7–8; it is not permission t
 
 ### Delivery sequence
 
-The canonical roadmap batch schedule lives in [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md) §7 (`M20-B0` through `M20-B7`). B1–B4 provide bounded catalog/capability/installation/grant evidence. Bounded `M20-B5` now provides one GAT read transaction across separate catalog/installation/current-or-exact-grant/policy carriers, service-owned candidate/current assembly, the adopted resolver/recheck and post-success precondition verification under `crate::market::authority`. These slices create no production grant, durable lifecycle state, enable evidence, effect intent or acceptance promotion. Remaining work is `M20-B6` `update-rollback` and `M20-B7` production-facing composition/fake M40 consumer. The module remains `partial-evidence`; B5 effects no `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted` promotion.
+The canonical roadmap batch schedule lives in [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md) §7 (`M20-B0` through `M20-B7`). B1–B4 provide bounded catalog/capability/installation/grant evidence. Bounded `M20-B5` provides one GAT read transaction across separate catalog/installation/current-or-exact-grant/policy carriers, service-owned candidate/current assembly, the adopted resolver/recheck and post-success precondition verification under `crate::market::authority`. Bounded `M20-B6` now provides pure update/rollback aggregate evidence and an atomic in-memory semantic package-update repository under `crate::market::update`, including exact approval/readiness/confirmation/rollback evidence, complete-current grant stale-on-Apply/Rollback semantics, receipt-prefix rebuild and cross-stream reference bijection tests. These slices create no production grant/update issuer, durable lifecycle state, artifact-store switch, crash recovery, enable evidence, effect intent or acceptance promotion. Remaining work is `M20-B7` production-facing API/composition/fake M40 consumer plus future durable adapters. The module remains `partial-evidence`; B6 effects no `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted` promotion.
 
 ## 14. Exit gate
 

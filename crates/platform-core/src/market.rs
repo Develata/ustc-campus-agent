@@ -4,6 +4,7 @@ pub mod authority;
 pub mod capability;
 pub mod grant;
 pub mod installation;
+pub mod update;
 
 use crate::invocation::{
     CapabilityId, CatalogRevision, ComponentKind, PackageId, PackageVersion, Sha256Digest,

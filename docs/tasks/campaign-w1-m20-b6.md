@@ -5,29 +5,36 @@
 - `Campaign ID`: `USTC-MODULES-2026-07-W1`
 - `Lane`: `M20-B6`
 - `Grant carrier`: [`01-execution-roadmap.md`](01-execution-roadmap.md#active-autonomous-module-campaign-authorization)
-- `Mode`: proposal-only; no contract acceptance or retained implementation
+- `Mode`: operation-specific finite retained implementation grant; no acceptance-status promotion, B7 composition or M90 production persistence
 
 ## Mutable campaign state
 
-- `Status`: `paused`
-- `Bound source commit`: `993b44229d1ff76a124d5194a00c0b29b7991f7d`
+- `Status`: `active`
+- `Bound source commit`: `5e9e5b934cd7e6ea50db1787ebd35949394f1052`
 - `Repair round`: `2`
 - `Current blocker identity`: `none`
-- `Stop reason`: `accepted-packet-draft-pr-update-authorized-no-merge-no-implementation-grant`
-- `Last transition evidence`: `prior-packet-sha256:5b340f1934c74c1fccd5de54e63a330b9fa485025b6faf383a158bb9da148e11; superseded-repair-sha256:c1dce1d02b169d34ecfd406fcfc4779df069c5aaf06deccc0611eb5aac9bebce; superseded-review-batch:deleg_2bb72512-no-verdict-timeout; accepted-delimited-packet-sha256:3bfde89d1915d525ded7155c8c324b99c39146c69c636165368f2ba3e5ef1d10; source-main:993b44229d1ff76a124d5194a00c0b29b7991f7d; source-tree:44f65329c300a11549e896e9ff48acf233f3a177; glm-candidate-sha256:047a30ccc41f77cdc73f4d3b4f37d4e6c0c92f98cbf2f551620254167ee822dd; original-independent-review-sha256:90091fc3fdb2baad14d41e7cdded2739f16ac782131a6901145d0d363c1c6d1c; repaired-semantic-rereview-sha256:4ae3769ba41439335e554482f5443ae060793a15623ed2b152355ff29ab1b2b9=GO; repaired-governance-rereview-sha256:e09df3f5f140c7a9bf5b2c9b3c13ed0ac3427f8b5dd1ce2f7bc0cc05e3c42587=GO; local-contract-check=PASS; develata-whole-packet-accepted-2026-08-01; commit-push-draft-pr-32-authorized; merge=false; implementation=false`
-- `Next allowed mutation`: `commit this exact accepted packet, push only docs/m20-b6-update-rollback-readiness, update and verify Draft PR #32, then remain paused; no merge, implementation, accepted-contract projection or acceptance-status promotion without a separate finite grant`
+- `Stop reason`: `none`
+- `Last transition evidence`: `accepted-delimited-packet-sha256:3bfde89d1915d525ded7155c8c324b99c39146c69c636165368f2ba3e5ef1d10; develata-whole-packet-accepted-2026-08-01; proposal-pr-32-merged-squash:5e9e5b934cd7e6ea50db1787ebd35949394f1052; merged-tree:92b2347ac678bebf4c55e6423965219f8e53765a; post-main-ci:30700279228=PASS; develata-operation-specific-finite-implementation-grant-2026-08-01; pre-edit-analysis-batch:deleg_a7b08aba=two-advisory-GO; parent-verification=proof-carrier-and-ledger-seed-clarifications-required; implementation-grant-sha256:7f48912254d363cea7e51f2abb1f2f7e2d2fb09cfc0e71107b86bc97580adab2=superseded-by-developata-authorized-proof-carrier-scope-amendment; implementation-grant-sha256:204ca6856f0264fa130c2e92919b5c00b25a3b3518371c048e29ecd1b2340a8f; pre-edit-semantic-review-sha256:4ae6140f94acd3ef47676e9e7cd8cbf8a6a145b02b6d55044764ed54b38f0e42=GO; pre-edit-path-b-review-sha256:b8b599f5f498dd327d98193f06b64352cfcefb308c9f3fd163cc90635bec2b78=GO; pre-edit-checker-review-sha256:8294ff4f6c4f78d36499d950ee5f40a20e36fab5a046e9cc7b86fc14d6372e66=GO; implementation-prompt-v1-sha256:c1381f89f2726984d6768dc3b4807895555903e17244078cdcff2c5d2cc49e47=BLOCKED_VERIFICATION; implementation-prompt-v2-sha256:4e1fa4a693c2731ddff50d5d6417255e01f94b80502acaef900e7cc893d905da; prompt-rereview-log-sha256:539a99087d7e846d55464085d0f8440f51be96acb39b8ac6faaed23b167247a3=GO; pre-edit-rereview=GO; implementation-repair-r1:blocker=grant-authority-conflict-rejected-receipt-not-reseedable-after-competing-grant-revoke; parent-procedure-note=repair-state-row-recorded-immediately-after-local-repair-not-before; repair=typed-private-repository-rejection-reseed-plus-historical-revoke-regression; targeted-grant-test=PASS; grant-unit-20=PASS; grant-integration-5=PASS; grant-owner-review-sha256:1af2e52f1df5f985f9c7a09eaa18199439ac642faa48a938f81a731761c8035c=BLOCKED; implementation-repair-r2:blockers=canonical-authority-tuple-order+repository-rejection-observed-prefix-proof; grant-r2-rereview-sha256:62705506d51d9f1b3342224db221fe3da4e7baf502666a116b514c25c5b03235=BLOCKED_STALE_AUTHORITY_PREFIX; canonical-order=closed; remaining=ordered-current-authority-prefix-index; grant-r2-final-rereview-log-sha256:a5ccc71bb6049ea36fe1a5f2f3d6a299dd6a9909609bed175e0ee3ccbfc4b337=GO; grant-round2-closed=canonical-order+ordered-repository-prefix-proof; grant-unit-20=PASS; grant-integration-5=PASS; source-control=local-only-pending-separate-ship-decision`
+- `Next allowed mutation`: `three final reviews bound to the exact candidate; repair counter remains 2 by stop rule; any independent blocker or required-gate failure permits only scoped repair followed by a full three-review restart; source-control shipping remains closed`
+- `U2 prefix evidence`: `update-unit-16/16=PASS; installation-grant-integration-16/16=PASS; cargo-fmt=PASS; git-diff-check=PASS; policy-carriers=canonical-complete-typed; replay-forgery=fail-closed; parent-final-byte-review=GO`
+- `U3 implementation completion evidence`: `parent-verified implementation completion, not an independent review: exact 21 market::update unit tests; 3 market_package_update public integration tests; installation/grant owner regressions; repository atomic failure/retry, exact ledgers/indexes/consumed approvals, positive rebuild controls and isolated unreferenced PackageUpdated, PackageRolledBack and update-prefixed Grant MarkedStale bijection negatives; all seven owner-only UpdateDecisionContext constructor families are production-reachable and synthetic authority builders are cfg(test)-only`
+- `U4 governance projection evidence`: `parent-verified truthful docs projection: B6 bounded evidence complete; M20 remains partial-evidence; MARKET-004 and PKG-020 remain planned; B7 composition, durable adapters, current API/UI, in-flight/current-call composition, crash recovery and artifact switching remain future`
+- `U5 checker closure evidence`: `contract-check PASS; exact source/module/public/impl/derive/attribute/macro/test inventories; full-name owner-only restricted-function inventories for update, installation and grant; all seven production context constructor calls pinned exactly once with no extra named context literal; exact InstallationEventKind variants; semantic cfg(test) adjacency for synthetic authority constructors; 12 mandatory B6 mutation methods PASS; no acceptance status promotion`
+- `Repair chronology`: `U1 accepted delimited packet and pre-edit reviews; U2 repaired grant authority conflict by typed private repository rejection reseed plus historical revoke regression, then repaired canonical authority tuple order and ordered current-authority prefix proof; U3 completed atomic package-update repository and evidence in parent repair lane under frozen repair round 2, then strengthened five existing semantic tests without adding or renaming tests; parent repair added positive owner-ledger rebuild controls around three isolated cross-stream bijection negatives; parent repair replaced direct/private context construction with all seven owner-only constructor families, passed complete typed catalog publications into Stage, RecordApproval, Apply and Rollback, and excluded synthetic authority builders from production with cfg(test); U5 repaired checker prefix-only blindness by pinning full restricted function names and installation event variants plus mutation bites; full-suite discovery repaired three stale mutation-test assumptions for dead-code attribute uniqueness, installation-module adjacency and cross-file binding cardinality without weakening their bites; final all-target clippy repair replaced fourteen grant test unwraps with explicit fixture expectations; independent review then exposed owner/update disabled-state predicate drift: update admitted both InstalledDisabled and Disabled while owner decide/replay admitted only Disabled; scoped repair unified owner decide/replay on a private two-state predicate and strengthened existing owner plus semantic-repository Apply/Rollback regressions without adding test functions; the next exact-candidate reviews found that repository Apply/Rollback staged owner events before the pure disabled-state admission, that opaque installation references were not bound back to the update plan's exact prior/next pins, and that accepted current-grant-set witnesses were not replay-bound to owner prefixes or checked for omitted active old-revision authority; scoped repair extracted shared pure admission and persisted a typed coupled-preflight rejection before owner staging, added restricted boolean-only owner/canonical verifiers, replay-bound accepted receipt witnesses and rejected coupled-preflight witnesses to exact owner history prefixes and repository authority carriers, rejected omitted active old-revision grants, and added wrong-but-valid owner-event, omitted-active-grant, and missing-rejected-owner-prefix mutation regressions inside existing tests; one checker review hash claim was rejected because it used LF-delimited paths rather than the frozen path+NUL+u64be+bytes manifest algorithm; governance projects bounded truth only and invents no independent review`
+- `Authorized scope amendment`: `Develata explicitly authorized crates/platform-core/tests/platform_identity.rs on 2026-08-02 solely to project the existing market.rs module declaration mirrors for pub mod update; no identity behavior, public surface or runtime authority changed; prior implementation-grant digest is superseded by the digest recorded in Last transition evidence`
 
 ## Output contract
 
-Produce one source-bound exact-contract readiness packet for planned `MARKET-004` and `PKG-020`: update staging, permission expansion/reapproval, atomic package-pin activation, rollback target and event/audit semantics. This packet MAY be pushed as a Draft PR. It MUST NOT be merged, presented as an accepted `market-lifecycle/v0` amendment or used to retain implementation until Develata accepts the exact proposal and activates an implementation grant.
+Implement the accepted packet as one bounded `M20-B6` Rust domain/semantic-fake slice on exact merged `main`, including deterministic update decision/replay, owner-reachable installation/grant events, complete-current grant-set semantics, atomic in-memory cross-stream commit and honest docs/checker evidence. Preserve the accepted packet bytes and keep `MARKET-004`/`PKG-020` planned. Stop at the source-control shipping boundary unless Develata separately authorizes the implementation commit/push/PR/merge operations.
 
 ## Required evidence
 
-- exact source commit/tree and clean-checkout receipt;
-- high-level plan-to-exact-contract gap table;
-- proposed command/state/error/event ordering and acceptance future bindings;
-- independent blocker review bound to the delimited packet digest;
-- every repair round and blocker identity recorded above before another mutation.
+- exact merged source commit/tree, clean isolated worktree and post-main CI receipt;
+- separately delimited and hashed finite implementation grant with exact writable paths, public/private/import/test/mutation/manual-`Debug` inventories;
+- independent PRE_EDIT_TASKBOOK review before Rust mutation;
+- focused and full Rust/docs/checker gates on the final candidate;
+- independent lifecycle/atomicity/replay, authority/evidence and checker/status-honesty reviews bound to the final tree;
+- every implementation repair round and blocker identity recorded above before another mutation.
 
 <!-- M20_B6_READINESS_PACKET:BEGIN -->
 ## 1. Proposal status and selected posture
@@ -654,3 +661,408 @@ Before any proposal merge or Rust implementation, Develata must explicitly accep
 
 Until then, current accepted `market-lifecycle/v0` and existing Rust behavior remain unchanged.
 <!-- M20_B6_READINESS_PACKET:END -->
+
+<!-- M20_B6_IMPLEMENTATION_GRANT:BEGIN -->
+## 14. Operation-specific finite implementation grant
+
+### 14.1 Authority and source binding
+
+Develata activated this finite retained-implementation grant on `2026-08-01`. It supersedes the proposal-only stop for this lane but does not mutate the active campaign-grant block, authorize another batch or widen the product contract.
+
+| field | exact receipt |
+|---|---|
+| accepted semantic packet | delimited SHA-256 `3bfde89d1915d525ded7155c8c324b99c39146c69c636165368f2ba3e5ef1d10`; bytes remain immutable |
+| accepted proposal PR | `#32`, squash-merged as `5e9e5b934cd7e6ea50db1787ebd35949394f1052` |
+| exact base tree | `92b2347ac678bebf4c55e6423965219f8e53765a` |
+| post-main CI | GitHub Actions `30700279228`; `rust` and `docs-and-contracts` passed |
+| implementation branch | `feat/m20-b6-package-update-domain` in a dedicated clean worktree |
+| shipping authority | local implementation/review only; commit, push, PR and implementation merge require a separate source-control decision |
+
+This is a Path-B-sized bounded domain slice only if all Path B admission criteria pass on the final candidate. Otherwise it remains local and falls back to the M20 Path A branch; the taskbook does not self-authorize a remote operation.
+
+### 14.2 Exact writable paths
+
+No path outside this list may change without recording a scope blocker and obtaining a fresh operation-specific decision:
+
+```text
+crates/platform-core/src/market.rs
+crates/platform-core/src/market/update.rs
+crates/platform-core/src/market/installation.rs
+crates/platform-core/src/market/grant.rs
+crates/platform-core/tests/market_package_update.rs
+crates/platform-core/tests/platform_identity.rs
+scripts/check_repo_contracts.py
+scripts/tests/test_check_repo_contracts.py
+docs/plan/modules/00-module-map.md
+docs/plan/modules/30-market-package-lifecycle.md
+docs/plan/04-market-and-plugin-lifecycle.md
+docs/contracts/market-lifecycle.md
+docs/features/00-market-browse-install.md
+docs/acceptance/matrix.tsv
+docs/tasks/01-execution-roadmap.md
+docs/tasks/campaign-w1-m20-b6.md
+docs/overview/architecture.md
+```
+
+`00-module-map.md` and `overview/architecture.md` are admitted only to replace stale “no bounded update evidence” prose with the exact bounded/non-production truth. `Cargo.toml`, `Cargo.lock`, active campaign-grant/policy delimiters, workflows, CODEOWNERS, fixtures, adapters and application/UI paths are forbidden. No new dependency, feature, build target or generated source is admitted.
+
+### 14.3 Public declaration inventory
+
+`market.rs` adds only `pub mod update;`. The `crate::market::update` public item set is exactly:
+
+```text
+UpdateConstructionError
+UpdateDecisionError
+UpdateReplayError
+PackageUpdateId
+UpdateCommandId
+UpdateApprovalId
+UpdateEvidenceId
+UpdateEventSequence
+UpdateRevision
+UpdateState
+UpdateChangeClass
+PackageUpdatePlan
+UpdateApprovalEvidence
+UpdateReadinessEvidence
+UpdateConfirmationEvidence
+RollbackReadinessEvidence
+UpdateDecisionContext
+UpdateCommand
+UpdateEventKind
+UpdateEvent
+PackageUpdateAggregate
+PackageUpdateSnapshot
+PackageUpdateRepository
+decide
+evolve
+replay
+UpdateCommandReceipt
+UpdateCommandOutcome
+UpdateRepositoryError
+InMemoryPackageUpdateRepository
+```
+
+Private fields, checked constructors and immutable accessors are mandatory. `PackageUpdateSnapshot` is only a type alias to `PackageUpdateAggregate`. No public `Default`, Serde construction, mutable accessor, arbitrary insert/list/query, authority boolean, caller-supplied change class or adapter payload is admitted.
+
+The exact public command constructors remain:
+
+```rust
+impl UpdateCommand {
+    #[allow(clippy::too_many_arguments)]
+    pub fn stage(
+        command_id: UpdateCommandId,
+        update_id: PackageUpdateId,
+        installation: &InstallationSnapshot,
+        target_pin: InstallationPackagePin,
+        rollback_catalog: &CatalogReadModel,
+        rollback_publications: &[CatalogPackageRevision],
+        target_catalog: &CatalogReadModel,
+        target_publications: &[CatalogPackageRevision],
+        rollback_registry: &CapabilityRegistry,
+        target_registry: &CapabilityRegistry,
+    ) -> Result<Self, UpdateConstructionError>;
+
+    pub fn record_approval(
+        command_id: UpdateCommandId,
+        update_id: PackageUpdateId,
+        expected_update_revision: UpdateRevision,
+        approval: UpdateApprovalEvidence,
+        readiness: UpdateReadinessEvidence,
+    ) -> Result<Self, UpdateConstructionError>;
+
+    pub fn apply(
+        command_id: UpdateCommandId,
+        update_id: PackageUpdateId,
+        expected_update_revision: UpdateRevision,
+        expected_installation_revision: InstallationRevision,
+    ) -> Result<Self, UpdateConstructionError>;
+
+    pub fn confirm_applied_update(
+        command_id: UpdateCommandId,
+        update_id: PackageUpdateId,
+        expected_update_revision: UpdateRevision,
+        expected_installation_revision: InstallationRevision,
+        evidence: UpdateConfirmationEvidence,
+    ) -> Result<Self, UpdateConstructionError>;
+
+    pub fn rollback(
+        command_id: UpdateCommandId,
+        update_id: PackageUpdateId,
+        expected_update_revision: UpdateRevision,
+        expected_installation_revision: InstallationRevision,
+        evidence: RollbackReadinessEvidence,
+    ) -> Result<Self, UpdateConstructionError>;
+
+    pub fn cancel(
+        command_id: UpdateCommandId,
+        update_id: PackageUpdateId,
+        expected_update_revision: UpdateRevision,
+    ) -> Result<Self, UpdateConstructionError>;
+
+    pub fn cancel_after_terminal_installation(
+        command_id: UpdateCommandId,
+        update_id: PackageUpdateId,
+        expected_update_revision: UpdateRevision,
+        expected_terminal_installation_revision: InstallationRevision,
+    ) -> Result<Self, UpdateConstructionError>;
+}
+```
+
+Command accessors are only `command_id` and `update_id`; event accessors are only the accepted packet set. `UpdateCommandReceipt` stores the complete private `UpdateCommand` plus `UpdateCommandOutcome` and exposes immutable `command()`/`outcome()` accessors so an unforgeable typed receipt can reseed its exact ledger entry. Evidence constructors remain no wider than `pub(in crate::market)`.
+
+`UpdateDecisionContext` has no public constructor and no mutable or allow-like accessor. Owner-only constructors are exactly the command-specific families `for_stage`, `for_record_approval`, `for_apply`, `for_confirm_applied`, `for_rollback`, `for_cancel` and `for_cancel_after_terminal_installation`; they accept complete typed carriers/events, not claimed booleans or partial indexes.
+
+The public repository port remains exactly `execute`, `load_exact` and `event_history`.
+
+### 14.4 Semantic-fake seed and ledger-completeness repair
+
+The accepted packet requires replay-based history seeding and complete command-ledger reconstruction. Events alone cannot reconstruct a persisted rejected command: rejected receipts append no event, and the existing grant receipt did not retain its complete command. Therefore the implementation freezes this evidence-carrier repair:
+
+1. `GrantCommandReceipt` privately stores the complete `GrantCommand` instead of only duplicated command/snapshot IDs; its existing `command_id()` and `snapshot_id()` behavior is preserved and no new public grant item/accessor is added.
+2. Installation, grant and update owner repositories accept unforgeable typed receipts plus the exact observed pre-decision snapshot when rebuilding a ledger. Receipt fields remain private; callers cannot author a receipt.
+3. A receipt seed is admitted only when its command identity, observed snapshot, accepted event/snapshot or rejected outcome, and the corresponding replayed stream prefix are coherent. Accepted events have a one-to-one exact position; rejected receipts have no event. Missing/extra/duplicate/conflicting ledger entries fail closed.
+
+The public fake signature is frozen as:
+
+```rust
+impl InMemoryPackageUpdateRepository {
+    #[must_use]
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self;
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_from_authority_histories(
+        catalog_read_models: Vec<CatalogReadModel>,
+        catalog_publications: Vec<CatalogPackageRevision>,
+        capability_registries: Vec<CapabilityRegistry>,
+        policy_snapshots: Vec<InvocationPolicySnapshot>,
+        installation_histories: Vec<(InstallationId, Vec<InstallationEvent>)>,
+        installation_ledger_receipts: Vec<(
+            InstallationCommandReceipt,
+            Option<InstallationSnapshot>,
+        )>,
+        grant_histories: Vec<(GrantSnapshotId, Vec<GrantEvent>)>,
+        grant_ledger_receipts: Vec<(GrantCommandReceipt, Option<GrantSnapshot>)>,
+        update_histories: Vec<(PackageUpdateId, Vec<UpdateEvent>)>,
+        update_ledger_receipts: Vec<(
+            UpdateCommandReceipt,
+            Option<PackageUpdateSnapshot>,
+        )>,
+    ) -> Result<Self, UpdateRepositoryError>;
+
+    pub fn fail_next_commit_for_test(&mut self);
+}
+```
+
+`installation.rs` and `grant.rs` may add only repository-private checked `try_from_histories_and_receipts`/staged-clone helpers needed to implement this signature. They replay through their owning `replay`/`decide`/`evolve`, rebuild indexes and ledgers, and expose no arbitrary snapshot/event insertion.
+
+### 14.5 Owner-only installation and grant additions
+
+`installation.rs` adds only public event kinds `PackageUpdated` and `PackageRolledBack`. `InstallationCommand` gains restricted `package_updated` and `package_rolled_back` constructors taking the exact expected revision, plan digest and next pin. They store exact prior/next pins in private event payloads, preserve configuration and disabled state, and expose only a `pub(in crate::market)` canonical coupling digest on `InstallationEvent`. It imports no `update` type.
+
+`grant.rs` adds exactly `CurrentInstallationGrantSet` and `GrantRepository::load_current_for_installation` as accepted. The read model has private fields, canonical sorted `grants()`, exact observed installation revision and a domain-separated complete-set digest. Its constructor and per-event canonical coupling digest remain `pub(in crate::market)`. Revoked history is excluded; Revoked-in-current-index and every missing/extra/wrong-key/duplicate nonterminal current row are corruption.
+
+For atomic Apply/Rollback, `InMemoryPackageUpdateRepository` may stage checked clones of the existing owner repositories, invoke owner `decide`/`evolve` or equivalent owner-private staged helpers, create the update event from those exact subordinate events, and swap all staged maps only after all decisions, sequence checks and preconditions pass. It must not perform externally visible sequential `execute` commits or reimplement installation/grant event construction.
+
+### 14.6 Admissible dependency and import set
+
+`update.rs` may import only:
+
+```text
+std::{collections::{BTreeMap, BTreeSet}, error::Error, fmt}
+crate::identity::{TenantId, UserId}
+crate::invocation::{CapabilityId, CatalogComponentRevision, CatalogPackageRevision,
+  CatalogRevision, ComponentId, ComponentKind, ComponentVersion, ExecutionIdentity,
+  GrantSnapshotId, GrantState, GrantVersion, InstallationId, InstallationRevision,
+  InvocationPolicySnapshot, PackageId, PackageVersion, PolicyRevision,
+  PolicySnapshotId, Sha256Digest}
+crate::market::{CatalogReadModel, ComponentDeclaration, PackageTier,
+  ValidatedPackageManifest}
+crate::market::capability::{compare_capability_definitions, CapabilityDefinition,
+  CapabilityPolicyChange, CapabilityRegistry, CapabilityRegistryRevision,
+  CapabilityStatus, ScopeKind}
+crate::market::installation::{ConfigurationRevision, InstallationCommand,
+  InstallationCommandId, InstallationCommandOutcome, InstallationCommandReceipt,
+  InstallationEvent, InstallationEventKind, InstallationEventSequence,
+  InstallationPackagePin, InstallationReplayError, InstallationRepository,
+  InstallationRepositoryError, InstallationSnapshot, InMemoryInstallationRepository,
+  ManagedInstallationState}
+crate::market::grant::{CurrentInstallationGrantSet, GrantCommand, GrantCommandId,
+  GrantCommandOutcome, GrantCommandReceipt, GrantEvent, GrantEventKind,
+  GrantEventSequence, GrantInvalidationReason, GrantReplayError, GrantRepository,
+  GrantRepositoryError, GrantSnapshot, InMemoryGrantRepository}
+```
+
+Unused imports are not admitted. The checker freezes the final exact normalized import declarations. Serde, direct `sha2`, time/clock, random/UUID, filesystem, network, process, database, framework, executor, model/provider, MCP and M30/M40/M90 types are forbidden.
+
+Dependency direction remains `update -> installation/grant/capability/market/invocation/identity`; installation and grant do not import update.
+
+### 14.7 Manual `Debug` inventory
+
+Manual authority-redacted `fmt::Debug` is mandatory for:
+
+```text
+PackageUpdateId
+UpdateCommandId
+UpdateApprovalId
+UpdateEvidenceId
+PackageUpdatePlan
+UpdateApprovalEvidence
+UpdateReadinessEvidence
+UpdateConfirmationEvidence
+RollbackReadinessEvidence
+UpdateDecisionContext
+UpdateCommandAction
+UpdateCommand
+InstallationEventReference
+GrantEventReference
+UpdateEventPayload
+UpdateEvent
+PackageUpdateAggregate
+UpdateCommandOutcome
+UpdateCommandReceipt
+InMemoryPackageUpdateRepository
+CurrentInstallationGrantSet
+```
+
+Every private authority index/context/ledger type either has no `Debug` or a manual redacted implementation. New installation package-pin payloads remain under the existing manually redacted action/event-payload wrappers. `UpdateConstructionError`, `UpdateDecisionError`, `UpdateReplayError`, `UpdateRepositoryError`, `UpdateEventSequence`, `UpdateRevision`, `UpdateState`, `UpdateChangeClass` and `UpdateEventKind` may derive `Debug` only while they contain category-only variants or numeric/revision values; a future payload-bearing variant must switch to manual redaction.
+
+### 14.8 Test-function inventory and proof-carrier repair
+
+The complete `market::update::tests` unit-test inventory is:
+
+```text
+checked_update_ids_revisions_and_sequences_are_canonical
+update_plan_binds_exact_source_target_catalog_registry_policy_and_digests
+change_classifier_is_computed_from_complete_typed_authority_not_caller_hint
+change_classifier_precedence_covers_added_expanded_source_policy_tier_component_scope_and_unknown
+evidence_values_bind_plan_digest_revision_configuration_and_authority_without_leaking_payloads
+state_machine_allows_only_stage_approval_apply_confirm_rollback_cancel_paths
+stage_requires_absence_one_slot_nonterminal_installation_and_distinct_reviewed_target
+record_approval_requires_coherent_fresh_approval_and_readiness_evidence
+apply_requires_ready_disabled_exact_revisions_pins_configuration_and_authority_recheck
+rollback_requires_applied_pending_disabled_fresh_readiness_and_current_target_pin
+confirm_only_closes_applied_pending_without_runtime_health_or_grant_authority
+cancel_and_terminal_installation_reconciliation_have_exact_precedence
+event_sequences_revisions_command_ids_and_approval_consumption_are_exact
+replay_accepts_reachable_histories_and_rejects_gap_duplicate_reorder_overflow_and_post_terminal
+replay_rejects_forged_plan_change_class_evidence_revision_and_identity_bindings
+subordinate_installation_and_grant_event_references_are_complete_kind_checked_and_digest_bound
+repository_idempotency_command_conflict_approval_conflict_and_failure_injection_are_atomic
+repository_rebuilds_current_slot_all_ledgers_consumed_approvals_and_authority_indexes
+permission_expansion_and_every_conservative_update_require_exact_approval
+apply_and_rollback_preserve_frozen_toolsets_and_change_only_current_future_authority
+public_errors_debug_display_and_authority_debug_are_category_only_and_secret_safe
+```
+
+The accepted semantics require the last two named acceptance proofs, but an external integration-test crate cannot invoke `pub(in crate::market)` evidence minting constructors without widening authority. They are therefore rebound, with exact names and assertion scope unchanged, to:
+
+```text
+cargo test --locked -p ustc-campus-agent-core --lib \
+  market::update::tests::permission_expansion_and_every_conservative_update_require_exact_approval -- --exact
+cargo test --locked -p ustc-campus-agent-core --lib \
+  market::update::tests::apply_and_rollback_preserve_frozen_toolsets_and_change_only_current_future_authority -- --exact
+```
+
+This is a proof-carrier placement repair, not a lifecycle/public-API change. The external `market_package_update.rs` remains mandatory and contains exactly:
+
+```text
+checked_public_update_values_and_stage_surface_are_deterministic
+empty_public_repository_and_replay_are_non_authoritative
+public_errors_and_debug_are_category_only_and_redacted
+```
+
+It proves the downstream public boundary without a test-only authority mint. Compile-fail doctests or an equivalent compiler probe must establish that external callers cannot construct evidence/context/events or mutate snapshots. No test feature, `cfg(debug_assertions)` public backdoor or test-only public harness is admitted.
+
+### 14.9 Checker and mutation inventory
+
+`scripts/check_repo_contracts.py` remains the sole fail-closed checker owner and must add/update:
+
+```text
+PLATFORM_UPDATE_SOURCE
+PLATFORM_UPDATE_TEST
+PLATFORM_CORE_SOURCE_FILES
+PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS
+PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS
+PLATFORM_CORE_ADMITTED_SIBLING_MACROS
+PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS
+PLATFORM_CORE_ADMITTED_SIBLING_IMPLS
+PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES / exact attribute-count inventories
+PLATFORM_UPDATE_ADMITTED_PUBLIC_DECLARATIONS
+PLATFORM_UPDATE_ADMITTED_UNCLASSIFIED_PUBLIC
+PLATFORM_UPDATE_ADMITTED_IMPL_DECLARATIONS
+PLATFORM_UPDATE_ADMITTED_DERIVES
+PLATFORM_UPDATE_UNIT_TEST_FUNCTIONS
+PLATFORM_UPDATE_INTEGRATION_TEST_FUNCTIONS
+PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS
+PLATFORM_INSTALLATION_ADMITTED_UNCLASSIFIED_PUBLIC
+PLATFORM_INSTALLATION_ADMITTED_DERIVES
+PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS
+PLATFORM_GRANT_ADMITTED_UNCLASSIFIED_PUBLIC
+PLATFORM_GRANT_ADMITTED_DERIVES
+```
+
+The checker must reject missing/unregistered update source or test, module-declaration drift, import/item/impl/derive/attribute/macro/public/restricted-public drift, omitted/ignored/cfg-disabled unit or integration tests, authority-bearing `Debug` derive, visibility widening, arbitrary insert/list/query APIs and missing installation/grant coupling surfaces.
+
+`scripts/tests/test_check_repo_contracts.py` must retain mutation-sensitive cases for each category above, including at least:
+
+```text
+test_missing_market_update_nested_file_fails_closed
+test_missing_market_update_module_declaration_fails_closed
+test_unregistered_market_update_source_or_test_fails_closed
+test_market_update_public_rename_extra_item_and_visibility_widening_fail_closed
+test_market_update_dependency_import_impl_derive_attribute_and_macro_drift_fail_closed
+test_market_update_authority_debug_derive_fails_closed
+test_market_update_missing_or_ignored_unit_test_fails_closed
+test_market_update_missing_or_ignored_integration_test_fails_closed
+test_market_installation_update_event_or_restricted_constructor_drift_fails_closed
+test_market_grant_current_set_or_arbitrary_query_drift_fails_closed
+test_market_004_status_promotion_after_b6_fails_closed
+test_pkg_020_status_promotion_after_b6_fails_closed
+```
+
+The mutation tests may update intentional checked-in allowlists but must not weaken campaign-authorization policy/digest/mutations, identity/authority checkers or CI wiring.
+
+### 14.10 Documentation and status projections
+
+The bounded slice updates accepted plan/contract/feature/roadmap/architecture prose only to state that a pure update aggregate and deterministic semantic in-memory transaction fake are retained supporting evidence. It must continue to state:
+
+- no durable installation/grant/update repository, production transaction/TOCTOU adapter or crash recovery;
+- no production approval/readiness/confirmation/grant/enable issuer;
+- no artifact switch, executor, M10/M80 API/UI, B7 composition or M90 persistence;
+- `MARKET-004` and `PKG-020` remain `planned`;
+- M20 remains `partial-evidence`, never StandaloneReady/IntegrationReady/Accepted;
+- historical projections remain immutable and runtime health remains separate from authority.
+
+No active campaign-grant/policy marker bytes may change. The roadmap may update only ordinary B6/current-evidence prose outside those markers.
+
+### 14.11 Required implementation and closeout gates
+
+PRE_EDIT closure requires an independent review bound to the exact base, accepted packet digest and this implementation-grant digest. Only a written `GO` allows `Status: active` and Rust edits.
+
+The final candidate must pass:
+
+```text
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-features -- -D warnings
+cargo test --locked -p ustc-campus-agent-core --lib market::update::tests
+cargo test --locked -p ustc-campus-agent-core --test market_package_update
+cargo test --locked -p ustc-campus-agent-core --test market_installation_lifecycle
+cargo test --locked -p ustc-campus-agent-core --test market_grant_lifecycle
+cargo test --locked -p ustc-campus-agent-core --test market_authority_assembly
+cargo test --locked -p ustc-campus-agent-core --test invocation_resolution
+cargo test --locked --workspace --all-features
+cargo test --locked --doc --workspace
+python3 scripts/check_repo_contracts.py --ci
+python3 -m unittest scripts.tests.test_check_repo_contracts
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+git diff --check
+```
+
+Final review fan-in is exactly three blocker-only lanes: lifecycle/state/idempotency; cross-stream atomicity/replay/complete-current authority; checker/public-surface/status honesty. Parent verification must replay every accepted blocker. After convergence, stop before source-control mutation and present exact paths, diff, gates, review receipts and candidate tree to Develata.
+
+### 14.12 Stop conditions
+
+Pause before further mutation if implementation needs a path/dependency/public type outside this grant, a lifecycle/authority behavior not settled by the accepted packet, test-only public authority, M90/durable adapter, active grant/policy edit, acceptance promotion, live user data/credentials, unplanned instrumentation, or the same semantic blocker/gate failure after repair round `2`.
+<!-- M20_B6_IMPLEMENTATION_GRANT:END -->

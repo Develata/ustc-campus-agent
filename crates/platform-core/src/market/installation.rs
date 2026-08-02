@@ -25,6 +25,8 @@ const MAX_CONFIGURATION_ENTRIES: usize = 128;
 
 const CONFIGURATION_DOMAIN: &[u8] = b"market-installation-configuration/v0\0";
 const ENABLE_EVIDENCE_DOMAIN: &[u8] = b"market-installation-enable-evidence/v0\0";
+#[allow(dead_code)]
+const EVENT_COUPLING_DOMAIN: &[u8] = b"market-installation-event-coupling/v0\0";
 
 /// Construction failure for checked managed-installation values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -545,6 +547,10 @@ impl ManagedInstallationState {
     const fn is_terminal(self) -> bool {
         matches!(self, Self::Revoked | Self::Uninstalled)
     }
+
+    const fn is_disabled_for_package_pin_change(self) -> bool {
+        matches!(self, Self::InstalledDisabled | Self::Disabled)
+    }
 }
 
 /// Non-public evidence that future authority composition minted an exact enable precondition.
@@ -675,6 +681,18 @@ enum InstallationCommandAction {
     Disable {
         expected_revision: InstallationRevision,
     },
+    #[allow(dead_code)]
+    PackageUpdated {
+        expected_revision: InstallationRevision,
+        plan_digest: Sha256Digest,
+        next_package_pin: InstallationPackagePin,
+    },
+    #[allow(dead_code)]
+    PackageRolledBack {
+        expected_revision: InstallationRevision,
+        plan_digest: Sha256Digest,
+        rollback_package_pin: InstallationPackagePin,
+    },
     Revoke {
         expected_revision: InstallationRevision,
     },
@@ -701,6 +719,18 @@ impl fmt::Debug for InstallationCommandAction {
                 .finish(),
             Self::Disable { expected_revision } => formatter
                 .debug_struct("Disable")
+                .field("expected_revision", expected_revision)
+                .finish(),
+            Self::PackageUpdated {
+                expected_revision, ..
+            } => formatter
+                .debug_struct("PackageUpdated")
+                .field("expected_revision", expected_revision)
+                .finish(),
+            Self::PackageRolledBack {
+                expected_revision, ..
+            } => formatter
+                .debug_struct("PackageRolledBack")
                 .field("expected_revision", expected_revision)
                 .finish(),
             Self::Revoke { expected_revision } => formatter
@@ -791,6 +821,44 @@ impl InstallationCommand {
         })
     }
 
+    #[allow(dead_code)]
+    pub(in crate::market) fn package_updated(
+        command_id: InstallationCommandId,
+        installation_id: InstallationId,
+        expected_revision: InstallationRevision,
+        plan_digest: Sha256Digest,
+        next_package_pin: InstallationPackagePin,
+    ) -> Result<Self, InstallationConstructionError> {
+        Ok(Self {
+            command_id,
+            installation_id,
+            action: InstallationCommandAction::PackageUpdated {
+                expected_revision,
+                plan_digest,
+                next_package_pin,
+            },
+        })
+    }
+
+    #[allow(dead_code)]
+    pub(in crate::market) fn package_rolled_back(
+        command_id: InstallationCommandId,
+        installation_id: InstallationId,
+        expected_revision: InstallationRevision,
+        plan_digest: Sha256Digest,
+        rollback_package_pin: InstallationPackagePin,
+    ) -> Result<Self, InstallationConstructionError> {
+        Ok(Self {
+            command_id,
+            installation_id,
+            action: InstallationCommandAction::PackageRolledBack {
+                expected_revision,
+                plan_digest,
+                rollback_package_pin,
+            },
+        })
+    }
+
     pub fn revoke(
         command_id: InstallationCommandId,
         installation_id: InstallationId,
@@ -833,6 +901,8 @@ pub enum InstallationEventKind {
     Configured,
     Enabled,
     Disabled,
+    PackageUpdated,
+    PackageRolledBack,
     Revoked,
     Uninstalled,
 }
@@ -859,6 +929,20 @@ enum InstallationEventPayload {
     Disabled {
         installation_id: InstallationId,
     },
+    PackageUpdated {
+        installation_id: InstallationId,
+        prior_revision: InstallationRevision,
+        plan_digest: Sha256Digest,
+        prior_package_pin: InstallationPackagePin,
+        next_package_pin: InstallationPackagePin,
+    },
+    PackageRolledBack {
+        installation_id: InstallationId,
+        prior_revision: InstallationRevision,
+        plan_digest: Sha256Digest,
+        prior_package_pin: InstallationPackagePin,
+        next_package_pin: InstallationPackagePin,
+    },
     Revoked {
         installation_id: InstallationId,
     },
@@ -874,6 +958,8 @@ impl InstallationEventPayload {
             Self::Configured { .. } => InstallationEventKind::Configured,
             Self::Enabled { .. } => InstallationEventKind::Enabled,
             Self::Disabled { .. } => InstallationEventKind::Disabled,
+            Self::PackageUpdated { .. } => InstallationEventKind::PackageUpdated,
+            Self::PackageRolledBack { .. } => InstallationEventKind::PackageRolledBack,
             Self::Revoked { .. } => InstallationEventKind::Revoked,
             Self::Uninstalled { .. } => InstallationEventKind::Uninstalled,
         }
@@ -891,6 +977,12 @@ impl InstallationEventPayload {
                 installation_id, ..
             }
             | Self::Disabled { installation_id }
+            | Self::PackageUpdated {
+                installation_id, ..
+            }
+            | Self::PackageRolledBack {
+                installation_id, ..
+            }
             | Self::Revoked { installation_id }
             | Self::Uninstalled { installation_id } => installation_id,
         }
@@ -935,6 +1027,65 @@ impl InstallationEvent {
     #[must_use]
     pub const fn kind(&self) -> InstallationEventKind {
         self.payload.kind()
+    }
+
+    #[must_use]
+    #[allow(dead_code)]
+    pub(in crate::market) fn canonical_coupling_digest(&self) -> Sha256Digest {
+        digest_event_coupling(self)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(in crate::market) fn matches_package_pin_change(
+        &self,
+        expected_kind: InstallationEventKind,
+        installation_id: &InstallationId,
+        prior_revision: &InstallationRevision,
+        plan_digest: &Sha256Digest,
+        prior_package_pin: &InstallationPackagePin,
+        next_package_pin: &InstallationPackagePin,
+    ) -> bool {
+        let binding_matches =
+            |event_installation_id: &InstallationId,
+             event_prior_revision: &InstallationRevision,
+             event_plan_digest: &Sha256Digest,
+             event_prior_pin: &InstallationPackagePin,
+             event_next_pin: &InstallationPackagePin| {
+                event_installation_id == installation_id
+                    && event_prior_revision == prior_revision
+                    && event_plan_digest == plan_digest
+                    && event_prior_pin == prior_package_pin
+                    && event_next_pin == next_package_pin
+            };
+        match (&self.payload, expected_kind) {
+            (
+                InstallationEventPayload::PackageUpdated {
+                    installation_id,
+                    prior_revision,
+                    plan_digest,
+                    prior_package_pin,
+                    next_package_pin,
+                },
+                InstallationEventKind::PackageUpdated,
+            )
+            | (
+                InstallationEventPayload::PackageRolledBack {
+                    installation_id,
+                    prior_revision,
+                    plan_digest,
+                    prior_package_pin,
+                    next_package_pin,
+                },
+                InstallationEventKind::PackageRolledBack,
+            ) => binding_matches(
+                installation_id,
+                prior_revision,
+                plan_digest,
+                prior_package_pin,
+                next_package_pin,
+            ),
+            _ => false,
+        }
     }
 }
 
@@ -1147,6 +1298,30 @@ pub fn decide(
                 },
             )
         }
+        InstallationCommandAction::PackageUpdated {
+            expected_revision,
+            plan_digest,
+            next_package_pin,
+        } => decide_package_pin_change(
+            current,
+            command,
+            expected_revision,
+            plan_digest,
+            next_package_pin,
+            PackagePinChangeKind::Update,
+        ),
+        InstallationCommandAction::PackageRolledBack {
+            expected_revision,
+            plan_digest,
+            rollback_package_pin,
+        } => decide_package_pin_change(
+            current,
+            command,
+            expected_revision,
+            plan_digest,
+            rollback_package_pin,
+            PackagePinChangeKind::Rollback,
+        ),
         InstallationCommandAction::Revoke { expected_revision } => {
             let aggregate = require_current(current)?;
             require_target(aggregate, command.installation_id())?;
@@ -1280,6 +1455,33 @@ pub fn evolve(
             }
             transition(aggregate, event, ManagedInstallationState::Disabled)
         }
+        (
+            Some(aggregate),
+            InstallationEventPayload::PackageUpdated {
+                installation_id,
+                prior_revision,
+                prior_package_pin,
+                next_package_pin,
+                ..
+            },
+        )
+        | (
+            Some(aggregate),
+            InstallationEventPayload::PackageRolledBack {
+                installation_id,
+                prior_revision,
+                prior_package_pin,
+                next_package_pin,
+                ..
+            },
+        ) => apply_package_pin_event(
+            aggregate,
+            event,
+            installation_id,
+            prior_revision,
+            prior_package_pin,
+            next_package_pin,
+        ),
         (Some(aggregate), InstallationEventPayload::Revoked { installation_id }) => {
             ensure_same_installation(aggregate, installation_id)?;
             if aggregate.state.is_terminal() {
@@ -1389,6 +1591,7 @@ pub enum InstallationRepositoryError {
     CommandConflict,
     InjectedPersistenceFailure,
     CorruptEventHistory(InstallationReplayError),
+    CorruptCommandLedger,
     DecisionRejected(InstallationDecisionError),
 }
 
@@ -1410,7 +1613,7 @@ struct CommandLedgerEntry {
 }
 
 /// Deterministic semantic in-memory fake with idempotent command receipts.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct InMemoryInstallationRepository {
     aggregates: BTreeMap<InstallationId, InstallationAggregate>,
     events: BTreeMap<InstallationId, Vec<InstallationEvent>>,
@@ -1427,6 +1630,105 @@ impl InMemoryInstallationRepository {
     /// One-shot pre-commit failure injection for repository tests.
     pub fn fail_next_commit_for_testing(&mut self) {
         self.fail_next_commit = true;
+    }
+
+    #[allow(dead_code)]
+    pub(in crate::market) fn try_from_histories_and_receipts(
+        histories: Vec<(InstallationId, Vec<InstallationEvent>)>,
+        ledger_receipts: Vec<(InstallationCommandReceipt, Option<InstallationSnapshot>)>,
+    ) -> Result<Self, InstallationRepositoryError> {
+        let mut repository = Self::new();
+        let mut reachable_prefixes: BTreeMap<InstallationId, Vec<Option<InstallationSnapshot>>> =
+            BTreeMap::new();
+        let mut accepted_events_by_command: BTreeMap<
+            InstallationCommandId,
+            (
+                InstallationId,
+                InstallationEvent,
+                Option<InstallationSnapshot>,
+                InstallationSnapshot,
+            ),
+        > = BTreeMap::new();
+
+        for (installation_id, events) in histories {
+            if repository.events.contains_key(&installation_id) {
+                return Err(InstallationRepositoryError::CorruptCommandLedger);
+            }
+            let mut current = None;
+            let mut prefixes = Vec::with_capacity(events.len().saturating_add(1));
+            let mut stored_events = Vec::with_capacity(events.len());
+            prefixes.push(None);
+            for event in events {
+                if event.payload.installation_id() != &installation_id {
+                    return Err(InstallationRepositoryError::CorruptEventHistory(
+                        InstallationReplayError::RedundantFieldMismatch,
+                    ));
+                }
+                let pre_snapshot = current.clone();
+                let snapshot = evolve(current, &event)
+                    .map_err(InstallationRepositoryError::CorruptEventHistory)?;
+                if snapshot.installation_id() != &installation_id {
+                    return Err(InstallationRepositoryError::CorruptEventHistory(
+                        InstallationReplayError::RedundantFieldMismatch,
+                    ));
+                }
+                if accepted_events_by_command
+                    .insert(
+                        event.command_id().clone(),
+                        (
+                            installation_id.clone(),
+                            event.clone(),
+                            pre_snapshot,
+                            snapshot.clone(),
+                        ),
+                    )
+                    .is_some()
+                {
+                    return Err(InstallationRepositoryError::CommandConflict);
+                }
+                prefixes.push(Some(snapshot.clone()));
+                current = Some(snapshot);
+                stored_events.push(event);
+            }
+            if let Some(snapshot) = current {
+                repository
+                    .aggregates
+                    .insert(installation_id.clone(), snapshot);
+            }
+            repository
+                .events
+                .insert(installation_id.clone(), stored_events);
+            reachable_prefixes.insert(installation_id, prefixes);
+        }
+
+        for (receipt, observed_pre_snapshot) in ledger_receipts {
+            validate_receipt_against_histories(
+                &receipt,
+                &observed_pre_snapshot,
+                &reachable_prefixes,
+                &mut accepted_events_by_command,
+            )?;
+            let command = receipt.command.clone();
+            if repository
+                .command_ledger
+                .insert(
+                    command.command_id().clone(),
+                    CommandLedgerEntry {
+                        command,
+                        receipt: receipt.clone(),
+                    },
+                )
+                .is_some()
+            {
+                return Err(InstallationRepositoryError::CommandConflict);
+            }
+        }
+
+        if accepted_events_by_command.is_empty() {
+            Ok(repository)
+        } else {
+            Err(InstallationRepositoryError::CorruptCommandLedger)
+        }
     }
 }
 
@@ -1494,6 +1796,106 @@ impl InstallationRepository for InMemoryInstallationRepository {
     }
 }
 
+fn validate_receipt_against_histories(
+    receipt: &InstallationCommandReceipt,
+    observed_pre_snapshot: &Option<InstallationSnapshot>,
+    reachable_prefixes: &BTreeMap<InstallationId, Vec<Option<InstallationSnapshot>>>,
+    accepted_events_by_command: &mut BTreeMap<
+        InstallationCommandId,
+        (
+            InstallationId,
+            InstallationEvent,
+            Option<InstallationSnapshot>,
+            InstallationSnapshot,
+        ),
+    >,
+) -> Result<(), InstallationRepositoryError> {
+    let command = receipt.command();
+    if observed_pre_snapshot
+        .as_ref()
+        .is_some_and(|snapshot| snapshot.installation_id() != command.installation_id())
+    {
+        return Err(InstallationRepositoryError::CorruptCommandLedger);
+    }
+    if !pre_snapshot_is_reachable(
+        reachable_prefixes,
+        command.installation_id(),
+        observed_pre_snapshot,
+    ) {
+        return Err(InstallationRepositoryError::CorruptCommandLedger);
+    }
+
+    match (
+        decide(observed_pre_snapshot.as_ref(), command),
+        receipt.outcome(),
+    ) {
+        (
+            Ok(decided_event),
+            InstallationCommandOutcome::Accepted {
+                event: receipt_event,
+                snapshot: receipt_snapshot,
+            },
+        ) => {
+            if &decided_event != receipt_event {
+                return Err(InstallationRepositoryError::CorruptCommandLedger);
+            }
+            let evolved_snapshot = evolve(observed_pre_snapshot.clone(), receipt_event)
+                .map_err(InstallationRepositoryError::CorruptEventHistory)?;
+            if &evolved_snapshot != receipt_snapshot {
+                return Err(InstallationRepositoryError::CorruptCommandLedger);
+            }
+            let Some((history_id, history_event, history_pre, history_snapshot)) =
+                accepted_events_by_command.remove(command.command_id())
+            else {
+                return Err(InstallationRepositoryError::CorruptCommandLedger);
+            };
+            if &history_id != command.installation_id()
+                || &history_event != receipt_event
+                || &history_pre != observed_pre_snapshot
+                || &history_snapshot != receipt_snapshot
+            {
+                return Err(InstallationRepositoryError::CorruptCommandLedger);
+            }
+            Ok(())
+        }
+        (
+            Err(error),
+            InstallationCommandOutcome::Rejected {
+                error: receipt_error,
+            },
+        ) => {
+            if accepted_events_by_command.contains_key(command.command_id())
+                || error != *receipt_error
+            {
+                Err(InstallationRepositoryError::CorruptCommandLedger)
+            } else {
+                Ok(())
+            }
+        }
+        (Ok(_), InstallationCommandOutcome::Rejected { .. }) => {
+            Err(InstallationRepositoryError::CorruptCommandLedger)
+        }
+        (Err(error), InstallationCommandOutcome::Accepted { .. }) => {
+            Err(InstallationRepositoryError::DecisionRejected(error))
+        }
+    }
+}
+
+fn pre_snapshot_is_reachable(
+    reachable_prefixes: &BTreeMap<InstallationId, Vec<Option<InstallationSnapshot>>>,
+    installation_id: &InstallationId,
+    observed_pre_snapshot: &Option<InstallationSnapshot>,
+) -> bool {
+    reachable_prefixes.get(installation_id).map_or_else(
+        || observed_pre_snapshot.is_none(),
+        |prefixes| {
+            prefixes
+                .iter()
+                .any(|prefix| prefix == observed_pre_snapshot)
+        },
+    )
+}
+
 fn require_current(
     current: Option<&InstallationAggregate>,
 ) -> Result<&InstallationAggregate, InstallationDecisionError> {
@@ -1541,6 +1943,72 @@ fn require_configuration_tenant(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PackagePinChangeKind {
+    Update,
+    Rollback,
+}
+
+fn decide_package_pin_change(
+    current: Option<&InstallationAggregate>,
+    command: &InstallationCommand,
+    expected_revision: &InstallationRevision,
+    plan_digest: &Sha256Digest,
+    next_package_pin: &InstallationPackagePin,
+    kind: PackagePinChangeKind,
+) -> Result<InstallationEvent, InstallationDecisionError> {
+    let aggregate = require_current(current)?;
+    require_target(aggregate, command.installation_id())?;
+    require_nonterminal(aggregate)?;
+    require_revision(aggregate, expected_revision)?;
+    require_disabled_for_package_pin_change(aggregate)?;
+    require_valid_package_pin_change(aggregate.package_pin(), next_package_pin)?;
+
+    let payload = match kind {
+        PackagePinChangeKind::Update => InstallationEventPayload::PackageUpdated {
+            installation_id: command.installation_id.clone(),
+            prior_revision: aggregate.revision.clone(),
+            plan_digest: plan_digest.clone(),
+            prior_package_pin: aggregate.package_pin.clone(),
+            next_package_pin: next_package_pin.clone(),
+        },
+        PackagePinChangeKind::Rollback => InstallationEventPayload::PackageRolledBack {
+            installation_id: command.installation_id.clone(),
+            prior_revision: aggregate.revision.clone(),
+            plan_digest: plan_digest.clone(),
+            prior_package_pin: aggregate.package_pin.clone(),
+            next_package_pin: next_package_pin.clone(),
+        },
+    };
+
+    event(
+        aggregate.last_sequence.next()?,
+        command.command_id.clone(),
+        payload,
+    )
+}
+
+fn require_disabled_for_package_pin_change(
+    aggregate: &InstallationAggregate,
+) -> Result<(), InstallationDecisionError> {
+    if aggregate.state.is_disabled_for_package_pin_change() {
+        Ok(())
+    } else {
+        Err(InstallationDecisionError::IllegalTransition)
+    }
+}
+
+fn require_valid_package_pin_change(
+    prior: &InstallationPackagePin,
+    next: &InstallationPackagePin,
+) -> Result<(), InstallationDecisionError> {
+    if prior == next || prior.package_id() != next.package_id() {
+        Err(InstallationDecisionError::IllegalTransition)
+    } else {
+        Ok(())
+    }
+}
+
 fn event(
     sequence: InstallationEventSequence,
     command_id: InstallationCommandId,
@@ -1565,6 +2033,37 @@ fn transition(
 ) -> Result<InstallationAggregate, InstallationReplayError> {
     let mut next = aggregate.clone();
     next.state = state;
+    next.revision = event.post_revision.clone();
+    next.last_sequence = event.sequence;
+    Ok(next)
+}
+
+fn apply_package_pin_event(
+    aggregate: &InstallationAggregate,
+    event: &InstallationEvent,
+    installation_id: &InstallationId,
+    prior_revision: &InstallationRevision,
+    prior_package_pin: &InstallationPackagePin,
+    next_package_pin: &InstallationPackagePin,
+) -> Result<InstallationAggregate, InstallationReplayError> {
+    ensure_same_installation(aggregate, installation_id)?;
+    if aggregate.state.is_terminal() {
+        return Err(InstallationReplayError::PostTerminalEvent);
+    }
+    if !aggregate.state.is_disabled_for_package_pin_change() {
+        return Err(InstallationReplayError::IllegalTransition);
+    }
+    if aggregate.revision() != prior_revision || aggregate.package_pin() != prior_package_pin {
+        return Err(InstallationReplayError::RedundantFieldMismatch);
+    }
+    if prior_package_pin == next_package_pin
+        || prior_package_pin.package_id() != next_package_pin.package_id()
+    {
+        return Err(InstallationReplayError::IllegalTransition);
+    }
+
+    let mut next = aggregate.clone();
+    next.package_pin = next_package_pin.clone();
     next.revision = event.post_revision.clone();
     next.last_sequence = event.sequence;
     Ok(next)
@@ -1705,6 +2204,173 @@ fn digest_enable_evidence(
     Sha256Digest::from_bytes(&bytes)
 }
 
+fn digest_event_coupling(event: &InstallationEvent) -> Sha256Digest {
+    let mut bytes = EVENT_COUPLING_DOMAIN.to_vec();
+    encode_u64(event.sequence().get(), &mut bytes);
+    encode_string(event.post_revision().as_str(), &mut bytes);
+    encode_string(event.command_id().as_str(), &mut bytes);
+    encode_event_payload(&event.payload, &mut bytes);
+    Sha256Digest::from_bytes(&bytes)
+}
+
+fn encode_event_payload(payload: &InstallationEventPayload, bytes: &mut Vec<u8>) {
+    match payload {
+        InstallationEventPayload::Installed {
+            installation_id,
+            tenant_id,
+            user_id,
+            package_pin,
+            configuration,
+            configuration_revision,
+        } => {
+            bytes.push(1);
+            encode_string(installation_id.as_str(), bytes);
+            encode_string(tenant_id.as_str(), bytes);
+            encode_string(user_id.as_str(), bytes);
+            encode_package_pin(package_pin, bytes);
+            encode_configuration(configuration, bytes);
+            encode_u64(configuration_revision.get(), bytes);
+        }
+        InstallationEventPayload::Configured {
+            installation_id,
+            configuration,
+            configuration_revision,
+        } => {
+            bytes.push(2);
+            encode_string(installation_id.as_str(), bytes);
+            encode_configuration(configuration, bytes);
+            encode_u64(configuration_revision.get(), bytes);
+        }
+        InstallationEventPayload::Enabled {
+            installation_id,
+            evidence,
+        } => {
+            bytes.push(3);
+            encode_string(installation_id.as_str(), bytes);
+            encode_enable_precondition_evidence(evidence, bytes);
+        }
+        InstallationEventPayload::Disabled { installation_id } => {
+            bytes.push(4);
+            encode_string(installation_id.as_str(), bytes);
+        }
+        InstallationEventPayload::PackageUpdated {
+            installation_id,
+            prior_revision,
+            plan_digest,
+            prior_package_pin,
+            next_package_pin,
+        } => {
+            bytes.push(5);
+            encode_string(installation_id.as_str(), bytes);
+            encode_string(prior_revision.as_str(), bytes);
+            encode_string(plan_digest.as_str(), bytes);
+            encode_package_pin(prior_package_pin, bytes);
+            encode_package_pin(next_package_pin, bytes);
+        }
+        InstallationEventPayload::PackageRolledBack {
+            installation_id,
+            prior_revision,
+            plan_digest,
+            prior_package_pin,
+            next_package_pin,
+        } => {
+            bytes.push(6);
+            encode_string(installation_id.as_str(), bytes);
+            encode_string(prior_revision.as_str(), bytes);
+            encode_string(plan_digest.as_str(), bytes);
+            encode_package_pin(prior_package_pin, bytes);
+            encode_package_pin(next_package_pin, bytes);
+        }
+        InstallationEventPayload::Revoked { installation_id } => {
+            bytes.push(7);
+            encode_string(installation_id.as_str(), bytes);
+        }
+        InstallationEventPayload::Uninstalled { installation_id } => {
+            bytes.push(8);
+            encode_string(installation_id.as_str(), bytes);
+        }
+    }
+}
+
+fn encode_package_pin(package_pin: &InstallationPackagePin, bytes: &mut Vec<u8>) {
+    encode_string(package_pin.catalog_revision().as_str(), bytes);
+    encode_string(package_pin.package_id().as_str(), bytes);
+    let package_version = package_pin.package_version().as_str();
+    encode_string(&package_version, bytes);
+    encode_string(package_pin.package_digest().as_str(), bytes);
+    encode_count(package_pin.components().len(), bytes);
+    for component in package_pin.components() {
+        encode_component_pin(component, bytes);
+    }
+    encode_string(package_pin.component_set_digest().as_str(), bytes);
+    encode_string(package_pin.capability_manifest_digest().as_str(), bytes);
+}
+
+fn encode_component_pin(component: &InstalledComponentPin, bytes: &mut Vec<u8>) {
+    encode_string(component.component_id().as_str(), bytes);
+    bytes.push(component_kind_tag(component.kind()));
+    encode_string(component.version().as_str(), bytes);
+    encode_string(component.digest().as_str(), bytes);
+    encode_string(component.execution_identity().as_str(), bytes);
+}
+
+fn encode_configuration(configuration: &InstallationConfiguration, bytes: &mut Vec<u8>) {
+    encode_string(configuration.tenant_id().as_str(), bytes);
+    encode_string(configuration.digest().as_str(), bytes);
+    encode_count(configuration.entries().len(), bytes);
+    for (key, value) in configuration.entries() {
+        encode_string(key.as_str(), bytes);
+        match value {
+            ConfigurationValue::Text(text) => {
+                bytes.push(1);
+                encode_string(text.as_str(), bytes);
+            }
+            ConfigurationValue::Integer(value) => {
+                bytes.push(2);
+                bytes.extend_from_slice(&value.to_be_bytes());
+            }
+            ConfigurationValue::Boolean(value) => {
+                bytes.push(3);
+                bytes.push(u8::from(*value));
+            }
+            ConfigurationValue::Secret(secret) => {
+                bytes.push(4);
+                encode_string(secret.tenant_id().as_str(), bytes);
+                encode_string(secret.id().as_str(), bytes);
+            }
+        }
+    }
+}
+
+fn encode_enable_precondition_evidence(evidence: &EnablePreconditionEvidence, bytes: &mut Vec<u8>) {
+    for value in [
+        evidence.installation_id().as_str(),
+        evidence.expected_installation_revision().as_str(),
+        evidence.package_digest().as_str(),
+        evidence.component_set_digest().as_str(),
+        evidence.configuration_digest().as_str(),
+        evidence.capability_manifest_digest().as_str(),
+        evidence.grant_set_snapshot_digest().as_str(),
+        evidence.policy_admission_snapshot_digest().as_str(),
+        evidence.evidence_digest().as_str(),
+    ] {
+        encode_string(value, bytes);
+    }
+}
+
+const fn component_kind_tag(kind: ComponentKind) -> u8 {
+    match kind {
+        ComponentKind::SkillComponent => 1,
+        ComponentKind::DeclarativeResourcePack => 2,
+        ComponentKind::McpServerComponent => 3,
+        ComponentKind::NativeRustComponent => 4,
+    }
+}
+
+fn encode_u64(value: u64, output: &mut Vec<u8>) {
+    output.extend_from_slice(&value.to_be_bytes());
+}
+
 fn encode_count(count: usize, output: &mut Vec<u8>) {
     output.extend_from_slice(&(count as u64).to_be_bytes());
 }
@@ -1772,25 +2438,74 @@ mod tests {
     }
 
     fn package_pin() -> InstallationPackagePin {
+        package_pin_variant(
+            parsed(PackageId::parse("ustc.installation-test")),
+            "1.0.0",
+            '1',
+            "component-version:1",
+            '2',
+            '3',
+            '4',
+            "execution:test",
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn package_pin_variant(
+        package_id: PackageId,
+        package_version: &str,
+        package_digest: char,
+        component_version: &str,
+        component_digest: char,
+        component_set_digest: char,
+        capability_manifest_digest: char,
+        execution_identity: &str,
+    ) -> InstallationPackagePin {
         InstallationPackagePin::new(
             parsed(CatalogRevision::parse("catalog:test")),
-            parsed(PackageId::parse("ustc.installation-test")),
-            parsed(PackageVersion::parse("1.0.0")),
-            digest('1'),
+            package_id,
+            parsed(PackageVersion::parse(package_version)),
+            digest(package_digest),
             vec![
                 InstalledComponentPin::new(
                     parsed(ComponentId::parse("component:test")),
                     ComponentKind::NativeRustComponent,
-                    parsed(ComponentVersion::parse("component-version:1")),
-                    digest('2'),
-                    parsed(ExecutionIdentity::parse("execution:test")),
+                    parsed(ComponentVersion::parse(component_version)),
+                    digest(component_digest),
+                    parsed(ExecutionIdentity::parse(execution_identity)),
                 )
                 .unwrap(),
             ],
-            digest('3'),
-            digest('4'),
+            digest(component_set_digest),
+            digest(capability_manifest_digest),
         )
         .unwrap()
+    }
+
+    fn target_package_pin() -> InstallationPackagePin {
+        package_pin_variant(
+            parsed(PackageId::parse("ustc.installation-test")),
+            "1.1.0",
+            '7',
+            "component-version:2",
+            '8',
+            '9',
+            'a',
+            "execution:test",
+        )
+    }
+
+    fn foreign_package_pin() -> InstallationPackagePin {
+        package_pin_variant(
+            parsed(PackageId::parse("ustc.other-installation-test")),
+            "1.1.0",
+            '7',
+            "component-version:2",
+            '8',
+            '9',
+            'a',
+            "execution:test",
+        )
     }
 
     fn install_command(id: &str) -> InstallationCommand {
@@ -1817,6 +2532,482 @@ mod tests {
             digest('6'),
         )
         .unwrap()
+    }
+
+    fn installed_enabled_disabled_fixture(
+        command_prefix: &str,
+    ) -> (
+        Vec<InstallationEvent>,
+        InstallationAggregate,
+        InstallationAggregate,
+        InstallationAggregate,
+    ) {
+        let install_command = install_command(&format!("{command_prefix}-install"));
+        let install_event = decide(None, &install_command).unwrap();
+        let installed = evolve(None, &install_event).unwrap();
+
+        let enable_command = InstallationCommand::enable(
+            command_id(&format!("{command_prefix}-enable")),
+            installation_id(),
+            revision(1),
+            evidence(1, installed.configuration()),
+        )
+        .unwrap();
+        let enable_event = decide(Some(&installed), &enable_command).unwrap();
+        let enabled = evolve(Some(installed.clone()), &enable_event).unwrap();
+
+        let disable_command = InstallationCommand::disable(
+            command_id(&format!("{command_prefix}-disable")),
+            installation_id(),
+            revision(2),
+        )
+        .unwrap();
+        let disable_event = decide(Some(&enabled), &disable_command).unwrap();
+        let disabled = evolve(Some(enabled.clone()), &disable_event).unwrap();
+
+        (
+            vec![install_event, enable_event, disable_event],
+            installed,
+            enabled,
+            disabled,
+        )
+    }
+
+    #[test]
+    fn package_update_and_rollback_preserve_disabled_state_and_exact_pins() {
+        let (mut events, _, _, disabled) = installed_enabled_disabled_fixture("package-change");
+        let prior_pin = disabled.package_pin().clone();
+        let prior_configuration = disabled.configuration().clone();
+        let prior_configuration_revision = disabled.configuration_revision();
+        let target_pin = target_package_pin();
+        let plan_digest = digest('b');
+
+        let installed_disabled = replay(events.iter().take(1))
+            .expect("initial installation history replays")
+            .expect("initial installation exists");
+        assert_eq!(
+            installed_disabled.state(),
+            ManagedInstallationState::InstalledDisabled
+        );
+        let initial_update_command = InstallationCommand::package_updated(
+            command_id("package-change-initial-update"),
+            installation_id(),
+            installed_disabled.revision().clone(),
+            plan_digest.clone(),
+            target_pin.clone(),
+        )
+        .expect("initially disabled update command validates");
+        let initial_update_event = decide(Some(&installed_disabled), &initial_update_command)
+            .expect("initially disabled update is legal");
+        let initially_updated = evolve(Some(installed_disabled.clone()), &initial_update_event)
+            .expect("initially disabled update evolves");
+        assert_eq!(
+            initially_updated.state(),
+            ManagedInstallationState::InstalledDisabled
+        );
+        assert_eq!(initially_updated.package_pin(), &target_pin);
+        let initial_rollback_command = InstallationCommand::package_rolled_back(
+            command_id("package-change-initial-rollback"),
+            installation_id(),
+            initially_updated.revision().clone(),
+            plan_digest.clone(),
+            installed_disabled.package_pin().clone(),
+        )
+        .expect("initially disabled rollback command validates");
+        let initial_rollback_event = decide(Some(&initially_updated), &initial_rollback_command)
+            .expect("initially disabled rollback is legal");
+        let initially_rolled_back = evolve(Some(initially_updated), &initial_rollback_event)
+            .expect("initially disabled rollback evolves");
+        assert_eq!(
+            initially_rolled_back.state(),
+            ManagedInstallationState::InstalledDisabled
+        );
+        assert_eq!(
+            initially_rolled_back.package_pin(),
+            installed_disabled.package_pin()
+        );
+        assert_eq!(
+            replay([&events[0], &initial_update_event, &initial_rollback_event])
+                .expect("initially disabled package changes replay"),
+            Some(initially_rolled_back)
+        );
+
+        let update_command = InstallationCommand::package_updated(
+            command_id("package-change-update"),
+            installation_id(),
+            disabled.revision().clone(),
+            plan_digest.clone(),
+            target_pin.clone(),
+        )
+        .unwrap();
+        let update_event = decide(Some(&disabled), &update_command).unwrap();
+        assert_eq!(update_event.kind(), InstallationEventKind::PackageUpdated);
+        match &update_event.payload {
+            InstallationEventPayload::PackageUpdated {
+                installation_id: event_installation_id,
+                prior_revision,
+                plan_digest: event_plan_digest,
+                prior_package_pin,
+                next_package_pin,
+            } => {
+                assert_eq!(event_installation_id, &installation_id());
+                assert_eq!(prior_revision, disabled.revision());
+                assert_eq!(event_plan_digest, &plan_digest);
+                assert_eq!(prior_package_pin, &prior_pin);
+                assert_eq!(next_package_pin, &target_pin);
+            }
+            _ => panic!("fixture must produce a package-updated event"),
+        }
+        let update_digest = update_event.canonical_coupling_digest();
+        let mut forged_plan_digest_event = update_event.clone();
+        if let InstallationEventPayload::PackageUpdated { plan_digest, .. } =
+            &mut forged_plan_digest_event.payload
+        {
+            *plan_digest = digest('c');
+        }
+        assert_ne!(
+            update_digest,
+            forged_plan_digest_event.canonical_coupling_digest()
+        );
+
+        let updated = evolve(Some(disabled.clone()), &update_event).unwrap();
+        assert_eq!(updated.state(), ManagedInstallationState::Disabled);
+        assert_eq!(updated.package_pin(), &target_pin);
+        assert_eq!(updated.tenant_id(), disabled.tenant_id());
+        assert_eq!(updated.user_id(), disabled.user_id());
+        assert_eq!(updated.installation_id(), disabled.installation_id());
+        assert_eq!(updated.configuration(), &prior_configuration);
+        assert_eq!(
+            updated.configuration_revision(),
+            prior_configuration_revision
+        );
+        assert_eq!(updated.revision(), &revision(4));
+        assert_eq!(updated.last_sequence().get(), 4);
+
+        let rollback_command = InstallationCommand::package_rolled_back(
+            command_id("package-change-rollback"),
+            installation_id(),
+            updated.revision().clone(),
+            plan_digest.clone(),
+            prior_pin.clone(),
+        )
+        .unwrap();
+        let rollback_event = decide(Some(&updated), &rollback_command).unwrap();
+        assert_eq!(
+            rollback_event.kind(),
+            InstallationEventKind::PackageRolledBack
+        );
+        match &rollback_event.payload {
+            InstallationEventPayload::PackageRolledBack {
+                installation_id: event_installation_id,
+                prior_revision,
+                plan_digest: event_plan_digest,
+                prior_package_pin,
+                next_package_pin,
+            } => {
+                assert_eq!(event_installation_id, &installation_id());
+                assert_eq!(prior_revision, updated.revision());
+                assert_eq!(event_plan_digest, &plan_digest);
+                assert_eq!(prior_package_pin, &target_pin);
+                assert_eq!(next_package_pin, &prior_pin);
+            }
+            _ => panic!("fixture must produce a package-rolled-back event"),
+        }
+        assert_ne!(update_digest, rollback_event.canonical_coupling_digest());
+
+        let rolled_back = evolve(Some(updated.clone()), &rollback_event).unwrap();
+        assert_eq!(rolled_back.state(), ManagedInstallationState::Disabled);
+        assert_eq!(rolled_back.package_pin(), &prior_pin);
+        assert_eq!(rolled_back.configuration(), &prior_configuration);
+        assert_eq!(
+            rolled_back.configuration_revision(),
+            prior_configuration_revision
+        );
+        assert_eq!(rolled_back.revision(), &revision(5));
+        assert_eq!(rolled_back.last_sequence().get(), 5);
+
+        events.extend([update_event, rollback_event]);
+        assert_eq!(replay(events.iter()).unwrap(), Some(rolled_back));
+    }
+
+    #[test]
+    fn package_pin_change_commands_reject_missing_non_disabled_terminal_revision_and_pin_mismatch()
+    {
+        let (_, _installed, enabled, disabled) =
+            installed_enabled_disabled_fixture("reject-change");
+        let target_pin = target_package_pin();
+        let plan_digest = digest('d');
+
+        let missing = InstallationCommand::package_updated(
+            command_id("reject-change-missing"),
+            installation_id(),
+            revision(1),
+            plan_digest.clone(),
+            target_pin.clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            decide(None, &missing),
+            Err(InstallationDecisionError::AggregateMissing)
+        );
+
+        let enabled_command = InstallationCommand::package_updated(
+            command_id("reject-change-enabled"),
+            installation_id(),
+            enabled.revision().clone(),
+            plan_digest.clone(),
+            target_pin.clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            decide(Some(&enabled), &enabled_command),
+            Err(InstallationDecisionError::IllegalTransition)
+        );
+
+        let wrong_revision_command = InstallationCommand::package_updated(
+            command_id("reject-change-wrong-revision"),
+            installation_id(),
+            revision(99),
+            plan_digest.clone(),
+            target_pin,
+        )
+        .unwrap();
+        assert_eq!(
+            decide(Some(&disabled), &wrong_revision_command),
+            Err(InstallationDecisionError::RevisionMismatch)
+        );
+
+        let same_pin_command = InstallationCommand::package_updated(
+            command_id("reject-change-same-pin"),
+            installation_id(),
+            disabled.revision().clone(),
+            plan_digest.clone(),
+            disabled.package_pin().clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            decide(Some(&disabled), &same_pin_command),
+            Err(InstallationDecisionError::IllegalTransition)
+        );
+
+        let foreign_package_command = InstallationCommand::package_rolled_back(
+            command_id("reject-change-foreign-package"),
+            installation_id(),
+            disabled.revision().clone(),
+            plan_digest,
+            foreign_package_pin(),
+        )
+        .unwrap();
+        assert_eq!(
+            decide(Some(&disabled), &foreign_package_command),
+            Err(InstallationDecisionError::IllegalTransition)
+        );
+
+        let revoke_command = InstallationCommand::revoke(
+            command_id("reject-change-revoke"),
+            installation_id(),
+            disabled.revision().clone(),
+        )
+        .unwrap();
+        let revoke_event = decide(Some(&disabled), &revoke_command).unwrap();
+        let revoked = evolve(Some(disabled), &revoke_event).unwrap();
+        let terminal_command = InstallationCommand::package_updated(
+            command_id("reject-change-terminal"),
+            installation_id(),
+            revoked.revision().clone(),
+            digest('e'),
+            target_package_pin(),
+        )
+        .unwrap();
+        assert_eq!(
+            decide(Some(&revoked), &terminal_command),
+            Err(InstallationDecisionError::TerminalState)
+        );
+    }
+
+    #[test]
+    fn package_pin_change_replay_rejects_forged_prior_next_state_and_revisions() {
+        let (events, _, enabled, disabled) = installed_enabled_disabled_fixture("replay-change");
+        let target_pin = target_package_pin();
+        let update_command = InstallationCommand::package_updated(
+            command_id("replay-change-update"),
+            installation_id(),
+            disabled.revision().clone(),
+            digest('f'),
+            target_pin.clone(),
+        )
+        .unwrap();
+        let update_event = decide(Some(&disabled), &update_command).unwrap();
+
+        let mut forged_prior_pin = update_event.clone();
+        if let InstallationEventPayload::PackageUpdated {
+            prior_package_pin, ..
+        } = &mut forged_prior_pin.payload
+        {
+            *prior_package_pin = target_pin.clone();
+        }
+        let mut forged_history = events.clone();
+        forged_history.push(forged_prior_pin.clone());
+        assert_eq!(
+            evolve(Some(disabled.clone()), &forged_prior_pin),
+            Err(InstallationReplayError::RedundantFieldMismatch)
+        );
+        assert_eq!(
+            replay(forged_history.iter()),
+            Err(InstallationReplayError::RedundantFieldMismatch)
+        );
+
+        let mut forged_prior_revision = update_event.clone();
+        if let InstallationEventPayload::PackageUpdated { prior_revision, .. } =
+            &mut forged_prior_revision.payload
+        {
+            *prior_revision = revision(99);
+        }
+        assert_eq!(
+            evolve(Some(disabled.clone()), &forged_prior_revision),
+            Err(InstallationReplayError::RedundantFieldMismatch)
+        );
+
+        let mut forged_same_next = update_event.clone();
+        if let InstallationEventPayload::PackageUpdated {
+            next_package_pin, ..
+        } = &mut forged_same_next.payload
+        {
+            *next_package_pin = disabled.package_pin().clone();
+        }
+        assert_eq!(
+            evolve(Some(disabled.clone()), &forged_same_next),
+            Err(InstallationReplayError::IllegalTransition)
+        );
+
+        let mut forged_non_disabled = update_event.clone();
+        forged_non_disabled.sequence = InstallationEventSequence::new(3).unwrap();
+        forged_non_disabled.post_revision = revision(3);
+        if let InstallationEventPayload::PackageUpdated {
+            prior_revision,
+            prior_package_pin,
+            ..
+        } = &mut forged_non_disabled.payload
+        {
+            *prior_revision = enabled.revision().clone();
+            *prior_package_pin = enabled.package_pin().clone();
+        }
+        assert_eq!(
+            evolve(Some(enabled), &forged_non_disabled),
+            Err(InstallationReplayError::IllegalTransition)
+        );
+
+        let revoke_command = InstallationCommand::revoke(
+            command_id("replay-change-revoke"),
+            installation_id(),
+            disabled.revision().clone(),
+        )
+        .unwrap();
+        let revoke_event = decide(Some(&disabled), &revoke_command).unwrap();
+        let revoked = evolve(Some(disabled.clone()), &revoke_event).unwrap();
+        let mut forged_terminal = update_event;
+        forged_terminal.sequence = InstallationEventSequence::new(5).unwrap();
+        forged_terminal.post_revision = revision(5);
+        if let InstallationEventPayload::PackageUpdated {
+            prior_revision,
+            prior_package_pin,
+            ..
+        } = &mut forged_terminal.payload
+        {
+            *prior_revision = revoked.revision().clone();
+            *prior_package_pin = revoked.package_pin().clone();
+        }
+        assert_eq!(
+            evolve(Some(revoked), &forged_terminal),
+            Err(InstallationReplayError::PostTerminalEvent)
+        );
+    }
+
+    #[test]
+    fn in_memory_repository_rebuilds_histories_and_receipts_without_arbitrary_insertion() {
+        let mut repository = InMemoryInstallationRepository::new();
+        let install = install_command("rebuild-install");
+        let install_receipt = repository.execute(install).unwrap();
+        let installed = repository.load_exact(&installation_id()).unwrap();
+
+        let enable = InstallationCommand::enable(
+            command_id("rebuild-enable"),
+            installation_id(),
+            revision(1),
+            evidence(1, installed.as_ref().unwrap().configuration()),
+        )
+        .unwrap();
+        let enable_pre = repository.load_exact(&installation_id()).unwrap();
+        let enable_receipt = repository.execute(enable).unwrap();
+
+        let stale_disable = InstallationCommand::disable(
+            command_id("rebuild-stale-disable"),
+            installation_id(),
+            revision(1),
+        )
+        .unwrap();
+        let stale_disable_pre = repository.load_exact(&installation_id()).unwrap();
+        let stale_disable_receipt = repository.execute(stale_disable).unwrap();
+        assert!(matches!(
+            stale_disable_receipt.outcome(),
+            InstallationCommandOutcome::Rejected {
+                error: InstallationDecisionError::RevisionMismatch
+            }
+        ));
+
+        let disable = InstallationCommand::disable(
+            command_id("rebuild-disable"),
+            installation_id(),
+            revision(2),
+        )
+        .unwrap();
+        let disable_pre = repository.load_exact(&installation_id()).unwrap();
+        let disable_receipt = repository.execute(disable).unwrap();
+
+        let update = InstallationCommand::package_updated(
+            command_id("rebuild-update"),
+            installation_id(),
+            revision(3),
+            digest('a'),
+            target_package_pin(),
+        )
+        .unwrap();
+        let update_pre = repository.load_exact(&installation_id()).unwrap();
+        let update_receipt = repository.execute(update.clone()).unwrap();
+        let final_snapshot = repository.load_exact(&installation_id()).unwrap();
+        let history = repository.event_history(&installation_id()).unwrap();
+
+        let rebuilt = InMemoryInstallationRepository::try_from_histories_and_receipts(
+            vec![(installation_id(), history.clone())],
+            vec![
+                (install_receipt, None),
+                (enable_receipt, enable_pre),
+                (stale_disable_receipt, stale_disable_pre),
+                (disable_receipt, disable_pre),
+                (update_receipt.clone(), update_pre),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            rebuilt.load_exact(&installation_id()).unwrap(),
+            final_snapshot
+        );
+        assert_eq!(rebuilt.event_history(&installation_id()).unwrap(), history);
+        assert_eq!(
+            rebuilt.clone().load_exact(&installation_id()).unwrap(),
+            final_snapshot
+        );
+
+        let mut idempotent = rebuilt;
+        assert_eq!(idempotent.execute(update).unwrap(), update_receipt);
+
+        assert!(matches!(
+            InMemoryInstallationRepository::try_from_histories_and_receipts(
+                vec![(installation_id(), history)],
+                Vec::new(),
+            ),
+            Err(InstallationRepositoryError::CorruptCommandLedger)
+        ));
     }
 
     #[test]

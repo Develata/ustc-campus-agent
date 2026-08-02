@@ -2,15 +2,15 @@
 
 ## Metadata
 
-- `Status`: Accepted `market-lifecycle/v0` contract; historical `B1-0` established the contract, while canonical `M20-B1` package/catalog, `M20-B2` capability-registry, bounded `M20-B3-s1` managed-installation, bounded `M20-B4` grant and bounded `M20-B5` transaction-current authority-assembly evidence are implemented; durable installation/grant/update repositories and production composition remain planned; pure invocation resolver and call-time recheck remain the adopted items 7–8
+- `Status`: Accepted `market-lifecycle/v0` contract; historical `B1-0` established the contract, while canonical `M20-B1` package/catalog, `M20-B2` capability-registry, bounded `M20-B3-s1` managed-installation, bounded `M20-B4` grant, bounded `M20-B5` transaction-current authority assembly and bounded `M20-B6` update/rollback domain plus semantic fake evidence are implemented; production issuers, durable lifecycle/update repositories, crash recovery, artifact switching and B7 composition remain planned; pure invocation resolver and call-time recheck remain the adopted items 7–8
 - `Version`: `market-lifecycle/v0`
-- `Last Review`: `2026-07-30`
+- `Last Review`: `2026-08-02`
 - `Owning Plan`: [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)
 - `Large-module Blueprint`: [`../plan/modules/30-market-package-lifecycle.md`](../plan/modules/30-market-package-lifecycle.md)
 - `Counterpart Contracts`: [`plugin-package.md`](plugin-package.md), [`invocation-resolution.md`](invocation-resolution.md), [`permissions.md`](permissions.md), [`agent-plugin-boundary.md`](agent-plugin-boundary.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for state ownership, [`agent-runtime.md`](agent-runtime.md) for run/effect state, and [`invocation-resolution.md`](invocation-resolution.md) for the adopted projection/recheck decision shapes
-- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); `M20-B2` through bounded `M20-B5` are supporting domain/transaction evidence only, mint no production grant/enable evidence, create no effect intent and promote no acceptance row; durable adapters and B7 composition remain required
-- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` package validation/catalog metadata; `crates/platform-core/src/market/capability.rs` for `M20-B2`; `crates/platform-core/src/market/installation.rs` for `M20-B3-s1`; `crates/platform-core/src/market/grant.rs` for `M20-B4`; `crates/platform-core/src/market/authority.rs` for bounded `M20-B5` carrier-by-carrier read transactions and authority assembly; `crates/platform-core/src/invocation.rs` for adopted resolver/recheck items 7–8 and their non-authorizing shared call-prefix helper
+- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); `M20-B2` through bounded `M20-B6` are supporting domain/semantic-fake evidence only, mint no production grant/enable evidence, create no effect intent, switch no production artifact and promote no acceptance row; durable adapters and B7 composition remain required
+- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` package validation/catalog metadata; `crates/platform-core/src/market/capability.rs` for `M20-B2`; `crates/platform-core/src/market/installation.rs` for `M20-B3-s1`; `crates/platform-core/src/market/grant.rs` for `M20-B4`; `crates/platform-core/src/market/authority.rs` for bounded `M20-B5` carrier-by-carrier read transactions and authority assembly; `crates/platform-core/src/market/update.rs` and `crates/platform-core/tests/market_package_update.rs` for bounded `M20-B6` update/rollback domain and semantic package-update repository evidence; `crates/platform-core/src/invocation.rs` for adopted resolver/recheck items 7–8 and their non-authorizing shared call-prefix helper
 
 ## 1. Scope and authority
 
@@ -341,6 +341,8 @@ Installation MUST NOT imply a grant. Grant creation, replacement and revoke MUST
 ### M20-LC-008 — permission expansion requires reapproval
 
 A staged update that adds capabilities, widens object scope, changes capability class, source policy or execution identity, or otherwise increases authority MUST NOT auto-apply or auto-enable. Exact unchanged permissions MAY be eligible for later rollout policy, but still require an exact tested update target and a durable receipt.
+
+Bounded `M20-B6` now implements a complete package-level change classifier, exact update-approval/readiness/confirmation/rollback evidence values and fail-closed no-auto-reapproval rules in `crate::market::update`; this is supporting domain evidence only. It does not issue production grants, enable an installation, satisfy grant reapproval, switch artifacts or prove B7 current-call/application composition.
 
 ### M20-B4 grant-domain surface
 
@@ -847,6 +849,8 @@ The accepted B4 contract is accompanied by bounded implementation evidence in `g
 
 Stage, apply and rollback MUST operate on exact reviewed package revisions. Apply MUST use expected installation/update revisions and MUST preserve a tested rollback target. A failed apply MUST leave the prior accepted installation authority intact or the installation disabled; it MUST NOT widen permissions or silently fall back.
 
+Bounded `M20-B6` now implements the pure event-sourced update aggregate, sealed installation package-pin Apply/Rollback events, complete-current grant stale-on-Apply/Rollback semantics, receipt-prefix rebuild and an atomic in-memory package-update semantic repository over staged cloned installation/grant owner fakes. This proves exact rollback/update semantics inside the bounded fake only: no production database transaction, durable crash recovery, real artifact-store switch, package-manager operation, production issuer, M10/M80 API/UI or B7 in-flight/current-call composition is implemented.
+
 ## 6. Semantic repositories
 
 ### M20-LC-010 — semantic repositories use preconditions
@@ -915,10 +919,10 @@ Package update, disable or revoke MUST change only future projections and curren
 This contract does not own:
 
 - anonymous browse/detail delivery through M10/M80 application/query adapters remains planned (`MARKET-001`); the `M20-B1` (historical `B1-1`) anonymous metadata domain read model is implemented but is not delivery evidence;
-- durable installation/grant/enable/disable/upgrade mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); bounded B3/B4 domain evidence issues no production enable/grant evidence, and bounded B5 semantic authority transactions create no durable state or acceptance promotion;
-- a production database/repository transaction or TOCTOU closure (planned);
+- durable installation/grant/enable/disable/update mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); bounded B3/B4/B6 domain evidence issues no production enable/grant/update issuer evidence, bounded B5 semantic authority transactions and bounded B6 package-update transactions create no durable state or acceptance promotion, and B6 does not switch artifacts;
+- a production database/repository transaction, durable update repository, crash-recovery proof or TOCTOU closure (planned);
 - provider, network, MCP, daemon HTTP/SSE or UI adapters;
 - external tool execution, durable journal or crash recovery;
 - M30 `EffectIntent`, M40 executor dispatch, or M51 process isolation.
 
-Current repository status: the pure P0a resolver/recheck is implemented and adopted (`MARKET-005`/`MARKET-006`); B1–B4 provide bounded catalog/capability/installation/grant evidence; bounded B5 adds carrier-by-carrier semantic authority reads, service-owned projection/current assembly, shared call preflight and post-success revision verification under `crate::market::authority`. No production database, durable grant/update/rollback repository, production grant/enable issuer, effect-intent coupling, application composition or M10/M80 browse delivery exists yet. M20 remains `partial-evidence`, `MARKET-003`/`MARKET-007` remain `planned`, and no current first-party manifest is made runnable by these slices.
+Current repository status: the pure P0a resolver/recheck is implemented and adopted (`MARKET-005`/`MARKET-006`); B1–B4 provide bounded catalog/capability/installation/grant evidence; bounded B5 adds carrier-by-carrier semantic authority reads, service-owned projection/current assembly, shared call preflight and post-success revision verification under `crate::market::authority`; bounded B6 adds pure update/rollback aggregate evidence and an atomic in-memory semantic package-update repository under `crate::market::update` with `market::update::tests` and `market_package_update` coverage. No production database, durable grant/update/rollback repository, crash recovery, artifact switch, production grant/enable/update issuer, effect-intent coupling, B7 application composition, current-call/in-flight composition or M10/M80 browse/API/UI delivery exists yet. M20 remains `partial-evidence`; `MARKET-003`/`MARKET-004`/`MARKET-007`/`PKG-020` remain `planned`, and no current first-party manifest is made runnable by these slices.

@@ -3,16 +3,16 @@
 ## Metadata
 
 - `Layer`: Product authority
-- `Status`: Schema/identity baseline, typed package/catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` transaction-current authority assembly and pure resolver evidence implemented; durable runtime lifecycle and production composition planned
+- `Status`: Schema/identity baseline, typed package/catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` transaction-current authority assembly, bounded `M20-B6` update/rollback domain plus semantic fake and pure resolver evidence implemented; durable runtime lifecycle, artifact switching and production composition planned
 - `Version`: `0.5.0`
-- `Last Review`: `2026-07-30`
+- `Last Review`: `2026-08-02`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
 - `Authority Defers To`: Market JSON schema/registries and package/permission contracts for exact fields
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
 - `Owning Lifecycle Contract`: [`../contracts/market-lifecycle.md`](../contracts/market-lifecycle.md)
 - `Counterpart Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
 - `Counterpart Acceptance`: `MARKET-*`, `PKG-*`, `AGENT-002`, `AGENT-017`, `AGENT-018`, `FP-006`, `FP-015`, `FP-007`
-- `Primary Code Areas`: `market/`, `crates/platform-core/src/market.rs`, `crates/platform-core/src/market/capability.rs`, `crates/platform-core/src/market/installation.rs`, `crates/platform-core/src/market/grant.rs`, `crates/platform-core/src/invocation.rs`, future durable grant/update/gateway composition modules
+- `Primary Code Areas`: `market/`, `crates/platform-core/src/market.rs`, `crates/platform-core/src/market/capability.rs`, `crates/platform-core/src/market/installation.rs`, `crates/platform-core/src/market/grant.rs`, `crates/platform-core/src/market/authority.rs`, `crates/platform-core/src/market/update.rs`, `crates/platform-core/tests/market_package_update.rs`, `crates/platform-core/src/invocation.rs`, future durable grant/update/gateway composition modules
 - `Large-module Blueprint`: [`modules/30-market-package-lifecycle.md`](modules/30-market-package-lifecycle.md)
 
 ## 1. Scope and repository boundary
@@ -128,9 +128,9 @@ The capability registry—not the package author—owns risk and auto-grant elig
 
 An installation pins the package version and effective component/capability identity. Updates follow:
 
-- exact reviewed patch with unchanged permission set: MAY enter staged/canary rollout after evidence;
-- permission expansion, trust downgrade, execution-identity change or minor/major semantic change: requires explicit reapproval;
-- unhealthy rollout: retain a tested rollback target and block further cohort promotion;
+- every retained B6 update plan is staged against exact rollback and target package pins and consumes explicit update approval plus readiness evidence, even when the authority class is unchanged;
+- permission expansion, trust downgrade, execution-identity/source-policy change or semantic authority change requires explicit update approval and never auto-enables new access;
+- apply/rollback are disabled-only bounded authority transitions that retain a tested rollback target until confirmation; future production rollout still needs durable artifact/admission switching and crash recovery;
 - security revoke: block new invocation immediately and drain/stop old execution according to explicit policy;
 - first-party status never bypasses update, revoke or audit rules.
 
@@ -157,16 +157,17 @@ Implemented:
 - pure managed-installation decide/evolve/replay, exact pins/configuration, terminal lifecycle, deny-side resolver projection and atomic semantic in-memory repository behavior under `crate::market::installation` (`M20-B3-s1` bounded evidence only; no durable store or production enable-evidence issuance).
 - pure reviewed-grant decide/evolve/replay, exact admission/scope/version/reapproval bindings, deny-side resolver projection and atomic semantic in-memory repository behavior under `crate::market::grant` (`M20-B4` bounded evidence only; no production grant issuer, durable store or acceptance promotion).
 - carrier-by-carrier catalog/installation/grant/policy reads under one semantic GAT transaction, service-owned candidate/current assembly, shared call preflight and post-success precondition verification under `crate::market::authority` (`M20-B5` bounded evidence only; no durable adapter, effect intent, production composition or acceptance promotion).
+- pure update/rollback aggregate, exact approval/readiness/confirmation/rollback evidence, sealed installation package-pin events, complete-current grant stale-on-Apply/Rollback semantics and atomic in-memory semantic package-update repository under `crate::market::update` (`M20-B6` bounded evidence only; no durable adapter, artifact switch, crash recovery, production update issuer, API/UI, in-flight/current-call composition or acceptance promotion).
 - pure typed invocation resolution, immutable per-turn projection and synthetic `RunSpec` proof (`MARKET-005/006`).
 - Agent–Plugin dependency direction and composition-root cross-boundary proof (`AGENT-017`).
 
 Planned:
 
 - M10/M80 anonymous catalog browse/detail API/browser delivery (`MARKET-001`);
-- durable installation/grant repositories and production transaction/TOCTOU closure;
-- grant issuance, production enable-evidence assembly, durable authority adapters and transaction coupling to effect intent;
-- Market browse/detail UI;
-- upgrade/revoke/rollback runtime.
+- durable installation/grant/update repositories, production transaction/TOCTOU closure and crash recovery;
+- grant/update issuance, production enable-evidence assembly, durable authority adapters, artifact switching and transaction coupling to effect intent;
+- Market browse/detail/update API and UI;
+- B7 current-call/in-flight composition and production upgrade/revoke/rollback runtime.
 - production ToolGateway and executable Plugin tool-host packaging; the framework-neutral Agent tool protocol value subset is implemented.
 
 Verification:
@@ -176,8 +177,11 @@ Verification:
 - `docs/contracts/invocation-resolution.md`
 - `crates/platform-core/src/market.rs`
 - `crates/platform-core/src/market/authority.rs`
+- `crates/platform-core/src/market/update.rs`
 - `cargo test --locked -p ustc-campus-agent-core --test market_package_catalog`
 - `cargo test --locked -p ustc-campus-agent-core --test market_authority_assembly`
+- `cargo test --locked -p ustc-campus-agent-core --lib market::update::tests`
+- `cargo test --locked -p ustc-campus-agent-core --test market_package_update`
 - `market/schemas/plugin-package.schema.json`
 - `python3 scripts/check_repo_contracts.py`
 - `scripts/tests/test_check_repo_contracts.py`
