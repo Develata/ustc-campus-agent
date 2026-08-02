@@ -26,10 +26,11 @@ S01 Market browse → S02 Package detail → S03 Install review（精确包）
   → S12 Server-confirmed Enabled
 ```
 
-Failure branch（选定：plan drift + enable 需 fresh grant）：
+Failure branch（选定：plan drift + install unknown outcome + enable 需 fresh grant）：
 
 ```text
 S06a Plan drift（approval 后 plan 变化）→ S03' 重新审查
+S07a Unknown outcome（请求可能已被接受）→ reconcile 重试核对 → S08 / 离开 → S09
 S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 ```
 
@@ -44,7 +45,8 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 | S05 | Install review ③ 权限审批 | denied/high-risk-unchecked | 继续 | →S06 / back→S04 |
 | S06 | Install review ④ 最终摘要 | drift（S06a）/conflict | 批准此安装方案 | →S07 / back→S05 |
 | S06a | Plan drift banner 态 | — | 重新生成方案 | →S03' |
-| S07 | Install pending | pending/unknown-outcome | （等待）reconcile | →S08 / unknown→S10 reconcile |
+| S07 | Install pending | pending/unknown-outcome | （等待） | →S08 / unknown→S07a |
+| S07a | Unknown outcome · reconcile | — | 重试核对 / 离开 | →S08（已确认，演示）/ →S09 |
 | S08 | Complete-disabled | terminal success | 前往插件管理 | →S09 |
 | S09 | Plugins list | empty/stale/partial | 管理 | →S10 |
 | S10 | Installation detail | 十变体（见 `02` 卷 §7.4） | 启用 | →S11 / →更新/回滚 flows |
@@ -55,6 +57,8 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 
 （S13 语义来源：B6 收窄 posture，bounded implemented domain evidence，packet 仍 proposal-only；carrier 未定。）
 
+本 prototype 共 **16 个 screen/state IDs**：13 个 main screens（S01–S13）+ 3 个 failure-branch states（S06a、S07a、S11a）。README 索引、本表与 `prototype/index.html` 三者保持一致。
+
 ## 4. 关键转场注释
 
 | Transition | Trigger | Pending | Server 确认 | Focus | Back/cancel | Android 行为 |
@@ -63,7 +67,8 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 | S06→S07 | 「批准此安装方案」 | 禁重复提交 | approval evidence + install receipt | S07 进度区 | 不可 cancel server 操作；可离开页面 | anchored action |
 | S06→S06a | （server 事件）plan drift | — | drift 投影 | banner（assertive） | — | 同 desktop |
 | S07→S08 | （server 事件）InstalledDisabled | — | lifecycle 事件 | 结果 heading | — | 同 desktop |
-| S07 unknown | timeout-after-possible-acceptance | 「正在核对结果」 | reconcile 结果 | reconcile 区 | 提供重试核对 | banner |
+| S07→S07a | timeout-after-possible-acceptance | 「正在核对结果」 | reconcile 结果 | reconcile 区 | 可离开页面 | banner |
+| S07a→S08 | 「重试核对」（演示） | 核对中（不重复提交） | reconcile 成功（演示） | 结果 heading | — | 同 desktop |
 | S10→S11 | 「启用」 | — | availability 投影 | S11 heading | back→S10 | sheet（bounded）或 page |
 | S11→S11a | availability=Unavailable+reason | — | reason 投影 | reason 文本 | back→S10 | 同 desktop |
 | S11→S12 | 「启用插件」 | pending | Enabled 事件 | 结果 summary | — | 同 desktop |
@@ -81,7 +86,8 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 │ ────────────────────────────────────────────────│
 │  · 安装 ustc.change-radar 0.4.0（digest 9f2c…） │
 │  · 配置 revision：cfg-…（摘要）                 │
-│  · 授予能力：2 项                                │
+│  · 授予能力：1 项（读取校园信息源 · read）       │
+│  · 未授予：推送通知（未勾选 → 不授权）           │
 │  · 安装后状态：已安装，未启用                    │
 │                                                 │
 │ ⚠ 批准仅对这一个方案有效。                       │
@@ -89,6 +95,8 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 └──────────────────────────────────────────────────┘
 Illustrative / No live backend
 ```
+
+未勾选能力不进入「已授权」集合；对应功能由 server 投影为不可用（denied/unavailable 如实呈现），见 `prototype/index.html` S05/S06 与 `02` 卷 §3。
 
 **S06a Plan drift（failure branch）**
 
@@ -101,12 +109,13 @@ Illustrative / No live backend
 Illustrative / No live backend
 ```
 
-**S07 Install pending / unknown outcome**
+**S07 Install pending / S07a unknown outcome**
 
 ```text
 正常：「安装进行中…」+ 可离开页面（稍后从插件管理查看）
-异常：「正在核对安装结果」— 请求可能已被服务器接受；
+S07a：「正在核对安装结果」— 请求可能已被服务器接受；
       正在按请求标识核对，不会重复提交。[重试核对]
+      （16B 中 S07a 为已实现演示态：S07 → 失败分支演示链接 → S07a）
 ```
 
 **S08 Complete-disabled**——见 `02` 卷 §4.6。成功仅由 server 事件确认后呈现。

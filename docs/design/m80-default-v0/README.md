@@ -14,7 +14,7 @@
 | Source commit | `2f4de29032560ff3e13d9994b33a3aff14243f44` |
 | Source tree | `53e266c47fdb07d50a734faa24bb11ac4bc5527d` |
 | Source relation | 绑定 `origin/main` @ `2f4de29`（2026-08-02 第二轮 rebind 核验；首轮绑定 `5e9e5b9`，因 M20-B6 实现合入发生 drift，见 Source drift 记录） |
-| Publication | 2026-08-02 经 Deve-hermes operation-specific 授权，以 frozen review surface 发布于 `docs/design/m80-default-v0/`（Draft PR，非 merge-ready；governance slice 由同 PR 的 commit 1 提供） |
+| Publication | 2026-08-02 经 Deve-hermes operation-specific 授权，以 frozen review surface 发布于 `docs/design/m80-default-v0/`（Draft PR #34，保持 Draft，非 merge-ready；round-1 review repair 已补齐 checker 集成，见 §6） |
 | Working copy | 仓库外 `/home/deve/gitclone/ustc-campus-agent-design/m80-default-v0/`（非 Git root，仅为工作副本） |
 | Language | Chinese-first；英文仅作 optional secondary label |
 
@@ -39,7 +39,7 @@
 ## 相对原 brief 的 tracked 修正
 
 1. `TRACKED FACT`：M20-B6 packet 随 `5e9e5b9` 合入 `docs/tasks/campaign-w1-m20-b6.md`，packet 内容仍声明 “proposed, not accepted authority”（:42）；**2026-08-02 PR #33（`2f4de29`）进一步合入 bounded Rust 实现** `crate::market::update` + `market_package_update` 测试——为 supporting domain/semantic-fake evidence only：不发 production grant/enable/update issuer、不切换 artifact、不构成 durable repository、不提升 MARKET-004/PKG-020（仍 `planned`）、M20 仍 `partial-evidence`（`docs/contracts/market-lifecycle.md:919-928`）。**设计语义前提（收窄 posture）经复核不变**：rollback 仅允许自 `AppliedPendingConfirmation`；`ConfirmAppliedUpdate` 进 terminal `Confirmed` 并关闭窗口；之后恢复旧版本须创建新 reverse update（新 plan + 新 approval）；Apply/Rollback 仅 Disabled 态（`InstalledDisabled`/`Disabled`；实现修复已将 owner decide/replay 与 update 统一为同一两态谓词）且原子地将 transaction-current Active grants 置 `Stale(InstallationChanged)`；`ConfirmAppliedUpdate` 不重新检查 configuration、grants、catalog policy、runtime health 或 executor state（`docs/tasks/campaign-w1-m20-b6.md` §1、:50、:436）。
-2. `TRACKED FACT`：brief 称 `InstallationCommand/Event/Snapshot`、`GrantCommand/Event/Snapshot` 为 existing types。实际 source 上存在 `InstallationCommand`（`crates/platform-core/src/market/installation.rs:750`）、`InstallationEventKind`（:899）、`InstallationCommandReceipt`（:1558）、`GrantCommand`（`crates/platform-core/src/market/grant.rs:424`）、`GrantEventKind`（:526）、`GrantCommandReceipt`（:945）、`GrantState`（`crates/platform-core/src/invocation.rs:110`）；**未发现名为 `InstallationSnapshot`/`GrantSnapshot` 的 pub 类型**。本 packet 引用 existing types 时以实际路径为准。
+2. `TRACKED FACT`：brief 称 `InstallationCommand/Event/Snapshot`、`GrantCommand/Event/Snapshot` 为 existing types。实际 source 上存在 `InstallationCommand`（`crates/platform-core/src/market/installation.rs:750`）、`InstallationEventKind`（:899）、`InstallationCommandReceipt`（:1558）、`InstallationSnapshot`（:1118，`pub type InstallationSnapshot = InstallationAggregate;` public type alias）；`GrantCommand`（`crates/platform-core/src/market/grant.rs:424`）、`GrantEventKind`（:526）、`GrantCommandReceipt`（:945）、`GrantSnapshot`（:642，`pub type GrantSnapshot = GrantAggregate;` public type alias）、`GrantState`（`crates/platform-core/src/invocation.rs:110`）。即 Snapshot 名称存在，但实现为 public type alias 而非独立 snapshot 类型；本 packet 引用 existing types 时以实际路径与 alias 语义为准，不假设独立 snapshot carrier。**修正记录**：本行早前版本错误声称「未发现名为 `InstallationSnapshot`/`GrantSnapshot` 的 pub 类型」，经 Draft PR #34 round-1 review 指正，2026-08-02 修复。
 3. `TRACKED FACT`：`RunEvent` 存在于 `crates/agent-runtime/src/lib.rs:361`，`RunEventKind` 于 :312，`RunSpec` 于 :38，`AgentRun` 于 :379；`AgentToolsetView` 于 `crates/agent-tool-protocol/src/lib.rs:176`；`ManagedInstallationState` 于 `crates/platform-core/src/market/installation.rs:538`；`GrantChangeClass` 于 `crates/platform-core/src/market/grant.rs:218`；`GrantInvalidationReason` 于 :210；`CapabilityPolicyChange` 于 `crates/platform-core/src/market/capability.rs:84`。
 4. `TRACKED FACT`：模块状态与 `docs/plan/modules/00-module-map.md:19-31` 一致：M00/M20/M30/M40 `partial-evidence`，M10 `skeleton`，M50/M51/M60 `planned`，M70/M71 `design-only`，M72 `bounded-spike`，M80 `planned`，M90 `governance-baseline`。`docs/contracts/market-lifecycle.md:919-928` 确认无 durable lifecycle/update repository、无 artifact switch、无 production composition、无 M10/M80 browse/API/UI delivery。
 5. `TRACKED FACT`：`docs/acceptance/matrix.tsv` 中 MARKET-004、PKG-020、RADAR-001/002、PROC-001/006/008、FP-001/002/007 均为 `planned`（MARKET-004/PKG-020 的 evidence 文字已更新为含 bounded B6 supporting evidence，但状态仍 planned）；planned 不是 pass。
@@ -72,7 +72,7 @@
 | 13 | Interaction annotations | `04` §4 | Delivered | PROPOSAL | trigger/precondition/pending/confirmation/focus/recovery | exact timing/stream reconnect 待 Stage B | — | pending |
 | 14 | Accessibility annotations | `06` §2 | Delivered | PROPOSAL | 核心屏 keyboard/touch/reader/contrast/reduced-motion | 实现后真实 audit | — | pending |
 | 15 | State atlas | `04` §5 | Delivered | PROPOSAL | 全状态族（含 drift/consumed/partial-reconnect/version-skew） | 真实 copy 长度 | — | pending |
-| 16 | Clickable prototype | `07` 全卷 + `prototype/index.html` | **16A + 16B Delivered** | PROPOSAL | Storyboard：screen/state IDs + transition table + failure branch；16B：自包含静态 HTML（14 screens，hash 导航） | 16B 为设计演示物，非 retained frontend skeleton；Stage B 以真实实现校准 | 无外部 URL；文件在 packet 内 | pending |
+| 16 | Clickable prototype | `07` 全卷 + `prototype/index.html` | **16A + 16B Delivered** | PROPOSAL | Storyboard：screen/state IDs + transition table + failure branch；16B：自包含静态 HTML（16 screen/state IDs，hash 导航） | 16B 为设计演示物，非 retained frontend skeleton；Stage B 以真实实现校准 | 无外部 URL；文件在 packet 内 | pending |
 | 17 | Redline/handoff notes | `08` 全卷 | Delivered | PROPOSAL | spacing/type/layout/behavior specs | 无 Dioxus component/API 发明 | — | pending |
 
 Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delivered**。第一轮 16B deferred（无 no-code 工具）经独立 review 记录为 F4 scope 缺口；Develata 2026-08-02 决策以自包含静态 HTML 补齐（见 `07` §1 决策记录）。
@@ -91,7 +91,7 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 | `08-handoff-and-redlines.md` | 17 |
 | `09-onboarding-connectivity-and-settings.md` | required surfaces §6.1 / §6.18 + §9.5 client/system intents（第二轮补卷） |
 | `10-grant-diff-and-activity.md` | required surfaces §6.11 / §6.17（第二轮补卷） |
-| `prototype/index.html` | 16B clickable prototype（14 screens） |
+| `prototype/index.html` | 16B clickable prototype（16 screen/state IDs：13 main S01–S13 + 3 failure-branch S06a/S07a/S11a） |
 
 `assets/` 子目录（wireframes/mockups/prototype-exports）预留给未来外部 no-code tool 的静态 exports；本轮无外部资产，不创建空目录。所有线框以 ASCII 内联于各卷。
 
@@ -110,7 +110,7 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 | `docs/design/m80-default-v0/08-handoff-and-redlines.md` | artifact 17：handoff contract + redlines |
 | `docs/design/m80-default-v0/09-onboarding-connectivity-and-settings.md` | 第二轮补卷：first-run/connectivity/settings + 3 个 client/system intents |
 | `docs/design/m80-default-v0/10-grant-diff-and-activity.md` | 第二轮补卷：grant diff 六分组 + activity/audit + export/redaction |
-| `docs/design/m80-default-v0/prototype/index.html` | artifact 16B：**External disposable executable prototype · Deliverable 16B only · Non-product · Non-retained M80 frontend · No backend/API · No readiness evidence**（14 screens，hash 导航，纯静态） |
+| `docs/design/m80-default-v0/prototype/index.html` | artifact 16B：**External disposable executable prototype · Deliverable 16B only · Non-product · Non-retained M80 frontend · No backend/API · No readiness evidence**（16 screen/state IDs，hash 导航，纯静态） |
 
 共 11 个 Markdown + 1 个静态 prototype 文件；无其他静态 assets；无代码、无 fixture、无配置变更。
 
@@ -130,18 +130,13 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 | Q10 | Grant diff 六分组 presentation vocabulary 与 domain 分类（`GrantChangeClass`/`CapabilityPolicyChange`）的 wire 映射与逐项 reason vocabulary（第二轮新增，`10` 卷 §1/§4） | M20 | 逐项 diff entries + 分类 + reason server-projected；UI 不映射回 domain 判定 |
 | Q11 | 匿名/受限只读 session 是否 admitted（第二轮新增，`09` 卷 §2.4） | M00/M10 | 决定 onboarding「稍后登录」是否存在；server 不投影则按钮不出现 |
 
-## §6 导入前置：governance slice（未授权，本轮未执行）
+## §6 导入与 checker 集成状态（2026-08-02 round-1 repair 更新）
 
-`TRACKED FACT`：`scripts/check_repo_contracts.py:187` 的 `EXPECTED_DOC_DIRECTORIES` 对 `docs/` 做 exact topology 检查；直接新增 `docs/design/` 会使 contract gate 失败。导入本 packet 前需要一个单独授权的 exact-scope governance slice，涉及：
+`TRACKED FACT`：`scripts/check_repo_contracts.py` 的 `EXPECTED_DOC_DIRECTORIES` 对 `docs/` 做 exact topology 检查。当前实际状态：
 
-- `docs/AGENTS.md`（声明 design/ 角色：subordinate presentation layer；proposal 不构成 authority；冲突时让位 plan/contracts/features/acceptance）
-- `docs/README.md`（Structure 表登记）
-- `docs/coverage-matrix.md`（登记 design projection）
-- 新建 `docs/design/AGENTS.md`（packet metadata、source binding、`Proposal/Reviewed/Superseded` 状态、标签约定、external asset 规则、authority deferral、promotion/supersession）
-- 新建 `docs/design/README.md`（真实 packet 索引，不建空分类树）
-- `scripts/check_repo_contracts.py` + `scripts/tests/test_check_repo_contracts.py`（expected topology 与 fail-closed mutation tests）
-
-本轮未被授权修改 scripts，故未执行；packet 在仓库外 workspace 维护。
+- governance slice 已随 Draft PR #34 commit 1 入库：`docs/AGENTS.md`、`docs/README.md`、`docs/coverage-matrix.md` 各加 design 条目，新建 `docs/design/AGENTS.md`（subordinate presentation role、`Proposal/Reviewed/Superseded`、source binding、authority deferral、external asset/prototype rule）与 `docs/design/README.md`（packet 索引）。
+- round-1 review 后 checker 集成已补齐（同 PR repair commit）：`design` 已加入 `EXPECTED_DOC_DIRECTORIES`；`docs/design/AGENTS.md` 与 `docs/design/README.md` 已登记为 key/nonempty files；新增 `check_design_packets`——index status 仅允许 `Proposal|Reviewed|Superseded`、packet 目录与索引精确一致、source commit/tree 为合法 hex 且经 `git rev-parse <commit>^{tree}` 与实际 Git 对象比对一致、packet README metadata 与索引一致；mutation tests 覆盖 missing/empty governance files、未知多余 docs 目录 fail-closed、index/status/binding drift。
+- 本 packet 当前为仓库内 Draft PR #34 的 review surface：`python3 scripts/check_repo_contracts.py` PASS；保持 Draft，非 merge-ready（review/merge 前置见 PR body）。
 
 ## §7 最终自查（2026-08-02 第二轮：review 补卷后更新）
 
@@ -158,17 +153,16 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 | Design 越权为 domain authority | 无；`10` 卷明确六分组为 presentation vocabulary 且与 `GrantChangeClass`/`CapabilityPolicyChange` 区分（Q10） |
 | 每卷 `Illustrative / No live backend` | 11/11 文件具备（含 prototype banner） |
 | 对比度实测 | `05` 卷 §6：两方向 light/dark 全 role 计算（第一轮 review 独立复算 56 对全部吻合） |
-| Prototype 验证 | 14 screens 定义齐全；全部 hash 链接目标可解析；JS 语法校验通过 |
+| Prototype 验证 | 16 screen/state IDs 定义齐全（13 main S01–S13 + 3 failure-branch S06a/S07a/S11a）；全部 hash 链接目标可解析；JS 语法校验通过；无外部网络引用；round-1 repair 补齐 a11y 语义（main landmark、可见 focus、hash 导航后 focus 回到 heading、disabled destructive 动作 aria-describedby 说明、动作目标 ≥44px）与 S05/S06/S13 授权流诚实性、S07a unknown/reconcile 演示态、S09 生命周期分组矛盾修复 |
 | Stage B dependency | 各 artifact 行与各卷末尾标明 |
-| 仓库检查 | 两轮仓库零改动 → `check_repo_contracts.py` / `git diff --check` **not applicable**；governance slice 授权后执行完整 gates |
+| 仓库检查 | 入库后（Draft PR #34，round-1 repair）：`git diff --check` clean；`python3 scripts/check_repo_contracts.py` PASS（含 design topology/index/status/source-binding 检查）；`python3 -m unittest scripts.tests.test_check_repo_contracts` PASS |
 
 ### 本轮未实现/未验证
 
 - F10 视觉样例真实渲染 fidelity（文本级，冻结待下一轮决策）；
-- 真实 browser/device 的对比度、排印、touch、lifecycle 验证（Stage B）；
-- `docs/design/` governance slice（未授权 scripts 修改）与 packet 入库；
+- 真实物理设备的对比度、排印、touch、lifecycle 验证（Stage B；本轮已做 Chromium 320/390/768/1200 渲染 smoke）；
 - 各 `PROPOSED_SEMANTIC_INTENT` 的 carrier 校准（待 M10/M20 vertical slice）；
-- Prototype 未在真实浏览器做 a11y/键盘走查（Stage B）。
+- Prototype 完整 screen reader / keyboard-only 走查（本轮已修静态 a11y 语义；真实 AT audit 属 Stage B）。
 
 ### 需上提 plan/contract 的候选 proposal（均未上提，待 Develata 决定）
 

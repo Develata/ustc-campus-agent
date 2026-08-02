@@ -188,6 +188,7 @@ EXPECTED_DOC_DIRECTORIES = {
     "acceptance",
     "adr",
     "contracts",
+    "design",
     "features",
     "guides",
     "overview",
@@ -218,6 +219,8 @@ KEY_FILES = [
     "docs/README.md",
     "docs/AGENTS.md",
     "docs/coverage-matrix.md",
+    "docs/design/AGENTS.md",
+    "docs/design/README.md",
     "docs/plan/AGENTS.md",
     "docs/plan/00-engineering-constitution.md",
     "docs/plan/01-terminology.md",
@@ -1094,6 +1097,127 @@ def check_docs_topology(issues: list[str]) -> None:
             f"expected={sorted(EXPECTED_DOC_ROOT_FILES)} actual={sorted(actual_root_files)}",
             issues,
         )
+
+
+DESIGN_PACKET_STATUSES = {"Proposal", "Reviewed", "Superseded"}
+DESIGN_INDEX_PATH = "docs/design/README.md"
+
+
+def git_commit_tree_hex(commit: str) -> str | None:
+    """Resolve `<commit>^{tree}` in the repository; None when unresolvable."""
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "--verify", f"{commit}^{{tree}}"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if completed.returncode != 0:
+        return None
+    tree = completed.stdout.strip()
+    return tree if re.fullmatch(r"[0-9a-f]{40}", tree) else None
+
+
+def check_design_packets(issues: list[str]) -> None:
+    index_rows = parse_markdown_table(
+        DESIGN_INDEX_PATH,
+        ["Packet", "Scope", "Status", "Source binding"],
+        "design packet index",
+        issues,
+    )
+    indexed: dict[str, tuple[str, str, str]] = {}
+    for line_no, cells in index_rows:
+        link_match = re.fullmatch(r"\[`([^`]+)/`\]\(([^)]+)/\)", cells[0])
+        if link_match is None:
+            fail(
+                f"design packet index row {line_no} has malformed packet link: {cells[0]!r}",
+                issues,
+            )
+            continue
+        packet_name, link_target = link_match.groups()
+        if packet_name != link_target or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", packet_name):
+            fail(
+                f"design packet index row {line_no} packet identity drift: {cells[0]!r}",
+                issues,
+            )
+            continue
+        status = markdown_code_value(cells[2]) or cells[2].strip()
+        if status not in DESIGN_PACKET_STATUSES:
+            fail(
+                f"design packet index row {line_no} has invalid status: {cells[2]!r}",
+                issues,
+            )
+            continue
+        binding_match = re.fullmatch(r"commit `([0-9a-f]{40})`, tree `([0-9a-f]{40})`", cells[3])
+        if binding_match is None:
+            fail(
+                f"design packet index row {line_no} has malformed source binding: {cells[3]!r}",
+                issues,
+            )
+            continue
+        commit, tree = binding_match.groups()
+        if packet_name in indexed:
+            fail(f"duplicate design packet in index: {packet_name}", issues)
+            continue
+        indexed[packet_name] = (status, commit, tree)
+
+    design_root = ROOT / "docs/design"
+    actual_packets = (
+        {path.name for path in design_root.iterdir() if path.is_dir()}
+        if design_root.is_dir()
+        else set()
+    )
+    if actual_packets != set(indexed):
+        fail(
+            "design packet directory/index drift: "
+            f"missing={sorted(set(indexed) - actual_packets)} "
+            f"unexpected={sorted(actual_packets - set(indexed))}",
+            issues,
+        )
+
+    for packet_name, (status, commit, tree) in indexed.items():
+        packet_dir = design_root / packet_name
+        if not packet_dir.is_dir():
+            continue
+        resolved_tree = git_commit_tree_hex(commit)
+        if resolved_tree is None:
+            fail(
+                f"design packet {packet_name} source commit is not resolvable in Git: {commit}",
+                issues,
+            )
+        elif resolved_tree != tree:
+            fail(
+                f"design packet {packet_name} source binding tree drift: "
+                f"index={tree} git={resolved_tree}",
+                issues,
+            )
+        readme_path = packet_dir / "README.md"
+        if not readme_path.is_file():
+            fail(f"design packet {packet_name} missing README.md", issues)
+            continue
+        readme_text = readme_path.read_text(encoding="utf-8")
+        status_rows = re.findall(r"^\| Status \| `([^`]+)` \|$", readme_text, flags=re.MULTILINE)
+        if status_rows != [status]:
+            fail(
+                f"design packet {packet_name} README status drift: "
+                f"index={status!r} readme={status_rows!r}",
+                issues,
+            )
+        commit_rows = re.findall(
+            r"^\| Source commit \| `([0-9a-f]{40})` \|$", readme_text, flags=re.MULTILINE
+        )
+        tree_rows = re.findall(
+            r"^\| Source tree \| `([0-9a-f]{40})` \|$", readme_text, flags=re.MULTILINE
+        )
+        if commit_rows != [commit] or tree_rows != [tree]:
+            fail(
+                f"design packet {packet_name} README source binding drift: "
+                f"index=({commit}, {tree}) readme=({commit_rows}, {tree_rows})",
+                issues,
+            )
 
 
 def check_no_retired_docs_references(issues: list[str]) -> None:
@@ -8975,6 +9099,7 @@ def main() -> int:
     check_key_files_present_and_nonempty(issues)
     check_campaign_authorization(issues)
     check_docs_topology(issues)
+    check_design_packets(issues)
     check_no_retired_docs_references(issues)
     check_markdown_links(issues)
     check_no_obvious_secrets(issues)

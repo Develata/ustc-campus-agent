@@ -602,6 +602,38 @@ class DocsTopologyContractTests(unittest.TestCase):
     def test_current_docs_topology_passes(self) -> None:
         self.assertEqual(self.check_docs_topology(), [])
 
+    def test_design_governance_files_are_registered_nonempty_key_files(self) -> None:
+        issues = self.check_key_files()
+        key_files = cast(list[str], getattr(checker, "KEY_FILES"))
+        for rel in ("docs/design/AGENTS.md", "docs/design/README.md"):
+            self.assertIn(rel, key_files)
+            self.assertFalse(any(rel in issue for issue in issues), rel)
+
+    def test_missing_design_governance_file_fails_closed(self) -> None:
+        for rel in ("docs/design/AGENTS.md", "docs/design/README.md"):
+            with self.subTest(rel=rel):
+                path = self.root / rel
+                original = path.read_text(encoding="utf-8")
+                path.unlink()
+                self.assertIn(f"key file missing: {rel}", self.check_key_files())
+                path.write_text(original, encoding="utf-8")
+
+    def test_empty_design_governance_file_fails_closed(self) -> None:
+        for rel in ("docs/design/AGENTS.md", "docs/design/README.md"):
+            with self.subTest(rel=rel):
+                path = self.root / rel
+                original = path.read_text(encoding="utf-8")
+                path.write_text(" \n", encoding="utf-8")
+                self.assertIn(f"key file empty: {rel}", self.check_key_files())
+                path.write_text(original, encoding="utf-8")
+
+    def test_unknown_extra_docs_directory_fails_closed(self) -> None:
+        (self.root / "docs/incoming").mkdir()
+        (self.root / "docs/incoming/notes.md").write_text("stray\n", encoding="utf-8")
+        self.assertTrue(
+            any("documentation directory topology drift" in issue for issue in self.check_docs_topology())
+        )
+
     def test_invocation_contract_is_a_registered_nonempty_key_file(self) -> None:
         issues = self.check_key_files()
         self.assertFalse(any("invocation-resolution.md" in issue for issue in issues))
@@ -877,6 +909,120 @@ class DocsTopologyContractTests(unittest.TestCase):
         issues: list[str] = []
         checker.check_rust_doctest_gate(issues)
         self.assertIn("Rust doctest CI step must use the exact run command", issues)
+
+
+class DesignPacketContractTests(unittest.TestCase):
+    REAL_SOURCE_COMMIT = "2f4de29032560ff3e13d9994b33a3aff14243f44"
+    REAL_SOURCE_TREE = "53e266c47fdb07d50a734faa24bb11ac4bc5527d"
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+        self.original_resolver = checker.git_commit_tree_hex
+        real_tree = self.REAL_SOURCE_TREE
+        real_commit = self.REAL_SOURCE_COMMIT
+        setattr(
+            checker,
+            "git_commit_tree_hex",
+            lambda commit: real_tree if commit == real_commit else None,
+        )
+
+    def tearDown(self) -> None:
+        setattr(checker, "git_commit_tree_hex", self.original_resolver)
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def replace_once(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, f"stale or ambiguous mutation target in {rel}")
+        updated = text.replace(old, new, 1)
+        self.assertNotEqual(updated, text)
+        path.write_text(updated, encoding="utf-8")
+
+    def check_design_packets(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_design_packets(issues)
+        return issues
+
+    def test_current_design_packets_pass(self) -> None:
+        self.assertEqual(self.check_design_packets(), [])
+
+    def test_design_packet_invalid_status_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/design/README.md",
+            "| [`m80-default-v0/`](m80-default-v0/) | M80 Default v0 UI design candidate: 17 artifact proposals, 20 required surfaces, 16B disposable static prototype | Proposal |",
+            "| [`m80-default-v0/`](m80-default-v0/) | M80 Default v0 UI design candidate: 17 artifact proposals, 20 required surfaces, 16B disposable static prototype | Draft |",
+        )
+        self.assertTrue(
+            any("design packet index row" in issue and "invalid status" in issue for issue in self.check_design_packets())
+        )
+
+    def test_unindexed_design_packet_directory_fails_closed(self) -> None:
+        (self.root / "docs/design/stray-packet").mkdir()
+        self.assertTrue(
+            any("design packet directory/index drift" in issue for issue in self.check_design_packets())
+        )
+
+    def test_design_packet_source_binding_malformed_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/design/README.md",
+            f"commit `{self.REAL_SOURCE_COMMIT}`, tree",
+            "commit `2f4de29`, tree",
+        )
+        self.assertTrue(
+            any("malformed source binding" in issue for issue in self.check_design_packets())
+        )
+
+    def test_design_packet_source_commit_not_resolvable_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/design/README.md",
+            f"commit `{self.REAL_SOURCE_COMMIT}`",
+            f"commit `{'0' * 40}`",
+        )
+        self.assertTrue(
+            any("not resolvable in Git" in issue for issue in self.check_design_packets())
+        )
+
+    def test_design_packet_source_binding_tree_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/design/README.md",
+            f"tree `{self.REAL_SOURCE_TREE}`",
+            f"tree `{'1' * 40}`",
+        )
+        self.assertTrue(
+            any("source binding tree drift" in issue for issue in self.check_design_packets())
+        )
+
+    def test_design_packet_readme_status_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/design/m80-default-v0/README.md",
+            "| Status | `Proposal` |",
+            "| Status | `Reviewed` |",
+        )
+        self.assertTrue(
+            any("README status drift" in issue for issue in self.check_design_packets())
+        )
+
+    def test_design_packet_readme_source_binding_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/design/m80-default-v0/README.md",
+            f"| Source commit | `{self.REAL_SOURCE_COMMIT}` |",
+            f"| Source commit | `{'0' * 40}` |",
+        )
+        self.assertTrue(
+            any("README source binding drift" in issue for issue in self.check_design_packets())
+        )
+
+    def test_design_packet_missing_readme_fails_closed(self) -> None:
+        (self.root / "docs/design/m80-default-v0/README.md").unlink()
+        self.assertIn(
+            "design packet m80-default-v0 missing README.md",
+            self.check_design_packets(),
+        )
 
 
 class MarketLifecycleContractTests(unittest.TestCase):
@@ -5735,6 +5881,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_key_files_present_and_nonempty(issues)",
         "check_campaign_authorization(issues)",
         "check_docs_topology(issues)",
+        "check_design_packets(issues)",
         "check_no_retired_docs_references(issues)",
         "check_markdown_links(issues)",
         "check_no_obvious_secrets(issues)",
