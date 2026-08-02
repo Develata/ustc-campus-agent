@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current delivery and task-splitting order
-- `Version`: `module-roadmap/v2.4`
-- `Last Review`: `2026-07-31`
+- `Version`: `module-roadmap/v2.5`
+- `Last Review`: `2026-08-02`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module map`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
@@ -72,9 +72,9 @@ The controller pauses before further mutation upon any user-choice request; revi
 
 ```text
 Foundation contracts
-├── M00 Platform Control/Identity
+├── M00 Platform Control/Identity (identity/session evidence; account/auth/membership/general-profile planned)
 ├── M10 Application Ingress Host
-├── M90 Infrastructure/Operations
+├── M90 Infrastructure/Operations (SQLite `local-demo`; PostgreSQL hosted/production planned)
 └── M80 client-core with peer Dioxus/ustc-agent/inbound-MCP adapters may develop against fake M10
 
 Independent runtime/market lanes
@@ -97,7 +97,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 
 | Module | State key | Current state | Current module target | Owner | Merge gate |
 |---|---|---|---|---|---|
-| `M00` Platform Control/Identity | `partial-evidence` | identity-types and session-domain implemented; request-context/ports planned | stable IDs, request/session context and fake ports | unassigned | admitted/denied API request proof |
+| `M00` Platform Control/Identity | `partial-evidence` | identity-types and session-domain implemented; request-context/ports/account/auth/profile planned | stable IDs, runtime account/external identity/membership/session plus purpose-bound general profile | unassigned | account/link/profile standalone proofs plus admitted/denied API request proof |
 | `M10` Application Ingress Host | `skeleton` | skeleton | Dioxus server-function plus explicit `ustc-agent`/inbound-MCP HTTP/SSE route, DTO/error/event/compatibility host | unassigned | black-box peer-client HTTP/stream conformance and no reach-through |
 | `M20` Market/Package | `partial-evidence` | typed package/catalog + capability-registry + bounded managed-installation fake + bounded reviewed-grant aggregate/replay/semantic repository + bounded package-update aggregate/semantic repository + pure resolver evidence | M10/M80 browse delivery + durable installation/grant/update adapters, artifact switching and B7 composition around audited resolver | unassigned | `MARKET-*` current-scope rows |
 | `M30` Agent Harness/Runtime | `partial-evidence` | node kernel only | finite harness/graph/context/review against fakes | unassigned | `HARNESS-*` + owned `AGENT-*` |
@@ -107,9 +107,9 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 | `M60` Campus Trust/Source | `planned` | planned | one reviewed source/revision/baseline | unassigned | `SRC-*` current-scope rows |
 | `M70` ChangeRadar | `design-only` | design only | one semantic change + feed | unassigned | `RADAR-*` current-scope rows |
 | `M71` Affairs Navigator | `design-only` | design only | one reviewed procedure board | unassigned | `PROC-*` current-scope rows |
-| `M72` Opportunity Graph | `bounded-spike` | planner spike | honest source/profile/Market integration | unassigned | `COURSE-*` current-scope rows |
+| `M72` Opportunity Graph | `bounded-spike` | planner spike | honest source/Market integration plus M00 profile-consumer and M72 preference boundaries | unassigned | `COURSE-*` current-scope rows plus future `PROFILE-*` consumer proof |
 | `M80` Client Core and Interaction Shells | `planned` | no code | framework-neutral client core plus peer `ustc-agent`, inbound MCP and required Dioxus Web/Android journeys | client/core/CLI/MCP unassigned; Kimi K3 + Claude Opus 5 lead Windows UI/design; GPT review/local optimization | `CLIENT-007`–`CLIENT-010` for retained headless slices; exact active `WEB-*`/deployment rows plus Web and Android passing for Dioxus |
-| `M90` Infrastructure | `governance-baseline` | CI only | config/store/journal/evidence + Docker Compose Fullstack restore profile | unassigned | Compose Web/Android target profile restore/read-back |
+| `M90` Infrastructure | `governance-baseline` | CI only | typed storage profile/config, SQLite local-demo and PostgreSQL operational repositories, journal/evidence + Docker Compose Fullstack restore | unassigned | equal repository conformance plus PostgreSQL production concurrency/restore/read-back |
 
 Team assignment updates only the `Owner` cells and issue links. It does not change module ownership semantics.
 
@@ -155,11 +155,16 @@ Team assignment updates only the `Owner` cells and issue links. It does not chan
 - `M00-B2 session-domain`: open/refresh/expire/revoke transitions and replay under accepted [`platform-session/v0`](../contracts/platform-session.md). Implemented as a pure kernel in `crates/platform-core/src/session.rs` with evidence in `crates/platform-core/tests/platform_session.rs`; `AUTH-017`, `AUTH-018`, `AUTH-019` and `AUTH-020` are `implemented`, two of them partly through private library-target fixtures for the reason that contract's §17 records. The batch added no dependency, port, repository, clock, request context or M10 integration.
 - `M00-B3 request-context`: land `policy-reference` first, then immutable admitted actor/request/command/causation context and duplicate/conflict semantics as separate reviewable commits.
 - `M00-B4 ports-and-fakes`: land `session-port` and `control-evidence` as separate reviewable commits, then clock/session/audit/secret-ref fakes with failure fixtures.
-- `M00-B5 api-admission-integration`: attach to `M10`; one denied request reaches no downstream fake.
+- `M00-B5 demo-api-admission-integration`: attach one development-only assertion/session path to `M10`; one denied request reaches no downstream fake and no durable-account or USTC production claim is made.
+- `M00-B6 account-directory-and-membership`: human account lifecycle, tenant membership, separate role/service-principal negative space and repository fakes; freeze exact Rust API and promote only its bound `AUTH-*` cases before code.
+- `M00-B7 external-identity-and-auth-admission`: canonical issuer/subject, aliases, explicit create/link/conflict and local reauthentication; freeze the exact adapter/account-link contract before code.
+- `M00-B8 profile-registry-and-facts`: extensible field registry, fact/proposal/source/verification/conflict/deletion semantics and repository fakes; freeze exact Rust API and promote bound `PROFILE-*` cases before code.
+- `M00-B9 profile-projection-and-consumers`: purpose-bound current projection plus M10/M30/M72 boundaries; prove wrong-scope denial before payload read.
+- `M00-B10 durable-account-profile-integration`: attach M90 SQLite/PostgreSQL adapters only after common repository conformance and PostgreSQL production race/restart/read-back evidence have active bindings.
 
-These five roadmap batches schedule the six small modules in the M00 blueprint; they are not alternate module names. `identity-types` maps to B1, `session-domain` to B2, `policy-reference` plus `request-context` to B3, and `session-port` plus `control-evidence` to B4. Each small module still receives its own commit and standalone evidence before B5 composition.
+The M00 blueprint owns the full small-module decomposition; roadmap batch numbers are delivery groupings, not alternate module names. Every small module receives its own standalone evidence before composition.
 
-Current completion scope excludes production USTC/CAS login. A labelled demo/auth adapter is sufficient if the boundary is honest.
+Current completion scope excludes durable account/profile storage and production USTC/CAS login. A labelled development adapter is sufficient only for B5. Any institutional adapter requires a reviewed stable-subject/attribute agreement; a mock with current/historical aliases may test behavior but cannot define production identity authority.
 
 ## 6. M10 lane — Application Ingress Host
 
@@ -183,7 +188,7 @@ Handlers contain mapping and coordination only. Domain validation remains in own
 - `M20-B4 grant-domain`: scope/version/reapproval and tenant checks. The exact public contract and bounded Rust implementation are complete under `crate::market::grant`: pure grant aggregate, explicit admission evidence, decide/evolve/replay, deny-side resolver projection and semantic in-memory repository fake. This supporting evidence mints no production grant, promotes no acceptance row and leaves durable authority assembly/composition to `M20-B5`.
 - `M20-B5 invocation-authority`: bounded implementation is complete under `crate::market::authority`: one semantic carrier-by-carrier read transaction, service-owned candidate/current assembly, shared call preflight, adopted resolver/recheck and post-success precondition verification. It creates no durable authority, production grant/enable evidence, effect intent or acceptance promotion.
 - `M20-B6 update-rollback`: bounded evidence complete for staged update, permission expansion, exact rollback and atomic in-memory package-update fake; no durable adapter, artifact switch, API/UI, current-call/in-flight composition or acceptance promotion.
-- `M20-B7 composition`: future attachment of read/mutation APIs, durable adapters/current API calls and fake `M40` consumer.
+- `M20-B7 composition`: repaired exact contract accepted in [`m20-b7-contract-readiness-proposal.md`](m20-b7-contract-readiness-proposal.md), packet SHA-256 `ab4873ca783c899618beca5add61a7d79ff2b305d95d8f4baac92502233b15c4`. The sequence is A1 internal catalog/owned-state reads plus owner-scoped Disable over existing semantic ports, then a separately granted B7-B composition-root staged fake M40/M30/executor evidence slice. A2 authority-bearing mutations, M90 durable adapters and M10/M80 wire/client work remain future contracts.
 
 `M20` merge scope is complete only when browse and current lifecycle state are distinct and disable/revoke blocks discovery/calls. Historical `B1-0`/`B1-1` labels map to the lifecycle-contract establishment and `M20-B1` respectively; the earlier `B1-2`/`B1-3`/… sequence is superseded by the canonical `M20-B<n>`/slice references above.
 
@@ -288,12 +293,12 @@ M70 ChangeRadar source/revision/diff foundation
 
 - `M72-B0 planner-spike-audit`;
 - `M72-B1 opportunity-types-validation`;
-- `M72-B2 tenant-profile-consent-delete`;
+- `M72-B2 M00-profile-consumer-and-M72-preference-consent-delete`;
 - `M72-B3 qualification-dependency-conflict`;
 - `M72-B4 bounded-candidate-and-independent-validation`;
 - `M72-B5 course-pack-adapter`;
 - `M72-B6 evidence-explanation`;
-- `M72-B7 M20/M60/M10/M80 integration`.
+- `M72-B7 M00/M20/M60/M10/M80 integration`.
 
 The three packages keep independent versions, enable/disable and acceptance even when they share M60 facts.
 
@@ -323,19 +328,19 @@ Every truth-affecting calculation/mutation is re-evaluated by backend modules. C
 
 ## 15. M90 lane — Infrastructure and Operations
 
-- `M90-B1 typed-config-doctor`;
-- `M90-B2 operational-store-transactions`;
-- `M90-B3 journal-and-events`;
-- `M90-B4 evidence-artifact-store`;
-- `M90-B5 clock-scheduler-lease-queue`;
-- `M90-B6 secret-ref-and-redaction`;
-- `M90-B7 safe-http`;
-- `M90-B8 telemetry-and-retention`;
-- `M90-B9 migration-backup-restore`;
-- `M90-B10 docker-compose-fullstack-profile-and-real-readback`;
+- `M90-B1 typed-storage-profile-config-doctor-and-conformance-harness`;
+- `M90-B2 sqlite-local-demo-repositories-migrations-restart`;
+- `M90-B3 postgresql-operational-repositories-migrations-concurrency-backup-restore`;
+- `M90-B4 journal-and-events`;
+- `M90-B5 evidence-artifact-store`;
+- `M90-B6 clock-scheduler-lease-queue`;
+- `M90-B7 secret-ref-and-redaction`;
+- `M90-B8 safe-http`;
+- `M90-B9 telemetry-and-retention`;
+- `M90-B10 docker-compose-fullstack-postgresql-profile-and-real-readback`;
 - `M90-B11 CI/contracts/dependency gates`.
 
-Start with one restorable demo deployment. Do not add multi-cloud/container orchestration symmetry first.
+Start with one restorable SQLite `local-demo`, but treat PostgreSQL as the normative hosted/production operational target. Both implement equal domain-owned semantic repository contracts where supported; PostgreSQL alone carries production concurrency/isolation/backup evidence. Do not add multi-cloud/container orchestration symmetry first.
 
 ## 16. Cross-module assembly gates
 
@@ -344,6 +349,10 @@ Start with one restorable demo deployment. Do not add multi-cloud/container orch
 `M00` admitted context + `M10` server-function/HTTP/event host + fake application modules + `M80` client-core conformance with one fake `ustc-agent`/inbound-MCP read path; Dioxus Web/Android assembly enters only under its own active bindings.
 
 Prerequisite: exact active acceptance rows and future bindings exist for every retained M00/M10/M80 scaffold. `CLIENT-007`–`CLIENT-010` satisfy only the headless/client-core projection; a disposable Dioxus initialization spike cannot satisfy A0 or enter the module merge packet.
+
+### A0-I — Durable account and user-context profile
+
+`M00` human account + external identity + tenant membership + session + profile registry/facts/projections attached through `M10`, with `M90` SQLite `local-demo` and PostgreSQL hosted/production repository adapters. The gate requires explicit account-link conflicts, purpose/sensitivity denial before profile payload read, equal repository semantics, PostgreSQL concurrent-first-login/profile-update proof, restart/read-back and backend-correct restore. It makes no USTC production-auth claim.
 
 ### A1 — Market/tool skeleton
 

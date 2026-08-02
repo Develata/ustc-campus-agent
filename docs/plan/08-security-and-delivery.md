@@ -4,12 +4,12 @@
 
 - `Layer`: Cross-cutting governance
 - `Status`: Current security/publication rules; production deployment planned
-- `Version`: `0.2.0`
-- `Last Review`: `2026-07-25`
+- `Version`: `0.3.0`
+- `Last Review`: `2026-08-02`
 - `Authority Owns`: credential/data boundaries, release/publication gates, deployment-profile invariants
 - `Authority Defers To`: owning product/source/runtime plans and explicit Develata publication approval
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
-- `Counterpart Contracts`: `docs/contracts/permissions.md`, `docs/contracts/source-import.md`
+- `Counterpart Contracts`: `docs/contracts/platform-account.md`, `docs/contracts/user-context-profile.md`, `docs/contracts/storage-profiles.md`, `docs/contracts/permissions.md`, `docs/contracts/source-import.md`
 - `Counterpart Acceptance`: `PUBLIC-*`, release-gated security cases
 - `Primary Code Areas`: repository-wide, future deployment/auth/runtime modules
 - `Large-module Counterpart`: [`M90 Platform Infrastructure and Operations`](modules/90-infrastructure-operations.md); security remains a cross-cutting gate rather than one module that absorbs all security rules
@@ -30,8 +30,10 @@ Secrets use runtime secret references. Catalog manifests, docs, normal logs and 
 ## 2. Authorization and data isolation
 
 - Every invocation revalidates user/session/tenant, installation, enabled state, component identity and capability grant.
+- External authentication resolves canonical provider subject through an explicit M00 account-link decision; email, telephone, school-number alias, profile text and AI output never auto-merge accounts.
+- Account status, tenant membership, administrator role/grant, service principal and general profile are distinct authority classes.
 - Default Plugins receive only explicitly auto-grant-eligible public read/link-out capabilities.
-- Tenant-private reads/writes are narrow, consent-aware and never cross-user.
+- Tenant-private reads/writes are tenant/user/purpose/consumer/field bounded, consent-aware and never cross-user. M30 and M72 consume minimum M00 profile projections, not repositories or raw credentials.
 - Administrative publication, source ingestion and operator diagnostics are separate authority classes from user Plugin invocation.
 - Arbitrary shell, PATH search, host filesystem/device/socket access and unrestricted network access are outside the MVP.
 
@@ -41,18 +43,18 @@ Secrets use runtime secret references. Catalog manifests, docs, normal logs and 
 - iCourse remains link-out-only unless an explicit data-use contract permits more.
 - External pages, tool output and model output are untrusted input.
 - Markdown/JSON/path handling rejects traversal, symlink escape, hidden-control hazards and unknown schema fields where the owning contract requires it.
-- Public/approved facts and tenant-private profile data remain separate projections.
+- Public/approved facts, M00 general profile data and product-owned private preferences remain separate projections.
 
 ## 4. Deployment profiles
 
-The same authority contracts apply to central, staging, demo and optional single-tenant deployments. A deployment profile MAY change resource sizing or adapter location; it MUST NOT create a second package/grant/source authority or weaken tenant-scoped types.
+The same authority contracts apply to central, staging, demo and optional single-tenant deployments. `local-demo` defaults to SQLite with explicit single-host/low-concurrency limits. Hosted and production require PostgreSQL and MUST NOT fall back to SQLite. A deployment profile MAY change resource sizing or adapter location; it MUST NOT create a second account/profile/package/grant/source authority, weaken tenant-scoped types or expose backend row/JSON shape as a public/domain contract.
 
 Production-like deployment eventually requires:
 
 - only reviewed HTTPS user surfaces exposed;
 - typed configuration and read-only preflight/doctor checks;
 - low-privilege bounded workers for external execution;
-- explicit database/evidence-store durability and restore tests;
+- common SQLite/PostgreSQL repository conformance plus PostgreSQL production concurrency/isolation and backend-correct database/evidence-store restore tests;
 - environment/worktree/credential separation;
 - bounded logs, caches, images and evidence retention.
 
@@ -90,6 +92,7 @@ Repository visibility and GitHub Pages/download publication are explicit securit
 - Secret/privacy uncertainty blocks publication.
 - Missing audit/evidence blocks success acknowledgement for durable mutation.
 - Permission or tenant ambiguity blocks invocation.
+- External-subject/link conflict, profile purpose/sensitivity ambiguity or unsupported storage profile/backend pair blocks admission without payload read or fallback.
 - Restore/read-back failure blocks release.
 - Source permission withdrawal suspends new ingestion and preserves only policy-compliant historical evidence.
 - Security revoke blocks new invocation before convenience or availability concerns.

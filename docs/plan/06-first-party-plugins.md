@@ -4,8 +4,8 @@
 
 - `Layer`: First-party product contracts
 - `Status`: Identities/manifests accepted; product journeys mostly planned
-- `Version`: `0.3.0`
-- `Last Review`: `2026-07-25`
+- `Version`: `0.4.0`
+- `Last Review`: `2026-08-02`
 - `Authority Owns`: first-party product split, shared semantics, independent lifecycles and implementation order
 - `Authority Defers To`: Campus Trust Kernel for shared authority and typed contracts/manifests for exact fields
 - `Counterpart Features`: `docs/features/01-ustc-affairs-navigator.md`, `docs/features/02-ustc-change-radar.md`, `docs/features/03-campus-opportunity-graph.md`
@@ -26,7 +26,7 @@ Campus Opportunity Graph: What fits me, and what should I choose next?
 |---|---|---|
 | Affairs Navigator | reviewed procedure projection | conditions, steps, deadlines, entry points, sources and uncertainty |
 | ChangeRadar | approved semantic-change projection | before/after, effective time, affected scope, provenance and feed item |
-| Opportunity Graph | opportunity facts + consent-aware profile projection | qualification, dependency, conflict, match and next action |
+| Opportunity Graph | opportunity facts + purpose-bound M00 profile projection + M72 preferences | qualification, dependency, conflict, match and next action |
 
 The products share one Campus Trust Kernel:
 
@@ -37,7 +37,7 @@ approved sources
 → normalized facts with time/conflict/provenance
    ├── reviewed procedure artifacts
    ├── approved semantic change events
-   └── reviewed opportunity graph facts + tenant-private profile projection
+   └── reviewed opportunity graph facts + purpose-bound M00 context + M72 preferences
 ```
 
 They MUST NOT build three crawler authorities or three incompatible source identities. They remain independent large modules and packages with separate versions, branches/owners, installation, enablement and acceptance. Each can be completed and attached through its public boundary without requiring the other two product implementations to finish.
@@ -139,15 +139,15 @@ HTML layout noise, duplicate fetch, parser failure and unreviewed inference neve
 
 ## 4. Campus Opportunity Graph
 
-Public opportunities are typed nodes/edges with eligibility, dependency, coverage, conflict, temporal window and evidence. Tenant-private profile facts remain a separate consent-aware projection.
+Public opportunities are typed nodes/edges with eligibility, dependency, coverage, conflict, temporal window and evidence. General user-context facts remain M00-owned and reach M72 only through a consented purpose-bound projection; M72 separately owns opportunity-specific preferences and derived matches.
 
 Minimum semantics:
 
 - qualification/prerequisite conditions retain scope and source;
 - temporal validity produces deterministic current views;
 - every material graph fact carries provenance;
-- private preferences and derived edges never enter the public graph;
-- user-owned facts are viewable and deletable;
+- M00 profile values, M72 private preferences and derived edges never enter the public graph;
+- M00 profile management and M72 preference management remain separate view/edit/delete paths;
 - matching/explanation exposes uncertainty rather than filling missing facts.
 
 ### 4.1 Course Planning bounded spike
@@ -164,7 +164,7 @@ Future research, competition, lecture and scholarship slices reuse the same trus
 1. ChangeRadar source/revision/diff foundation
 2. Affairs Navigator structured procedure entry
 3. ChangeRadar per-board feed
-4. Opportunity Graph consent/profile integration
+4. Opportunity Graph M00 profile-consumer and M72 preference integration
 ```
 
 The Course Planning spike was completed out of order and does not alter this sequence.
@@ -174,7 +174,7 @@ The Course Planning spike was completed out of order and does not alter this seq
 - **ChangeRadar foundation**: one approved historical change replays with exact evidence; failure cannot advance baseline.
 - **Affairs entry**: one administrator-maintained board answers a real procedure with conditions, steps, time, sources and uncertainty.
 - **ChangeRadar feed**: one approved semantic change publishes exactly once; crawl noise never enters feed.
-- **Opportunity integration**: existing planner appears behind honest install/grant/discovery and tenant-private profile boundaries.
+- **Opportunity integration**: existing planner appears behind honest install/grant/discovery, purpose-bound M00 profile consumption and separate M72 preference boundaries.
 - **Three-product demo**: exact packages bootstrap and can be disabled/re-enabled independently; every material answer exposes provenance.
 
 Bindings live in `FP-*`, `SRC-*`, `PROC-*`, `RADAR-*` and `COURSE-*` acceptance rows.

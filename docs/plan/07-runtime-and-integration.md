@@ -4,12 +4,12 @@
 
 - `Layer`: Runtime architecture
 - `Status`: R0 platform-owned transition kernel implemented; finite harness, orchestration, persistence and production adapters planned
-- `Version`: `0.7.0`
-- `Last Review`: `2026-07-25`
+- `Version`: `0.8.0`
+- `Last Review`: `2026-08-02`
 - `Authority Owns`: finite HarnessRun/TaskGraph, Plugin-neutral node AgentRun state, context budget, versioned Agent tool protocol, tool-effect ordering and framework/provider adapter boundary
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
 - `Counterpart Features`: `docs/features/04-bounded-agent-harness.md`; current Market and product features
-- `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
+- `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/user-context-profile.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
 - `Counterpart Acceptance`: planned `HARNESS-*`; active `AGENT-001`, `AGENT-002`, `AGENT-017` and implemented P0a `MARKET-005/006`; planned `AGENT-018`, `PKG-019/020`, `MARKET-007` and `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
 - `Primary Code Areas`: `crates/agent-runtime/`, future orchestration modules and `crates/adapters/`
 - `Large-module Blueprints`: [`M30 Agent`](modules/40-agent-harness-runtime.md), [`M40 Tool Gateway`](modules/50-tool-gateway-execution.md), [`M50 Model Provider`](modules/60-model-provider-integration.md), [`M51 MCP`](modules/61-mcp-binding-executor.md)
@@ -30,7 +30,7 @@ A platform run has an immutable specification containing at least:
 - installed Plugin/package/component identity;
 - provider/model profile identity;
 - current grant/capability schema version;
-- source/profile context references;
+- exact source references and purpose-bound M00 `CurrentProfileProjection` ID/revision/field set when context profile use is admitted;
 - turn, token/cost, tool, time and retry budgets.
 
 The exact R0 shape, validation rules and event semantics are owned by [`docs/contracts/agent-runtime.md`](../contracts/agent-runtime.md) and `crates/agent-runtime/`. The kernel pins resolved identities; it does not itself claim that an installation or grant exists. Existing package/install/component strings in `agent-run/v0` are opaque replay/audit provenance and MUST NOT be parsed into Plugin behavior. The implemented pure P0a producer of synthetic in-memory resolved identities is defined by [`docs/contracts/invocation-resolution.md`](../contracts/invocation-resolution.md); durable loaders remain planned.
@@ -68,6 +68,8 @@ ConversationSession
 ```
 
 The immutable run spec pins the root task contract. The model proposes plans and patches; Rust owns validation, legal transitions, budgets and replay. Parent-owned goal, prohibitions, deliverables and acceptance are immutable. A child planner may refine steps only. Worker context may continue across remediation; every reviewer call is fresh. Hooks and process exit are observations, not completion evidence.
+
+M30 consumes only `B-M00-M30-PROFILE`: an exact prompt-purpose/consumer/field-bounded projection with sensitive fields denied by policy. It cannot query M00 profile repositories, reinterpret profile values as authentication/authorization or directly mutate a fact. A model may emit an evidence-bound `ProfileProposal` through `B-M30-M00-PROFILE-PROPOSAL`; M00 alone validates, records and accepts/rejects it under user/admin policy.
 
 Before every provider call, the complete serialized request `q` must satisfy
 

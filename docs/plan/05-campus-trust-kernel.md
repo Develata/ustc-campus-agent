@@ -4,8 +4,8 @@
 
 - `Layer`: Shared campus authority
 - `Status`: Contract accepted; Source Registry implementation and concrete source approval planned
-- `Version`: `0.1.0`
-- `Last Review`: `2026-07-25`
+- `Version`: `0.2.0`
+- `Last Review`: `2026-08-02`
 - `Authority Owns`: source identity, immutable revision, authority order, temporal/conflict/provenance state, baseline advancement and publication gates
 - `Authority Defers To`: source-import/data-model contracts for exact shapes and package sourcePolicy for requested scope
 - `Counterpart Features`: all documents under `docs/features/`
@@ -142,15 +142,16 @@ L0 exact stable ID/path/normalized URL
 
 A reviewed current artifact takes precedence over an unreviewed refresh/RAG candidate. Responses expose last verified, observed/effective time, stale/refresh-pending state and conflict/uncertainty. Insufficient authority yields `cannot_verify`, not invented completion.
 
-## 8. Tenant-private data
+## 8. Tenant-private context boundary
 
-Public source/graph facts and tenant-private profile facts are separate authority classes.
+Public source/graph facts, M00-owned general user-context profile facts and product-owned private preferences are separate authority classes.
 
-- A profile fact is created from explicit user input/consent or a documented tenant-local derivation.
-- It is viewable and deletable by the owning user.
-- Shared caches and derived projections are tenant-keyed.
-- Private preferences/academic snapshots never enter public source, graph or feed projections.
-- Deletion/revocation semantics must cover durable payload, recoverable logs and caches before release claims.
+- M00 owns profile field/fact/proposal/confirmation/deletion semantics under [`user-context-profile/v0`](../contracts/user-context-profile.md); Campus Trust does not create a second profile store.
+- M72 may consume only an exact purpose-bound M00 projection and separately own opportunity-specific preferences/constraints.
+- M30 may receive a prompt-safe purpose-bound projection and may return only an AI proposal; it cannot confirm a fact or change account/membership/grant authority.
+- Shared caches and derived projections are tenant/user/purpose keyed.
+- Private context, preferences and academic snapshots never enter public source, graph or feed projections.
+- Deletion/revocation semantics must cover the owning module's durable payload, recoverable logs and caches before release claims.
 
 ## 9. Failure and recovery
 

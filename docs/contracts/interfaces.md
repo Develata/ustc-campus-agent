@@ -1,8 +1,29 @@
 # Interface registry
 
-This registry names draft public surfaces before implementation. [`module-boundaries.md`](module-boundaries.md) owns the large-module crossing rules; this file owns the concrete application/API/tool surface registry. Implementation PRs must update this document or create a more specific contract before changing surfaces.
+This registry names accepted or draft application, API and tool surfaces before implementation. [`module-boundaries.md`](module-boundaries.md) owns large-module crossing rules; this file owns concrete operation/transport/tool surface registration. Implementation PRs must update this document or a more specific owning contract before changing surfaces.
 
 The implemented single-node Agent state/event contract is defined in [`agent-runtime.md`](agent-runtime.md). The planned finite user-task lifecycle is defined in [`agent-harness.md`](agent-harness.md). The Agent–Plugin seam is [`agent-plugin-boundary/v0`](agent-plugin-boundary.md). The future typed multi-client boundary is [`client-shell/v2`](client-shell.md). None makes the application endpoints below operational.
+
+## M20 application operations — A1 accepted contract, implementation planned
+
+[`market-lifecycle/v0`](market-lifecycle.md) owns the complete Rust item/signature/privacy/error contract. This registry binds each application operation to that surface:
+
+| Operation | Request | Result | Status |
+|---|---|---|---|
+| `BrowseCatalog` | `CatalogBrowseQuery` | `MarketCatalogPage` | A1 accepted contract; implementation planned |
+| `ReadPackageDetail` | `CatalogPackageQuery` | `MarketPackageDetail` | A1 accepted contract; implementation planned |
+| `ReadOwnedInstallation` | `OwnedInstallationQuery` | `MarketInstallationView` | A1 accepted contract; implementation planned |
+| `ReadOwnedCurrentGrants` | `OwnedInstallationGrantQuery` | `MarketGrantPage` | A1 accepted contract; implementation planned |
+| `ReadOwnedPackageUpdate` | `OwnedUpdateQuery` | `MarketUpdateView` | A1 accepted contract; implementation planned |
+| `DisableOwnedInstallation` | `DisableInstallationRequest` | `DisableInstallationReceiptView` | A1 accepted contract; implementation planned |
+| `ResolveToolProjection` | existing M20 projection request | existing `ToolProjectionSnapshot`/`AgentToolsetView` mapping | bounded B5/P0a implementation; no A1 wrapper |
+| `RecheckInvocationAuthority` | existing frozen projection + proposed call | existing `AuthorizedInvocation` or typed denial | bounded B5/P0a implementation; no A1 wrapper |
+
+A1's exact new public set is the application error, limit, request/query, safe view/result, catalog port/fake and service types enumerated in the lifecycle contract; this registry creates no second numeric inventory. No application value is a wire DTO or implements Serde. Safe views expose no raw source-policy map, configuration entry, `SecretRef`, `ExecutionIdentity`, approval/evidence carrier, private route or event history.
+
+The owner-scoped tenant/user values are downstream scope claims, not request admission. A1 has zero production call sites. A later M10 adapter may map them only from current M00-admitted context; client body/query/header identity is forbidden. Absence and owner mismatch both map to `NotFound`. `DisableOwnedInstallation` delegates one existing owner command after ownership check and preserves owner-ledger-first idempotent replay.
+
+Contract acceptance adds no M10 route/server function. The HTTP table below remains independently planned; in particular, `/api/installations/{id}:disable` cannot call A1 until M00/M10 admission and wire contracts are accepted.
 
 ## Application HTTP endpoints — draft
 

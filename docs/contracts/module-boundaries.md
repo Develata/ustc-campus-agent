@@ -4,7 +4,7 @@
 
 - `Status`: Current contract
 - `Version`: `module-boundaries/v2`
-- `Last Review`: `2026-07-31`
+- `Last Review`: `2026-08-02`
 - `Owning Plan`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
 - `Task Policy`: [`../tasks/00-module-work-policy.md`](../tasks/00-module-work-policy.md)
 
@@ -26,26 +26,35 @@ This registry defines what may cross each large-module boundary. It does not pre
 
 | Boundary ID | Producer/owner | Consumer | Values/operation | Status |
 |---|---|---|---|---|
-| `B-M00-M10-ACTOR` | `M00` | `M10` | `AuthenticatedActor`, `PlatformRequestContext`, session denial | planned |
+| `B-M10-M00-AUTH` | `M10` | `M00` | one bounded adapter-validated `AuthAssertion`, explicit link/account intent or logout/revoke intent; no raw password/ticket/token or client-asserted `UserId` | accepted semantic contract; implementation planned |
+| `B-M00-M10-ACTOR` | `M00` | `M10` | active account/membership-backed `AuthenticatedActor`, `PlatformRequestContext`, session/admission denial; no profile payload | planned |
 | `B-M80-M10-CALL` | M80 produces request instances; M10 owns the versioned wire schema | `M10` | versioned client-core request from Dioxus, `ustc-agent` or inbound MCP; client build/target/protocol, admitted session projection, typed intent, precondition and correlation/idempotency identity | accepted contract; implementation planned |
 | `B-M10-M80-RESULT` | `M10` | `M80` | versioned response/error/projection plus compatibility or `UpgradeRequired` outcome reduced/rendered by the calling peer adapter | accepted contract; implementation planned |
 | `B-M10-M80-EVENT` | `M10` | `M80` | typed server event/stream value, monotone cursor and reconnect/resync outcome shared semantically across peer adapters | accepted contract; implementation planned |
 | `B-M10-APP-CALL` | `M10` | owning backend application module | one admitted typed application command/query; no transport or Dioxus type | planned per ingress |
 | `B-APP-M10-RESULT` | owning backend application module | `M10` | typed application result/error/event projection; no concrete adapter handle | planned per ingress |
-| `B-M20-M40-PROJECTION` | `M20` | `M40` | immutable tool projection, private route and current authorization result | partial implementation |
+| `B-M10-M20-MARKET-A1` | `M10` | `M20` | one admitted `BrowseCatalog`, `ReadPackageDetail`, `ReadOwnedInstallation`, `ReadOwnedCurrentGrants`, `ReadOwnedPackageUpdate` or `DisableOwnedInstallation` request; no wire/framework type | accepted contract; implementation and M00/M10 admission planned |
+| `B-M20-M10-MARKET-A1-RESULT` | `M20` | `M10` | exact A1 safe view/receipt or stable application error; no Serde, repository, evidence, execution identity or private route | accepted contract; implementation planned |
+| `B-M20-M40-PROJECTION` | `M20` | `M40` | immutable tool projection, private route and current authorization result | partial implementation; B7-B staged composition contract accepted, unimplemented |
 | `B-M30-M50-MODEL` | `M30` | `M50` | complete model request, ordered events, usage and typed provider errors | planned |
+| `B-M00-M30-PROFILE` | `M00` | `M30` | prompt-safe purpose-bound `CurrentProfileProjection` with exact field set/revision and no highly-sensitive default fields | accepted semantic contract; implementation planned |
+| `B-M30-M00-PROFILE-PROPOSAL` | `M30` via composition | `M00` | evidence-bound `ProfileProposal` only; cannot confirm, supersede or mutate account/membership/grant authority | accepted semantic contract; implementation planned |
 | `B-M20-M30-TOOLSET` | `M20` resolver via composition | `M30`/provider | frozen `AgentToolsetView` only; no private route/package/grant internals | partial implementation |
-| `B-M30-M40-CALL` | `M30` via composition | `M40` | correlated `AgentToolCall` proposal for staged prepare; no executor I/O yet | protocol/fake proof implemented; production planned |
-| `B-COMP-M30-EFFECT` | `M30` owns; composition issues | `M30` | approve/persist-intent/persist-receipt/result commands under current run phase | node runtime implemented; production composition planned |
-| `B-M40-M30-RESULT` | `M40` via composition | `M30` | validated bounded `AgentToolResult` carrying the persisted receipt reference when execution was attempted | protocol/fake proof implemented; production planned |
+| `B-M30-M40-CALL` | `M30` via composition | `M40` | persisted correlated `AgentToolCall` proposal for staged prepare/current recheck; no executor I/O yet | protocol/fake proof implemented; B7-B exact staged-test contract accepted, unimplemented; production planned |
+| `B-COMP-M30-EFFECT` | `M30` owns; composition issues | `M30` | persist exact intent before execution and exact receipt before result under current run phase | node runtime implemented; B7-B composition-test contract accepted, unimplemented; production composition planned |
+| `B-M40-M30-RESULT` | `M40` via composition | `M30` | correlated bounded `AgentToolResult` derived from the exact persisted receipt outcome | protocol/fake proof implemented; B7-B exact result-order contract accepted, unimplemented; production planned |
 | `B-M40-M51-EXEC` | `M40` | `M51` | bounded `PluginExecutionRequest`/`PluginExecutionOutcome` | planned |
 | `B-M60-M70-CHANGE` | `M60` | `M70` | accepted revision/fact pair, provenance/freshness/conflict | planned |
 | `B-M60-M71-PROC` | `M60` | `M71` | accepted facts/revisions supporting procedure candidates | planned |
 | `B-M60-M72-OPPORTUNITY` | `M60` | `M72` | reviewed opportunity/course facts with provenance/time/conflict | fixture subset only |
-| `B-M00-M72-PROFILE` | `M00` | `M72` | exact tenant/user/request context for private profile operations | planned |
+| `B-M00-M72-PROFILE` | `M00` | `M72` | minimum planning-purpose `CurrentProfileProjection`, purpose grant and exact projection revision; M72 owns only product-specific preferences/derived matches | accepted semantic contract; implementation planned |
 | `B-DOMAIN-M90-PORTS` | each domain module | `M90` | repository, journal, artifact, clock, scheduler, secret-ref, HTTP and telemetry ports | mostly planned |
 
 `B-M10-APP-CALL` and `B-APP-M10-RESULT` are boundary families, not universal command/result bags. Each server function or public route declares one owning application module and exact value contract. Dioxus/Axum transport types terminate in the M10 adapter.
+
+The accepted A1 rows are future specializations of those families, not live crossings. A1 request tenant/user fields are non-authoritative scope claims; a future M10 adapter may populate them only from `B-M00-M10-ACTOR`/current admitted context after that boundary is implemented. Client-supplied identity material cannot cross `B-M10-M20-MARKET-A1`. Until then, repository checks require zero production call sites. A1 results are safe M20 projections and historical command receipts, never domain aggregates, owner evidence or claims of cross-repository atomicity.
+
+The M00 authentication/profile rows are semantic boundaries under [`platform-account/v0`](platform-account.md) and [`user-context-profile/v0`](user-context-profile.md), not implemented APIs. `B-M10-M00-AUTH` begins only after the outer protocol adapter has validated the exchange and reduced raw credentials to bounded evidence; M00 then resolves external subject → account → membership → session. `B-M00-M10-ACTOR` never carries general profile data. M30 and M72 receive separate purpose-bound projections and cannot query M00 repositories. M30 may return a proposal through composition, but only an admitted M00 user/admin flow can accept, reject, supersede or delete a profile fact.
 
 ## 3. Client-core and peer-shell boundary
 
@@ -95,9 +104,10 @@ AgentToolResult
 The Agent never receives package/component/grant/executor identities except opaque audit-compatible IDs explicitly allowed by the run contract. Executors never receive Agent graph/checkpoint/prompt authority. The production sequence remains:
 
 ```text
-M20 projection/recheck
-→ M30 proposal
-→ composition invokes M40 prepare
+M20 freezes projection/routes
+→ composition binds provider raw call through frozen AgentToolsetView::bind_call
+→ M30 persists proposal derived from the bound AgentToolCall
+→ composition invokes M40 prepare and M20 current recheck
 → composition records M30 intent
 → M51 or peer executor
 → composition records M30 receipt

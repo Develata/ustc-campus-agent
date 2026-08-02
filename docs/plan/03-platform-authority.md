@@ -4,8 +4,8 @@
 
 - `Layer`: Authority architecture
 - `Status`: Accepted architecture; R0 Agent transition kernel implemented, finite harness and authority plane largely planned
-- `Version`: `0.8.0`
-- `Last Review`: `2026-07-31`
+- `Version`: `0.9.0`
+- `Last Review`: `2026-08-02`
 - `Authority Owns`: authority partition, canonical state ownership, client/execution-plane boundary
 - `Authority Defers To`: product positioning for scope and contracts for exact external shapes
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/04-bounded-agent-harness.md`, `docs/features/05-headless-client-and-agent-integration.md`
@@ -16,7 +16,7 @@
 
 ## 1. Scope
 
-This chapter defines where authoritative decisions live across the whole system. [`modules/00-module-map.md`](modules/00-module-map.md) divides that system into independently deliverable large modules. M10 owns the framework-neutral versioned client-protocol carrier; M80 owns one framework-neutral typed client core over it with peer Dioxus Web/Android, `ustc-agent` user/automation and inbound MCP adapters. M10 never depends on M80 core and no peer shells out to another. Dioxus remains the long-lived first-party graphical stack for required Web/PWA, Docker Compose server and Android targets. `ustc-agentctl` remains a separate operator surface. No client dependency or retained scaffold lands before its exact active planned acceptance rows and future bindings exist. Production database and external Agent framework choices remain unfrozen until a bounded slice proves the need.
+This chapter defines where authoritative decisions live across the whole system. [`modules/00-module-map.md`](modules/00-module-map.md) divides that system into independently deliverable large modules. M10 owns the framework-neutral versioned client-protocol carrier; M80 owns one framework-neutral typed client core over it with peer Dioxus Web/Android, `ustc-agent` user/automation and inbound MCP adapters. M10 never depends on M80 core and no peer shells out to another. Dioxus remains the long-lived first-party graphical stack for required Web/PWA, Docker Compose server and Android targets. `ustc-agentctl` remains a separate operator surface. No client dependency or retained scaffold lands before its exact active planned acceptance rows and future bindings exist. Storage is now fixed semantically as SQLite for `local-demo` and PostgreSQL for hosted/production behind M90 adapters; exact SQLx/version/schema implementation remains contract-gated. External Agent framework choices remain unfrozen until a bounded slice proves the need.
 
 Long-term shape:
 
@@ -30,7 +30,8 @@ M80 peer clients
     │ versioned server functions / HTTP / typed event stream
     ▼
 USTC Campus Agent authority plane
-├── identity/session
+├── runtime account/external identity/membership/session
+├── general user-context profile and purpose-bound projections
 ├── Market catalog projection
 ├── installation/grant resolver
 ├── finite HarnessRun / TaskGraph
@@ -60,7 +61,9 @@ Clients render/serialize state and submit typed intent through [`client-shell/v2
 | source definition and accepted revision | reviewed declaration + Rust-governed durable state | search/crawl status projections |
 | immutable raw/normalized evidence | content-addressed evidence objects with exact revision identity | parser/search indexes |
 | procedure/change/graph publication | reviewed canonical artifacts and durable receipts | PostgreSQL/search/feed projections |
-| tenant-private profile facts | tenant-scoped durable state | consented derived match/planning view |
+| runtime user account/external identity/tenant membership | M00 Rust transitions plus tenant-scoped durable state | admitted actor/session and safe account view |
+| general user-context profile facts/proposals | M00 registry/fact/confirmation/deletion transitions plus tenant-scoped durable state | purpose-bound current projection for clients/M30/M72 |
+| product-specific opportunity preferences | M72 consented tenant/user state | derived match/planning view |
 | HarnessRun phase, accepted TaskGraph and review/evidence state | Rust commands/events plus future durable journal | client plan panel, model prompts, framework task state |
 | canonical conversation/transcript and context artifacts | tenant-scoped durable session/artifact state | bounded PromptProjection and lossy context summary |
 | per-turn Agent tool definitions/calls/results | versioned platform tool protocol derived from one resolver snapshot | provider wire shape and client rendering |
@@ -135,6 +138,8 @@ The target architecture is one authority plane with replaceable execution locati
 
 A single-tenant local profile MAY run the same binaries for development, demo or private deployment. It is a deployment profile, not a second product or divergent state model.
 
+The `local-demo` profile defaults to SQLite and makes only single-host/low-concurrency claims. Hosted and production profiles require PostgreSQL and never fall back to SQLite. Both implement domain-owned repository ports; database rows, JSON operators and ORM/driver models do not become authority. Separate backend migrations and conformance obligations are frozen by [`storage-profiles/v0`](../contracts/storage-profiles.md).
+
 The required Docker Compose profile runs the native Fullstack server, durable dependencies and reviewed reverse-proxy/TLS/readiness/recovery wiring. It serves Web assets/SSR and admitted server-function/stream endpoints. Android is a separately built/signed client artifact that points to the deployed HTTPS server; it is not a process inside Compose.
 
 ### 4.1 Multi-client interaction boundary
@@ -156,12 +161,12 @@ Implemented now:
 
 Not yet implemented:
 
-- production identity/session;
+- durable runtime account/external-identity/membership/profile services and production identity/session admission;
 - durable installations and grants;
 - durable Agent orchestration/journal and production ToolGateway; the framework-neutral tool-protocol value subset is implemented;
 - finite HarnessRun/TaskGraph, clarification/review supervisor and context compaction;
 - source ingestion and publication state;
-- production database/evidence store;
+- SQLite/PostgreSQL operational adapters, migrations and production database/evidence store;
 - framework-neutral client-core, `ustc-agent` user/automation CLI and inbound MCP adapter;
 - Dioxus Fullstack Web journey, Docker Compose server profile and mandatory Android target; later iOS/desktop peers.
 

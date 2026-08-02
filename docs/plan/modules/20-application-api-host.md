@@ -5,8 +5,8 @@
 - `Module ID`: `M10`
 - `Status`: Accepted blueprint amended for Dioxus, user CLI and inbound MCP peer clients; daemon skeleton exists, application ingress implementation planned
 - `Implementation State`: `skeleton`
-- `Version`: `m10-application-ingress/v2`
-- `Last Review`: `2026-07-31`
+- `Version`: `m10-application-ingress/v3`
+- `Last Review`: `2026-08-02`
 - `Composition`: `apps/ustc-agentd`
 - `Primary code area`: `apps/ustc-agentd/`, future M10-owned `crates/client-protocol/`, plus shared Dioxus server-function declarations in the Fullstack application boundary
 
@@ -17,7 +17,7 @@
 - Axum/Dioxus Fullstack server-function ingress for Web and Android;
 - versioned HTTP JSON endpoints for `ustc-agent`, inbound MCP and other intentionally admitted heterogeneous clients;
 - typed SSE/stream event delivery;
-- authentication/session admission;
+- authentication protocol initiation/callback transport, M00 account/session admission and profile-management transport;
 - request/response/error/compatibility mapping;
 - idempotency/precondition and audit context;
 - one-ingress-to-one-application-operation dispatch.
@@ -30,6 +30,7 @@ M10 owns the versioned public wire schema and compatibility carrier (`client-pro
 
 - rendering Dioxus components or owning client navigation/presentation state;
 - deciding grants, package lifecycle, Agent phases, source acceptance or product facts;
+- resolving/merging platform accounts, accepting profile proposals or deriving authorization from profile values;
 - exposing direct database, container, filesystem or Plugin executor operations;
 - letting a server-function macro bypass admission or create a hidden authority path;
 - forcing an admitted server function through a redundant loopback HTTP request before the same application port;
@@ -53,7 +54,7 @@ M10 owns ingress, compatibility and event-delivery state only. Domain state rema
 
 ## 4. Public inputs and outputs
 
-First-party Dioxus inputs may arrive through generated server-function clients. `ustc-agent`, inbound MCP and other admitted heterogeneous clients arrive through explicit versioned HTTP/SSE routes. Every path carries admitted session context, bounded versioned values and optional idempotency/precondition identity, and every path terminates at the same application command/query ownership.
+First-party Dioxus inputs may arrive through generated server-function clients. `ustc-agent`, inbound MCP and other admitted heterogeneous clients arrive through explicit versioned HTTP/SSE routes. Every authenticated path carries admitted session context, bounded versioned values and optional idempotency/precondition identity, and terminates at the owning application command/query. The only pre-session exception is a registered authentication initiation/callback route: the transport/adapter validates protocol state and obtains a bounded `AuthAssertion`, then M00 alone resolves account/link/membership/session under `B-M10-M00-AUTH`.
 
 Outputs are typed accepted/denied responses, compatibility outcomes and monotone events/streams. Initial operation families remain those registered in [`../../contracts/interfaces.md`](../../contracts/interfaces.md):
 
@@ -90,7 +91,7 @@ Dioxus component/router/signal/WebView types remain forbidden inside M10. Dioxus
 
 Allowed dependencies:
 
-- `M00` request/session/client compatibility admission;
+- M00 public account/auth/session/profile application interfaces and request/client compatibility admission; no M00 repository;
 - public application command/query interfaces of `M20`, `M30`, `M60`, `M70`, `M71` and `M72`;
 - `M90` HTTP runtime, config, telemetry, event-subscription and deployment adapters;
 - Dioxus/Axum server-function transport declarations confined to the Fullstack ingress adapter.
@@ -126,6 +127,8 @@ SSE/typed-stream reconnect resumes from a server-owned monotone cursor. Disconne
 - Unsupported client/API/schema version: typed compatibility/upgrade error and no domain call.
 - Malformed/oversized request: reject before application dispatch.
 - Missing/invalid session: M00 denial and no downstream call.
+- Invalid/replayed auth callback, ambiguous subject or account-link conflict: typed M00/auth-adapter denial, no account/profile fabrication and no session.
+- Profile purpose/field/sensitivity/revision denial: stable private error and no profile payload in transport diagnostics.
 - Stale precondition/idempotency conflict: typed conflict response.
 - Downstream typed denial: stable error code; no transport-level success disguise.
 - Event cursor too old or unknown: explicit refresh/resync outcome.
@@ -135,7 +138,7 @@ SSE/typed-stream reconnect resumes from a server-owned monotone cursor. Disconne
 
 ## 9. Configuration and secrets
 
-Typed config covers listener addresses, public/Web origin, Android server origin policy, TLS/proxy trust, body/time/connection limits, stream heartbeat/buffer limits, supported client/API versions, minimum client version and telemetry redaction. Secret values are references supplied by M90; endpoint config embeds no credential.
+Typed config covers listener addresses, public/Web origin, Android server origin policy, auth initiation/callback routes and allowed redirect origins, TLS/proxy trust, body/time/connection limits, stream heartbeat/buffer limits, supported client/API versions, minimum client version and telemetry redaction. Secret values are references supplied by M90; endpoint config embeds no credential.
 
 Web same-origin session and Android secure-session/token transport are separate target adapters under one admission policy.
 
@@ -162,6 +165,7 @@ Hot paths are request decode/admission, compatibility checks, read-model seriali
 - Dioxus Fullstack server-function query/command/event ingress for one real Web journey;
 - the same semantic client-core result/error/event behavior consumed by Android, CLI and inbound MCP where the operation applies;
 - read-only Market browse/detail;
+- demo account/session admission plus the current user's safe account/profile read/propose/confirm/reject/delete operation families once exact M00 contracts and active cases exist;
 - minimal finite run create/read/cancel/events;
 - stable errors, request correlation, reconnect cursor and upgrade-required behavior;
 - strict size/version/session/idempotency gates;
@@ -186,13 +190,14 @@ Hot paths are request decode/admission, compatibility checks, read-model seriali
 1. `ingress-registry` — server-function/public route/version/error registry.
 2. `ingress-contract` — first-party/public request/response/event/compatibility values.
 3. `request-admission` — bounds, M00 actor, client version and precondition mapping.
-4. `server-function-adapter` — Dioxus/Axum endpoint declarations and dispatch.
-5. `user-integration-http-adapter` — exact REST/SSE routes required by `ustc-agent`, inbound MCP or another named heterogeneous consumer.
-6. `application-dispatch` — one ingress to one use case.
-7. `error-projection` — stable safe error and upgrade envelopes.
-8. `event-stream` — cursor, heartbeat, reconnect and backpressure.
-9. `server-lifecycle` — config preflight, Dioxus attachment, readiness and drain.
-10. `ingress-conformance` — black-box and import-boundary fixtures.
+4. `auth-profile-adapter` — protocol callback-to-`AuthAssertion` transport and safe account/profile DTO mapping; owns no account/profile decision.
+5. `server-function-adapter` — Dioxus/Axum endpoint declarations and dispatch.
+6. `user-integration-http-adapter` — exact REST/SSE routes required by `ustc-agent`, inbound MCP or another named heterogeneous consumer.
+7. `application-dispatch` — one ingress to one use case.
+8. `error-projection` — stable safe error and upgrade envelopes.
+9. `event-stream` — cursor, heartbeat, reconnect and backpressure.
+10. `server-lifecycle` — config preflight, Dioxus attachment, readiness and drain.
+11. `ingress-conformance` — black-box and import-boundary fixtures.
 
 ## 15. Exit gate
 

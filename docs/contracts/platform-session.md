@@ -162,6 +162,8 @@ Invariants:
 - the digest and adapter ID may appear in internal replay evidence, but no validation, decision, evolution or serialization error ever echoes rejected source text or secret-derived material;
 - a platform `UserId` is not inferred from provider-subject text by this kernel.
 
+**Adapter interpretation.** [`platform-account/v0`](platform-account.md) freezes the future adapter-side meaning: `credential_not_after` is the latest instant M00 may continue trusting this authentication evidence without reauthentication. It is not mechanically copied from a one-use CAS service-ticket lifetime and is not assumed equal to an OIDC token `exp` or the local session's independent idle/absolute policy. This clarification does not rename or reinterpret the implemented B2 field; changing that persisted/public surface still requires a new session contract version under §16.
+
 The pure domain verifies the shape and temporal consistency of this value. It does not verify the external credential represented by it.
 
 Structural validity is not authentication. A syntactically valid or successfully deserialized `SessionCredentialEvidence` is only a claim from a trusted M00 authentication-adapter/application boundary; it is never sufficient evidence at an untrusted M10/transport boundary. B2 exposes no raw-credential-to-evidence conversion and does not hash credential text. Final composition must prevent untrusted callers from invoking `OpenSession` directly with self-asserted evidence.

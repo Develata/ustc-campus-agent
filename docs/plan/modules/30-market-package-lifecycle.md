@@ -3,8 +3,9 @@
 ## Metadata
 
 - `Module ID`: `M20`
-- `Status`: Accepted blueprint; manifest/package-catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` semantic authority-read transaction/assembly, bounded `M20-B6` update/rollback domain plus semantic fake and pure invocation-resolver evidence exist; durable installation/grant/update repositories, artifact switching and production composition remain planned
+- `Status`: Accepted blueprint; manifest/package-catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` semantic authority-read transaction/assembly and bounded M20-B6 update/rollback evidence exist; exact `M20-B7-A1` application-façade and `M20-B7-B` test-only composition contracts are accepted but unimplemented; durable repositories, artifact switching, M00/M10 caller admission, wire/client delivery and production ToolGateway composition remain planned
 - `Implementation State`: `partial-evidence`
+- `Contract acceptance note`: Contract acceptance creates no source, production caller, effect intent, executor, durable state or acceptance promotion.
 - `Version`: `m20-market-package/v0`
 - `Last Review`: `2026-08-02`
 - `Owning Plan`: [`../04-market-and-plugin-lifecycle.md`](../04-market-and-plugin-lifecycle.md)
@@ -66,6 +67,10 @@ MarketEvent / MarketError
 
 The resolver emits immutable authority entries and gateway-private routes. Agent-facing protocol values are produced through `M40`, not by exposing Market internals.
 
+Accepted B7-A1 narrows the first application slice to `BrowseCatalog`, exact package detail, owner-scoped installation/current-grant/update reads and owner-scoped Disable. It reuses the existing owner repositories and `InvocationAuthorityService`; it adds no Install/Enable/Grant/Update authority mutation, no M00 replacement actor, no Serde/wire DTO and no production call site. Its exact Rust surface/privacy/error contract is [`market-lifecycle/v0`](../../contracts/market-lifecycle.md); [`interfaces.md`](../../contracts/interfaces.md) owns operation registration.
+
+Accepted B7-B is a later, separately granted composition-root test slice over staged fake M40, semantic fake M30 journal and fake executor. It implements no production M40 crate and promotes no acceptance row merely by contract acceptance.
+
 ## 5. Dependency direction
 
 Allowed dependencies:
@@ -79,6 +84,8 @@ Allowed callers:
 - `M10` application API;
 - `M40` for projection/current invocation authority;
 - composition/bootstrap commands.
+
+The accepted A1 boundary is not yet an allowed live caller path: only semantic tests may call it until M00 current admission and the M10 mapping contract are implemented. Client-provided tenant/user fields are never authoritative.
 
 Forbidden dependencies:
 
@@ -173,7 +180,7 @@ Existing `invocation.rs` is reviewed against items 7–8; it is not permission t
 
 ### Delivery sequence
 
-The canonical roadmap batch schedule lives in [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md) §7 (`M20-B0` through `M20-B7`). B1–B4 provide bounded catalog/capability/installation/grant evidence. Bounded `M20-B5` provides one GAT read transaction across separate catalog/installation/current-or-exact-grant/policy carriers, service-owned candidate/current assembly, the adopted resolver/recheck and post-success precondition verification under `crate::market::authority`. Bounded `M20-B6` now provides pure update/rollback aggregate evidence and an atomic in-memory semantic package-update repository under `crate::market::update`, including exact approval/readiness/confirmation/rollback evidence, complete-current grant stale-on-Apply/Rollback semantics, receipt-prefix rebuild and cross-stream reference bijection tests. These slices create no production grant/update issuer, durable lifecycle state, artifact-store switch, crash recovery, enable evidence, effect intent or acceptance promotion. Remaining work is `M20-B7` production-facing API/composition/fake M40 consumer plus future durable adapters. The module remains `partial-evidence`; B6 effects no `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted` promotion.
+The canonical roadmap batch schedule lives in [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md) §7. B1–B6 bounded evidence remains unchanged. Accepted B7 is staged: A1 first implements only the internal safe-read/Disable façade and semantic catalog fake; B7-B later implements composition-root test evidence for current recheck → intent → fake execution/reconciliation → receipt → result. A2 authority-bearing mutations, M90 durability and M10/M80 delivery remain separate contracts/slices. Acceptance of the B7 contract is not implementation evidence, source creation, runtime execution, durability or status promotion. The module remains `partial-evidence`; each implementation requires a separate finite grant after pre-edit representability review.
 
 ## 14. Exit gate
 

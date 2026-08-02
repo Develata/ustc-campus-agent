@@ -2,15 +2,15 @@
 
 ## Metadata
 
-- `Status`: Accepted `market-lifecycle/v0` contract; historical `B1-0` established the contract, while canonical `M20-B1` package/catalog, `M20-B2` capability-registry, bounded `M20-B3-s1` managed-installation, bounded `M20-B4` grant, bounded `M20-B5` transaction-current authority assembly and bounded `M20-B6` update/rollback domain plus semantic fake evidence are implemented; production issuers, durable lifecycle/update repositories, crash recovery, artifact switching and B7 composition remain planned; pure invocation resolver and call-time recheck remain the adopted items 7–8
+- `Status`: Accepted `market-lifecycle/v0` contract; canonical B1–B5 evidence and the bounded `M20-B6` update/rollback domain plus semantic fake evidence are implemented, while the exact `M20-B7-A1` application façade and `M20-B7-B` test-only composition contracts are accepted but unimplemented; production callers/issuers, durable lifecycle/update repositories, crash recovery, artifact switching, wire/client delivery and production ToolGateway composition remain planned; pure invocation resolver and call-time recheck remain the adopted items 7–8
 - `Version`: `market-lifecycle/v0`
 - `Last Review`: `2026-08-02`
 - `Owning Plan`: [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)
 - `Large-module Blueprint`: [`../plan/modules/30-market-package-lifecycle.md`](../plan/modules/30-market-package-lifecycle.md)
 - `Counterpart Contracts`: [`plugin-package.md`](plugin-package.md), [`invocation-resolution.md`](invocation-resolution.md), [`permissions.md`](permissions.md), [`agent-plugin-boundary.md`](agent-plugin-boundary.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for state ownership, [`agent-runtime.md`](agent-runtime.md) for run/effect state, and [`invocation-resolution.md`](invocation-resolution.md) for the adopted projection/recheck decision shapes
-- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); `M20-B2` through bounded `M20-B6` are supporting domain/semantic-fake evidence only, mint no production grant/enable evidence, create no effect intent, switch no production artifact and promote no acceptance row; durable adapters and B7 composition remain required
-- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` package validation/catalog metadata; `crates/platform-core/src/market/capability.rs` for `M20-B2`; `crates/platform-core/src/market/installation.rs` for `M20-B3-s1`; `crates/platform-core/src/market/grant.rs` for `M20-B4`; `crates/platform-core/src/market/authority.rs` for bounded `M20-B5` carrier-by-carrier read transactions and authority assembly; `crates/platform-core/src/market/update.rs` and `crates/platform-core/tests/market_package_update.rs` for bounded `M20-B6` update/rollback domain and semantic package-update repository evidence; `crates/platform-core/src/invocation.rs` for adopted resolver/recheck items 7–8 and their non-authorizing shared call-prefix helper
+- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); exact B7 contract acceptance is not implementation evidence and promotes no row
+- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` package validation/catalog metadata; `crates/platform-core/src/market/capability.rs` for `M20-B2`; `crates/platform-core/src/market/installation.rs` for `M20-B3-s1`; `crates/platform-core/src/market/grant.rs` for `M20-B4`; `crates/platform-core/src/market/authority.rs` for bounded `M20-B5` carrier-by-carrier read transactions and authority assembly; `crates/platform-core/src/market/update.rs` and `crates/platform-core/tests/market_package_update.rs` for bounded `M20-B6` update/rollback domain and semantic package-update repository evidence; `crates/platform-core/src/invocation.rs` for adopted resolver/recheck items 7–8; accepted future B7 carriers are `crates/platform-core/src/market/application.rs` for A1 and composition-root test support under `apps/ustc-agentd/tests/` for B7-B, neither of which exists yet
 
 ## 1. Scope and authority
 
@@ -897,9 +897,11 @@ The deterministic `InMemoryInvocationAuthorityRepository` is a semantic fake. It
 Production call composition is owned by the composition root, not by M20. The authoritative ordering lives in [`agent-plugin-boundary.md`](agent-plugin-boundary.md) §7 and [`../plan/modules/50-tool-gateway-execution.md`](../plan/modules/50-tool-gateway-execution.md) §6. For illustration, the flow from M20's perspective is:
 
 ```text
-M20 projection/recheck
-→ M30 proposal
-→ composition invokes M40 prepare
+M20 freezes projection/routes
+→ provider raw call binds through frozen AgentToolsetView::bind_call
+→ M30 persists ToolCallProposal::from(bound AgentToolCall)
+→ composition invokes M40 prepare/correlation on the bound call
+→ M20 transaction-current recheck
 → composition records M30 effect intent
 → M51/peer executor
 → M40 bounded outcome
@@ -908,21 +910,290 @@ M20 projection/recheck
 → M30 result state
 ```
 
-M20 MUST NOT create M30 `EffectIntent` and MUST NOT call an executor.
+M20 MUST NOT create M30 `ToolCallProposal`/`EffectIntent` and MUST NOT call an executor. Binding a provider raw call into an `AgentToolCall` is a composition/protocol step over the frozen `AgentToolsetView`; an unknown tool fails before any M30 proposal exists.
 
 ### M20-LC-015 — historical projections are immutable
 
 Package update, disable or revoke MUST change only future projections and current call-time denial. It MUST NOT mutate an already frozen `ToolProjectionSnapshot`, an in-flight `RunSpec`, or a historical receipt.
+
+### M20-B7-A1 — accepted application façade contract; implementation planned
+
+A1 defines one M20-owned, framework-neutral façade over existing B1–B6 owner ports. Its exact operation set is:
+
+```text
+BrowseCatalog
+ReadPackageDetail
+ReadOwnedInstallation
+ReadOwnedCurrentGrants
+ReadOwnedPackageUpdate
+DisableOwnedInstallation
+```
+
+The existing `InvocationAuthorityService<R>` remains the sole M20 projection/current-call application service. A1 adds no wrapper, alternate resolver, allow boolean or joined authority model. It selects no latest version, infers no owner, creates no installation, issues/replaces no grant, mints no evidence, applies no update and serializes no wire DTO.
+
+Owner-scoped requests carry checked `TenantId`/`UserId` values as downstream scope claims, not authentication or authority evidence. A1 has zero production call sites. Until M00-B3/B5 and an exact M10 mapping contract exist, the operations are semantic-test-only. A later M10 adapter MUST derive tenant/user from a current M00-admitted request context; it MUST NOT copy them from a client body, query or header.
+
+#### Exact Rust surface
+
+The future module is exactly `crates/platform-core/src/market/application.rs`, exported as `pub mod application;`. Its complete public item set is:
+
+```text
+MarketApplicationConstructionError
+MarketApplicationRepositoryError
+MarketApplicationError
+CatalogPageLimit
+CatalogBrowseQuery
+CatalogPackageQuery
+OwnedInstallationQuery
+OwnedInstallationGrantQuery
+OwnedUpdateQuery
+DisableInstallationRequest
+MarketPackageSummary
+MarketPackageDetail
+MarketCatalogPage
+MarketInstalledComponentView
+MarketPackagePinView
+MarketInstallationView
+MarketGrantView
+MarketGrantPage
+MarketUpdateView
+DisableInstallationReceiptView
+CatalogReadRepository
+InMemoryCatalogReadRepository
+MarketApplicationService
+```
+
+No other public item kind is admitted. Exact constructors and request accessors are:
+
+```rust
+CatalogPageLimit::new(value: u16) -> Result<Self, MarketApplicationConstructionError>
+CatalogPageLimit::get(&self) -> u16
+CatalogBrowseQuery::new(revision: Option<CatalogRevision>, offset: u32, limit: CatalogPageLimit) -> Result<Self, MarketApplicationConstructionError>
+CatalogPackageQuery::new(revision: Option<CatalogRevision>, package_id: PackageId, package_version: PackageVersion) -> Self
+OwnedInstallationQuery::new(tenant_id: TenantId, user_id: UserId, installation_id: InstallationId) -> Self
+OwnedInstallationGrantQuery::new(tenant_id: TenantId, user_id: UserId, installation_id: InstallationId, expected_installation_revision: InstallationRevision) -> Self
+OwnedUpdateQuery::new(tenant_id: TenantId, user_id: UserId, update_id: PackageUpdateId) -> Self
+DisableInstallationRequest::new(command_id: InstallationCommandId, tenant_id: TenantId, user_id: UserId, installation_id: InstallationId, expected_revision: InstallationRevision) -> Self
+```
+
+Their only remaining public query/request accessors are exactly:
+
+```rust
+CatalogBrowseQuery::catalog_revision(&self) -> Option<&CatalogRevision>
+CatalogBrowseQuery::offset(&self) -> u32
+CatalogBrowseQuery::limit(&self) -> CatalogPageLimit
+CatalogPackageQuery::catalog_revision(&self) -> Option<&CatalogRevision>
+CatalogPackageQuery::package_id(&self) -> &PackageId
+CatalogPackageQuery::package_version(&self) -> &PackageVersion
+OwnedInstallationQuery::tenant_id(&self) -> &TenantId
+OwnedInstallationQuery::user_id(&self) -> &UserId
+OwnedInstallationQuery::installation_id(&self) -> &InstallationId
+OwnedInstallationGrantQuery::tenant_id(&self) -> &TenantId
+OwnedInstallationGrantQuery::user_id(&self) -> &UserId
+OwnedInstallationGrantQuery::installation_id(&self) -> &InstallationId
+OwnedInstallationGrantQuery::expected_installation_revision(&self) -> &InstallationRevision
+OwnedUpdateQuery::tenant_id(&self) -> &TenantId
+OwnedUpdateQuery::user_id(&self) -> &UserId
+OwnedUpdateQuery::update_id(&self) -> &PackageUpdateId
+DisableInstallationRequest::command_id(&self) -> &InstallationCommandId
+DisableInstallationRequest::tenant_id(&self) -> &TenantId
+DisableInstallationRequest::user_id(&self) -> &UserId
+DisableInstallationRequest::installation_id(&self) -> &InstallationId
+DisableInstallationRequest::expected_revision(&self) -> &InstallationRevision
+```
+
+The exact view accessors are:
+
+```rust
+MarketPackageSummary::package_id(&self) -> &PackageId
+MarketPackageSummary::package_version(&self) -> &PackageVersion
+MarketPackageSummary::publisher(&self) -> &str
+MarketPackageSummary::tier(&self) -> PackageTier
+MarketPackageSummary::display_name(&self) -> &str
+MarketPackageSummary::implementation_status(&self) -> ImplementationStatus
+MarketPackageSummary::install_policy(&self) -> &InstallPolicy
+MarketPackageDetail::catalog_revision(&self) -> &CatalogRevision
+MarketPackageDetail::catalog_digest(&self) -> &Sha256Digest
+MarketPackageDetail::summary(&self) -> &MarketPackageSummary
+MarketPackageDetail::description(&self) -> Option<&str>
+MarketPackageDetail::components(&self) -> &[ComponentDeclaration]
+MarketPackageDetail::capabilities(&self) -> &[CapabilityId]
+MarketPackageDetail::package_digest(&self) -> &Sha256Digest
+MarketPackageDetail::component_declaration_set_digest(&self) -> &Sha256Digest
+MarketPackageDetail::capability_manifest_digest(&self) -> &Sha256Digest
+MarketPackageDetail::source_policy_digest(&self) -> &Sha256Digest
+MarketCatalogPage::catalog_revision(&self) -> &CatalogRevision
+MarketCatalogPage::catalog_digest(&self) -> &Sha256Digest
+MarketCatalogPage::packages(&self) -> &[MarketPackageSummary]
+MarketCatalogPage::next_offset(&self) -> Option<u32>
+MarketInstalledComponentView::component_id(&self) -> &ComponentId
+MarketInstalledComponentView::kind(&self) -> ComponentKind
+MarketInstalledComponentView::version(&self) -> &ComponentVersion
+MarketInstalledComponentView::digest(&self) -> &Sha256Digest
+MarketPackagePinView::catalog_revision(&self) -> &CatalogRevision
+MarketPackagePinView::package_id(&self) -> &PackageId
+MarketPackagePinView::package_version(&self) -> &PackageVersion
+MarketPackagePinView::package_digest(&self) -> &Sha256Digest
+MarketPackagePinView::components(&self) -> &[MarketInstalledComponentView]
+MarketPackagePinView::component_set_digest(&self) -> &Sha256Digest
+MarketPackagePinView::capability_manifest_digest(&self) -> &Sha256Digest
+MarketInstallationView::installation_id(&self) -> &InstallationId
+MarketInstallationView::package_pin(&self) -> &MarketPackagePinView
+MarketInstallationView::state(&self) -> ManagedInstallationState
+MarketInstallationView::revision(&self) -> &InstallationRevision
+MarketInstallationView::configuration_revision(&self) -> &ConfigurationRevision
+MarketInstallationView::configuration_digest(&self) -> &Sha256Digest
+MarketGrantView::snapshot_id(&self) -> &GrantSnapshotId
+MarketGrantView::installation_id(&self) -> &InstallationId
+MarketGrantView::installation_revision(&self) -> &InstallationRevision
+MarketGrantView::catalog_revision(&self) -> &CatalogRevision
+MarketGrantView::package_id(&self) -> &PackageId
+MarketGrantView::package_version(&self) -> &PackageVersion
+MarketGrantView::package_digest(&self) -> &Sha256Digest
+MarketGrantView::capability_id(&self) -> &CapabilityId
+MarketGrantView::capability_definition(&self) -> &CapabilityDefinition
+MarketGrantView::scope(&self) -> &GrantScope
+MarketGrantView::confirmation_policy(&self) -> &ConfirmationPolicy
+MarketGrantView::state(&self) -> GrantState
+MarketGrantView::version(&self) -> &GrantVersion
+MarketGrantPage::installation_id(&self) -> &InstallationId
+MarketGrantPage::observed_installation_revision(&self) -> &InstallationRevision
+MarketGrantPage::grants(&self) -> &[MarketGrantView]
+MarketUpdateView::update_id(&self) -> &PackageUpdateId
+MarketUpdateView::installation_id(&self) -> &InstallationId
+MarketUpdateView::rollback_pin(&self) -> &MarketPackagePinView
+MarketUpdateView::target_pin(&self) -> &MarketPackagePinView
+MarketUpdateView::change_class(&self) -> &UpdateChangeClass
+MarketUpdateView::state(&self) -> UpdateState
+MarketUpdateView::revision(&self) -> &UpdateRevision
+MarketUpdateView::applied_installation_revision(&self) -> Option<&InstallationRevision>
+DisableInstallationReceiptView::command_id(&self) -> &InstallationCommandId
+DisableInstallationReceiptView::installation_id(&self) -> &InstallationId
+DisableInstallationReceiptView::post_state(&self) -> ManagedInstallationState
+DisableInstallationReceiptView::post_revision(&self) -> &InstallationRevision
+```
+
+Every accessor exposes the exact redacted DTO field type rather than an owner aggregate, event, evidence object, execution identity, private route or repository handle. Pages return slices of safe view DTOs; optional fields return `Option<&T>` or `Option<u32>`; states that are copy enums return by value; digests and semantic IDs return shared references. No accessor returns mutable references, iterators with side effects or raw source-policy/configuration maps. `MarketApplicationService` may construct these view values, but external callers cannot construct or mutate them.
+
+The exact port/service signatures are:
+
+```rust
+pub trait CatalogReadRepository {
+    fn load_current(
+        &self,
+    ) -> Result<Arc<CatalogReadModel>, MarketApplicationRepositoryError>;
+
+    fn load_exact(
+        &self,
+        revision: &CatalogRevision,
+    ) -> Result<Option<Arc<CatalogReadModel>>, MarketApplicationRepositoryError>;
+}
+
+impl InMemoryCatalogReadRepository {
+    pub fn try_new(
+        revisions: Vec<CatalogReadModel>,
+        current_revision: CatalogRevision,
+    ) -> Result<Self, MarketApplicationRepositoryError>;
+}
+
+impl<C, I, G, U> MarketApplicationService<C, I, G, U>
+where
+    C: CatalogReadRepository,
+    I: InstallationRepository,
+    G: GrantRepository,
+    U: PackageUpdateRepository,
+{
+    pub fn new(catalogs: C, installations: I, grants: G, updates: U) -> Self;
+    pub fn browse_catalog(&self, query: &CatalogBrowseQuery) -> Result<MarketCatalogPage, MarketApplicationError>;
+    pub fn package_detail(&self, query: &CatalogPackageQuery) -> Result<MarketPackageDetail, MarketApplicationError>;
+    pub fn installation(&self, query: &OwnedInstallationQuery) -> Result<MarketInstallationView, MarketApplicationError>;
+    pub fn current_grants(&self, query: &OwnedInstallationGrantQuery) -> Result<MarketGrantPage, MarketApplicationError>;
+    pub fn package_update(&self, query: &OwnedUpdateQuery) -> Result<MarketUpdateView, MarketApplicationError>;
+    pub fn disable_installation(&mut self, request: DisableInstallationRequest) -> Result<DisableInstallationReceiptView, MarketApplicationError>;
+}
+```
+
+`Arc` is `std::sync::Arc`. `InMemoryCatalogReadRepository::try_new` is its only public inherent method; it accepts `1..=64` exact immutable catalog revisions, rejects duplicate/current-missing histories and exposes no mutator. `CatalogPageLimit` accepts only `1..=100`. Offset `0` may select current; any nonzero continuation offset requires an exact `CatalogRevision`. Paging preserves the existing canonical `(package_id, package_version)` order, returns the selected revision/digest and never continues across revisions. Package detail requires exact package ID/version and has no fuzzy/latest/same-name fallback.
+
+#### Visibility, traits and safe projection
+
+All fields are private. Request/query constructors are checked and read-only; view constructors are private to `application.rs`. The three fieldless error enums derive exactly `Debug, Clone, Copy, PartialEq, Eq`; `CatalogPageLimit` derives exactly `Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash` plus manual bounded `Debug`; query/request/view types derive exactly `Clone, PartialEq, Eq` plus manual bounded/redacted `Debug`; `InMemoryCatalogReadRepository` derives only `Clone`; `MarketApplicationService` derives nothing. The fake and service use manual authority-redacted `Debug` without inner `Debug` bounds.
+
+No A1 type implements `Default`, `Deref`, `DerefMut`, Serde, unchecked/raw conversion or mutable-field access. The service exposes no `into_parts`, repository mutator, raw event/history API or authority-evidence constructor.
+
+Safe views expose only:
+
+- package summaries/details: reviewed typed metadata and declaration/digest fields; raw source-policy map, absent source/license fields and private execution details remain excluded;
+- installation/update pins: catalog/package/component IDs, kinds, versions and digests through `MarketPackagePinView`; every `ExecutionIdentity` is excluded;
+- installation state/revision and configuration revision/digest; configuration entries, `NonSecretText`, `SecretRef` and secret-ref IDs are excluded;
+- current grant identity/binding/state/version; approval IDs/evidence, consumed-approval indexes and history are excluded;
+- update state/pins/change/revisions; readiness/confirmation/rollback evidence, policies, private routes and history are excluded.
+
+`MarketGrantPage` is the complete canonically sorted current nonterminal set for one exact installation/revision. Every nested installation ID must agree; revoked history is absent. `DisableInstallationReceiptView` is a historical command disposition, not a current-state claim.
+
+Exact fieldless errors are:
+
+```text
+MarketApplicationConstructionError
+  PageLimitOutOfRange
+  UnboundContinuationOffset
+
+MarketApplicationRepositoryError
+  Unavailable
+  EmptyCatalogHistory
+  TooManyCatalogRevisions
+  DuplicateCatalogRevision
+  CurrentCatalogMissing
+  CorruptCatalog
+
+MarketApplicationError
+  NotFound
+  Conflict
+  LifecycleDenied
+  RepositoryUnavailable
+  CorruptAuthority
+```
+
+Absent and foreign-owned values both map to `NotFound`. Revision/command-ledger conflicts map to `Conflict`; legal owner-state denials to `LifecycleDenied`; I/O/persistence unavailability to `RepositoryUnavailable`; corrupt history/index/replay or unclassified owner-error drift to `CorruptAuthority`. Errors carry no arbitrary text, input or wrapped source error.
+
+#### Disable and fake semantics
+
+`DisableOwnedInstallation` loads the exact installation, maps absence/owner mismatch to `NotFound`, constructs exactly one existing `InstallationCommand::disable` with the request's command ID and expected revision, then delegates to `InstallationRepository`. The façade MUST NOT reject the expected revision before the owner repository's command ledger can replay an exact prior receipt. A typed-equal retry returns the prior receipt and emits no second event; conflicting command reuse or stale new command is `Conflict`. Immutable ownership plus the owner repository's expected-revision decision closes the load/execute race for a new command.
+
+A1 reuses `InMemoryInstallationRepository`, `InMemoryGrantRepository` and `InMemoryPackageUpdateRepository`; it creates no second aggregate implementation. Independent safe reads identify their owner revisions and do not claim cross-repository atomicity. Invocation projection/recheck remains solely `InvocationAuthorityService` under one verified transaction.
+
+The exact future integration-test functions are:
+
+```text
+anonymous_catalog_paging_is_revision_bound_bounded_and_exact
+package_detail_is_exact_without_latest_or_fallback
+owned_reads_hide_foreign_objects_and_exclude_sensitive_carriers
+current_grants_require_exact_installation_revision_and_canonical_order
+disable_preserves_owner_ledger_first_idempotency_and_maps_one_event
+application_facade_exposes_no_transport_or_authority_issuer_surface
+```
+
+They use production-public API only, assert exact typed variants and admit no test-only public constructor. A1 still proves no process restart, database transaction, migration, event delivery, real API route or production caller.
+
+### M20-B7-B — accepted composition-evidence contract; implementation planned
+
+B7-B adds no production M40 crate or application code. It is a composition-root integration-test contract that stages existing public M20/M30/protocol carriers and a semantic fake executor/journal. [`agent-plugin-boundary.md`](agent-plugin-boundary.md) §7 owns its exact support inventory, persistence/execution/result order, reconciliation and denial matrix. This contract owns only the M20 side:
+
+- `InvocationAuthorityService` performs the one transaction-current recheck before intent/executor I/O;
+- deny-side current drift returns no prepared authority and reaches no intent, executor, receipt or result;
+- disable/update/revoke change current/future authority while a frozen historical view remains immutable;
+- the B3/B5/B6 evidence bridge is compositional and MUST NOT expose owner-private evidence constructors or claim one external test executed them;
+- B7-B remains test-only semantic evidence and proves no durability, production executor or acceptance pass by contract alone.
 
 ## 9. Non-goals and current status
 
 This contract does not own:
 
 - anonymous browse/detail delivery through M10/M80 application/query adapters remains planned (`MARKET-001`); the `M20-B1` (historical `B1-1`) anonymous metadata domain read model is implemented but is not delivery evidence;
-- durable installation/grant/enable/disable/update mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); bounded B3/B4/B6 domain evidence issues no production enable/grant/update issuer evidence, bounded B5 semantic authority transactions and bounded B6 package-update transactions create no durable state or acceptance promotion, and B6 does not switch artifacts;
+- durable installation/grant/enable/disable/update mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); accepted A1 covers only internal safe reads plus Disable with zero production call sites, and accepted B7-B is test-only; neither creates durable state, production issuer authority, artifact switching or acceptance evidence;
 - a production database/repository transaction, durable update repository, crash-recovery proof or TOCTOU closure (planned);
 - provider, network, MCP, daemon HTTP/SSE or UI adapters;
 - external tool execution, durable journal or crash recovery;
 - M30 `EffectIntent`, M40 executor dispatch, or M51 process isolation.
 
-Current repository status: the pure P0a resolver/recheck is implemented and adopted (`MARKET-005`/`MARKET-006`); B1–B4 provide bounded catalog/capability/installation/grant evidence; bounded B5 adds carrier-by-carrier semantic authority reads, service-owned projection/current assembly, shared call preflight and post-success revision verification under `crate::market::authority`; bounded B6 adds pure update/rollback aggregate evidence and an atomic in-memory semantic package-update repository under `crate::market::update` with `market::update::tests` and `market_package_update` coverage. No production database, durable grant/update/rollback repository, crash recovery, artifact switch, production grant/enable/update issuer, effect-intent coupling, B7 application composition, current-call/in-flight composition or M10/M80 browse/API/UI delivery exists yet. M20 remains `partial-evidence`; `MARKET-003`/`MARKET-004`/`MARKET-007`/`PKG-020` remain `planned`, and no current first-party manifest is made runnable by these slices.
+Current repository status: the pure P0a resolver/recheck is implemented and adopted (`MARKET-005`/`MARKET-006`); B1–B4 provide bounded catalog/capability/installation/grant evidence; bounded B5 adds carrier-by-carrier semantic authority reads; bounded B6 adds pure update/rollback aggregate and atomic in-memory semantic-repository evidence. The exact A1 and B7-B contracts above are accepted, but `application.rs`, `market_application.rs` and `tool_effect_composition.rs` do not exist and no production caller is admitted. No production database, durable grant/update/rollback repository, crash recovery, artifact switch, production grant/enable/update issuer, effect-intent coupling, current-call/in-flight composition implementation or M10/M80 browse/API/UI delivery exists yet. M20 remains `partial-evidence`; `MARKET-001`–`MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020` and `FP-007` remain `planned`, and no current first-party manifest is made runnable by contract acceptance.

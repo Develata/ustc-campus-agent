@@ -5,7 +5,7 @@
 - `Layer`: `Acceptance / Coverage / Evidence`
 - `Status`: **Planning baseline; only `matrix.tsv` is the active competition gate registry**
 - `Version`: `0.6.0`
-- `Last Review`: `2026-07-26`
+- `Last Review`: `2026-08-02`
 - `Authority Owns`: stable long-horizon case IDs, planned assertions and evidence-binding classes
 - `Authority Defers To`: `docs/plan/`, `docs/contracts/` and `docs/acceptance/matrix.tsv` for current scope/status
 
@@ -50,7 +50,7 @@ A manual or automated case cannot pass without a named owner, exact evidence and
 | --- | --- | --- | --- |
 | engineering/docs projection | [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md), [`../coverage-matrix.md`](../coverage-matrix.md) | `DOC-*` | repository checker + manual doc review |
 | typed config and CLI smoke | [`../contracts/cli.md`](../contracts/cli.md), [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `CFG-*` | `ustc-agentctl` smoke + typed loader tests |
-| catalog authority and Plugin lifecycle | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md), [`../contracts/agent-plugin-boundary.md`](../contracts/agent-plugin-boundary.md) | `CAT-*`, `PKG-*` | catalog validator + domain/integration tests |
+| catalog authority and Plugin lifecycle | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md), [`../contracts/market-lifecycle.md`](../contracts/market-lifecycle.md), [`../contracts/interfaces.md`](../contracts/interfaces.md), [`../contracts/agent-plugin-boundary.md`](../contracts/agent-plugin-boundary.md) | `CAT-*`, `PKG-*` | catalog validator + domain/integration/composition tests |
 | identity/session/RBAC and capability isolation | [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md), [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `AUTH-*`, `SEC-*` | policy/integration/browser/security evidence |
 | community component validation | [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) | `SKILL-*` | deterministic validator + security review |
 | finite Agent harness, Agent–Plugin tool protocol, MCP binding, hosted runtime, node AgentRun state and model providers | [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md), [`../contracts/agent-plugin-boundary.md`](../contracts/agent-plugin-boundary.md) | `HARNESS-*`, `MCP-*`, `RUN-*`, `AGENT-*`, `AI-*` | owned state-machine/context/graph tests + protocol/real-host conformance |
@@ -59,6 +59,8 @@ A manual or automated case cannot pass without a named owner, exact evidence and
 | reliability, deployment and restore | [`../plan/08-security-and-delivery.md`](../plan/08-security-and-delivery.md) | `REL-*`, `DEP-*` | doctor/preflight/restore/remote read-back gates |
 
 Long-horizon suites remain planned until projected into `matrix.tsv`. New current plan chapters or product-visible features require a current coverage row and an active acceptance binding; catalog-only presence is insufficient.
+
+The accepted M20-B7 A1/B7-B contracts refine future application/composition evidence only. They add no Rust/test implementation and do not alter the active `planned` status of MARKET-001–MARKET-004, MARKET-007, PKG-019, PKG-020 or FP-007 in `matrix.tsv`.
 
 ### 3.1 ADR traceability baseline
 
@@ -119,6 +121,21 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `CFG-018` | IdP validation profile is protocol-complete | rust-cli-real-host | demo |
 | `CFG-019` | optional Redis loss does not change durable truth | rust-integration | demo |
 | `CFG-020` | static/resolved/live-readonly smoke leaves durable state unchanged | rust-integration | release |
+
+### Storage-profile portability — `STORAGE-*`
+
+| Case ID | Assertion | Binding | Required gate |
+| --- | --- | --- | --- |
+| `STORAGE-001` | `local-demo` defaults to SQLite while hosted/production require PostgreSQL and never fall back | rust-unit | PR |
+| `STORAGE-002` | SQLite and PostgreSQL pass the same domain repository semantic conformance where supported | rust-integration | integration |
+| `STORAGE-003` | SQLite enables and verifies foreign keys, bounded busy handling, explicit durability policy and safe owned path | rust-integration | demo |
+| `STORAGE-004` | unsupported SQLite concurrency/transaction semantics fail explicitly rather than race or overclaim | rust-integration | release |
+| `STORAGE-005` | PostgreSQL proves concurrent external-identity creation/link uniqueness and account/profile expected-revision conflicts | rust-cli-real-host | release |
+| `STORAGE-006` | backend-specific migrations map to one semantic schema version and failed migration leaves readiness false | rust-integration | release |
+| `STORAGE-007` | canonical profile JSON/value digests and current projections agree across SQLite and PostgreSQL | rust-integration | integration |
+| `STORAGE-008` | static/resolved/live-readonly probes perform no migration or durable write on either backend | rust-integration | release |
+| `STORAGE-009` | database connection secrets and sensitive profile values are absent from config output, logs and evidence | manual-security | release |
+| `STORAGE-010` | backend-correct backup restores and reads back accounts, external links, memberships, sessions, profile facts/projections and audit references | rust-cli-real-host | release |
 
 ## 6. Public catalog authority — `CAT-*`
 
@@ -184,6 +201,38 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AUTH-018` | refresh extends only idle expiry while equality expires credential absolute and idle cause ties have deterministic precedence late observation preserves effective expiry revoke blocks immediately and terminal sessions cannot mutate or resurrect | rust-unit | PR |
 | `AUTH-019` | session expected revisions and ordered events fail closed on exhaustion and reject gap duplicate reorder wrapped-zero cross-session and forged-derived-field input while replay reconstructs an equal snapshot without adapter I/O | rust-unit | PR |
 | `AUTH-020` | session-domain commands events snapshots and B2-owned errors retain no raw credential or arbitrary adapter payload expose no mutable unchecked or raw-credential conversion authority fields never represent structural evidence decoding as authentication and declare no clock RNG transport database framework or auth-adapter dependency while deserializer-generated syntax and type diagnostics are excluded as untrusted boundary diagnostics owned by the later control-evidence redaction boundary | rust-unit + rust-doc-test | PR |
+
+### Runtime account and authentication admission — `AUTH-*`
+
+| Case ID | Assertion | Binding | Required gate |
+| --- | --- | --- | --- |
+| `AUTH-021` | platform `UserId` remains stable and opaque when provider subjects, school-number aliases, emails or profile values change | rust-unit | PR |
+| `AUTH-022` | external identity uniqueness is enforced on exact tenant adapter issuer subject and maps to one account | rust-integration | integration |
+| `AUTH-023` | one canonical USTC subject with current and historical login aliases resolves to one account without duplicate users | external-conformance | demo |
+| `AUTH-024` | equal email/name/telephone/profile text or AI assertion never auto-links or merges accounts | rust-integration | release |
+| `AUTH-025` | concurrent first login or link for one external subject commits one account/link and returns typed conflict to losers | rust-cli-real-host | release |
+| `AUTH-026` | account, tenant membership, administrator role/grant and service principal remain distinct authority classes | rust-unit | PR |
+| `AUTH-027` | suspended/deleted account or inactive membership denies session/request admission before downstream calls while historical receipts remain | rust-integration | release |
+| `AUTH-028` | adapter assertion validates canonical issuer/subject/replay evidence and retains no raw password, ticket, cookie or token | external-conformance | demo |
+| `AUTH-029` | session credential deadline represents local reauthentication trust and is not mechanically copied from CAS ticket or OIDC token expiry | rust-integration | release |
+| `AUTH-030` | hosted/production rejects the development adapter and ambiguous/missing USTC canonical subject instead of inventing an account/profile | rust-cli-smoke | release |
+
+### User context profile — `PROFILE-*`
+
+| Case ID | Assertion | Binding | Required gate |
+| --- | --- | --- | --- |
+| `PROFILE-001` | reviewed field registry validates type/cardinality/source/sensitivity/consumer policy and rejects unknown keys/variants | rust-unit | PR |
+| `PROFILE-002` | common nullable fields coexist with additive registered fields without schema-column or historical-value reinterpretation | rust-integration | integration |
+| `PROFILE-003` | every fact preserves tenant/user/key/value digest/source/time/verification/sensitivity/status/revision provenance | rust-unit | PR |
+| `PROFILE-004` | current projection distinguishes Known, Unknown, Withheld, NotApplicable and Conflicted rather than collapsing them to null | rust-integration | integration |
+| `PROFILE-005` | deterministic source/verification/time policy prevents a newer low-authority or high-confidence AI proposal from overriding confirmed fact | rust-integration | release |
+| `PROFILE-006` | AI/model can create only evidence-bound proposals; confirmation/supersession/deletion require admitted M00 user/admin policy | rust-integration | release |
+| `PROFILE-007` | school-number prefix/year classification is versioned SystemDerived evidence and cannot authenticate or mint membership/role/grant | rust-unit | PR |
+| `PROFILE-008` | prompt projection is purpose/consumer/field bounded and excludes campus-card UID, telephone and dormitory by default | rust-integration | release |
+| `PROFILE-009` | every fact/proposal/projection/cache/read is tenant/user/purpose isolated and wrong-scope access reaches no payload | rust-integration | release |
+| `PROFILE-010` | expected-revision conflict, stale projection and source revision change are explicit and deterministic | rust-integration | integration |
+| `PROFILE-011` | deletion removes canonical sensitive payload plus rebuildable projections/caches/recoverable copies without rewriting retained receipt identity | manual-security | release |
+| `PROFILE-012` | M72 and M30 consume only exact purpose-bound projections; M72 owns preferences and derived matches, while neither consumer mutates general profile/account authority | rust-integration | release |
 
 ## 9. Capability registry and ControlledCLI — `SEC-*`
 

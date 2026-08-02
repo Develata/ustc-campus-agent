@@ -5,14 +5,14 @@
 - `Module ID`: `M90`
 - `Status`: Accepted blueprint; repository CI/checker baseline exists, production infrastructure planned
 - `Implementation State`: `governance-baseline`
-- `Version`: `m90-infrastructure/v1`
-- `Last Review`: `2026-07-25`
+- `Version`: `m90-infrastructure/v2`
+- `Last Review`: `2026-08-02`
 - `Owning Governance`: [`../08-security-and-delivery.md`](../08-security-and-delivery.md)
 - `Primary code areas`: `crates/adapters/`, deployment/config modules and Docker Compose profile, `.github/`, `scripts/`
 
 ## 1. Purpose
 
-`M90` supplies replaceable implementations of infrastructure ports declared by other modules: durable repositories/journals, immutable evidence/artifacts, transactions, clock/scheduler/queue, secret references, safe HTTP, configuration, telemetry, deployment and recovery tooling.
+`M90` supplies replaceable implementations of infrastructure ports declared by other modules: durable repositories/journals, immutable evidence/artifacts, transactions, clock/scheduler/queue, secret references, safe HTTP, configuration, telemetry, deployment and recovery tooling. [`storage-profiles/v0`](../../contracts/storage-profiles.md) fixes SQLite as the `local-demo` default and PostgreSQL as the required hosted/production operational store.
 
 It makes domain rules durable and operable. It does not define those rules.
 
@@ -29,6 +29,9 @@ It makes domain rules durable and operable. It does not define those rules.
 
 ```text
 TypedRuntimeConfig / ConfigVersion
+StorageProfile: local-demo | hosted | production
+StorageBackend: SQLite | PostgreSQL
+SemanticSchemaVersion / BackendMigrationVersion
 Repository transaction/checkpoint implementation state
 Journal/EventCursor storage
 EvidenceObject/ArtifactLocation and retention state
@@ -46,7 +49,9 @@ The semantic meaning of stored rows/events belongs to the module that declared t
 Infrastructure implements explicit ports such as:
 
 ```text
-SessionRepository / InstallationRepository / GrantRepository
+AccountRepository / ExternalIdentityRepository / TenantMembershipRepository
+SessionRepository / ProfileFactRepository / ProfileProjectionRepository
+InstallationRepository / GrantRepository
 RunJournal / EventSubscription
 SourceRepository / EvidenceStore / ArtifactStore
 Clock / Scheduler / Lease / Queue
@@ -104,7 +109,7 @@ A deployment profile may change scale or adapter placement, not domain authority
 
 ## 8. Configuration and secrets
 
-Configuration is typed, versioned and divided by module/adapter. Startup preflight validates paths, listener/public origins, Android HTTPS server origin policy, Compose services/volumes, limits, ownership and secret references without performing product mutations. Secrets are resolved at the narrowest adapter and redacted from config dumps, logs, events and receipts.
+Configuration is typed, versioned and divided by module/adapter. Startup preflight validates the exact storage profile/backend pair, schema version, SQLite path policy or PostgreSQL `SecretRef`, paths, listener/public origins, Android HTTPS server origin policy, Compose services/volumes, limits and ownership without performing migrations or product mutations. Secrets are resolved at the narrowest adapter and redacted from config dumps, logs, events and receipts. Hosted/production cannot fall back to SQLite.
 
 ## 9. Observability
 
@@ -112,7 +117,7 @@ Stable telemetry includes service/build/config/schema versions, readiness, repos
 
 ## 10. Extension and replacement
 
-Database, object store, queue, HTTP client, secret manager, telemetry stack and deployment profile are independent peers behind ports. A local in-memory/demo adapter and a production adapter must obey equal semantic contracts. Infrastructure replacement must not require domain state-machine changes.
+Database, object store, queue, HTTP client, secret manager, telemetry stack and deployment profile are independent peers behind ports. Domain-owned ports use SQLx-backed SQLite/PostgreSQL implementations initially; backend-specific query/migration modules remain private and ORM/row models never become domain authority. Common semantics pass equal repository conformance, while PostgreSQL alone carries production concurrency/locking/backup evidence. Infrastructure replacement must not require domain state-machine changes.
 
 ## 11. Performance path
 
@@ -123,7 +128,8 @@ Critical paths are transactional authority reads/writes, append-only journals, e
 **MVP**
 
 - typed config and doctor/preflight;
-- one durable operational store with migrations/transactions;
+- SQLite as the default single-host `local-demo` store and PostgreSQL as the required hosted/production store, with separate migrations and common semantic conformance;
+- SQLx plus domain-owned repository ports; no generic record-store/ORM authority;
 - run/source/event journals and bounded subscriptions;
 - immutable local or reviewed evidence/artifact store;
 - secret references and redaction;
@@ -133,7 +139,7 @@ Critical paths are transactional authority reads/writes, append-only journals, e
 
 **Later**
 
-- production managed database/object store/queue peers;
+- managed PostgreSQL/object-store/queue deployment peers after the PostgreSQL adapter itself passes production gates;
 - richer telemetry and retention;
 - horizontally scaled workers after lease/idempotency proof;
 - isolated hosted execution only after separate GO/NO-GO review.
@@ -148,21 +154,23 @@ Critical paths are transactional authority reads/writes, append-only journals, e
 ## 13. Small-module decomposition
 
 1. `config` — typed schema, load, preflight and redacted diagnostics.
-2. `storage` — repository/transaction adapters grouped by semantic database boundary.
-3. `journal` — append/replay/event subscription.
-4. `evidence-store` — immutable objects, digest/read-back and retention.
-5. `clock-scheduler` — monotone clock, deadlines and bounded scheduled work.
-6. `lease-queue` — concurrency, delivery and duplicate-safe worker plumbing.
-7. `secret-ref` — resolution, rotation, revoke/delete and redaction.
-8. `safe-http` — fixed-origin/SSRF/redirect/content/time/size policy.
-9. `telemetry` — stable metrics/log/trace schema and payload exclusions.
-10. `migration` — schema version, forward/rollback compatibility.
-11. `backup-restore` — real read-back and recovery proof.
-12. `deployment-profile` — Docker Compose Fullstack server/Web/Android endpoint wiring plus later staging/central/single-tenant peers.
-13. `ci-contracts` — build/test/docs/schema/dependency gates.
+2. `storage-contract` — backend-neutral semantic repository conformance and typed failure mapping.
+3. `sqlite-local-demo` — SQLite path/pragma/migration/restart adapter with explicit single-host limits.
+4. `postgres-operational` — PostgreSQL pool/transaction/locking/index and production-concurrency adapter.
+5. `journal` — append/replay/event subscription.
+6. `evidence-store` — immutable objects, digest/read-back and retention.
+7. `clock-scheduler` — monotone clock, deadlines and bounded scheduled work.
+8. `lease-queue` — concurrency, delivery and duplicate-safe worker plumbing.
+9. `secret-ref` — resolution, rotation, revoke/delete and redaction.
+10. `safe-http` — fixed-origin/SSRF/redirect/content/time/size policy.
+11. `telemetry` — stable metrics/log/trace schema and payload exclusions.
+12. `migration` — paired backend migration trees and one semantic compatibility map.
+13. `backup-restore` — backend-correct snapshot plus real semantic read-back.
+14. `deployment-profile` — Docker Compose Fullstack server/Web/Android endpoint wiring plus later staging/central/single-tenant peers.
+15. `ci-contracts` — build/test/docs/schema/dependency gates.
 
 Do not place all items in one source file or dependency-heavy crate. Keep adapter dependencies local to the small module that uses them.
 
 ## 14. Exit gate
 
-`M90` is integration-ready when each selected production adapter passes the same port conformance as its fake, including failure injection, duplicate/restart and redaction. The required Docker Compose Fullstack profile is accepted only after clean startup, migration, Web asset/SSR and server-function readiness, Android remote access, bounded operation, backup, restore, restart and read-back smoke on the actual target surface.
+`M90` is integration-ready when SQLite and PostgreSQL pass their common repository conformance, SQLite passes its declared local-demo limits, and PostgreSQL independently passes production concurrency/isolation/migration/backup/restore cases including account-link and profile-update races. The required Docker Compose Fullstack profile is accepted only after clean PostgreSQL startup, migration, Web asset/SSR and server-function readiness, Android remote access, bounded operation, backup, restore, restart and read-back smoke on the actual target surface.

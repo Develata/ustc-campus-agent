@@ -4,8 +4,8 @@
 
 - `Layer`: Large-module architecture
 - `Status`: Accepted current skeleton
-- `Version`: `module-map/v3`
-- `Last Review`: `2026-07-31`
+- `Version`: `module-map/v4`
+- `Last Review`: `2026-08-02`
 - `Owning Constitution`: [`../00-engineering-constitution.md`](../00-engineering-constitution.md)
 - `Counterpart Contract`: [`../../contracts/module-boundaries.md`](../../contracts/module-boundaries.md)
 - `Counterpart Tasks`: [`../../tasks/00-module-work-policy.md`](../../tasks/00-module-work-policy.md), [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md)
@@ -16,7 +16,7 @@ A large module is an independently owned and independently testable part. “Lar
 
 | ID | Large module | State key | Owns | Must not own | Current state |
 |---|---|---|---|---|---|
-| `M00` | Platform Control and Identity | `partial-evidence` | tenant/user/session identity, request causation, application command envelope, platform-wide policy references | package internals, Agent loop, source parsing, UI | identity-types and session-domain implemented; request-context/ports planned |
+| `M00` | Platform Control and Identity | `partial-evidence` | runtime human accounts, external identity links, tenant membership, general user-context profile, session/admitted actor identity, request causation, application command envelope and platform-wide policy references | package/product permission decisions, product-specific opportunity preferences, Agent loop, source parsing, UI | identity-types and session-domain implemented; account/auth/profile/request-context/ports planned |
 | `M10` | Application Ingress Host | `skeleton` | Dioxus/Axum server-function ingress, versioned public HTTP/typed streams where needed, auth/session/client-compatibility admission, mapping to application ports | domain decisions, direct database/executor rules, UI | skeleton only |
 | `M20` | Market and Package Lifecycle | `partial-evidence` | catalog package/component identity, install/configure/enable/disable/update/revoke/grant lifecycle, invocation authority snapshots | model loop, Plugin execution, client state | typed package/catalog + capability registry + bounded installation/grant/update domains + bounded transaction-current authority assembly + pure resolver evidence; durable lifecycle, artifact switching, API/UI and B7 composition planned |
 | `M30` | Agent Harness and Runtime | `partial-evidence` | finite user-task/run phases, graph, budgets, context projection, provider/tool ports, replay and review | package lifecycle, executor implementation, transport/UI | node runtime kernel implemented; harness planned |
@@ -26,7 +26,7 @@ A large module is an independently owned and independently testable part. “Lar
 | `M60` | Campus Trust and Source Pipeline | `planned` | source registry, retrieval policy, immutable revision, normalization, provenance, accepted baseline and publication gate | product-specific rendering, arbitrary crawling, UI | contract only; planner fixtures provide limited evidence |
 | `M70` | USTC ChangeRadar | `design-only` | semantic change candidates/events, board scope, approval and feed behavior | generic source authority, other product state | manifest/design only |
 | `M71` | USTC Affairs Navigator | `design-only` | reviewed tree/procedure artifacts, lookup, supersession and publication journey | generic source authority, full-corpus RAG as truth | manifest/design only |
-| `M72` | Campus Opportunity Graph | `bounded-spike` | opportunity facts, qualification/dependency/conflict, tenant profile projection and planning journeys | public source authority, cross-user profile state | offline Course Planning spike only |
+| `M72` | Campus Opportunity Graph | `bounded-spike` | opportunity facts, product-specific preferences, qualification/dependency/conflict and planning journeys over a purpose-bound M00 profile projection | public source authority, general/cross-user profile state, account/auth/membership | offline Course Planning spike only |
 | `M80` | Client Core and Interaction Shells | `planned` | framework-neutral typed client behavior; peer Dioxus Web/Android, `ustc-agent` user/automation CLI and inbound MCP adapters; later iOS/desktop | domain calculation/mutation, direct repository/executor access, Agent/Market/Plugin/source authority, operator `ustc-agentctl`, outbound M51 execution, peer-shell subprocess dependencies | architecture accepted; no client-core or peer adapter implementation |
 | `M90` | Platform Infrastructure and Operations | `governance-baseline` | repository implementations for storage, journal, evidence, clock, queue, config, secrets, telemetry and Docker Compose deployment/recovery wiring | domain transition rules and product policy | CI/checker baseline only |
 
@@ -59,6 +59,11 @@ M10 Application Ingress Host
 M10 Application Ingress Host
   └── admitted typed application calls ──► M00 / M20 / M30 / M60 / M70 / M71 / M72
 
+M00 Platform Control and Identity
+  ├── admitted actor/request context ──► M10 and backend application modules
+  ├── prompt-safe purpose-bound profile projection ──► M30
+  └── planning-purpose profile projection ──► M72
+
 M30 Agent Harness and Runtime
   ├── model port ──► M50 Model Provider Integration
   └── emits/accepts Plugin-neutral tool proposal/result values at composition
@@ -87,7 +92,7 @@ Dependency rules:
 4. `M30` and `M40` depend on the Plugin-neutral tool protocol, not on each other's implementation; `ustc-agentd` orders their public operations.
 5. `M40` coordinates existing decisions but does not mint grants, run phases or receipts by itself.
 6. `M50` and `M51` normalize external protocols and never own platform state transitions.
-7. `M70`, `M71` and `M72` may depend on `M60` contracts but not on each other's internals.
+7. `M70`, `M71` and `M72` may depend on `M60` contracts but not on each other's internals; M72 may additionally consume only the named purpose-bound M00 profile projection and never M00 repositories.
 8. `M90` implements ports; domain modules do not import database/cloud/runtime-specific state as authority.
 9. Cross-module integration tests live at `apps/ustc-agentd` or another explicitly declared composition test surface.
 10. Cyclic large-module dependencies are forbidden.

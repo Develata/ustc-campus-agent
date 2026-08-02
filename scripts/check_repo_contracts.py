@@ -21,7 +21,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VALID_GATES = {"pr", "core-demo", "release", "public"}
 VALID_ACCEPTANCE_STATUSES = {"planned", "implemented"}
-STABLE_CATALOG_PREFIXES = {"AGENT", "AUTH", "FP", "HARNESS", "PKG", "PROC", "SRC"}
+STABLE_CATALOG_PREFIXES = {
+    "AGENT",
+    "AUTH",
+    "FP",
+    "HARNESS",
+    "PKG",
+    "PROC",
+    "PROFILE",
+    "SRC",
+    "STORAGE",
+}
 MIN_LONG_HORIZON_CASES = 200
 VALID_MODULE_STATES = {
     "planned",
@@ -279,10 +289,13 @@ KEY_FILES = [
     "docs/contracts/market-lifecycle.md",
     "docs/contracts/module-boundaries.md",
     "docs/contracts/permissions.md",
+    "docs/contracts/platform-account.md",
     "docs/contracts/platform-identity.md",
     "docs/contracts/platform-session.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",
+    "docs/contracts/storage-profiles.md",
+    "docs/contracts/user-context-profile.md",
     "market/review-policy/first-party.md",
     "market/fixtures/course-planning/README.md",
     "market/fixtures/course-planning/minimal-v0.json",
@@ -3371,7 +3384,8 @@ PLATFORM_AUTHORITY_STATUS_MARKERS = {
     "docs/plan/modules/00-module-map.md": ("bounded transaction-current authority assembly",),
     "docs/plan/modules/30-market-package-lifecycle.md": (
         "bounded `M20-B5` semantic authority-read transaction/assembly",
-        "Remaining work is `M20-B7` production-facing API/composition/fake M40 consumer plus future durable adapters",
+        "exact `M20-B7-A1` application-façade and `M20-B7-B` test-only composition contracts are accepted but unimplemented",
+        "Contract acceptance creates no source, production caller, effect intent, executor, durable state or acceptance promotion.",
     ),
     "docs/tasks/01-execution-roadmap.md": (
         "`M20-B5 invocation-authority`: bounded implementation is complete",
@@ -7197,8 +7211,11 @@ def check_platform_authority_implementation(issues: list[str]) -> None:
             fail(f"market authority status carrier missing: {relative}", issues)
             continue
         content = path.read_text(encoding="utf-8")
+        marker_haystack = content
+        if relative == "docs/plan/modules/30-market-package-lifecycle.md":
+            marker_haystack = content.split("\n## 1. Purpose", 1)[0]
         for marker in markers:
-            if marker not in content:
+            if marker not in marker_haystack:
                 fail(f"market authority status marker missing in {relative}: {marker!r}", issues)
 
     matrix = (ROOT / "docs/acceptance/matrix.tsv").read_text(encoding="utf-8").splitlines()

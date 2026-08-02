@@ -3,10 +3,10 @@
 ## Metadata
 
 - `Module ID`: `M40`
-- `Status`: Accepted blueprint; protocol values and fake gateway/executor conformance implemented
+- `Status`: Accepted blueprint; protocol values and monolithic fake gateway/executor conformance implemented; exact B7-B staged composition-test contract accepted but unimplemented; production gateway/executor remains planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m40-tool-gateway/v0`
-- `Last Review`: `2026-07-25`
+- `Last Review`: `2026-08-02`
 - `Owning Contract`: [`../../contracts/agent-plugin-boundary.md`](../../contracts/agent-plugin-boundary.md)
 - `Primary code areas`: `crates/agent-tool-protocol/`, future gateway/executor modules, composition tests in `apps/ustc-agentd/tests/`
 
@@ -92,8 +92,9 @@ Forbidden dependencies:
 ```text
 M20 freezes projection + private routes
 → M30/provider sees AgentToolsetView
-→ M30 records provider-selected proposal
-→ composition asks M40 to normalize/recheck and return PreparedToolExecution
+→ composition binds provider-selected raw call via AgentToolsetView::bind_call
+→ M30 records ToolCallProposal::from(bound AgentToolCall)
+→ composition asks M40 to prepare/correlate the bound call, recheck current authority and return PreparedToolExecution
 → composition commands M30 to persist EffectIntent
 → composition asks M40 to call the admitted executor
 → M40 returns a validated bounded outcome
@@ -103,6 +104,14 @@ M20 freezes projection + private routes
 ```
 
 A package update creates new routes/projections for new turns. It never mutates an in-flight call.
+
+### Accepted B7-B composition-test slice
+
+[`agent-plugin-boundary/v0`](../../contracts/agent-plugin-boundary.md) §7.1 owns the exact test-only support types/methods, trace variants, ordering, reconciliation, denial/update matrix and seven test names. The slice remains composition-root test code under `apps/ustc-agentd/tests/`; it creates no production M40 crate or public runtime surface.
+
+Its proof target is exact: frozen-view call binding → persisted bound-call proposal → frozen-call correlation/current M20 recheck → persisted M30 intent → one idempotent fake executor effect or read-only disposition reconciliation → persisted exact receipt → correlated result. Unknown tools produce no proposal. Intent failure reaches no executor; receipt uncertainty returns no result; reconciliation starts no new effect; deny/update/revoke cases leave frozen historical views unchanged and block current/new use until fresh authority exists.
+
+Contract acceptance implements no staged support/test, changes no current fake and promotes neither `MARKET-007` nor `PKG-020`. A later B7-B implementation grant follows merged A1 and a pre-edit representability review.
 
 ## 7. Failure and recovery
 

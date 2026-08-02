@@ -889,6 +889,11 @@ class MarketLifecycleContractTests(unittest.TestCase):
     """
 
     CONTRACT_REL = "docs/contracts/market-lifecycle.md"
+    NEW_CONTRACT_RELS = (
+        "docs/contracts/platform-account.md",
+        "docs/contracts/storage-profiles.md",
+        "docs/contracts/user-context-profile.md",
+    )
 
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -946,6 +951,35 @@ class MarketLifecycleContractTests(unittest.TestCase):
             f"current contract not registered as key file: {self.CONTRACT_REL}",
             self.check_key_files(),
         )
+
+    def test_new_identity_profile_storage_contracts_are_registered_and_nonempty(self) -> None:
+        for rel in self.NEW_CONTRACT_RELS:
+            with self.subTest(rel=rel):
+                self.assertFalse(
+                    any(rel in issue for issue in self.check_key_files()),
+                    self.check_key_files(),
+                )
+
+    def test_missing_new_identity_profile_storage_contracts_fail_closed(self) -> None:
+        for rel in self.NEW_CONTRACT_RELS:
+            with self.subTest(rel=rel):
+                (self.root / rel).unlink()
+                self.assertIn(f"key file missing: {rel}", self.check_key_files())
+
+    def test_empty_new_identity_profile_storage_contracts_fail_closed(self) -> None:
+        for rel in self.NEW_CONTRACT_RELS:
+            with self.subTest(rel=rel):
+                (self.root / rel).write_text(" \n", encoding="utf-8")
+                self.assertIn(f"key file empty: {rel}", self.check_key_files())
+
+    def test_unregistered_new_identity_profile_storage_contracts_fail_closed(self) -> None:
+        for rel in self.NEW_CONTRACT_RELS:
+            with self.subTest(rel=rel):
+                checker.KEY_FILES.remove(rel)
+                self.assertIn(
+                    f"current contract not registered as key file: {rel}",
+                    self.check_key_files(),
+                )
 
 
 class ModuleRegistryContractTests(unittest.TestCase):
@@ -5700,6 +5734,42 @@ class PlatformAuthorityImplementationTests(unittest.TestCase):
             "not a production catalog/publication authority, durable M90 transaction, grant/enable issuer or effect-intent/I/O boundary",
             "not production-ready",
         )
+        self.assert_rejected("market authority status marker missing")
+
+    def test_market_authority_b7_accepted_contract_marker_deletion_fails_closed(self) -> None:
+        self.rewrite(
+            "docs/plan/modules/30-market-package-lifecycle.md",
+            "exact `M20-B7-A1` application-façade and `M20-B7-B` test-only composition contracts are accepted but unimplemented",
+            "B7 contracts are accepted",
+        )
+        self.assert_rejected("market authority status marker missing")
+
+    def test_market_authority_b7_accepted_contract_marker_decoy_fails_closed(self) -> None:
+        path = self.path("docs/plan/modules/30-market-package-lifecycle.md")
+        marker = "exact `M20-B7-A1` application-façade and `M20-B7-B` test-only composition contracts are accepted but unimplemented"
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(marker), 1)
+        text = text.replace(marker, "B7 contracts are accepted", 1)
+        text = f"{text}\n\n## 99. Decoy\n\n{marker}\n"
+        path.write_text(text, encoding="utf-8")
+        self.assert_rejected("market authority status marker missing")
+
+    def test_market_authority_b7_no_implementation_marker_deletion_fails_closed(self) -> None:
+        self.rewrite(
+            "docs/plan/modules/30-market-package-lifecycle.md",
+            "Contract acceptance creates no source, production caller, effect intent, executor, durable state or acceptance promotion.",
+            "Contract acceptance is not implementation.",
+        )
+        self.assert_rejected("market authority status marker missing")
+
+    def test_market_authority_b7_no_implementation_marker_decoy_fails_closed(self) -> None:
+        path = self.path("docs/plan/modules/30-market-package-lifecycle.md")
+        marker = "Contract acceptance creates no source, production caller, effect intent, executor, durable state or acceptance promotion."
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(marker), 1)
+        text = text.replace(marker, "Contract acceptance is not implementation.", 1)
+        text = f"{text}\n\n## 99. Decoy\n\n{marker}\n"
+        path.write_text(text, encoding="utf-8")
         self.assert_rejected("market authority status marker missing")
 
     def test_market_authority_acceptance_promotion_fails_closed(self) -> None:

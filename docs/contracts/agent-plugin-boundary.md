@@ -2,12 +2,12 @@
 
 ## Metadata
 
-- `Status`: Accepted target architecture; protocol value objects and fake gateway/executor conformance implemented, production ToolGateway planned
+- `Status`: Accepted target architecture; protocol value objects and monolithic fake gateway/executor conformance implemented; exact B7-B staged composition-test contract accepted but unimplemented; production ToolGateway remains planned
 - `Version`: `agent-plugin-boundary/v0`
-- `Last Review`: `2026-07-24`
+- `Last Review`: `2026-08-02`
 - `Owning Plans`: [`04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) owns package lifecycle; [`07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md) owns Agent/tool execution
 - `Decisions`: [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md)
-- `Acceptance`: implemented `AGENT-017`, `AGENT-019`; planned `AGENT-018`, `PKG-019`, `PKG-020`
+- `Acceptance`: implemented `AGENT-017`, `AGENT-019`; planned `AGENT-018`, `MARKET-007`, `PKG-019`, `PKG-020`; B7-B contract acceptance promotes no row
 - `Primary Code`: `crates/agent-tool-protocol/`, `crates/agent-runtime/`, `crates/platform-core/src/invocation.rs`, `apps/ustc-agentd/tests/tool_gateway_conformance.rs`
 
 ## 1. Purpose
@@ -145,10 +145,11 @@ Normative rules:
 resolve current package/installation/grant state
 → freeze ToolProjectionSnapshot
 → derive AgentToolsetView and private ToolRouteTable
-→ provider proposes a tool call
-→ normalize against frozen view
+→ provider emits a raw call name/id/argument payload
+→ composition binds it through frozen AgentToolsetView::bind_call into AgentToolCall
+→ M30 persists ToolCallProposal::from(bound AgentToolCall)
+→ staged M40 prepares/correlates the bound AgentToolCall
 → recheck current deny-side authority
-→ AgentRun accepts proposal
 → persist EffectIntent
 → execute PluginExecutor through bounded adapter
 → persist EffectReceipt
@@ -157,6 +158,96 @@ resolve current package/installation/grant state
 ```
 
 No Plugin callback may run before authorization and effect-intent persistence. A denied call produces no executor request. A process exit, hook or Plugin-returned success string cannot replace the receipt/result sequence.
+
+### 7.1 M20-B7-B staged composition evidence; accepted contract, implementation planned
+
+B7-B is a composition-root integration-test contract. It creates no production M40 crate/application code, no durable journal and no alternative authority. Its exact test-only support types are:
+
+```text
+StagedFakeToolGateway
+PreparedFakeToolExecution
+IdempotentFakePluginExecutor
+InMemoryFakeRunJournal
+EffectCompositionHarness
+CompositionTraceEvent
+```
+
+They live only under `apps/ustc-agentd/tests/support/`. Exact test-visible methods are:
+
+```text
+StagedFakeToolGateway::prepare / complete
+PreparedFakeToolExecution::authorized_invocation / protocol_call / effect_binding_digest
+IdempotentFakePluginExecutor::execute_or_reconcile / lookup_disposition / fail_next_attempt / attempt_count / unique_effect_count
+InMemoryFakeRunJournal::execute / fail_next_intent_persist / fail_next_receipt_persist / snapshot / events
+EffectCompositionHarness::execute_call / reconcile_pending_effect / trace
+```
+
+`CompositionTraceEvent` has exactly these fieldless variants in order:
+
+```text
+ToolCallProposalPersisted
+CallPrepared
+EffectIntentPersisted
+ExecutorAttempted
+ExecutorDispositionObserved
+EffectReceiptPersisted
+ResultReturned
+```
+
+All other support values above use manual bounded/redacted `Debug` and never print canonical arguments, execution identities, routes, pending effects, receipts or executor dispositions. `CompositionTraceEvent` may derive exactly `Debug, Clone, Copy, PartialEq, Eq`.
+
+The success path is exact:
+
+```text
+provider raw call binds through frozen AgentToolsetView::bind_call into AgentToolCall
+→ M30 ToolCallProposal::from(bound AgentToolCall) persisted
+→ staged fake M40 correlates the already-bound AgentToolCall
+→ M20 InvocationAuthorityService transaction-current recheck succeeds
+→ PreparedFakeToolExecution returned with executor count zero
+→ composition derives one exact M30 EffectIntent
+→ fake M30 journal decides, validates on a cloned checkpoint, persists, then swaps the clone
+→ idempotent fake executor observes one sealed request
+→ composition derives one exact M30 EffectReceipt
+→ fake M30 journal decides, validates on a cloned checkpoint, persists, then swaps the clone
+→ staged fake M40 returns one correlated AgentToolResult
+```
+
+The fake journal performs no second fallible apply after persistence. `AlreadyApplied` appends nothing. Intent persistence failure leaves event/checkpoint unchanged and reaches no executor. Receipt persistence failure/uncertainty returns no `AgentToolResult`.
+
+`AgentToolResult` reuses the original provider call ID and the persisted receipt's exact outcome kind/digest. It never re-hashes raw executor output, substitutes a failure class or returns raw output/logs. Any call/effect/idempotency/outcome mismatch fails before result construction.
+
+Receipt uncertainty follows a separate reconciliation path:
+
+1. replay/load the exact pending M30 `EffectIntent`;
+2. query executor disposition by exact effect/idempotency identity without starting a new effect;
+3. persist the exact matching receipt when known;
+4. remain unresolved with no result when unknown;
+5. fail closed with no result on conflict.
+
+Current denial blocks new execution but cannot erase or reinterpret an already observed disposition. Reconciliation performs no new current authorization and no non-idempotent effect retry. Executor attempts and unique effects are counted separately; the unique-effect count remains one.
+
+Before proposal or intent persistence, every projection/run/turn mismatch or unknown tool produces no M30 proposal, no intent, no executor request, no receipt and no result. After a call is bound, malformed arguments, route/dispatch mismatch, catalog revoke, absent/Disabled/Revoked installation, absent/Stale/Expired/Revoked grant, emergency block, post-update old carrier mismatch and repository conflict/corruption produce no intent, executor request, receipt or result.
+
+Disable/update/revoke evidence composes existing owners rather than recreating them:
+
+- Disable executes the accepted A1 façade, obtains its owner receipt projection and updates the semantic current-resolver fixture only by preserving immutable installation/package/component identity and copying the receipt's exact post-state/revision; mismatch is rejected.
+- B6 owner tests prove Apply/Rollback future-carrier mutation and prior-grant staling; B5 tests prove owner-to-resolver mapping and transaction-current recheck.
+- B7-B freezes the old `AgentToolsetView`, mutates only semantic current authority, proves the old call is denied before intent/I/O and new projection is denied until exact fresh enable/grant authority exists, then proves the fresh projection binds the target pin while the old view remains byte/typed-equal.
+- No external test may mint B6 owner-private evidence; checker-bound cross-file evidence must preserve the exact postcondition without claiming one test executed private constructors.
+
+Exact B7-B tests are:
+
+```text
+authorized_call_persists_intent_before_executor_and_receipt_before_result
+pre_intent_denials_persist_nothing_and_reach_no_executor
+intent_persistence_failure_reaches_no_executor
+executor_failure_is_receipted_before_failed_result
+receipt_uncertainty_returns_no_result_and_retry_deduplicates_effect
+disable_and_revoke_preserve_frozen_view_but_deny_old_calls_and_new_projection
+package_update_preserves_in_flight_view_and_requires_fresh_projection_authority
+```
+
+`tool_gateway_conformance.rs` must reuse staged support rather than retaining a second monolithic fake. Test functions remain active (`#[test]`, no ignore/cfg/zero-test), use load-bearing calls at top-level body depth and assert exact ordering/correlation. Contract acceptance itself implements none of these types/tests and promotes neither `MARKET-007` nor `PKG-020`.
 
 ## 8. Compatibility and replacement
 
@@ -197,6 +288,11 @@ Implemented now:
 - composition-root synthetic proof maps successful resolution into `RunSpec`, while denial creates no run;
 - composition-root fake gateway maps the frozen private route through current-state `authorize_call`; unknown tool, malformed arguments, route mismatch, current denial and projection mismatch reach no fake executor;
 - repository checks enforce the exact protocol path and current dependency direction.
+
+Accepted contract, not implemented:
+
+- B7-B staged composition-root semantic support, exact intent/executor/receipt/result order, receipt reconciliation, denial/update fixtures and seven exact tests under §7.1;
+- this contract state adds no production ToolGateway, executor request/outcome implementation, durable journal or acceptance promotion.
 
 Planned later:
 

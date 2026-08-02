@@ -5,8 +5,8 @@
 - `Module ID`: `M30`
 - `Status`: Accepted blueprint; node-local runtime kernel implemented, finite harness planned
 - `Implementation State`: `partial-evidence`
-- `Version`: `m30-agent-runtime/v0`
-- `Last Review`: `2026-07-25`
+- `Version`: `m30-agent-harness/v2`
+- `Last Review`: `2026-08-02`
 - `Owning Plan`: [`../07-runtime-and-integration.md`](../07-runtime-and-integration.md)
 - `Primary code areas`: `crates/agent-runtime/` and future cohesive harness modules
 
@@ -36,6 +36,7 @@ AgentRunSpec / AgentRun phase
 RunCommand / RunEvent / replay checkpoint
 BudgetSnapshot and consumed counters
 PromptProjection / ContextSummaryArtifact references
+PurposeBoundProfileProjectionRef with exact M00 purpose/revision/field set
 EvidencePack / ReviewReceipt / terminal outcome
 ```
 
@@ -52,6 +53,7 @@ Accept/Reject TaskGraphProposal
 DispatchReadyNode
 RecordModelUsage / ToolProposal / EffectIntent / Receipt
 RecordEvidence / ReviewDisposition
+ProposeProfileFact              # typed evidence-bound proposal only; M00 admits/accepts
 RequestCancel/Fail/Expire
 ```
 
@@ -62,6 +64,7 @@ ModelInvocationPort              # implemented by M50
 PluginNeutralToolExchange        # proposal/result values; composition invokes M40
 RunJournalPort / ArtifactPort    # implemented by M90
 Clock/SchedulerPort              # implemented by M90
+PurposeBoundProfileProjection    # produced by M00; no M00 repository access
 RunSnapshot / RunEvent / Evidence/Review projections
 RuntimeError
 ```
@@ -73,6 +76,7 @@ RuntimeError
 Allowed dependencies:
 
 - `crates/agent-tool-protocol` and stable value libraries;
+- the exact M00 `B-M00-M30-PROFILE` projection and proposal boundary values, without M00 repositories or mutation authority;
 - ports declared by `M30` for provider, journal, artifacts, clock and scheduler; Plugin-neutral proposal/result values from `agent-tool-protocol` cross through composition.
 
 Allowed callers:
@@ -87,6 +91,7 @@ Forbidden dependencies:
 - concrete database/framework checkpoint types;
 - Dioxus/client state;
 - product-specific ChangeRadar/Affairs/Opportunity logic.
+- account/external-identity/membership/grant decisions or profile fact acceptance/supersession/deletion.
 
 ## 6. Lifecycle
 
@@ -115,11 +120,11 @@ Each model/tool node has a bounded `AgentRun`. An unresolved external effect pre
 
 ## 8. Configuration and secrets
 
-Run behavior is pinned by immutable policy/profile IDs and integer budgets. No raw provider secret or Plugin configuration enters run specs/events. Provider/tool implementations resolve their own admitted references outside `M30`.
+Run behavior is pinned by immutable policy/provider-profile IDs, an optional exact purpose-bound M00 user-profile projection reference and integer budgets. Prompt context receives only consumer/purpose/field-approved values; campus-card UID, telephone and dormitory are excluded by default. No raw provider secret, authentication credential or Plugin configuration enters run specs/events. Provider/tool implementations resolve their own admitted references outside `M30`.
 
 ## 9. Observability
 
-Events expose phase, graph revision, node, budget consumption, model/tool call correlation, evidence/review status and stable error class. UI/event projections omit hidden reasoning and raw private payloads. Every terminal claim points to required evidence and review receipts.
+Events expose phase, graph revision, node, budget consumption, profile projection/proposal identity without value, model/tool call correlation, evidence/review status and stable error class. UI/event projections omit hidden reasoning and raw private payloads. Every terminal claim points to required evidence and review receipts.
 
 ## 10. Extension and replacement
 

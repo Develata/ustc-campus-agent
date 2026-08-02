@@ -38,7 +38,7 @@ Application interface
           │ admitted typed command/query/event
           ▼
 Flow coordination
-  M00 actor/request context
+  M00 account/external identity/membership/session/profile and actor/request context
   M20 Market/package lifecycle
   M30 finite Agent harness/runtime
   application composition only
@@ -62,7 +62,7 @@ The thin peer clients display/serialize server projections and submit intent thr
 
 | ID | Module | Owns | Current evidence |
 |---|---|---|---|
-| `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity value types only |
+| `M00` | Platform Control/Identity | human account, external identity, tenant membership, general user-context profile, session/request/policy identity and causation | identity types + session-domain only; account/auth/profile planned |
 | `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | daemon help/version skeleton |
 | `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | typed catalog/capability + bounded installation/grant/update domains + bounded transaction-current authority assembly + pure resolver/fixtures |
 | `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel |
@@ -72,9 +72,9 @@ The thin peer clients display/serialize server projections and submit intent thr
 | `M60` | Campus Trust/Source | source policy, immutable revision, provenance, conflict, freshness, baseline | synthetic fixture semantics only |
 | `M70` | ChangeRadar | semantic change review/event/feed | manifest/design only |
 | `M71` | Affairs Navigator | reviewed procedure tree/artifacts/search | manifest/design only |
-| `M72` | Opportunity Graph | reviewed opportunities, private profiles, qualification/planning | offline Course Planning spike |
+| `M72` | Opportunity Graph | reviewed opportunities, product-specific preferences and qualification/planning over purpose-bound M00 context | offline Course Planning spike |
 | `M80` | Client Core and Interaction Shells | framework-neutral client behavior and peer Dioxus Web/Android, `ustc-agent` and inbound MCP adapters; later iOS/desktop | accepted architecture, no client-core or peer implementation |
-| `M90` | Infrastructure/Operations | ports for storage/journal/evidence/config/secrets/HTTP/telemetry and Docker Compose deployment | CI/checker only |
+| `M90` | Infrastructure/Operations | SQLite local-demo and PostgreSQL hosted/production repository adapters plus journal/evidence/config/secrets/HTTP/telemetry and Docker Compose deployment | CI/checker only; storage adapters planned |
 
 “Current evidence” is not module completion. See the module blueprint exit gate and acceptance matrix.
 
@@ -139,7 +139,7 @@ reviewed SourceDefinition
 → accepted baseline
         ├── M70 semantic change candidate → review → event/feed
         ├── M71 procedure candidate → validate/review → artifact/search
-        └── M72 opportunity fact + private profile → deterministic result
+        └── M72 opportunity fact + M00 purpose-bound context + M72 preferences → deterministic result
 ```
 
 Fetch success is not publication. Model output is candidate/explanation, not fact authority. The three products consume the same exact source/revision identity but remain independent modules/packages.
@@ -150,6 +150,7 @@ Each domain module declares its own semantic port. `M90` implements it:
 
 ```text
 Domain-owned port                    Infrastructure peer
+Account/Profile repositories ←         SQLite local-demo / PostgreSQL operational adapters
 RunJournal                 ←         durable event store
 EvidenceStore              ←         verified object/filesystem store
 InstallationRepository     ←         transactional database adapter
@@ -158,7 +159,7 @@ SecretResolver             ←         secret reference backend
 Clock/Scheduler/Lease       ←         runtime/scheduling adapter
 ```
 
-Domain modules do not import concrete SQL rows, queue clients, provider SDKs or deployment handles as authority. Cache/search/queue loss must be recoverable from canonical state.
+Domain modules do not import concrete SQL rows, queue clients, provider SDKs or deployment handles as authority. SQLite is bounded to `local-demo`; hosted/production requires PostgreSQL with no fallback. Both use domain-owned ports and backend-specific migrations under `storage-profiles/v0`. Cache/search/queue loss must be recoverable from canonical state.
 
 ## 8. Independent development and assembly
 
@@ -197,12 +198,12 @@ Not implemented:
 
 - framework-neutral client-core, `ustc-agent` user/automation CLI or inbound MCP adapter;
 - Dioxus Fullstack app or dependency, Compose Fullstack server profile, Web journey or Android artifact;
-- Fullstack/public ingress, typed stream or auth/session service;
+- Fullstack/public ingress, typed stream or durable account/external-identity/membership/profile/auth/session service;
 - production durable Market installations/grants/updates/authority adapters, crash recovery, artifact switching and lifecycle/effect-intent/B7 composition;
 - finite HarnessRun/TaskGraph/context/review supervisor;
 - real model provider/MCP/Plugin executor;
 - real source pipeline and first-party product integrations;
-- production database/evidence/secret/deployment profile.
+- SQLite/PostgreSQL repository adapters, production database/evidence/secret/deployment profile.
 
 ## 10. Reading order
 

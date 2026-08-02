@@ -4,8 +4,8 @@
 
 - `Layer`: Foundation
 - `Status`: Current MUST
-- `Version`: `0.4.0`
-- `Last Review`: `2026-07-25`
+- `Version`: `0.5.0`
+- `Last Review`: `2026-08-02`
 - `Authority Owns`: normative vocabulary used across plans, contracts and acceptance
 - `Authority Defers To`: typed schemas and Rust definitions for machine spelling
 - `Counterpart Acceptance`: `docs/acceptance/matrix.tsv`
@@ -39,7 +39,20 @@ Requirements SHOULD be testable or observable. Words such as “better”, “in
 - **Thin client**: a Dioxus/CLI shell that displays server-owned state and submits typed user intent. It does not perform truth-affecting calculation or mutation.
 - **Backend/application infrastructure**: explicit `ustc-agentd` application services and domain/execution modules that perform all product calculations and mutations. It does not mean a generic infrastructure layer may own domain rules.
 
-## 4. Market terms
+## 4. Platform identity and profile terms
+
+- **UserAccount**: M00-owned stable human runtime account identified by opaque `UserId`; it is not a provider subject, school number, role, profile or service principal.
+- **ExternalIdentity**: explicit link from one canonical provider issuer/subject under a tenant/adapter configuration to one `UserAccount`.
+- **ExternalIdentityAlias**: observed login/display alias such as a current or historical person number; it cannot authenticate, create or merge an account by itself.
+- **TenantMembership**: lifecycle/status binding between one `UserAccount` and one tenant. Roles/grants remain separate authorization facts.
+- **AuthAssertion**: bounded, adapter-validated authentication result containing canonical issuer/subject and evidence digest without raw credential retention.
+- **User context profile**: M00-owned general personalization/context state, separate from account, authentication, membership and authorization.
+- **ProfileFact**: schema-validated, provenance/verification/time/sensitivity-bearing candidate or confirmed value under one tenant/user/field key.
+- **ProfileProposal**: AI/system suggestion that has no acceptance or authorization power until an admitted M00 policy/user flow confirms it.
+- **CurrentProfileProjection**: deterministic rebuildable purpose/consumer/field-bounded view over profile facts at exact registry/policy/source revisions.
+- **OpportunityPreference**: M72-owned product-specific planning preference or constraint; it is not a general profile fact.
+
+## 5. Market terms
 
 - **Catalog Authority**: the reviewed Git-resident package schema, publisher, capability and manifest declarations that determine which public package revision exists.
 - **Catalog Projection**: a query-optimized view of Catalog Authority. It is rebuildable and cannot approve or un-revoke a package.
@@ -52,7 +65,7 @@ Requirements SHOULD be testable or observable. Words such as “better”, “in
 - **Plugin contribution**: a validated package component projection such as a procedural asset, resource or tool-provider route. It is not installation, grant or Agent state.
 - **FirstPartySystemPlugin**: a reviewed default first-party package governed by the same exact-version, permission-expansion, disable and audit rules as other packages.
 
-## 5. Campus Trust Kernel terms
+## 6. Campus Trust Kernel terms
 
 - **SourceDefinition**: reviewed declaration of one source identity, authority, owner, URL/retrieval policy, parser policy and status.
 - **SourceRevision**: immutable observation of a source, binding canonical/retrieved URL, time, digests, parser identity and snapshot references.
@@ -61,9 +74,9 @@ Requirements SHOULD be testable or observable. Words such as “better”, “in
 - **Candidate**: unapproved generated or parsed material. Candidate state carries no canonical publication authority.
 - **Published artifact**: validator-approved, administrator-approved canonical procedure/change/graph artifact with immutable identity and receipt.
 - **Campus Trust Kernel**: shared source identity, immutable revision, authority ordering, temporal, conflict, provenance, grant and audit semantics used by all three first-party Plugins.
-- **Tenant-private profile fact**: user-provided or user-derived data visible only in its authorized tenant/user scope; it never enters the public campus fact projection.
+- **Tenant-private context data**: M00 profile facts/projections or product-owned private preferences visible only within exact tenant/user/purpose scope; none enters a public campus fact projection.
 
-## 6. Runtime and proof terms
+## 7. Runtime and proof terms
 
 - **ConversationSession**: durable ordered conversation scope that may contain many finite `HarnessRun`s; it is not itself one execution run.
 - **HarnessRun**: platform-owned finite state machine for one accepted user task, from context/clarification through graph execution, verification and report.

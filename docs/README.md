@@ -8,10 +8,11 @@ USTC Campus Agent uses a proportionate docs-as-code structure: detailed authorit
 2. [`plan/01-terminology.md`](plan/01-terminology.md)
 3. [`plan/modules/00-module-map.md`](plan/modules/00-module-map.md)
 4. [`contracts/module-boundaries.md`](contracts/module-boundaries.md)
-5. [`tasks/00-module-work-policy.md`](tasks/00-module-work-policy.md)
-6. [`overview/architecture.md`](overview/architecture.md)
-7. [`coverage-matrix.md`](coverage-matrix.md)
-8. the matching module plan/feature/contract/acceptance documents
+5. [`contracts/platform-account.md`](contracts/platform-account.md), [`contracts/user-context-profile.md`](contracts/user-context-profile.md) and [`contracts/storage-profiles.md`](contracts/storage-profiles.md) for the runtime identity/profile/storage split
+6. [`tasks/00-module-work-policy.md`](tasks/00-module-work-policy.md)
+7. [`overview/architecture.md`](overview/architecture.md)
+8. [`coverage-matrix.md`](coverage-matrix.md)
+9. the matching module plan/feature/contract/acceptance documents
 
 ## Structure
 
@@ -19,7 +20,7 @@ USTC Campus Agent uses a proportionate docs-as-code structure: detailed authorit
 |---|---|
 | [`plan/`](plan/) | How is the system engineered, which large modules exist, and who owns authority/failure/recovery? |
 | [`features/`](features/) | What does the user see and what is the honest journey/status? |
-| [`contracts/`](contracts/) | What exact harness/runtime, Agent–Plugin tool boundary, typed client core/peer shells, schemas, CLI, interfaces, permissions and data models are exposed? |
+| [`contracts/`](contracts/) | What account/auth/profile/storage semantics, exact harness/runtime, Agent–Plugin tool boundary, typed client core/peer shells, schemas, CLI, interfaces, permissions and data models are exposed? |
 | [`acceptance/`](acceptance/) | What is active now, and which stable long-horizon proof cases must be retained for future scope? |
 | [`overview/`](overview/) | How do the layers fit together? |
 | [`tasks/`](tasks/) | How are large modules split, committed, independently accepted and assembled? |
