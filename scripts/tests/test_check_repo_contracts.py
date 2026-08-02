@@ -577,6 +577,11 @@ class DocsTopologyContractTests(unittest.TestCase):
             "- `Repair round`: `0`",
             "- `Repair round`: `2`",
         )
+        self.replace_once(
+            checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M40-B0"],
+            "- `Current blocker identity`: `none`",
+            "- `Current blocker identity`: `still-open-after-two-rounds`",
+        )
         self.assertTrue(
             any(
                 "campaign taskbook round 2 must be paused for M40-B0" in issue
@@ -3150,6 +3155,12 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def grant_test_path(self) -> Path:
         return self.root / checker.PLATFORM_GRANT_TEST
 
+    def update_path(self) -> Path:
+        return self.root / checker.PLATFORM_UPDATE_SOURCE
+
+    def update_test_path(self) -> Path:
+        return self.root / checker.PLATFORM_UPDATE_TEST
+
     def admit_installation_surface(self) -> None:
         path = self.installation_path()
         if not path.is_file():
@@ -3186,8 +3197,10 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
             occurrences,
             f"stale mutation target in {path.name}: {old!r}",
         )
+        updated = text.replace(old, new, occurrences if replacements is None else replacements)
+        self.assertNotEqual(updated, text, f"mutation did not change bytes in {path.name}: {old!r}")
         path.write_text(
-            text.replace(old, new, occurrences if replacements is None else replacements),
+            updated,
             encoding="utf-8",
         )
 
@@ -3207,6 +3220,188 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
 
     def test_admitted_current_market_grant_surface_passes(self) -> None:
         self.assertEqual(self.check_identity(), [])
+
+    def test_missing_market_update_nested_file_fails_closed(self) -> None:
+        self.assertEqual(self.check_identity(), [])
+        self.update_path().unlink()
+        issues = self.check_identity()
+        self.assert_rejected(issues, "market update carrier missing")
+        self.assert_rejected(issues, "platform-core source file set drifted")
+
+    def test_missing_market_update_module_declaration_fails_closed(self) -> None:
+        self.rewrite(self.market_path(), "pub mod update;\n", "")
+        self.assert_rejected(
+            self.check_identity(), "market update module declaration missing"
+        )
+
+    def test_unregistered_market_update_source_or_test_fails_closed(self) -> None:
+        cases = (
+            (
+                self.root / "crates/platform-core/src/market/update_shadow.rs",
+                "pub struct ExtraUpdateShadow;\n",
+                ("platform-core source file set drifted", "ungoverned platform-core source"),
+            ),
+            (
+                self.root / "crates/platform-core/tests/market_package_update_shadow.rs",
+                "#[test]\nfn shadow_update_test() {}\n",
+                ("platform-core package inventory drifted",),
+            ),
+        )
+        for path, content, markers in cases:
+            with self.subTest(path=path.name):
+                path.write_text(content, encoding="utf-8")
+                issues = self.check_identity()
+                for marker in markers:
+                    self.assert_rejected(issues, marker)
+                path.unlink()
+
+    def test_market_update_public_rename_extra_item_and_visibility_widening_fail_closed(self) -> None:
+        original = self.update_path().read_text(encoding="utf-8")
+        cases = (
+            ("pub struct UpdateApprovalId", "pub struct UpdateApprovalKey"),
+            ("pub trait PackageUpdateRepository {", "pub struct ExtraUpdateSurface;\n\npub trait PackageUpdateRepository {"),
+            ("struct PlanPackageAuthority {", "pub struct PlanPackageAuthority {"),
+        )
+        for old, new in cases:
+            with self.subTest(old=old):
+                self.update_path().write_text(original, encoding="utf-8")
+                self.rewrite(self.update_path(), old, new)
+                self.assert_rejected(
+                    self.check_identity(), "market update public declaration surface drifted"
+                )
+        self.update_path().write_text(original, encoding="utf-8")
+        self.rewrite(
+            self.update_path(),
+            "pub(in crate::market) fn for_cancel()",
+            "pub(in crate::market) fn for_abort()",
+        )
+        self.assert_rejected(
+            self.check_identity(), "market update restricted public function surface drifted"
+        )
+        self.update_path().write_text(original, encoding="utf-8")
+        self.rewrite(
+            self.update_path(),
+            "#[cfg(test)]\n    fn from_parts(",
+            "    fn from_parts(",
+        )
+        self.rewrite(
+            self.update_path(),
+            "fn validate_publications(",
+            "#[cfg(test)]\nfn validate_publications(",
+        )
+        self.assert_rejected(
+            self.check_identity(), "market update test-only authority carrier drifted"
+        )
+        self.update_path().write_text(original, encoding="utf-8")
+        self.rewrite(
+            self.update_path(),
+            "UpdateCommandAction::Cancel { .. } => Ok(UpdateDecisionContext::for_cancel()),",
+            "UpdateCommandAction::Cancel { .. } => Ok(UpdateDecisionContext { kind: UpdateDecisionContextKind::Cancel }),",
+        )
+        issues = self.check_identity()
+        self.assert_rejected(
+            issues, "market update production context constructor reachability drifted"
+        )
+        self.assert_rejected(
+            issues, "market update production direct context construction drifted"
+        )
+        self.update_path().write_text(original, encoding="utf-8")
+
+    def test_market_update_dependency_import_impl_derive_attribute_and_macro_drift_fail_closed(self) -> None:
+        original = self.update_path().read_text(encoding="utf-8")
+        cases = (
+            ("use std::fmt;", "use std::fmt;\nuse std::time::SystemTime;", "market update item declarations drifted"),
+            ("impl UpdateState {", "impl ExtraUpdateImpl {", "market update implementation surface drifted"),
+            ("#[derive(Clone, PartialEq, Eq)]\npub struct PackageUpdatePlan", "#[derive(Debug, Clone, PartialEq, Eq)]\npub struct PackageUpdatePlan", "market update derive surface drifted"),
+            ("pub enum UpdateConstructionError {", "#[allow(unused_imports)]\npub enum UpdateConstructionError {", "market update attribute inventory drifted"),
+            ("macro_rules! parsed {", "macro_rules! parsed_changed {", "market update macro definitions drifted"),
+            ("assert_ne!(approval.evidence_digest(), readiness.evidence_digest());", "assert_ne!(approval.evidence_digest(), readiness.evidence_digest());\n        assert!(true);", "market update macro invocation counts drifted"),
+        )
+        for old, new, marker in cases:
+            with self.subTest(marker=marker):
+                self.update_path().write_text(original, encoding="utf-8")
+                self.rewrite(self.update_path(), old, new)
+                self.assert_rejected(self.check_identity(), marker)
+        self.update_path().write_text(original, encoding="utf-8")
+
+    def test_market_update_authority_debug_derive_fails_closed(self) -> None:
+        self.rewrite(
+            self.update_path(),
+            "#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]\npub struct PackageUpdateId",
+            "#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]\npub struct PackageUpdateId",
+        )
+        self.assert_rejected(self.check_identity(), "market update derive surface drifted")
+
+    def test_market_update_missing_or_ignored_unit_test_fails_closed(self) -> None:
+        original = self.update_path().read_text(encoding="utf-8")
+        target = "#[test]\n    fn checked_update_ids_revisions_and_sequences_are_canonical()"
+        self.rewrite(self.update_path(), target, "fn checked_update_ids_revisions_and_sequences_are_canonical()")
+        self.assert_rejected(self.check_identity(), "market update unit test inventory drifted")
+        self.update_path().write_text(original, encoding="utf-8")
+        self.rewrite(self.update_path(), target, "#[ignore]\n    #[test]\n    fn checked_update_ids_revisions_and_sequences_are_canonical()")
+        issues = self.check_identity()
+        self.assert_rejected(issues, "market update attribute inventory drifted")
+
+    def test_market_update_missing_or_ignored_integration_test_fails_closed(self) -> None:
+        original = self.update_test_path().read_text(encoding="utf-8")
+        target = "#[test]\nfn checked_public_update_values_and_stage_surface_are_deterministic()"
+        self.rewrite(self.update_test_path(), target, "fn checked_public_update_values_and_stage_surface_are_deterministic()")
+        self.assert_rejected(self.check_identity(), "market update acceptance test registration drift")
+        self.update_test_path().write_text(original, encoding="utf-8")
+        self.rewrite(self.update_test_path(), target, "#[ignore]\n#[test]\nfn checked_public_update_values_and_stage_surface_are_deterministic()")
+        issues = self.check_identity()
+        self.assert_rejected(issues, "market update acceptance test")
+        self.assert_rejected(issues, "attribute envelope drifted")
+
+    def test_market_installation_update_event_or_restricted_constructor_drift_fails_closed(self) -> None:
+        original = self.installation_path().read_text(encoding="utf-8")
+        cases = (
+            ("pub(in crate::market) fn package_updated(", "pub fn package_updated(", "market installation has an unclassified public declaration"),
+            ("    PackageUpdated,\n    PackageRolledBack,", "    PackageUpdatedRenamed,\n    PackageRolledBack,", "market installation event kind variants drifted"),
+            ("pub(in crate::market) fn package_rolled_back(", "pub(in crate::market) fn package_rollback_event(", "market installation restricted public function surface drifted"),
+            ("pub(in crate::market) fn matches_package_pin_change(", "pub(in crate::market) fn matches_any_pin_change(", "market installation restricted public function surface drifted"),
+        )
+        for old, new, marker in cases:
+            with self.subTest(marker=marker):
+                self.installation_path().write_text(original, encoding="utf-8")
+                self.rewrite(self.installation_path(), old, new)
+                self.assert_rejected(self.check_identity(), marker)
+        self.installation_path().write_text(original, encoding="utf-8")
+
+    def test_market_grant_current_set_or_arbitrary_query_drift_fails_closed(self) -> None:
+        original = self.grant_path().read_text(encoding="utf-8")
+        cases = (
+            ("pub struct CurrentInstallationGrantSet {", "pub struct CurrentInstallationGrants {", "market grant public declaration surface drifted"),
+            ("pub trait GrantRepository {", "pub fn arbitrary_grant_query() {}\n\npub trait GrantRepository {", "market grant public declaration surface drifted"),
+            ("pub(in crate::market) fn canonical_coupling_digest(", "pub(in crate::market) fn coupling_hash(", "market grant restricted public function surface drifted"),
+            ("pub(in crate::market) fn is_canonical(", "pub(in crate::market) fn trusts_canonical(", "market grant restricted public function surface drifted"),
+        )
+        for old, new, marker in cases:
+            with self.subTest(marker=marker):
+                self.grant_path().write_text(original, encoding="utf-8")
+                self.rewrite(self.grant_path(), old, new)
+                self.assert_rejected(self.check_identity(), marker)
+        self.grant_path().write_text(original, encoding="utf-8")
+
+    def test_market_004_status_promotion_after_b6_fails_closed(self) -> None:
+        matrix = self.root / "docs/acceptance/matrix.tsv"
+        text = matrix.read_text(encoding="utf-8")
+        row = next(line for line in text.splitlines() if line.startswith("MARKET-004\t"))
+        self.assertEqual(row.count("\tplanned\t"), 1)
+        matrix.write_text(text.replace(row, row.replace("\tplanned\t", "\timplemented\t", 1), 1), encoding="utf-8")
+        issues: list[str] = []
+        checker.check_platform_authority_implementation(issues)
+        self.assert_rejected(issues, "MARKET-004 must remain a planned acceptance row after bounded B6")
+
+    def test_pkg_020_status_promotion_after_b6_fails_closed(self) -> None:
+        matrix = self.root / "docs/acceptance/matrix.tsv"
+        text = matrix.read_text(encoding="utf-8")
+        row = next(line for line in text.splitlines() if line.startswith("PKG-020\t"))
+        self.assertEqual(row.count("\tplanned\t"), 1)
+        matrix.write_text(text.replace(row, row.replace("\tplanned\t", "\timplemented\t", 1), 1), encoding="utf-8")
+        issues: list[str] = []
+        checker.check_platform_authority_implementation(issues)
+        self.assert_rejected(issues, "PKG-020 must remain a planned acceptance row after bounded B6")
 
     # Grant mutation map: carrier missing -> carrier diagnostic.
     def test_missing_market_grant_nested_file_fails_closed(self) -> None:
@@ -3300,8 +3495,8 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def test_market_grant_allow_attribute_body_drift_fails_closed(self) -> None:
         self.rewrite(
             self.grant_path(),
-            "    #[allow(dead_code)]\n",
-            "    #[allow(unused_imports)]\n",
+            "    #[allow(dead_code)]\n    #[allow(clippy::too_many_arguments)]\n",
+            "    #[allow(unused_imports)]\n    #[allow(clippy::too_many_arguments)]\n",
         )
         self.assert_rejected(
             self.check_identity(), "market grant attribute inventory drifted"
@@ -3411,7 +3606,7 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
 
     def test_missing_market_installation_module_declaration_fails_closed(self) -> None:
         self.admit_installation_surface()
-        self.rewrite(self.market_path(), "pub mod installation;\n\n", "")
+        self.rewrite(self.market_path(), "pub mod installation;\n", "")
         self.assert_rejected(
             self.check_identity(),
             "market installation module declaration missing",
@@ -6050,7 +6245,7 @@ class PlatformSessionImplementationTests(unittest.TestCase):
             self.assertRegex(admitted_file, r"\Acrates/platform-core/src/[a-z_/]+\.rs\Z")
             self.assertRegex(admitted_text, r"\A(?:pub )?use crate::identity::\{[^}]*\};\Z")
             self.assertNotIn(" as ", admitted_text)
-        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 5)
+        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 6)
 
     def test_forbidden_dependency_carrier_fails_closed(self) -> None:
         # A path-qualified call inside a function body declares no item, so the item allowlist

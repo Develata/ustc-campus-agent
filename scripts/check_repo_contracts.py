@@ -947,7 +947,11 @@ def check_campaign_taskbook_state(issues: list[str]) -> None:
         repair_round = int(round_match.group(1)) if round_match else -1
         if not round_match:
             fail(f"campaign taskbook invalid repair round for {lane}", issues)
-        if repair_round == 2 and status != "paused":
+        if (
+            repair_round == 2
+            and values.get("Current blocker identity") != "`none`"
+            and status != "paused"
+        ):
             fail(f"campaign taskbook round 2 must be paused for {lane}", issues)
         if status == "paused" and values.get("Stop reason") == "`none`":
             fail(f"campaign taskbook paused lane has no stop reason for {lane}", issues)
@@ -2392,6 +2396,8 @@ PLATFORM_INSTALLATION_TEST = 'crates/platform-core/tests/market_installation_lif
 PLATFORM_INSTALLATION_SOURCE = 'crates/platform-core/src/market/installation.rs'
 PLATFORM_GRANT_SOURCE = "crates/platform-core/src/market/grant.rs"
 PLATFORM_GRANT_TEST = "crates/platform-core/tests/market_grant_lifecycle.rs"
+PLATFORM_UPDATE_SOURCE = "crates/platform-core/src/market/update.rs"
+PLATFORM_UPDATE_TEST = "crates/platform-core/tests/market_package_update.rs"
 PLATFORM_IDENTITY_KINDS = (
     "TenantId",
     "UserId",
@@ -2662,6 +2668,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/market/capability.rs',
  'src/market/grant.rs',
  'src/market/installation.rs',
+ 'src/market/update.rs',
  'src/session.rs',
  'tests/invocation_resolution.rs',
  'tests/market_authority_assembly.rs',
@@ -2669,6 +2676,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'tests/market_grant_lifecycle.rs',
  'tests/market_installation_lifecycle.rs',
  'tests/market_package_catalog.rs',
+ 'tests/market_package_update.rs',
  'tests/platform_identity.rs',
  'tests/platform_session.rs',
  'tests/support/invocation_fixture.rs',
@@ -2676,6 +2684,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
 PLATFORM_IDENTITY_ADMITTED_REEXPORT = "pub use crate::identity::{TenantId, UserId};"
 PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 PLATFORM_GRANT_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
+PLATFORM_UPDATE_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT = (
     "use crate::identity::{SessionId, TenantId, UserId};"
@@ -2692,6 +2701,7 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
     (PLATFORM_INVOCATION_SOURCE, PLATFORM_IDENTITY_ADMITTED_REEXPORT),
     (PLATFORM_INSTALLATION_SOURCE, PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_GRANT_SOURCE, PLATFORM_GRANT_ADMITTED_IDENTITY_IMPORT),
+    (PLATFORM_UPDATE_SOURCE, PLATFORM_UPDATE_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_AUTHORITY_SOURCE, PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT),
 )
@@ -2702,11 +2712,12 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'invocation.rs': (),
  'lib.rs': ('identity', 'invocation', 'market', 'session'),
- 'market.rs': ('authority', 'capability', 'grant', 'installation'),
+ 'market.rs': ('authority', 'capability', 'grant', 'installation', 'update'),
  'market/authority.rs': (),
  'market/capability.rs': (),
  'market/grant.rs': (),
  'market/installation.rs': (),
+ 'market/update.rs': (),
  'session.rs': ()}
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
 # the spelling `crate::identity` is not the same as accounting for the use tree that contains
@@ -2750,6 +2761,7 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                'pub mod capability;',
                'pub mod grant;',
                'pub mod installation;',
+               'pub mod update;',
                'use crate::invocation::{ CapabilityId, CatalogRevision, ComponentKind, PackageId, '
                'PackageVersion, Sha256Digest, };',
                'use serde::Deserialize;',
@@ -2759,27 +2771,27 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                'use std::fmt;',
                'type Value = UniqueStringMap;'),
  'market/authority.rs': ('use crate::identity::{TenantId, UserId};',
-                         'use crate::invocation::{ AuthorizedInvocation, '
-                         'CapabilityGrantSnapshot, CapabilityId, CatalogPackageRevision, '
-                         'CurrentDenyState, GrantSnapshotId, InstallationId, '
-                         'InvocationAuthorityCandidate, InvocationAuthorizationError, '
-                         'InvocationPolicySnapshot, InvocationResolver, InvocationTarget, '
-                         'ObjectScope, PluginInstallationSnapshot, ProjectionResolutionError, '
-                         'ProposedToolCall, ResolvedInvocation, ToolProjectionRequest, '
-                         'ToolProjectionSnapshot, authorize_call, preflight_projected_call, };',
+                         'use crate::invocation::{ AuthorizedInvocation, CapabilityGrantSnapshot, '
+                         'CapabilityId, CatalogPackageRevision, CurrentDenyState, GrantSnapshotId, '
+                         'InstallationId, InvocationAuthorityCandidate, '
+                         'InvocationAuthorizationError, InvocationPolicySnapshot, '
+                         'InvocationResolver, InvocationTarget, ObjectScope, '
+                         'PluginInstallationSnapshot, ProjectionResolutionError, ProposedToolCall, '
+                         'ResolvedInvocation, ToolProjectionRequest, ToolProjectionSnapshot, '
+                         'authorize_call, preflight_projected_call, };',
                          'use std::cell::Cell;',
                          'use std::collections::{BTreeMap, BTreeSet};',
                          'use std::error::Error;',
                          'use std::fmt;',
-                         "type ReadTransaction<'a>: InvocationAuthorityReadTransaction where "
-                         "Self: 'a;",
+                         "type ReadTransaction<'a>: InvocationAuthorityReadTransaction where Self: "
+                         "'a;",
                          "type ReadTransaction<'a> = InMemoryAuthorityReadTransaction<'a>;",
                          '#[cfg(test)] mod tests',
                          'use super::*;',
-                         'use crate::invocation::{ CapabilityClass, CatalogRevision, '
-                         'ComponentId, GrantState, GrantVersion, ObjectScope, PackageId, '
-                         'PackageVersion, PolicyRevision, PolicySnapshotId, RunId, '
-                         'Sha256Digest, ToolId, TurnId, };'),
+                         'use crate::invocation::{ CapabilityClass, CatalogRevision, ComponentId, '
+                         'GrantState, GrantVersion, ObjectScope, PackageId, PackageVersion, '
+                         'PolicyRevision, PolicySnapshotId, RunId, Sha256Digest, ToolId, TurnId, '
+                         '};'),
  'market/capability.rs': ('use crate::invocation::{CapabilityClass, CapabilityId, '
                           'ConfirmationPolicy, Sha256Digest};',
                           'use serde::Deserialize;',
@@ -2791,13 +2803,13 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
  'market/grant.rs': ('use crate::identity::{TenantId, UserId};',
                      'use crate::invocation::{ CapabilityGrantSnapshot, CapabilityId, '
                      'CatalogRevision, ConfirmationPolicy, GrantSnapshotId, GrantState, '
-                     'GrantVersion, InstallationId, InstallationRevision, ObjectScope, '
-                     'PackageId, PackageVersion, Sha256Digest, };',
+                     'GrantVersion, InstallationId, InstallationRevision, ObjectScope, PackageId, '
+                     'PackageVersion, Sha256Digest, };',
                      'use crate::market::ValidatedPackageManifest;',
-                     'use crate::market::capability::{ AutoGrantDisposition, '
-                     'CapabilityDefinition, CapabilityPolicyChange, CapabilityRegistry, '
-                     'CapabilityRegistryRevision, CapabilityStatus, DataClass, EffectClass, '
-                     'ScopeKind, compare_capability_definitions, };',
+                     'use crate::market::capability::{ AutoGrantDisposition, CapabilityDefinition, '
+                     'CapabilityPolicyChange, CapabilityRegistry, CapabilityRegistryRevision, '
+                     'CapabilityStatus, DataClass, EffectClass, ScopeKind, '
+                     'compare_capability_definitions, };',
                      'use crate::market::installation::{InstallationSnapshot, '
                      'ManagedInstallationState};',
                      'use std::collections::{BTreeMap, BTreeSet};',
@@ -2810,8 +2822,8 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                      'ExecutionIdentity};',
                      'use crate::market::capability::load_capability_registry;',
                      'use crate::market::installation::{ InstallationCommand, '
-                     'InstallationCommandId, InstallationConfiguration, '
-                     'InstallationPackagePin, InstalledComponentPin, };',
+                     'InstallationCommandId, InstallationConfiguration, InstallationPackagePin, '
+                     'InstalledComponentPin, };',
                      'use crate::market::load_package_manifest;'),
  'market/installation.rs': ('use crate::identity::{TenantId, UserId};',
                             'use crate::invocation::{ CatalogRevision, ComponentId, ComponentKind, '
@@ -2826,6 +2838,47 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                             '#[cfg(test)] #[allow(clippy::expect_used, clippy::panic, '
                             'clippy::unwrap_used)] mod tests',
                             'use super::*;'),
+ 'market/update.rs': ('use crate::identity::{TenantId, UserId};',
+                      'use crate::invocation::{ CapabilityClass, CapabilityId, '
+                      'CatalogComponentRevision, CatalogPackageRevision, CatalogRevision, '
+                      'ComponentId, ComponentKind, ExecutionIdentity, GrantSnapshotId, GrantState, '
+                      'GrantVersion, InstallationId, InstallationRevision, '
+                      'InvocationPolicySnapshot, Sha256Digest, SourcePolicyIdentity, };',
+                      'use crate::market::capability::{ CapabilityDefinition, '
+                      'CapabilityPolicyChange, CapabilityRegistry, CapabilityRegistryRevision, '
+                      'CapabilityStatus, ScopeKind, compare_capability_definitions, };',
+                      'use crate::market::grant::{ CurrentInstallationGrantSet, GrantCommand, '
+                      'GrantCommandId, GrantCommandOutcome, GrantCommandReceipt, GrantEvent, '
+                      'GrantEventKind, GrantEventSequence, GrantInvalidationReason, '
+                      'GrantReplayError, GrantRepository, GrantRepositoryError, GrantSnapshot, '
+                      'InMemoryGrantRepository, replay as grant_replay, };',
+                      'use crate::market::installation::{ ConfigurationRevision, '
+                      'InMemoryInstallationRepository, InstallationCommand, InstallationCommandId, '
+                      'InstallationCommandOutcome, InstallationCommandReceipt, InstallationEvent, '
+                      'InstallationEventKind, InstallationEventSequence, InstallationPackagePin, '
+                      'InstallationReplayError, InstallationRepository, '
+                      'InstallationRepositoryError, InstallationSnapshot, '
+                      'ManagedInstallationState, replay as installation_replay, };',
+                      'use crate::market::{ CatalogReadModel, ComponentDeclaration, PackageTier, '
+                      'ValidatedPackageManifest, };',
+                      'use std::collections::{BTreeMap, BTreeSet};',
+                      'use std::error::Error;',
+                      'use std::fmt;',
+                      'pub type PackageUpdateSnapshot = PackageUpdateAggregate;',
+                      'type InstallationCouplingKey = (String, u64, u8, String);',
+                      'type GrantCouplingKey = (String, u64, String);',
+                      'type PolicyBindingKey = (String, String, String, String);',
+                      '#[cfg(test)] mod tests',
+                      'use super::*;',
+                      'use crate::invocation::{ ComponentVersion, ConfirmationPolicy, '
+                      'PolicyRevision, PolicySnapshotId, SourcePolicyId, SourcePolicyIdentity, };',
+                      'use crate::market::grant::{ GrantAdmissionEvidence, GrantApprovalId, '
+                      'GrantRepository, GrantScope, InMemoryGrantRepository, };',
+                      'use crate::market::installation::{ ConfigurationKey, '
+                      'EnablePreconditionEvidence, InstallationCommand, InstallationCommandId, '
+                      'InstallationConfiguration, InstalledComponentPin, NonSecretText, decide as '
+                      'installation_decide, evolve as installation_evolve, };',
+                      'use crate::market::load_package_manifest;'),
  'session.rs': ('use std::error::Error;',
                 'use std::fmt;',
                 'use serde::de;',
@@ -2846,6 +2899,7 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
  'market/capability.rs': (),
  'market/grant.rs': ('category_error', 'parsed'),
  'market/installation.rs': (),
+ 'market/update.rs': ('parsed',),
  'session.rs': ()}
 # Macro INVOCATION names are pinned too, not screened for `include!`. A splicing macro can be
 # reached whatever the spelling — `include /* x */ !("f.rs")` contains no `include!` substring —
@@ -2857,10 +2911,37 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_
  'market.rs': ('matches', 'write'),
  'market/authority.rs': ('assert', 'assert_eq', 'format', 'panic', 'parsed', 'vec', 'write'),
  'market/capability.rs': ('assert', 'assert_eq', 'matches'),
- 'market/grant.rs': ('assert', 'assert_eq', 'category_error', 'concat', 'format',
-                     'include_bytes', 'matches', 'panic', 'parsed', 'unreachable', 'vec',
+ 'market/grant.rs': ('assert',
+                     'assert_eq',
+                     'assert_ne',
+                     'category_error',
+                     'concat',
+                     'format',
+                     'include_bytes',
+                     'matches',
+                     'panic',
+                     'parsed',
+                     'unreachable',
+                     'vec',
                      'write'),
- 'market/installation.rs': ('assert_eq', 'format', 'matches', 'panic', 'vec', 'write'),
+ 'market/installation.rs': ('assert',
+                            'assert_eq',
+                            'assert_ne',
+                            'format',
+                            'matches',
+                            'panic',
+                            'vec',
+                            'write'),
+ 'market/update.rs': ('assert',
+                      'assert_eq',
+                      'assert_ne',
+                      'format',
+                      'matches',
+                      'panic',
+                      'parsed',
+                      'unreachable',
+                      'vec',
+                      'write'),
  'session.rs': ('assert', 'assert_eq', 'matches', 'panic', 'write')}
 PLATFORM_IDENTITY_ADMITTED_TEST_MACRO_INVOCATIONS = (
     "assert",
@@ -2879,6 +2960,11 @@ PLATFORM_GRANT_ADMITTED_IDENTITY_MACRO_ARGUMENTS = (
     ("parsed", "TenantId,"),
     ("parsed", "TenantId,"),
     ("parsed", "TenantId,"),
+    ("parsed", "TenantId,"),
+    ("parsed", "UserId,"),
+)
+PLATFORM_UPDATE_ADMITTED_IDENTITY_MACRO_ARGUMENTS = (
+    ("parsed", "TenantId,"),
     ("parsed", "UserId,"),
 )
 PLATFORM_AUTHORITY_ADMITTED_IDENTITY_MACRO_ARGUMENTS = (
@@ -2891,38 +2977,36 @@ PLATFORM_AUTHORITY_ADMITTED_IDENTITY_MACRO_ARGUMENTS = (
 # freeze `parsed!` arguments separately because that helper constructs typed authority values.
 # The latter closes same-count type substitutions without turning arbitrary assertion bodies into
 # repository-contract authority.
-PLATFORM_GRANT_ADMITTED_MACRO_INVOCATION_COUNTS = (
-    ("assert", 8),
-    ("assert_eq", 54),
-    ("category_error", 3),
-    ("concat", 1),
-    ("format", 9),
-    ("include_bytes", 2),
-    ("matches", 8),
-    ("panic", 2),
-    ("parsed", 54),
-    ("unreachable", 1),
-    ("vec", 1),
-    ("write", 1),
-)
-PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS = (
-    ("CapabilityId,", 4),
-    ("CatalogRevision,", 1),
-    ("ComponentId,", 1),
-    ("ComponentVersion,", 1),
-    ("ExecutionIdentity,", 1),
-    ("GrantApprovalId,", 5),
-    ("GrantApprovalId, approval", 1),
-    ("GrantCommandId,", 15),
-    ("GrantCommandId, command", 1),
-    ("GrantSnapshotId,", 9),
-    ("GrantSnapshotId, snapshot", 1),
-    ("GrantVersion,", 7),
-    ("InstallationCommandId,", 2),
-    ("InstallationId,", 1),
-    ("TenantId,", 3),
-    ("UserId,", 1),
-)
+PLATFORM_GRANT_ADMITTED_MACRO_INVOCATION_COUNTS = (('assert', 15),
+ ('assert_eq', 66),
+ ('assert_ne', 4),
+ ('category_error', 3),
+ ('concat', 1),
+ ('format', 11),
+ ('include_bytes', 2),
+ ('matches', 12),
+ ('panic', 2),
+ ('parsed', 74),
+ ('unreachable', 1),
+ ('vec', 19),
+ ('write', 1))
+PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS = (('CapabilityId,', 8),
+ ('CatalogRevision,', 1),
+ ('ComponentId,', 1),
+ ('ComponentVersion,', 1),
+ ('ExecutionIdentity,', 1),
+ ('GrantApprovalId,', 5),
+ ('GrantApprovalId, approval', 2),
+ ('GrantCommandId,', 19),
+ ('GrantCommandId, command', 2),
+ ('GrantSnapshotId,', 14),
+ ('GrantSnapshotId, snapshot', 2),
+ ('GrantVersion,', 9),
+ ('InstallationCommandId,', 2),
+ ('InstallationId,', 1),
+ ('InstallationRevision,', 1),
+ ('TenantId,', 4),
+ ('UserId,', 1))
 # Rejecting sibling implementations whose self type NAMES a governed kind is still a blacklist.
 # A blanket `impl<T> Extension for T` names no kind and covers all six, so the sibling `impl`
 # surface is an allowlist as well. These are M20 items; a genuine M20 addition is drift that
@@ -2933,7 +3017,8 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
                   'impl Error for InvocationRecheckError',
                   'impl Error for ProjectionAssemblyError',
                   'impl InMemoryInvocationAuthorityRepository',
-                  "impl InvocationAuthorityReadTransaction for InMemoryAuthorityReadTransaction<'_>",
+                  'impl InvocationAuthorityReadTransaction for '
+                  "InMemoryAuthorityReadTransaction<'_>",
                   'impl InvocationAuthorityRepository for InMemoryInvocationAuthorityRepository',
                   'impl InvocationAuthorityService<R>',
                   'impl InvocationAuthorityService<R>',
@@ -2951,18 +3036,8 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
                    'impl fmt::Display for CapabilityRegistryLoadError',
                    'impl fmt::Display for CapabilityRegistryRevisionError',
                    'impl-arg Into<String>'),
- 'identity.rs': ('impl $name',
-                 "impl Deserialize<'de> for $name",
-                 'impl Error for IdentityValueError',
-                 'impl FromStr for $name',
-                 'impl IdentityValueError',
-                 'impl Serialize for $name',
-                 'impl TryFrom<&str> for $name',
-                 'impl TryFrom<String> for $name',
-                 'impl fmt::Display for $name',
-                 'impl fmt::Display for IdentityValueError',
-                 'impl-arg Into<String>'),
- 'grant.rs': ('impl Error for $kind',
+ 'grant.rs': ('impl CurrentInstallationGrantSet',
+              'impl Error for $kind',
               'impl Error for GrantRepositoryError',
               'impl Fixture',
               'impl GrantAdmissionEvidence',
@@ -2976,6 +3051,8 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
               'impl GrantRepository for InMemoryGrantRepository',
               'impl GrantScope',
               'impl InMemoryGrantRepository',
+              'impl InMemoryGrantRepository',
+              'impl fmt::Debug for CurrentInstallationGrantSet',
               'impl fmt::Debug for GrantAdmissionEvidence',
               'impl fmt::Debug for GrantAggregate',
               'impl fmt::Debug for GrantApprovalId',
@@ -2990,6 +3067,17 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
               'impl-arg Into<String>',
               'impl-arg Into<String>',
               "impl-arg IntoIterator<Item = &'a GrantEvent>"),
+ 'identity.rs': ('impl $name',
+                 "impl Deserialize<'de> for $name",
+                 'impl Error for IdentityValueError',
+                 'impl FromStr for $name',
+                 'impl IdentityValueError',
+                 'impl Serialize for $name',
+                 'impl TryFrom<&str> for $name',
+                 'impl TryFrom<String> for $name',
+                 'impl fmt::Display for $name',
+                 'impl fmt::Display for IdentityValueError',
+                 'impl-arg Into<String>'),
  'installation.rs': ('impl ConfigurationKey',
                      'impl ConfigurationRevision',
                      'impl EnablePreconditionEvidence',
@@ -3045,6 +3133,19 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
                    'impl-arg Into<String>',
                    "impl-arg IntoIterator<Item = &'a str>"),
  'lib.rs': ('impl SourceAuthority',),
+ 'market.rs': ('impl CatalogReadModel',
+               'impl ComponentDeclaration',
+               "impl Deserialize<'de> for UniqueStringMap",
+               'impl Error for CatalogReadModelError',
+               'impl Error for PackageLoadError',
+               'impl Error for PackageValidationError',
+               'impl InstallPolicy',
+               'impl PackageValidationError',
+               'impl ValidatedPackageManifest',
+               "impl Visitor<'de> for UniqueStringMapVisitor",
+               'impl fmt::Display for CatalogReadModelError',
+               'impl fmt::Display for PackageLoadError',
+               'impl fmt::Display for PackageValidationError'),
  'session.rs': ('impl AuthAdapterId',
                 'impl CredentialEvidenceDigest',
                 "impl Deserialize<'de> for AuthAdapterId",
@@ -3074,32 +3175,76 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
                 'impl fmt::Display for SessionValueError',
                 'impl-arg Into<String>',
                 'impl-arg Into<String>'),
- 'market.rs': ('impl CatalogReadModel',
-               'impl ComponentDeclaration',
-               "impl Deserialize<'de> for UniqueStringMap",
-               'impl Error for CatalogReadModelError',
-               'impl Error for PackageLoadError',
-               'impl Error for PackageValidationError',
-               'impl InstallPolicy',
-               'impl PackageValidationError',
-               'impl ValidatedPackageManifest',
-               "impl Visitor<'de> for UniqueStringMapVisitor",
-               'impl fmt::Display for CatalogReadModelError',
-               'impl fmt::Display for PackageLoadError',
-               'impl fmt::Display for PackageValidationError')}
+ 'update.rs': ('impl AcceptedSnapshotForTest for UpdateCommandOutcome',
+               'impl AuthorityCarrierBinding',
+               'impl Error for UpdateConstructionError',
+               'impl Error for UpdateDecisionError',
+               'impl Error for UpdateReplayError',
+               'impl Error for UpdateRepositoryError',
+               'impl GrantEventReference',
+               'impl InMemoryPackageUpdateRepository',
+               'impl InstallationEventReference',
+               'impl PackageUpdateAggregate',
+               'impl PackageUpdateId',
+               'impl PackageUpdatePlan',
+               'impl PackageUpdateRepository for InMemoryPackageUpdateRepository',
+               'impl RollbackReadinessEvidence',
+               'impl UpdateApprovalEvidence',
+               'impl UpdateApprovalId',
+               'impl UpdateCommand',
+               'impl UpdateCommandId',
+               'impl UpdateCommandReceipt',
+               'impl UpdateConfirmationEvidence',
+               'impl UpdateDecisionContext',
+               'impl UpdateEvent',
+               'impl UpdateEventPayload',
+               'impl UpdateEventSequence',
+               'impl UpdateEvidenceId',
+               'impl UpdateReadinessEvidence',
+               'impl UpdateRevision',
+               'impl UpdateState',
+               'impl fmt::Debug for GrantEventReference',
+               'impl fmt::Debug for InMemoryPackageUpdateRepository',
+               'impl fmt::Debug for InstallationEventReference',
+               'impl fmt::Debug for PackageUpdateAggregate',
+               'impl fmt::Debug for PackageUpdateId',
+               'impl fmt::Debug for PackageUpdatePlan',
+               'impl fmt::Debug for PlanPackageAuthority',
+               'impl fmt::Debug for RollbackReadinessEvidence',
+               'impl fmt::Debug for UpdateApprovalEvidence',
+               'impl fmt::Debug for UpdateApprovalId',
+               'impl fmt::Debug for UpdateCommand',
+               'impl fmt::Debug for UpdateCommandAction',
+               'impl fmt::Debug for UpdateCommandId',
+               'impl fmt::Debug for UpdateCommandOutcome',
+               'impl fmt::Debug for UpdateCommandReceipt',
+               'impl fmt::Debug for UpdateConfirmationEvidence',
+               'impl fmt::Debug for UpdateDecisionContext',
+               'impl fmt::Debug for UpdateEvent',
+               'impl fmt::Debug for UpdateEventPayload',
+               'impl fmt::Debug for UpdateEvidenceId',
+               'impl fmt::Debug for UpdateReadinessEvidence',
+               'impl fmt::Display for UpdateConstructionError',
+               'impl fmt::Display for UpdateDecisionError',
+               'impl fmt::Display for UpdateReplayError',
+               'impl fmt::Display for UpdateRepositoryError',
+               'impl-arg Into<String>',
+               'impl-arg Into<String>',
+               'impl-arg Into<String>',
+               'impl-arg Into<String>',
+               'impl-arg Into<String>',
+               "impl-arg IntoIterator<Item = &'a UpdateEvent>")}
 # `extern crate self as x;` re-roots the crate under a second name, which would make
 # `x::identity` a foreign-looking path. It is an item whose keyword is neither `mod`, `use` nor
 # `type`, so the item allowlist above cannot see it.
 # Kept as a second, independent carrier alongside the `extern` item accounting above.
 PLATFORM_CORE_FORBIDDEN_SOURCE_PATTERNS = (("extern crate", r"\bextern\s+crate\b"),)
 PLATFORM_CAPABILITY_TEST_FUNCTIONS = ('current_registry_loads_with_exact_eight_definitions', 'enum_risk_and_compatibility_mappings_are_exact', 'source_size_and_malformed_json_fail_closed', 'duplicate_json_keys_fail_closed', 'duplicate_capability_ids_fail_closed', 'invalid_capability_id_grammar_fail_closed', 'missing_extra_and_unknown_fields_fail_closed', 'invalid_schema_version_and_registry_revision_fail_closed', 'forbidden_and_incoherent_combinations_fail_closed', 'auto_grant_candidacy_and_deprecated_revoked_exclusions', 'deterministic_ordering_and_permutation_independent_digest', 'fixed_definition_and_registry_digest_vectors', 'one_field_change_alters_definition_digest', 'registry_revision_does_not_change_definition_digests', 'policy_change_comparator_branches_and_precedence', 'errors_do_not_leak_rejected_source_fragments', 'empty_registry_loads_with_zero_definitions', 'definition_classifier_preserves_existing_policy_matrix', 'definition_classifier_handles_none_added_removed_revoked_and_all_axes', 'definition_classifier_uses_complete_definition_not_digest_or_caller_hint')
-PLATFORM_GRANT_TEST_FUNCTIONS = (
-    'checked_grant_ids_versions_and_sequences_are_canonical',
-    'closed_scope_algebra_projects_exact_public_and_tenant_private_scopes',
-    'non_issue_commands_validate_snapshot_and_expected_version',
-    'empty_replay_and_repository_queries_are_deterministic',
-    'public_errors_are_category_only_and_secret_safe',
-)
+PLATFORM_GRANT_TEST_FUNCTIONS = ('checked_grant_ids_versions_and_sequences_are_canonical',
+ 'closed_scope_algebra_projects_exact_public_and_tenant_private_scopes',
+ 'non_issue_commands_validate_snapshot_and_expected_version',
+ 'empty_replay_and_repository_queries_are_deterministic',
+ 'public_errors_are_category_only_and_secret_safe')
 PLATFORM_AUTHORITY_SOURCE_SHA256 = "7fa7210fd0cebca033fd9a597069dadf34af6cc084855ea3587afb413d89f672"
 PLATFORM_AUTHORITY_TEST_SHA256 = "ba92339afb73096309948638c10db75dcb2a3714c6cc5f369e17b11aa2648fc3"
 PLATFORM_AUTHORITY_ADMITTED_ATTRIBUTE_COUNTS = (
@@ -3207,8 +3352,8 @@ PLATFORM_INVOCATION_PREFIX_TEST = "projected_call_preflight_and_authorize_share_
 PLATFORM_INVOCATION_PREFIX_TEST_BODY_SHA256 = "e479ca2296589b23729e4ad75d319514aa3ceea04bd815a46a8d4569558a857e"
 PLATFORM_AUTHORITY_STATUS_MARKERS = {
     "docs/contracts/market-lifecycle.md": (
-        "bounded `M20-B5` transaction-current authority-assembly evidence are implemented",
-        "M20 remains `partial-evidence`, `MARKET-003`/`MARKET-007` remain `planned`",
+        "bounded `M20-B6` update/rollback domain plus semantic fake evidence are implemented",
+        "planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007`",
         "not a production catalog/publication authority, durable M90 transaction, grant/enable issuer or effect-intent/I/O boundary",
     ),
     "docs/contracts/invocation-resolution.md": (
@@ -3217,7 +3362,7 @@ PLATFORM_AUTHORITY_STATUS_MARKERS = {
     ),
     "docs/features/00-market-browse-install.md": (
         "bounded transaction-current authority-assembly evidence",
-        "`MARKET-001` through `MARKET-004`, `MARKET-007` and the user journey remain planned",
+        "`MARKET-001` through `MARKET-004`, `MARKET-007`, `PKG-020` and the user journey remain planned",
     ),
     "docs/plan/04-market-and-plugin-lifecycle.md": (
         "bounded `M20-B5` transaction-current authority assembly",
@@ -3226,11 +3371,11 @@ PLATFORM_AUTHORITY_STATUS_MARKERS = {
     "docs/plan/modules/00-module-map.md": ("bounded transaction-current authority assembly",),
     "docs/plan/modules/30-market-package-lifecycle.md": (
         "bounded `M20-B5` semantic authority-read transaction/assembly",
-        "Remaining work is `M20-B6` `update-rollback` and `M20-B7`",
+        "Remaining work is `M20-B7` production-facing API/composition/fake M40 consumer plus future durable adapters",
     ),
     "docs/tasks/01-execution-roadmap.md": (
         "`M20-B5 invocation-authority`: bounded implementation is complete",
-        "`M20-B6 update-rollback`: next batch",
+        "`M20-B6 update-rollback`: bounded evidence complete",
     ),
     "docs/overview/architecture.md": (
         "bounded transaction-current authority assembly",
@@ -3254,84 +3399,186 @@ PLATFORM_INSTALLATION_TEST_FUNCTIONS = ('configuration_values_are_canonical_boun
  'replay_rejects_impossible_initial_post_terminal_and_redundant_field_mismatches',
  'resolver_projection_maps_managed_states_without_grants_or_resolver_mutation',
  'event_receipt_and_error_debug_display_do_not_leak_configuration_or_secret_material')
-PLATFORM_INSTALLATION_ADMITTED_DERIVES = ('Clone, Copy',
- 'Clone, PartialEq, Eq',
- 'Clone, PartialEq, Eq',
- 'Clone, PartialEq, Eq',
- 'Clone, PartialEq, Eq',
- 'Clone, PartialEq, Eq',
- 'Clone, PartialEq, Eq',
- 'Clone, PartialEq, Eq',
+PLATFORM_INSTALLATION_ADMITTED_DERIVES = ('Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
  'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
- 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
- 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
- 'Debug, Clone, Copy, PartialEq, Eq',
- 'Debug, Clone, Copy, PartialEq, Eq',
- 'Debug, Clone, Copy, PartialEq, Eq',
- 'Debug, Clone, Copy, PartialEq, Eq',
- 'Debug, Clone, Copy, PartialEq, Eq',
  'Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash',
  'Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash',
- 'Debug, Clone, PartialEq, Eq',
- 'Debug, Clone, PartialEq, Eq',
- 'Debug, Clone, PartialEq, Eq',
- 'Debug, Clone, PartialEq, Eq',
- 'Debug, Clone, PartialEq, Eq',
- 'Debug, Clone, PartialEq, Eq',
- 'Debug, Clone, PartialEq, Eq',
- 'Debug, Clone, PartialEq, Eq',
  'Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
- 'Debug, Default')
-PLATFORM_INSTALLATION_ADMITTED_UNCLASSIFIED_PUBLIC = ('pub(in crate::market) fn fr',)
-PLATFORM_GRANT_ADMITTED_DERIVES = (
- 'Clone, PartialEq, Eq', 'Clone, PartialEq, Eq', 'Clone, PartialEq, Eq',
- 'Clone, PartialEq, Eq', 'Clone, PartialEq, Eq', 'Clone, PartialEq, Eq',
  'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
  'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
- 'Debug, Clone, Copy, PartialEq, Eq', 'Debug, Clone, Copy, PartialEq, Eq',
- 'Debug, Clone, Copy, PartialEq, Eq', 'Debug, Clone, Copy, PartialEq, Eq',
- 'Debug, Clone, Copy, PartialEq, Eq', 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Default, Clone',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Clone, Copy')
+PLATFORM_INSTALLATION_ADMITTED_UNCLASSIFIED_PUBLIC = ('pub(in crate::market) fn fr',
+ 'pub(in crate::market) fn pa',
+ 'pub(in crate::market) fn pa',
+ 'pub(in crate::market) fn ca',
+ 'pub(in crate::market) fn ma',
+ 'pub(in crate::market) fn tr')
+PLATFORM_INSTALLATION_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS = (
+ 'from_authority_bindings',
+ 'package_updated',
+ 'package_rolled_back',
+ 'canonical_coupling_digest',
+ 'matches_package_pin_change',
+ 'try_from_histories_and_receipts')
+PLATFORM_INSTALLATION_EVENT_KIND_VARIANTS = (
+ 'Installed',
+ 'Configured',
+ 'Enabled',
+ 'Disabled',
+ 'PackageUpdated',
+ 'PackageRolledBack',
+ 'Revoked',
+ 'Uninstalled')
+PLATFORM_GRANT_ADMITTED_DERIVES = ('Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
  'Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash',
- 'Debug, Clone, PartialEq, Eq', 'Debug, Clone, PartialEq, Eq',
- 'Debug, Clone, PartialEq, Eq', 'Debug, Clone, PartialEq, Eq',
- 'Debug, Clone, PartialEq, Eq', 'Debug, Clone, PartialEq, Eq, PartialOrd, Ord')
-PLATFORM_GRANT_ADMITTED_UNCLASSIFIED_PUBLIC = ('pub(in crate::market) fn fr',)
-PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS = (
- 'pub const fn approval_id', 'pub const fn capability_definition',
- 'pub const fn capability_definition', 'pub const fn capability_definition_digest',
- 'pub const fn capability_definition_digest', 'pub const fn capability_id',
- 'pub const fn capability_id', 'pub const fn capability_manifest_digest',
- 'pub const fn capability_manifest_digest', 'pub const fn capability_registry_revision',
- 'pub const fn capability_registry_revision', 'pub const fn catalog_revision',
- 'pub const fn catalog_revision', 'pub const fn command_id', 'pub const fn command_id',
- 'pub const fn command_id', 'pub const fn confirmation_policy',
- 'pub const fn confirmation_policy', 'pub const fn evidence_digest',
- 'pub const fn expected_installation_revision', 'pub const fn get',
- 'pub const fn installation_id', 'pub const fn installation_id',
- 'pub const fn installation_revision', 'pub const fn last_approval_id',
- 'pub const fn last_sequence', 'pub const fn object_scope', 'pub const fn outcome',
- 'pub const fn package_digest', 'pub const fn package_digest', 'pub const fn package_id',
- 'pub const fn package_id', 'pub const fn package_version', 'pub const fn package_version',
- 'pub const fn post_version', 'pub const fn scope', 'pub const fn scope',
- 'pub const fn scope_kind', 'pub const fn sequence', 'pub const fn snapshot_id',
- 'pub const fn snapshot_id', 'pub const fn snapshot_id', 'pub const fn snapshot_id',
- 'pub const fn snapshot_id', 'pub const fn state', 'pub const fn tenant_id',
- 'pub const fn tenant_id', 'pub const fn tenant_id', 'pub const fn user_id',
- 'pub const fn user_id', 'pub const fn user_id', 'pub const fn version',
- 'pub enum GrantChangeClass', 'pub enum GrantCommandOutcome',
- 'pub enum GrantConstructionError', 'pub enum GrantDecisionError',
- 'pub enum GrantEventKind', 'pub enum GrantInvalidationReason',
- 'pub enum GrantReplayError', 'pub enum GrantRepositoryError', 'pub fn as_str',
- 'pub fn as_str', 'pub fn campus_public', 'pub fn change_class', 'pub fn decide',
- 'pub fn evolve', 'pub fn expire', 'pub fn fail_next_commit_for_testing',
- 'pub fn invalidation_reason', 'pub fn issue', 'pub fn kind', 'pub fn mark_stale',
- 'pub fn new', 'pub fn new', 'pub fn parse', 'pub fn parse', 'pub fn replace',
- 'pub fn replay', 'pub fn revoke', 'pub fn tenant_private_user',
- 'pub fn to_resolver_snapshot', 'pub struct GrantAdmissionEvidence',
- 'pub struct GrantAggregate', 'pub struct GrantApprovalId', 'pub struct GrantCommand',
- 'pub struct GrantCommandId', 'pub struct GrantCommandReceipt', 'pub struct GrantEvent',
- 'pub struct GrantEventSequence', 'pub struct GrantScope',
- 'pub struct InMemoryGrantRepository', 'pub trait GrantRepository',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq, PartialOrd, Ord',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Clone')
+PLATFORM_GRANT_ADMITTED_UNCLASSIFIED_PUBLIC = ('pub(in crate::market) fn fr', 'pub(in crate::market) fn ca', 'pub(in crate::market) fn is', 'pub(in crate::market) fn tr')
+PLATFORM_GRANT_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS = (
+ 'from_authority_bindings',
+ 'canonical_coupling_digest',
+ 'is_canonical',
+ 'try_from_histories_and_receipts')
+PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn approval_id',
+ 'pub const fn capability_definition',
+ 'pub const fn capability_definition',
+ 'pub const fn capability_definition_digest',
+ 'pub const fn capability_definition_digest',
+ 'pub const fn capability_id',
+ 'pub const fn capability_id',
+ 'pub const fn capability_manifest_digest',
+ 'pub const fn capability_manifest_digest',
+ 'pub const fn capability_registry_revision',
+ 'pub const fn capability_registry_revision',
+ 'pub const fn catalog_revision',
+ 'pub const fn catalog_revision',
+ 'pub const fn command_id',
+ 'pub const fn command_id',
+ 'pub const fn command_id',
+ 'pub const fn confirmation_policy',
+ 'pub const fn confirmation_policy',
+ 'pub const fn evidence_digest',
+ 'pub const fn expected_installation_revision',
+ 'pub const fn get',
+ 'pub const fn grant_set_digest',
+ 'pub const fn installation_id',
+ 'pub const fn installation_id',
+ 'pub const fn installation_id',
+ 'pub const fn installation_revision',
+ 'pub const fn last_approval_id',
+ 'pub const fn last_sequence',
+ 'pub const fn object_scope',
+ 'pub const fn observed_installation_revision',
+ 'pub const fn outcome',
+ 'pub const fn package_digest',
+ 'pub const fn package_digest',
+ 'pub const fn package_id',
+ 'pub const fn package_id',
+ 'pub const fn package_version',
+ 'pub const fn package_version',
+ 'pub const fn post_version',
+ 'pub const fn scope',
+ 'pub const fn scope',
+ 'pub const fn scope_kind',
+ 'pub const fn sequence',
+ 'pub const fn snapshot_id',
+ 'pub const fn snapshot_id',
+ 'pub const fn snapshot_id',
+ 'pub const fn snapshot_id',
+ 'pub const fn snapshot_id',
+ 'pub const fn state',
+ 'pub const fn tenant_id',
+ 'pub const fn tenant_id',
+ 'pub const fn tenant_id',
+ 'pub const fn tenant_id',
+ 'pub const fn user_id',
+ 'pub const fn user_id',
+ 'pub const fn user_id',
+ 'pub const fn user_id',
+ 'pub const fn version',
+ 'pub enum GrantChangeClass',
+ 'pub enum GrantCommandOutcome',
+ 'pub enum GrantConstructionError',
+ 'pub enum GrantDecisionError',
+ 'pub enum GrantEventKind',
+ 'pub enum GrantInvalidationReason',
+ 'pub enum GrantReplayError',
+ 'pub enum GrantRepositoryError',
+ 'pub fn as_str',
+ 'pub fn as_str',
+ 'pub fn campus_public',
+ 'pub fn change_class',
+ 'pub fn decide',
+ 'pub fn evolve',
+ 'pub fn expire',
+ 'pub fn fail_next_commit_for_testing',
+ 'pub fn grants',
+ 'pub fn invalidation_reason',
+ 'pub fn issue',
+ 'pub fn kind',
+ 'pub fn mark_stale',
+ 'pub fn new',
+ 'pub fn new',
+ 'pub fn parse',
+ 'pub fn parse',
+ 'pub fn replace',
+ 'pub fn replay',
+ 'pub fn revoke',
+ 'pub fn tenant_private_user',
+ 'pub fn to_resolver_snapshot',
+ 'pub struct CurrentInstallationGrantSet',
+ 'pub struct GrantAdmissionEvidence',
+ 'pub struct GrantAggregate',
+ 'pub struct GrantApprovalId',
+ 'pub struct GrantCommand',
+ 'pub struct GrantCommandId',
+ 'pub struct GrantCommandReceipt',
+ 'pub struct GrantEvent',
+ 'pub struct GrantEventSequence',
+ 'pub struct GrantScope',
+ 'pub struct InMemoryGrantRepository',
+ 'pub trait GrantRepository',
  'pub type GrantSnapshot')
 PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn capability_manifest_digest',
  'pub const fn capability_manifest_digest',
@@ -3430,6 +3677,332 @@ PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn capability_m
  'pub struct SecretRefId',
  'pub trait InstallationRepository',
  'pub type InstallationSnapshot')
+
+PLATFORM_INSTALLATION_ADMITTED_ATTRIBUTE_COUNTS = (((False, 'allow', 'allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)'), 1),
+ ((False, 'allow', 'allow(clippy::large_enum_variant)'), 1),
+ ((False, 'allow', 'allow(clippy::too_many_arguments)'), 3),
+ ((False, 'allow', 'allow(clippy::too_many_arguments, dead_code)'), 1),
+ ((False, 'allow', 'allow(dead_code)'), 7),
+ ((False, 'cfg', 'cfg(test)'), 1),
+ ((False, 'derive', 'derive(Clone, Copy)'), 1),
+ ((False, 'derive', 'derive(Clone, PartialEq, Eq)'), 7),
+ ((False, 'derive', 'derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)'), 3),
+ ((False, 'derive', 'derive(Debug, Clone, Copy, PartialEq, Eq)'), 6),
+ ((False, 'derive', 'derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)'), 2),
+ ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq)'), 8),
+ ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)'), 1),
+ ((False, 'derive', 'derive(Debug, Default, Clone)'), 1),
+ ((False, 'must_use', 'must_use'), 52),
+ ((False, 'test', 'test'), 7))
+PLATFORM_UPDATE_TEST_FUNCTIONS = ('checked_public_update_values_and_stage_surface_are_deterministic',
+ 'empty_public_repository_and_replay_are_non_authoritative',
+ 'public_errors_and_debug_are_category_only_and_redacted')
+PLATFORM_UPDATE_UNIT_TEST_FUNCTIONS = ('checked_update_ids_revisions_and_sequences_are_canonical',
+ 'update_plan_binds_exact_source_target_catalog_registry_policy_and_digests',
+ 'change_classifier_is_computed_from_complete_typed_authority_not_caller_hint',
+ 'change_classifier_precedence_covers_added_expanded_source_policy_tier_component_scope_and_unknown',
+ 'evidence_values_bind_plan_digest_revision_configuration_and_authority_without_leaking_payloads',
+ 'state_machine_allows_only_stage_approval_apply_confirm_rollback_cancel_paths',
+ 'stage_requires_absence_one_slot_nonterminal_installation_and_distinct_reviewed_target',
+ 'record_approval_requires_coherent_fresh_approval_and_readiness_evidence',
+ 'apply_requires_ready_disabled_exact_revisions_pins_configuration_and_authority_recheck',
+ 'rollback_requires_applied_pending_disabled_fresh_readiness_and_current_target_pin',
+ 'confirm_only_closes_applied_pending_without_runtime_health_or_grant_authority',
+ 'cancel_and_terminal_installation_reconciliation_have_exact_precedence',
+ 'event_sequences_revisions_command_ids_and_approval_consumption_are_exact',
+ 'replay_accepts_reachable_histories_and_rejects_gap_duplicate_reorder_overflow_and_post_terminal',
+ 'replay_rejects_forged_plan_change_class_evidence_revision_and_identity_bindings',
+ 'subordinate_installation_and_grant_event_references_are_complete_kind_checked_and_digest_bound',
+ 'repository_idempotency_command_conflict_approval_conflict_and_failure_injection_are_atomic',
+ 'repository_rebuilds_current_slot_all_ledgers_consumed_approvals_and_authority_indexes',
+ 'permission_expansion_and_every_conservative_update_require_exact_approval',
+ 'apply_and_rollback_preserve_frozen_toolsets_and_change_only_current_future_authority',
+ 'public_errors_debug_display_and_authority_debug_are_category_only_and_secret_safe')
+PLATFORM_UPDATE_ADMITTED_ATTRIBUTE_COUNTS = (((False, 'allow', 'allow(clippy::large_enum_variant)'), 4),
+ ((False, 'allow', 'allow(clippy::new_without_default)'), 1),
+ ((False, 'allow', 'allow(clippy::too_many_arguments)'), 13),
+ ((False, 'allow', 'allow(dead_code)'), 5),
+ ((False, 'cfg', 'cfg(test)'), 6),
+ ((False, 'derive', 'derive(Clone)'), 1),
+ ((False, 'derive', 'derive(Clone, PartialEq, Eq)'), 21),
+ ((False, 'derive', 'derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)'), 4),
+ ((False, 'derive', 'derive(Debug, Clone, Copy, PartialEq, Eq)'), 6),
+ ((False, 'derive', 'derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)'), 1),
+ ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq)'), 1),
+ ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)'), 1),
+ ((False, 'must_use', 'must_use'), 106),
+ ((False, 'test', 'test'), 21))
+PLATFORM_UPDATE_ADMITTED_DERIVES = ('Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Debug, Clone, Copy, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Debug, Clone, PartialEq, Eq',
+ 'Clone, PartialEq, Eq',
+ 'Clone',
+ 'Clone, PartialEq, Eq')
+PLATFORM_UPDATE_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn applied_event_digest',
+ 'pub const fn applied_installation_revision',
+ 'pub const fn approval',
+ 'pub const fn approval_evidence_digest',
+ 'pub const fn approval_id',
+ 'pub const fn change_class',
+ 'pub const fn change_class',
+ 'pub const fn command',
+ 'pub const fn command_id',
+ 'pub const fn command_id',
+ 'pub const fn confirmation',
+ 'pub const fn current_configuration_digest',
+ 'pub const fn current_configuration_revision',
+ 'pub const fn current_target_installation_revision',
+ 'pub const fn event_digest',
+ 'pub const fn evidence_digest',
+ 'pub const fn evidence_digest',
+ 'pub const fn evidence_digest',
+ 'pub const fn evidence_digest',
+ 'pub const fn evidence_id',
+ 'pub const fn evidence_id',
+ 'pub const fn evidence_id',
+ 'pub const fn expected_update_revision',
+ 'pub const fn expected_update_revision',
+ 'pub const fn get',
+ 'pub const fn installation_id',
+ 'pub const fn installation_id',
+ 'pub const fn installation_id',
+ 'pub const fn installation_revision',
+ 'pub const fn installation_state_digest',
+ 'pub const fn kind',
+ 'pub const fn last_sequence',
+ 'pub const fn outcome',
+ 'pub const fn plan',
+ 'pub const fn plan_digest',
+ 'pub const fn plan_digest',
+ 'pub const fn plan_digest',
+ 'pub const fn post_revision',
+ 'pub const fn readiness',
+ 'pub const fn revision',
+ 'pub const fn rollback_admission_snapshot_digest',
+ 'pub const fn rollback_capability_authority_digest',
+ 'pub const fn rollback_catalog_digest',
+ 'pub const fn rollback_catalog_revision',
+ 'pub const fn rollback_catalog_revision',
+ 'pub const fn rollback_component_authority_digest',
+ 'pub const fn rollback_component_authority_digest',
+ 'pub const fn rollback_evidence',
+ 'pub const fn rollback_package',
+ 'pub const fn rollback_package_digest',
+ 'pub const fn rollback_pin',
+ 'pub const fn rollback_pin_digest',
+ 'pub const fn rollback_registry_digest',
+ 'pub const fn rollback_registry_revision',
+ 'pub const fn rollback_registry_revision',
+ 'pub const fn rollback_source_policy_identity',
+ 'pub const fn sequence',
+ 'pub const fn staged_configuration_digest',
+ 'pub const fn staged_configuration_digest',
+ 'pub const fn staged_configuration_digest',
+ 'pub const fn staged_configuration_revision',
+ 'pub const fn staged_installation_revision',
+ 'pub const fn staged_installation_revision',
+ 'pub const fn staged_installation_revision',
+ 'pub const fn state',
+ 'pub const fn target_capability_authority_digest',
+ 'pub const fn target_catalog_digest',
+ 'pub const fn target_catalog_revision',
+ 'pub const fn target_catalog_revision',
+ 'pub const fn target_component_authority_digest',
+ 'pub const fn target_component_authority_digest',
+ 'pub const fn target_configuration_admission_snapshot_digest',
+ 'pub const fn target_package',
+ 'pub const fn target_package_digest',
+ 'pub const fn target_pin',
+ 'pub const fn target_pin_digest',
+ 'pub const fn target_registry_digest',
+ 'pub const fn target_registry_revision',
+ 'pub const fn target_registry_revision',
+ 'pub const fn target_source_execution_policy_admission_snapshot_digest',
+ 'pub const fn target_source_policy_identity',
+ 'pub const fn tenant_id',
+ 'pub const fn tenant_id',
+ 'pub const fn update_id',
+ 'pub const fn update_id',
+ 'pub const fn update_id',
+ 'pub const fn update_id',
+ 'pub const fn update_id',
+ 'pub const fn update_id',
+ 'pub const fn user_id',
+ 'pub const fn user_id',
+ 'pub const fn verified_rollback_artifact_set_digest',
+ 'pub const fn verified_rollback_artifact_set_digest',
+ 'pub const fn verified_target_artifact_set_digest',
+ 'pub enum UpdateChangeClass',
+ 'pub enum UpdateCommandOutcome',
+ 'pub enum UpdateConstructionError',
+ 'pub enum UpdateDecisionError',
+ 'pub enum UpdateEventKind',
+ 'pub enum UpdateReplayError',
+ 'pub enum UpdateRepositoryError',
+ 'pub enum UpdateState',
+ 'pub fn apply',
+ 'pub fn as_str',
+ 'pub fn as_str',
+ 'pub fn as_str',
+ 'pub fn as_str',
+ 'pub fn as_str',
+ 'pub fn cancel',
+ 'pub fn cancel_after_terminal_installation',
+ 'pub fn confirm_applied_update',
+ 'pub fn decide',
+ 'pub fn evolve',
+ 'pub fn fail_next_commit_for_test',
+ 'pub fn for_sequence',
+ 'pub fn new',
+ 'pub fn new',
+ 'pub fn next',
+ 'pub fn parse',
+ 'pub fn parse',
+ 'pub fn parse',
+ 'pub fn parse',
+ 'pub fn parse',
+ 'pub fn record_approval',
+ 'pub fn replay',
+ 'pub fn rollback',
+ 'pub fn rollback_capability_definitions',
+ 'pub fn rollback_component_declarations',
+ 'pub fn rollback_components',
+ 'pub fn stage',
+ 'pub fn target_capability_definitions',
+ 'pub fn target_component_declarations',
+ 'pub fn target_components',
+ 'pub fn try_from_authority_histories',
+ 'pub struct InMemoryPackageUpdateRepository',
+ 'pub struct PackageUpdateAggregate',
+ 'pub struct PackageUpdateId',
+ 'pub struct PackageUpdatePlan',
+ 'pub struct RollbackReadinessEvidence',
+ 'pub struct UpdateApprovalEvidence',
+ 'pub struct UpdateApprovalId',
+ 'pub struct UpdateCommand',
+ 'pub struct UpdateCommandId',
+ 'pub struct UpdateCommandReceipt',
+ 'pub struct UpdateConfirmationEvidence',
+ 'pub struct UpdateDecisionContext',
+ 'pub struct UpdateEvent',
+ 'pub struct UpdateEventSequence',
+ 'pub struct UpdateEvidenceId',
+ 'pub struct UpdateReadinessEvidence',
+ 'pub struct UpdateRevision',
+ 'pub trait PackageUpdateRepository',
+ 'pub type PackageUpdateSnapshot')
+PLATFORM_UPDATE_ADMITTED_UNCLASSIFIED_PUBLIC = ('pub(in crate::market) fn fr',
+ 'pub(in crate::market) fn fr',
+ 'pub(in crate::market) fn fr',
+ 'pub(in crate::market) fn fr',
+ 'pub(in crate::market) fn fo',
+ 'pub(in crate::market) fn fo',
+ 'pub(in crate::market) fn fo',
+ 'pub(in crate::market) fn fo',
+ 'pub(in crate::market) fn fo',
+ 'pub(in crate::market) fn fo',
+ 'pub(in crate::market) fn fo')
+PLATFORM_UPDATE_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS = (
+ 'from_plan',
+ 'from_plan',
+ 'from_bindings',
+ 'from_bindings',
+ 'for_stage',
+ 'for_record_approval',
+ 'for_apply',
+ 'for_confirm_applied',
+ 'for_rollback',
+ 'for_cancel',
+ 'for_cancel_after_terminal_installation')
+PLATFORM_UPDATE_TEST_ONLY_AUTHORITY_CARRIERS = (
+ '#[cfg(test)]\n    fn from_parts(',
+ '#[cfg(test)]\nfn synthetic_publications_for_plan_authority(')
+PLATFORM_UPDATE_PRODUCTION_CONTEXT_CALLS = (
+ 'UpdateDecisionContext::for_stage(',
+ 'UpdateDecisionContext::for_record_approval(',
+ 'UpdateDecisionContext::for_apply(',
+ 'UpdateDecisionContext::for_confirm_applied(',
+ 'UpdateDecisionContext::for_rollback(',
+ 'UpdateDecisionContext::for_cancel()',
+ 'UpdateDecisionContext::for_cancel_after_terminal_installation(')
+PLATFORM_UPDATE_PRODUCTION_NAMED_CONTEXT_DECLARATIONS = 3
+PLATFORM_UPDATE_ADMITTED_MACRO_INVOCATION_COUNTS = (('assert', 25),
+ ('assert_eq', 117),
+ ('assert_ne', 3),
+ ('format', 44),
+ ('matches', 22),
+ ('panic', 8),
+ ('parsed', 119),
+ ('unreachable', 14),
+ ('vec', 43),
+ ('write', 4))
+PLATFORM_UPDATE_ADMITTED_PARSED_ARGUMENT_COUNTS = (('CapabilityId, *cap', 1),
+ ('CapabilityId, cap_public()', 2),
+ ('CapabilityId, capability', 1),
+ ('CatalogRevision,', 1),
+ ('CatalogRevision, catalog', 2),
+ ('CatalogRevision, rev', 1),
+ ('ComponentId, id', 1),
+ ('ComponentVersion, version', 1),
+ ('ExecutionIdentity, exec', 1),
+ ('ExecutionIdentity, execution', 1),
+ ('GrantApprovalId, format!( )', 1),
+ ('GrantCommandId,', 1),
+ ('GrantCommandId, format!( )', 2),
+ ('GrantSnapshotId, format!( )', 2),
+ ('GrantVersion,', 1),
+ ('InstallationCommandId,', 12),
+ ('InstallationCommandId, format!( )', 3),
+ ('InstallationId,', 1),
+ ('PackageUpdateId,', 11),
+ ('PackageUpdateId, format!( )', 1),
+ ('PolicyRevision,', 1),
+ ('PolicyRevision, format!( )', 1),
+ ('PolicySnapshotId,', 1),
+ ('PolicySnapshotId, format!( )', 1),
+ ('Sha256Digest, format!( )', 8),
+ ('Sha256Digest, format!( , ch.to_string().repeat(64))', 1),
+ ('Sha256Digest, source_digest', 1),
+ ('SourcePolicyId,', 1),
+ ('SourcePolicyId, source_id', 1),
+ ('TenantId,', 1),
+ ('UpdateApprovalId,', 4),
+ ('UpdateApprovalId, format!( )', 2),
+ ('UpdateCommandId,', 28),
+ ('UpdateCommandId, format!( )', 4),
+ ('UpdateEvidenceId,', 10),
+ ('UpdateEvidenceId, format!( )', 3),
+ ('UpdateRevision,', 3),
+ ('UserId,', 1))
 # `#` `!` `[` with any whitespace between: an inner attribute is a token sequence, and
 # `# /*x*/ ! [cfg(any())]` excludes a module or a whole crate exactly as `#![cfg(any())]` does.
 RUST_INNER_ATTRIBUTE_PATTERN = r"#\s*!\s*\["
@@ -3658,32 +4231,25 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive'
  'market/capability.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'market/grant.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'market/installation.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
+ 'market/update.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'session.rs': ('cfg', 'derive', 'must_use', 'serde', 'test')}
 # `market/grant.rs` carries lint-affecting `allow` attributes, so names alone are not enough:
 # freeze the complete normalized attribute-body multiset. Counts are literal reviewed evidence,
 # not a minimum or a projection generated from the governed source at checker runtime.
-PLATFORM_GRANT_ADMITTED_ATTRIBUTE_COUNTS = (
-    ((False, "allow", "allow(clippy::large_enum_variant)"), 1),
-    ((False, "allow", "allow(clippy::new_without_default)"), 1),
-    ((False, "allow", "allow(clippy::too_many_arguments)"), 1),
-    ((False, "allow", "allow(dead_code)"), 1),
-    ((False, "cfg", "cfg(test)"), 1),
-    ((False, "derive", "derive(Clone, PartialEq, Eq)"), 6),
-    ((False, "derive", "derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)"), 2),
-    ((False, "derive", "derive(Debug, Clone, Copy, PartialEq, Eq)"), 6),
-    (
-        (
-            False,
-            "derive",
-            "derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)",
-        ),
-        1,
-    ),
-    ((False, "derive", "derive(Debug, Clone, PartialEq, Eq)"), 5),
-    ((False, "derive", "derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)"), 1),
-    ((False, "must_use", "must_use"), 59),
-    ((False, "test", "test"), 15),
-)
+PLATFORM_GRANT_ADMITTED_ATTRIBUTE_COUNTS = (((False, 'allow', 'allow(clippy::large_enum_variant)'), 1),
+ ((False, 'allow', 'allow(clippy::new_without_default)'), 1),
+ ((False, 'allow', 'allow(clippy::too_many_arguments)'), 1),
+ ((False, 'allow', 'allow(dead_code)'), 3),
+ ((False, 'cfg', 'cfg(test)'), 1),
+ ((False, 'derive', 'derive(Clone)'), 1),
+ ((False, 'derive', 'derive(Clone, PartialEq, Eq)'), 8),
+ ((False, 'derive', 'derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)'), 2),
+ ((False, 'derive', 'derive(Debug, Clone, Copy, PartialEq, Eq)'), 6),
+ ((False, 'derive', 'derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)'), 1),
+ ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq)'), 5),
+ ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)'), 1),
+ ((False, 'must_use', 'must_use'), 66),
+ ((False, 'test', 'test'), 20))
 PLATFORM_IDENTITY_ADMITTED_TEST_ATTRIBUTE_NAMES = ("test",)
 # Pinning dependency NAMES pins nothing about what those names resolve to. `semver = { path =
 # "crates/fake-semver" }` keeps the admitted name while Cargo compiles an attacker-authored
@@ -3901,6 +4467,16 @@ def rust_public_declarations(code: str) -> tuple[list[str], list[str]]:
             parts.append(matched.group(3))
         fingerprints.append(" ".join(parts))
     return sorted(fingerprints), unclassified
+
+
+def rust_market_restricted_public_functions(code: str) -> tuple[str, ...]:
+    """Pins full names of every owner-only `pub(in crate::market) fn` carrier."""
+    return tuple(
+        re.findall(
+            r"\bpub\s*\(\s*in\s+crate::market\s*\)\s+fn\s+([A-Za-z_][A-Za-z0-9_]*)",
+            code,
+        )
+    )
 
 
 def _rust_balanced_block(code: str, start: int) -> str | None:
@@ -6210,12 +6786,44 @@ def _check_market_installation_surface(market_code: str, issues: list[str]) -> b
     admitted_attributes = tuple(sorted(PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES["market/installation.rs"]))
     if observed_attributes != admitted_attributes:
         fail(f"market installation attribute names drifted: expected {admitted_attributes} actual={observed_attributes}", issues)
+    observed_attribute_counts = tuple(sorted(Counter(attributes).items()))
+    if observed_attribute_counts != PLATFORM_INSTALLATION_ADMITTED_ATTRIBUTE_COUNTS:
+        fail(
+            "market installation attribute inventory drifted: expected "
+            f"{PLATFORM_INSTALLATION_ADMITTED_ATTRIBUTE_COUNTS} actual={observed_attribute_counts}",
+            issues,
+        )
     public_declarations, unclassified_public = rust_public_declarations(governed)
     if tuple(unclassified_public) != PLATFORM_INSTALLATION_ADMITTED_UNCLASSIFIED_PUBLIC:
         fail(
             "market installation has an unclassified public declaration: "
             f"expected {PLATFORM_INSTALLATION_ADMITTED_UNCLASSIFIED_PUBLIC} "
             f"actual={unclassified_public}",
+            issues,
+        )
+    restricted_public = rust_market_restricted_public_functions(governed)
+    if restricted_public != PLATFORM_INSTALLATION_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS:
+        fail(
+            "market installation restricted public function surface drifted: "
+            f"expected={PLATFORM_INSTALLATION_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS} "
+            f"actual={restricted_public}",
+            issues,
+        )
+    event_kind = re.findall(
+        r"\bpub\s+enum\s+InstallationEventKind\s*\{([^{}]*)\}",
+        governed,
+        flags=re.DOTALL,
+    )
+    observed_event_kind_variants = (
+        tuple(re.findall(r"(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)\s*,", event_kind[0]))
+        if len(event_kind) == 1
+        else ()
+    )
+    if observed_event_kind_variants != PLATFORM_INSTALLATION_EVENT_KIND_VARIANTS:
+        fail(
+            "market installation event kind variants drifted: "
+            f"expected={PLATFORM_INSTALLATION_EVENT_KIND_VARIANTS} "
+            f"actual={observed_event_kind_variants}",
             issues,
         )
     if public_declarations != sorted(PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS):
@@ -6289,6 +6897,14 @@ def _check_market_grant_surface(market_code: str, issues: list[str]) -> None:
             f"expected {PLATFORM_GRANT_ADMITTED_UNCLASSIFIED_PUBLIC} actual={unclassified_public}",
             issues,
         )
+    restricted_public = rust_market_restricted_public_functions(governed)
+    if restricted_public != PLATFORM_GRANT_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS:
+        fail(
+            "market grant restricted public function surface drifted: "
+            f"expected={PLATFORM_GRANT_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS} "
+            f"actual={restricted_public}",
+            issues,
+        )
     if public_declarations != sorted(PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS):
         fail(f"market grant public declaration surface drifted: actual={public_declarations}", issues)
     impl_declarations, unclassified_impls = rust_impl_declarations(governed)
@@ -6340,6 +6956,108 @@ def _check_market_grant_surface(market_code: str, issues: list[str]) -> None:
         PLATFORM_GRANT_TEST, PLATFORM_GRANT_TEST_FUNCTIONS, "market grant", issues
     )
 
+
+
+def _check_market_update_surface(market_code: str, issues: list[str]) -> None:
+    """Pins the reviewed M20-B6 package-update authority and bound external evidence."""
+    update_path = ROOT / PLATFORM_UPDATE_SOURCE
+    if not re.search(r"^\s*pub\s+mod\s+update\s*;", market_code, flags=re.MULTILINE):
+        fail("market update module declaration missing from crates/platform-core/src/market.rs", issues)
+    if not update_path.is_file():
+        fail(f"market update carrier missing: {PLATFORM_UPDATE_SOURCE}", issues)
+        return
+    governed = strip_rust_comments_and_literals(update_path.read_text(encoding="utf-8"))
+    label = PLATFORM_UPDATE_SOURCE
+    if re.search(r"\bcfg_attr\b", governed):
+        fail(f"platform-core source must not carry cfg_attr: {label}", issues)
+    if re.search(RUST_INNER_ATTRIBUTE_PATTERN, governed):
+        fail(f"platform-core source must not carry an inner attribute: {label}", issues)
+    for carrier, pattern in PLATFORM_CORE_FORBIDDEN_SOURCE_PATTERNS + PLATFORM_CORE_FORBIDDEN_SPLICE_PATTERNS:
+        if re.search(pattern, governed):
+            fail(f"platform-core source must not carry {carrier!r}: {label}", issues)
+    items, unterminated = rust_item_declarations(governed)
+    if unterminated:
+        fail(f"unterminated platform-core item declaration in {label}: {unterminated}", issues)
+    admitted_items = list(PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS["market/update.rs"])
+    if items != admitted_items:
+        fail(f"market update item declarations drifted: expected {admitted_items} actual={items}", issues)
+    attributes, unterminated_attributes = rust_attributes(governed)
+    if unterminated_attributes:
+        fail(f"unterminated attribute in {label}: {unterminated_attributes}", issues)
+    observed_attribute_counts = tuple(sorted(Counter(attributes).items()))
+    if observed_attribute_counts != PLATFORM_UPDATE_ADMITTED_ATTRIBUTE_COUNTS:
+        fail("market update attribute inventory drifted: expected " f"{PLATFORM_UPDATE_ADMITTED_ATTRIBUTE_COUNTS} actual={observed_attribute_counts}", issues)
+    public_declarations, unclassified_public = rust_public_declarations(governed)
+    if tuple(unclassified_public) != PLATFORM_UPDATE_ADMITTED_UNCLASSIFIED_PUBLIC:
+        fail("market update has an unclassified public declaration: " f"expected {PLATFORM_UPDATE_ADMITTED_UNCLASSIFIED_PUBLIC} actual={unclassified_public}", issues)
+    restricted_public = rust_market_restricted_public_functions(governed)
+    if restricted_public != PLATFORM_UPDATE_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS:
+        fail(
+            "market update restricted public function surface drifted: "
+            f"expected={PLATFORM_UPDATE_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS} "
+            f"actual={restricted_public}",
+            issues,
+        )
+    for carrier in PLATFORM_UPDATE_TEST_ONLY_AUTHORITY_CARRIERS:
+        if governed.count(carrier) != 1:
+            fail(
+                "market update test-only authority carrier drifted: "
+                f"expected exactly one {carrier!r}",
+                issues,
+            )
+    tests_module = governed.find("mod tests")
+    production = governed[:tests_module] if tests_module >= 0 else governed
+    observed_context_calls = tuple(
+        (call, production.count(call)) for call in PLATFORM_UPDATE_PRODUCTION_CONTEXT_CALLS
+    )
+    expected_context_calls = tuple(
+        (call, 1) for call in PLATFORM_UPDATE_PRODUCTION_CONTEXT_CALLS
+    )
+    if observed_context_calls != expected_context_calls:
+        fail(
+            "market update production context constructor reachability drifted: "
+            f"expected={expected_context_calls} actual={observed_context_calls}",
+            issues,
+        )
+    named_context_declarations = production.count("UpdateDecisionContext {")
+    if named_context_declarations != PLATFORM_UPDATE_PRODUCTION_NAMED_CONTEXT_DECLARATIONS:
+        fail(
+            "market update production direct context construction drifted: "
+            f"expected={PLATFORM_UPDATE_PRODUCTION_NAMED_CONTEXT_DECLARATIONS} "
+            f"actual={named_context_declarations}",
+            issues,
+        )
+    if public_declarations != sorted(PLATFORM_UPDATE_ADMITTED_PUBLIC_DECLARATIONS):
+        fail(f"market update public declaration surface drifted: actual={public_declarations}", issues)
+    impl_declarations, unclassified_impls = rust_impl_declarations(governed)
+    if unclassified_impls:
+        fail(f"market update has an unclassified impl declaration: {unclassified_impls}", issues)
+    if impl_declarations != sorted(PLATFORM_CORE_ADMITTED_SIBLING_IMPLS["update.rs"]):
+        fail(f"market update implementation surface drifted: actual={impl_declarations}", issues)
+    derives = sorted(rust_derive_bodies(governed))
+    if derives != sorted(PLATFORM_UPDATE_ADMITTED_DERIVES):
+        fail(f"market update derive surface drifted: {derives}", issues)
+    definitions = rust_macro_definitions(governed)
+    if definitions != sorted(PLATFORM_CORE_ADMITTED_SIBLING_MACROS["market/update.rs"]):
+        fail(f"market update macro definitions drifted: actual={definitions}", issues)
+    invocations, unterminated_macros = rust_macro_invocation_arguments(governed)
+    if unterminated_macros:
+        fail(f"unterminated platform-core macro invocation in {label}: {sorted(unterminated_macros)}", issues)
+    invoked = tuple(sorted({name for name, _ in invocations}))
+    admitted_invocations = tuple(sorted(PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS["market/update.rs"]))
+    if invoked != admitted_invocations:
+        fail(f"market update macro invocations drifted: expected {admitted_invocations} actual={invoked}", issues)
+    observed_invocation_counts = tuple(sorted(Counter(name for name, _ in invocations).items()))
+    if observed_invocation_counts != PLATFORM_UPDATE_ADMITTED_MACRO_INVOCATION_COUNTS:
+        fail("market update macro invocation counts drifted: expected " f"{PLATFORM_UPDATE_ADMITTED_MACRO_INVOCATION_COUNTS} actual={observed_invocation_counts}", issues)
+    parsed_arguments = tuple(argument for name, argument in invocations if name == "parsed")
+    observed_parsed_argument_counts = tuple(sorted(Counter(parsed_arguments).items()))
+    if observed_parsed_argument_counts != PLATFORM_UPDATE_ADMITTED_PARSED_ARGUMENT_COUNTS:
+        fail("market update parsed macro arguments drifted: expected " f"{PLATFORM_UPDATE_ADMITTED_PARSED_ARGUMENT_COUNTS} actual={observed_parsed_argument_counts}", issues)
+    source_test_names = tuple(match.group(1) for match in re.finditer(r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", governed))
+    if source_test_names != PLATFORM_UPDATE_UNIT_TEST_FUNCTIONS:
+        fail("market update unit test inventory drifted: " f"expected={PLATFORM_UPDATE_UNIT_TEST_FUNCTIONS} actual={source_test_names}", issues)
+    _check_bound_rust_test_file(PLATFORM_UPDATE_TEST, PLATFORM_UPDATE_TEST_FUNCTIONS, "market update", issues)
 
 def check_platform_authority_implementation(issues: list[str]) -> None:
     source_path = ROOT / PLATFORM_AUTHORITY_SOURCE
@@ -6485,10 +7203,10 @@ def check_platform_authority_implementation(issues: list[str]) -> None:
 
     matrix = (ROOT / "docs/acceptance/matrix.tsv").read_text(encoding="utf-8").splitlines()
     rows = {fields[0]: fields for line in matrix[1:] if (fields := line.split("\t"))}
-    for case_id in ("MARKET-003", "MARKET-007"):
+    for case_id in ("MARKET-003", "MARKET-004", "MARKET-007", "PKG-020"):
         fields = rows.get(case_id)
         if fields is None or len(fields) != 7 or fields[5] != "planned":
-            fail(f"{case_id} must remain a planned acceptance row after bounded B5", issues)
+            fail(f"{case_id} must remain a planned acceptance row after bounded B6", issues)
 
 
 def check_platform_identity_implementation(issues: list[str]) -> None:
@@ -6519,6 +7237,7 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
     market_code = strip_rust_comments_and_literals(market_path.read_text(encoding="utf-8"))
     _check_market_installation_surface(market_code, issues)
     _check_market_grant_surface(market_code, issues)
+    _check_market_update_surface(market_code, issues)
     test_code = strip_rust_comments_and_literals(test_path.read_text(encoding="utf-8"))
 
     if not re.search(r"^\s*pub mod identity;$", lib_code, flags=re.MULTILINE):
@@ -6915,6 +7634,17 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
                 if identity_macro_arguments != admitted_identity_macro_arguments:
                     fail(
                         "market grant identity macro arguments drifted: expected "
+                        f"{admitted_identity_macro_arguments} "
+                        f"actual={identity_macro_arguments}",
+                        issues,
+                    )
+            elif source_key == "market/update.rs":
+                admitted_identity_macro_arguments = tuple(
+                    sorted(PLATFORM_UPDATE_ADMITTED_IDENTITY_MACRO_ARGUMENTS)
+                )
+                if identity_macro_arguments != admitted_identity_macro_arguments:
+                    fail(
+                        "market update identity macro arguments drifted: expected "
                         f"{admitted_identity_macro_arguments} "
                         f"actual={identity_macro_arguments}",
                         issues,

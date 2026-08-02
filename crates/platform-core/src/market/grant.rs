@@ -19,6 +19,8 @@ use std::fmt;
 
 const EVIDENCE_DOMAIN: &[u8] = b"market-grant-admission-evidence/v0\0";
 const SCOPE_DOMAIN: &[u8] = b"market-grant-tenant-user-scope/v0\0";
+const CURRENT_INSTALLATION_GRANT_SET_DOMAIN: &[u8] = b"market-current-installation-grant-set/v0\0";
+const EVENT_COUPLING_DOMAIN: &[u8] = b"market-grant-event-coupling/v0\0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GrantConstructionError {
@@ -599,6 +601,12 @@ impl GrantEvent {
             None
         }
     }
+
+    #[must_use]
+    #[allow(dead_code)]
+    pub(in crate::market) fn canonical_coupling_digest(&self) -> Sha256Digest {
+        digest_event_coupling(self)
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -922,10 +930,22 @@ impl fmt::Debug for GrantCommandOutcome {
 }
 
 #[derive(Clone, PartialEq, Eq)]
+enum GrantReceiptWitness {
+    ApprovalAlreadyConsumed {
+        approval_id: GrantApprovalId,
+        consumed_snapshot_id: GrantSnapshotId,
+        consumed_evidence_digest: Sha256Digest,
+    },
+    AuthorityConflict {
+        conflicting_snapshot: Box<GrantSnapshot>,
+    },
+}
+
+#[derive(Clone, PartialEq, Eq)]
 pub struct GrantCommandReceipt {
-    command_id: GrantCommandId,
-    snapshot_id: GrantSnapshotId,
+    command: GrantCommand,
     outcome: GrantCommandOutcome,
+    rejection_witness: Option<GrantReceiptWitness>,
 }
 
 impl fmt::Debug for GrantCommandReceipt {
@@ -937,15 +957,93 @@ impl fmt::Debug for GrantCommandReceipt {
 impl GrantCommandReceipt {
     #[must_use]
     pub const fn command_id(&self) -> &GrantCommandId {
-        &self.command_id
+        self.command.command_id()
     }
     #[must_use]
     pub const fn snapshot_id(&self) -> &GrantSnapshotId {
-        &self.snapshot_id
+        self.command.snapshot_id()
     }
     #[must_use]
     pub const fn outcome(&self) -> &GrantCommandOutcome {
         &self.outcome
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct CurrentInstallationGrantSet {
+    tenant_id: TenantId,
+    user_id: UserId,
+    installation_id: InstallationId,
+    observed_installation_revision: InstallationRevision,
+    grant_set_digest: Sha256Digest,
+    grants: Vec<GrantSnapshot>,
+}
+
+impl fmt::Debug for CurrentInstallationGrantSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("CurrentInstallationGrantSet(<authority-redacted>)")
+    }
+}
+
+impl CurrentInstallationGrantSet {
+    fn from_canonical_grants(
+        tenant_id: TenantId,
+        user_id: UserId,
+        installation_id: InstallationId,
+        observed_installation_revision: InstallationRevision,
+        mut grants: Vec<GrantSnapshot>,
+    ) -> Self {
+        sort_current_installation_grants(&mut grants);
+        let grant_set_digest = digest_current_installation_grant_set(
+            &tenant_id,
+            &user_id,
+            &installation_id,
+            &observed_installation_revision,
+            &grants,
+        );
+        Self {
+            tenant_id,
+            user_id,
+            installation_id,
+            observed_installation_revision,
+            grant_set_digest,
+            grants,
+        }
+    }
+
+    pub(in crate::market) fn is_canonical(&self) -> bool {
+        Self::from_canonical_grants(
+            self.tenant_id.clone(),
+            self.user_id.clone(),
+            self.installation_id.clone(),
+            self.observed_installation_revision.clone(),
+            self.grants.clone(),
+        ) == *self
+    }
+
+    #[must_use]
+    pub const fn tenant_id(&self) -> &TenantId {
+        &self.tenant_id
+    }
+    #[must_use]
+    pub const fn user_id(&self) -> &UserId {
+        &self.user_id
+    }
+    #[must_use]
+    pub const fn installation_id(&self) -> &InstallationId {
+        &self.installation_id
+    }
+    #[must_use]
+    pub const fn observed_installation_revision(&self) -> &InstallationRevision {
+        &self.observed_installation_revision
+    }
+    #[must_use]
+    pub const fn grant_set_digest(&self) -> &Sha256Digest {
+        &self.grant_set_digest
+    }
+    #[must_use]
+    pub fn grants(&self) -> &[GrantSnapshot] {
+        &self.grants
     }
 }
 
@@ -981,6 +1079,13 @@ pub trait GrantRepository {
         capability_id: &CapabilityId,
         scope: &GrantScope,
     ) -> Result<Option<GrantSnapshot>, GrantRepositoryError>;
+    fn load_current_for_installation(
+        &self,
+        tenant_id: &TenantId,
+        user_id: &UserId,
+        installation_id: &InstallationId,
+        expected_installation_revision: &InstallationRevision,
+    ) -> Result<CurrentInstallationGrantSet, GrantRepositoryError>;
     fn event_history(&self, id: &GrantSnapshotId) -> Result<Vec<GrantEvent>, GrantRepositoryError>;
 }
 
@@ -998,6 +1103,7 @@ struct LedgerEntry {
     receipt: GrantCommandReceipt,
 }
 
+#[derive(Clone)]
 pub struct InMemoryGrantRepository {
     aggregates: BTreeMap<GrantSnapshotId, GrantAggregate>,
     events: BTreeMap<GrantSnapshotId, Vec<GrantEvent>>,
@@ -1029,6 +1135,139 @@ impl InMemoryGrantRepository {
     pub fn fail_next_commit_for_testing(&mut self) {
         self.fail_next_commit = true;
     }
+
+    #[allow(dead_code)]
+    pub(in crate::market) fn try_from_histories_and_receipts(
+        histories: Vec<(GrantSnapshotId, Vec<GrantEvent>)>,
+        ledger_receipts: Vec<(GrantCommandReceipt, Option<GrantSnapshot>)>,
+    ) -> Result<Self, GrantRepositoryError> {
+        let mut repository = Self::new();
+        let mut reachable_prefixes: BTreeMap<GrantSnapshotId, Vec<Option<GrantSnapshot>>> =
+            BTreeMap::new();
+        let mut accepted_events_by_command: BTreeMap<
+            GrantCommandId,
+            (
+                GrantSnapshotId,
+                GrantEvent,
+                Option<GrantSnapshot>,
+                GrantSnapshot,
+            ),
+        > = BTreeMap::new();
+
+        for (snapshot_id, events) in histories {
+            if repository.events.contains_key(&snapshot_id) {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            }
+            let mut current = None;
+            let mut prefixes = Vec::with_capacity(events.len().saturating_add(1));
+            let mut stored_events = Vec::with_capacity(events.len());
+            prefixes.push(None);
+            for event in events {
+                if event.snapshot_id() != &snapshot_id {
+                    return Err(GrantRepositoryError::CorruptEventHistory(
+                        GrantReplayError::SnapshotIdentityMismatch,
+                    ));
+                }
+                let pre_snapshot = current.clone();
+                let snapshot =
+                    evolve(current, &event).map_err(GrantRepositoryError::CorruptEventHistory)?;
+                if snapshot.snapshot_id() != &snapshot_id {
+                    return Err(GrantRepositoryError::CorruptEventHistory(
+                        GrantReplayError::SnapshotIdentityMismatch,
+                    ));
+                }
+                if accepted_events_by_command
+                    .insert(
+                        event.command_id().clone(),
+                        (
+                            snapshot_id.clone(),
+                            event.clone(),
+                            pre_snapshot,
+                            snapshot.clone(),
+                        ),
+                    )
+                    .is_some()
+                {
+                    return Err(GrantRepositoryError::CommandConflict);
+                }
+                if let Some(evidence) = event_evidence(&event) {
+                    match repository.consumed_approvals.get(evidence.approval_id()) {
+                        None => {
+                            repository.consumed_approvals.insert(
+                                evidence.approval_id().clone(),
+                                (
+                                    evidence.snapshot_id().clone(),
+                                    evidence.evidence_digest().clone(),
+                                ),
+                            );
+                        }
+                        Some((existing_snapshot, existing_digest))
+                            if existing_snapshot == evidence.snapshot_id()
+                                && existing_digest == evidence.evidence_digest() => {}
+                        Some(_) => return Err(GrantRepositoryError::CorruptAuthorityIndex),
+                    }
+                }
+                prefixes.push(Some(snapshot.clone()));
+                current = Some(snapshot);
+                stored_events.push(event);
+            }
+            if let Some(snapshot) = current {
+                let old = repository
+                    .aggregates
+                    .insert(snapshot_id.clone(), snapshot.clone());
+                if old.is_some() {
+                    return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                }
+                if snapshot.state() != GrantState::Revoked {
+                    repository
+                        .current_authority
+                        .entry(authority_key_from_aggregate(&snapshot))
+                        .or_default()
+                        .insert(snapshot.snapshot_id().clone());
+                }
+            }
+            repository.events.insert(snapshot_id.clone(), stored_events);
+            reachable_prefixes.insert(snapshot_id, prefixes);
+        }
+
+        assert_current_authority_bijection(&repository)?;
+
+        let mut ledger_consumed_approvals: BTreeMap<
+            GrantApprovalId,
+            (GrantSnapshotId, Sha256Digest),
+        > = BTreeMap::new();
+        let mut ledger_current_authority: BTreeMap<AuthorityKey, GrantSnapshot> = BTreeMap::new();
+        for (receipt, observed_pre_snapshot) in ledger_receipts {
+            validate_receipt_against_histories(
+                &receipt,
+                &observed_pre_snapshot,
+                &reachable_prefixes,
+                &mut accepted_events_by_command,
+                &mut ledger_consumed_approvals,
+                &mut ledger_current_authority,
+            )?;
+            let command = receipt.command.clone();
+            if repository
+                .command_ledger
+                .insert(
+                    command.command_id().clone(),
+                    LedgerEntry {
+                        command,
+                        receipt: receipt.clone(),
+                    },
+                )
+                .is_some()
+            {
+                return Err(GrantRepositoryError::CommandConflict);
+            }
+        }
+
+        if accepted_events_by_command.is_empty() {
+            Ok(repository)
+        } else {
+            Err(GrantRepositoryError::CorruptAuthorityIndex)
+        }
+    }
 }
 
 impl GrantRepository for InMemoryGrantRepository {
@@ -1043,26 +1282,72 @@ impl GrantRepository for InMemoryGrantRepository {
                 Err(GrantRepositoryError::CommandConflict)
             };
         }
-        let mut repository_rejection = None;
+        let mut repository_rejection: Option<(GrantDecisionError, GrantReceiptWitness)> = None;
         if let Some(evidence) = command.evidence() {
-            if self.consumed_approvals.contains_key(evidence.approval_id()) {
-                repository_rejection = Some(GrantDecisionError::ApprovalAlreadyConsumed);
+            if let Some((consumed_snapshot_id, consumed_evidence_digest)) =
+                self.consumed_approvals.get(evidence.approval_id())
+            {
+                repository_rejection = Some((
+                    GrantDecisionError::ApprovalAlreadyConsumed,
+                    GrantReceiptWitness::ApprovalAlreadyConsumed {
+                        approval_id: evidence.approval_id().clone(),
+                        consumed_snapshot_id: consumed_snapshot_id.clone(),
+                        consumed_evidence_digest: consumed_evidence_digest.clone(),
+                    },
+                ));
             }
             if repository_rejection.is_none()
                 && matches!(command.action, GrantCommandAction::Issue(_))
             {
                 let key = authority_key(evidence);
-                if self
-                    .current_authority
-                    .get(&key)
-                    .is_some_and(|ids| !ids.is_empty())
+                let indexed_conflict = if let Some(ids) = self.current_authority.get(&key) {
+                    if ids.len() != 1 {
+                        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                    }
+                    let Some(id) = ids.first() else {
+                        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                    };
+                    let Some(snapshot) = self.aggregates.get(id) else {
+                        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                    };
+                    if snapshot.state() == GrantState::Revoked
+                        || authority_key_from_aggregate(snapshot) != key
+                    {
+                        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                    }
+                    Some(snapshot)
+                } else {
+                    None
+                };
+                let mut matching_conflicts = self.aggregates.values().filter(|snapshot| {
+                    snapshot.state() != GrantState::Revoked
+                        && authority_key_from_aggregate(snapshot) == key
+                });
+                let matching_conflict = matching_conflicts.next();
+                if matching_conflicts.next().is_some() {
+                    return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                }
+                let conflicting_snapshot = match (indexed_conflict, matching_conflict) {
+                    (None, None) => None,
+                    (Some(indexed), Some(matching)) if indexed == matching => Some(indexed),
+                    _ => return Err(GrantRepositoryError::CorruptAuthorityIndex),
+                };
+                if let Some(conflicting_snapshot) = conflicting_snapshot
+                    .filter(|snapshot| snapshot.snapshot_id() != command.snapshot_id())
                 {
-                    repository_rejection = Some(GrantDecisionError::AuthorityConflict);
+                    repository_rejection = Some((
+                        GrantDecisionError::AuthorityConflict,
+                        GrantReceiptWitness::AuthorityConflict {
+                            conflicting_snapshot: Box::new(conflicting_snapshot.clone()),
+                        },
+                    ));
                 }
             }
         }
         let current = self.aggregates.get(command.snapshot_id());
-        let decision = repository_rejection.map_or_else(|| decide(current, &command), Err);
+        let decision = repository_rejection
+            .as_ref()
+            .map_or_else(|| decide(current, &command), |(error, _)| Err(*error));
         let prepared = match decision {
             Ok(event) => {
                 let snapshot = evolve(current.cloned(), &event)
@@ -1076,9 +1361,9 @@ impl GrantRepository for InMemoryGrantRepository {
             return Err(GrantRepositoryError::InjectedPersistenceFailure);
         }
         let receipt = GrantCommandReceipt {
-            command_id: command.command_id.clone(),
-            snapshot_id: command.snapshot_id.clone(),
+            command: command.clone(),
             outcome: prepared.clone(),
+            rejection_witness: repository_rejection.map(|(_, witness)| witness),
         };
         if let GrantCommandOutcome::Accepted { event, snapshot } = prepared {
             if let Some(evidence) = event_evidence(&event) {
@@ -1156,9 +1441,394 @@ impl GrantRepository for InMemoryGrantRepository {
             .ok_or(GrantRepositoryError::CorruptAuthorityIndex)
             .map(Some)
     }
+
+    fn load_current_for_installation(
+        &self,
+        tenant_id: &TenantId,
+        user_id: &UserId,
+        installation_id: &InstallationId,
+        expected_installation_revision: &InstallationRevision,
+    ) -> Result<CurrentInstallationGrantSet, GrantRepositoryError> {
+        let grants = self.prove_current_installation_grants(tenant_id, user_id, installation_id)?;
+        Ok(CurrentInstallationGrantSet::from_canonical_grants(
+            tenant_id.clone(),
+            user_id.clone(),
+            installation_id.clone(),
+            expected_installation_revision.clone(),
+            grants,
+        ))
+    }
+
     fn event_history(&self, id: &GrantSnapshotId) -> Result<Vec<GrantEvent>, GrantRepositoryError> {
         Ok(self.events.get(id).cloned().unwrap_or_default())
     }
+}
+
+impl InMemoryGrantRepository {
+    fn prove_current_installation_grants(
+        &self,
+        tenant_id: &TenantId,
+        user_id: &UserId,
+        installation_id: &InstallationId,
+    ) -> Result<Vec<GrantSnapshot>, GrantRepositoryError> {
+        let mut expected = BTreeSet::new();
+        let mut grants = Vec::new();
+        for aggregate in self.aggregates.values() {
+            if aggregate.installation_id() != installation_id
+                || aggregate.state() == GrantState::Revoked
+            {
+                continue;
+            }
+            if aggregate.tenant_id() != tenant_id || aggregate.user_id() != user_id {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            }
+            let key = authority_key_from_aggregate(aggregate);
+            let Some(ids) = self.current_authority.get(&key) else {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            };
+            if ids.len() != 1 {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            }
+            if !ids.contains(aggregate.snapshot_id()) {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            }
+            expected.insert((key, aggregate.snapshot_id().clone()));
+            grants.push(aggregate.clone());
+        }
+
+        for (key, ids) in &self.current_authority {
+            if key.installation_id != *installation_id {
+                continue;
+            }
+            if key.tenant_id != *tenant_id || key.user_id != *user_id {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            }
+            for snapshot_id in ids {
+                let Some(aggregate) = self.aggregates.get(snapshot_id) else {
+                    return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                };
+                if aggregate.state() == GrantState::Revoked {
+                    return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                }
+                if authority_key_from_aggregate(aggregate) != *key {
+                    return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                }
+                if !expected.contains(&(key.clone(), snapshot_id.clone())) {
+                    return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                }
+            }
+        }
+
+        sort_current_installation_grants(&mut grants);
+        Ok(grants)
+    }
+}
+
+fn compare_current_installation_grants(
+    left: &GrantSnapshot,
+    right: &GrantSnapshot,
+) -> std::cmp::Ordering {
+    authority_key_from_aggregate(left)
+        .cmp(&authority_key_from_aggregate(right))
+        .then_with(|| left.snapshot_id().cmp(right.snapshot_id()))
+}
+
+fn sort_current_installation_grants(grants: &mut [GrantSnapshot]) {
+    grants.sort_by(compare_current_installation_grants);
+}
+
+fn validate_receipt_against_histories(
+    receipt: &GrantCommandReceipt,
+    observed_pre_snapshot: &Option<GrantSnapshot>,
+    reachable_prefixes: &BTreeMap<GrantSnapshotId, Vec<Option<GrantSnapshot>>>,
+    accepted_events_by_command: &mut BTreeMap<
+        GrantCommandId,
+        (
+            GrantSnapshotId,
+            GrantEvent,
+            Option<GrantSnapshot>,
+            GrantSnapshot,
+        ),
+    >,
+    ledger_consumed_approvals: &mut BTreeMap<GrantApprovalId, (GrantSnapshotId, Sha256Digest)>,
+    ledger_current_authority: &mut BTreeMap<AuthorityKey, GrantSnapshot>,
+) -> Result<(), GrantRepositoryError> {
+    let command = &receipt.command;
+    if observed_pre_snapshot
+        .as_ref()
+        .is_some_and(|snapshot| snapshot.snapshot_id() != command.snapshot_id())
+    {
+        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+    }
+    if !pre_snapshot_is_reachable(
+        reachable_prefixes,
+        command.snapshot_id(),
+        observed_pre_snapshot,
+    ) {
+        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+    }
+    if let GrantCommandOutcome::Rejected { error } = receipt.outcome() {
+        if accepted_events_by_command.contains_key(command.command_id()) {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        }
+        match error {
+            GrantDecisionError::ApprovalAlreadyConsumed => {
+                validate_approval_consumed_witness(
+                    receipt.rejection_witness.as_ref(),
+                    command,
+                    ledger_consumed_approvals,
+                )?;
+                return Ok(());
+            }
+            GrantDecisionError::AuthorityConflict => {
+                validate_authority_conflict_witness(
+                    receipt.rejection_witness.as_ref(),
+                    command,
+                    reachable_prefixes,
+                    ledger_current_authority,
+                )?;
+                return Ok(());
+            }
+            _ => {
+                if receipt.rejection_witness.is_some() {
+                    return Err(GrantRepositoryError::CorruptAuthorityIndex);
+                }
+            }
+        }
+    } else if receipt.rejection_witness.is_some() {
+        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+    }
+    if let (GrantCommandOutcome::Accepted { .. }, Some(evidence)) =
+        (receipt.outcome(), command.evidence())
+    {
+        if ledger_consumed_approvals.contains_key(evidence.approval_id()) {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        }
+        if matches!(command.action, GrantCommandAction::Issue(_))
+            && ledger_current_authority.contains_key(&authority_key(evidence))
+        {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        }
+    }
+    match (
+        decide(observed_pre_snapshot.as_ref(), command),
+        receipt.outcome(),
+    ) {
+        (
+            Ok(decided_event),
+            GrantCommandOutcome::Accepted {
+                event: receipt_event,
+                snapshot: receipt_snapshot,
+            },
+        ) => {
+            if &decided_event != receipt_event {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            }
+            let evolved_snapshot = evolve(observed_pre_snapshot.clone(), receipt_event)
+                .map_err(GrantRepositoryError::CorruptEventHistory)?;
+            if &evolved_snapshot != receipt_snapshot {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            }
+            let Some((history_id, history_event, history_pre, history_snapshot)) =
+                accepted_events_by_command.remove(command.command_id())
+            else {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            };
+            if &history_id != command.snapshot_id()
+                || &history_event != receipt_event
+                || &history_pre != observed_pre_snapshot
+                || &history_snapshot != receipt_snapshot
+            {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            }
+            if event_evidence(receipt_event).is_some_and(|evidence| {
+                ledger_consumed_approvals
+                    .insert(
+                        evidence.approval_id().clone(),
+                        (
+                            evidence.snapshot_id().clone(),
+                            evidence.evidence_digest().clone(),
+                        ),
+                    )
+                    .is_some()
+            }) {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            }
+            advance_ledger_current_authority(
+                observed_pre_snapshot.as_ref(),
+                receipt_snapshot,
+                ledger_current_authority,
+            )?;
+            Ok(())
+        }
+        (
+            Err(error),
+            GrantCommandOutcome::Rejected {
+                error: receipt_error,
+            },
+        ) => {
+            if accepted_events_by_command.contains_key(command.command_id())
+                || error != *receipt_error
+            {
+                Err(GrantRepositoryError::CorruptAuthorityIndex)
+            } else {
+                Ok(())
+            }
+        }
+        (Ok(_), GrantCommandOutcome::Rejected { .. }) => {
+            Err(GrantRepositoryError::CorruptAuthorityIndex)
+        }
+        (Err(error), GrantCommandOutcome::Accepted { .. }) => {
+            Err(GrantRepositoryError::DecisionRejected(error))
+        }
+    }
+}
+
+fn validate_approval_consumed_witness(
+    witness: Option<&GrantReceiptWitness>,
+    command: &GrantCommand,
+    ledger_consumed_approvals: &BTreeMap<GrantApprovalId, (GrantSnapshotId, Sha256Digest)>,
+) -> Result<(), GrantRepositoryError> {
+    let Some(evidence) = command.evidence() else {
+        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+    };
+    let Some(GrantReceiptWitness::ApprovalAlreadyConsumed {
+        approval_id,
+        consumed_snapshot_id,
+        consumed_evidence_digest,
+    }) = witness
+    else {
+        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+    };
+    if approval_id != evidence.approval_id() {
+        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+    }
+    match ledger_consumed_approvals.get(approval_id) {
+        Some((snapshot_id, digest))
+            if snapshot_id == consumed_snapshot_id && digest == consumed_evidence_digest =>
+        {
+            Ok(())
+        }
+        _ => Err(GrantRepositoryError::CorruptAuthorityIndex),
+    }
+}
+
+fn validate_authority_conflict_witness(
+    witness: Option<&GrantReceiptWitness>,
+    command: &GrantCommand,
+    reachable_prefixes: &BTreeMap<GrantSnapshotId, Vec<Option<GrantSnapshot>>>,
+    ledger_current_authority: &BTreeMap<AuthorityKey, GrantSnapshot>,
+) -> Result<(), GrantRepositoryError> {
+    let GrantCommandAction::Issue(evidence) = &command.action else {
+        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+    };
+    let Some(GrantReceiptWitness::AuthorityConflict {
+        conflicting_snapshot,
+    }) = witness
+    else {
+        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+    };
+    if conflicting_snapshot.state() == GrantState::Revoked
+        || conflicting_snapshot.snapshot_id() == command.snapshot_id()
+        || authority_key_from_aggregate(conflicting_snapshot) != authority_key(evidence)
+    {
+        return Err(GrantRepositoryError::CorruptAuthorityIndex);
+    }
+    let reachable_from_history = reachable_prefixes
+        .get(conflicting_snapshot.snapshot_id())
+        .is_some_and(|prefixes| {
+            prefixes
+                .iter()
+                .any(|prefix| prefix.as_ref() == Some(conflicting_snapshot.as_ref()))
+        });
+    let current_conflict = ledger_current_authority.get(&authority_key(evidence));
+    if reachable_from_history && current_conflict == Some(conflicting_snapshot.as_ref()) {
+        Ok(())
+    } else {
+        Err(GrantRepositoryError::CorruptAuthorityIndex)
+    }
+}
+
+fn advance_ledger_current_authority(
+    observed_pre_snapshot: Option<&GrantSnapshot>,
+    post_snapshot: &GrantSnapshot,
+    ledger_current_authority: &mut BTreeMap<AuthorityKey, GrantSnapshot>,
+) -> Result<(), GrantRepositoryError> {
+    if let Some(pre_snapshot) = observed_pre_snapshot {
+        if pre_snapshot.state() == GrantState::Revoked
+            || pre_snapshot.snapshot_id() != post_snapshot.snapshot_id()
+        {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        }
+        let pre_key = authority_key_from_aggregate(pre_snapshot);
+        if ledger_current_authority.remove(&pre_key).as_ref() != Some(pre_snapshot) {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        }
+        if authority_key_from_aggregate(post_snapshot) != pre_key {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        }
+    }
+    if post_snapshot.state() != GrantState::Revoked {
+        let key = authority_key_from_aggregate(post_snapshot);
+        if ledger_current_authority
+            .insert(key, post_snapshot.clone())
+            .is_some()
+        {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        }
+    }
+    Ok(())
+}
+
+fn pre_snapshot_is_reachable(
+    reachable_prefixes: &BTreeMap<GrantSnapshotId, Vec<Option<GrantSnapshot>>>,
+    snapshot_id: &GrantSnapshotId,
+    observed_pre_snapshot: &Option<GrantSnapshot>,
+) -> bool {
+    reachable_prefixes.get(snapshot_id).map_or_else(
+        || observed_pre_snapshot.is_none(),
+        |prefixes| {
+            prefixes
+                .iter()
+                .any(|prefix| prefix == observed_pre_snapshot)
+        },
+    )
+}
+
+fn assert_current_authority_bijection(
+    repository: &InMemoryGrantRepository,
+) -> Result<(), GrantRepositoryError> {
+    for aggregate in repository.aggregates.values() {
+        if aggregate.state() == GrantState::Revoked {
+            continue;
+        }
+        let key = authority_key_from_aggregate(aggregate);
+        let Some(ids) = repository.current_authority.get(&key) else {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        };
+        if !ids.contains(aggregate.snapshot_id()) {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        }
+    }
+    for (key, ids) in &repository.current_authority {
+        if ids.is_empty() {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        }
+        if ids.len() != 1 {
+            return Err(GrantRepositoryError::CorruptAuthorityIndex);
+        }
+        for snapshot_id in ids {
+            let Some(aggregate) = repository.aggregates.get(snapshot_id) else {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            };
+            if aggregate.state() == GrantState::Revoked
+                || authority_key_from_aggregate(aggregate) != *key
+            {
+                return Err(GrantRepositoryError::CorruptAuthorityIndex);
+            }
+        }
+    }
+    Ok(())
 }
 
 fn checked_prefixed(value: String, prefix: &str, max_tail: usize) -> Option<String> {
@@ -1502,6 +2172,237 @@ fn encode_tag(tag: u8, out: &mut Vec<u8>) {
     out.extend_from_slice(&1_u64.to_be_bytes());
     out.push(tag);
 }
+
+fn encode_u64(value: u64, out: &mut Vec<u8>) {
+    out.extend_from_slice(&value.to_be_bytes());
+}
+
+fn digest_current_installation_grant_set(
+    tenant_id: &TenantId,
+    user_id: &UserId,
+    installation_id: &InstallationId,
+    observed_installation_revision: &InstallationRevision,
+    grants: &[GrantSnapshot],
+) -> Sha256Digest {
+    let mut out = CURRENT_INSTALLATION_GRANT_SET_DOMAIN.to_vec();
+    encode_string(tenant_id.as_str(), &mut out);
+    encode_string(user_id.as_str(), &mut out);
+    encode_string(installation_id.as_str(), &mut out);
+    encode_string(observed_installation_revision.as_str(), &mut out);
+    encode_u64(grants.len() as u64, &mut out);
+    for grant in grants {
+        encode_grant_snapshot(grant, &mut out);
+    }
+    Sha256Digest::from_bytes(&out)
+}
+
+fn digest_event_coupling(event: &GrantEvent) -> Sha256Digest {
+    let mut out = EVENT_COUPLING_DOMAIN.to_vec();
+    encode_u64(event.sequence().get(), &mut out);
+    encode_string(event.post_version().as_str(), &mut out);
+    encode_string(event.command_id().as_str(), &mut out);
+    encode_string(event.snapshot_id().as_str(), &mut out);
+    encode_event_payload(&event.payload, &mut out);
+    Sha256Digest::from_bytes(&out)
+}
+
+fn encode_grant_snapshot(grant: &GrantSnapshot, out: &mut Vec<u8>) {
+    encode_string(grant.snapshot_id().as_str(), out);
+    encode_string(grant.tenant_id().as_str(), out);
+    encode_string(grant.user_id().as_str(), out);
+    encode_string(grant.installation_id().as_str(), out);
+    encode_string(grant.installation_revision().as_str(), out);
+    encode_string(grant.catalog_revision().as_str(), out);
+    encode_string(grant.package_id().as_str(), out);
+    let package_version = grant.package_version().as_str();
+    encode_string(&package_version, out);
+    encode_string(grant.package_digest().as_str(), out);
+    encode_string(grant.capability_id().as_str(), out);
+    encode_scope(grant.scope(), out);
+    encode_confirmation_policy(grant.confirmation_policy(), out);
+    encode_string(grant.capability_manifest_digest().as_str(), out);
+    encode_string(grant.capability_registry_revision().as_str(), out);
+    encode_capability_definition(grant.capability_definition(), out);
+    encode_string(grant.capability_definition_digest().as_str(), out);
+    encode_string(grant.last_approval_id().as_str(), out);
+    encode_grant_state(grant.state(), out);
+    encode_string(grant.version().as_str(), out);
+    encode_u64(grant.last_sequence().get(), out);
+}
+
+fn encode_event_payload(payload: &GrantEventPayload, out: &mut Vec<u8>) {
+    match payload {
+        GrantEventPayload::Issued(evidence) => {
+            encode_tag(0, out);
+            encode_evidence(evidence, out);
+        }
+        GrantEventPayload::Replaced {
+            evidence,
+            change_class,
+        } => {
+            encode_tag(1, out);
+            encode_evidence(evidence, out);
+            encode_change_class(*change_class, out);
+        }
+        GrantEventPayload::MarkedStale(reason) => {
+            encode_tag(2, out);
+            encode_invalidation_reason(*reason, out);
+        }
+        GrantEventPayload::Expired => encode_tag(3, out),
+        GrantEventPayload::Revoked => encode_tag(4, out),
+    }
+}
+
+fn encode_evidence(e: &GrantAdmissionEvidence, out: &mut Vec<u8>) {
+    for value in [
+        e.snapshot_id.as_str(),
+        e.approval_id.as_str(),
+        e.tenant_id.as_str(),
+        e.user_id.as_str(),
+        e.installation_id.as_str(),
+        e.expected_installation_revision.as_str(),
+        e.catalog_revision.as_str(),
+        e.package_id.as_str(),
+        &e.package_version.as_str(),
+        e.package_digest.as_str(),
+        e.capability_id.as_str(),
+    ] {
+        encode_string(value, out);
+    }
+    encode_scope(&e.scope, out);
+    encode_confirmation_policy(e.confirmation_policy, out);
+    encode_string(e.capability_manifest_digest.as_str(), out);
+    encode_string(e.capability_registry_revision.as_str(), out);
+    encode_capability_definition(&e.capability_definition, out);
+    encode_string(e.capability_definition_digest.as_str(), out);
+    encode_string(e.evidence_digest.as_str(), out);
+}
+
+fn encode_scope(scope: &GrantScope, out: &mut Vec<u8>) {
+    encode_scope_kind(scope.scope_kind(), out);
+    encode_string(scope.object_scope().as_str(), out);
+    match scope.tenant_id() {
+        Some(value) => {
+            encode_tag(1, out);
+            encode_string(value.as_str(), out);
+        }
+        None => encode_tag(0, out),
+    }
+    match scope.user_id() {
+        Some(value) => {
+            encode_tag(1, out);
+            encode_string(value.as_str(), out);
+        }
+        None => encode_tag(0, out),
+    }
+}
+
+fn encode_capability_definition(definition: &CapabilityDefinition, out: &mut Vec<u8>) {
+    encode_string(definition.id().as_str(), out);
+    encode_effect_class(definition.effect_class(), out);
+    encode_data_class(definition.data_class(), out);
+    encode_scope_kind(definition.scope_kind(), out);
+    encode_auto_grant(definition.auto_grant(), out);
+    encode_confirmation_policy(definition.confirmation_default(), out);
+    encode_capability_status(definition.status(), out);
+    encode_string(definition.definition_digest().as_str(), out);
+}
+
+fn encode_confirmation_policy(value: ConfirmationPolicy, out: &mut Vec<u8>) {
+    encode_tag(
+        match value {
+            ConfirmationPolicy::Allow => 0,
+            ConfirmationPolicy::Ask => 1,
+        },
+        out,
+    );
+}
+fn encode_effect_class(value: EffectClass, out: &mut Vec<u8>) {
+    encode_tag(
+        match value {
+            EffectClass::Read => 0,
+            EffectClass::Write => 1,
+            EffectClass::Destructive => 2,
+            EffectClass::Linkout => 3,
+            EffectClass::Diagnostic => 4,
+        },
+        out,
+    );
+}
+fn encode_data_class(value: DataClass, out: &mut Vec<u8>) {
+    encode_tag(
+        match value {
+            DataClass::PublicCampusFact => 0,
+            DataClass::TenantPrivateFact => 1,
+            DataClass::UserProfile => 2,
+            DataClass::Credential => 3,
+            DataClass::Administrative => 4,
+        },
+        out,
+    );
+}
+fn encode_scope_kind(value: ScopeKind, out: &mut Vec<u8>) {
+    encode_tag(
+        match value {
+            ScopeKind::CampusPublic => 0,
+            ScopeKind::TenantPrivateUser => 1,
+            ScopeKind::OperatorAdministrative => 2,
+        },
+        out,
+    );
+}
+fn encode_auto_grant(value: AutoGrantDisposition, out: &mut Vec<u8>) {
+    encode_tag(
+        match value {
+            AutoGrantDisposition::Never => 0,
+            AutoGrantDisposition::FirstPartyDefaultOnly => 1,
+        },
+        out,
+    );
+}
+fn encode_capability_status(value: CapabilityStatus, out: &mut Vec<u8>) {
+    encode_tag(
+        match value {
+            CapabilityStatus::Active => 0,
+            CapabilityStatus::Deprecated => 1,
+            CapabilityStatus::Revoked => 2,
+        },
+        out,
+    );
+}
+fn encode_grant_state(value: GrantState, out: &mut Vec<u8>) {
+    encode_tag(
+        match value {
+            GrantState::Active => 0,
+            GrantState::Stale => 1,
+            GrantState::Expired => 2,
+            GrantState::Revoked => 3,
+        },
+        out,
+    );
+}
+fn encode_change_class(value: GrantChangeClass, out: &mut Vec<u8>) {
+    encode_tag(
+        match value {
+            GrantChangeClass::Unchanged => 0,
+            GrantChangeClass::Narrowed => 1,
+            GrantChangeClass::ReapprovalRequired => 2,
+        },
+        out,
+    );
+}
+fn encode_invalidation_reason(value: GrantInvalidationReason, out: &mut Vec<u8>) {
+    encode_tag(
+        match value {
+            GrantInvalidationReason::CapabilityManifestChanged => 0,
+            GrantInvalidationReason::CapabilityDefinitionChanged => 1,
+            GrantInvalidationReason::InstallationChanged => 2,
+            GrantInvalidationReason::PolicyChanged => 3,
+        },
+        out,
+    );
+}
+
 fn digest_evidence(e: &GrantAdmissionEvidence) -> Sha256Digest {
     let mut out = EVIDENCE_DOMAIN.to_vec();
     let package_version = e.package_version.as_str();
@@ -1694,6 +2595,29 @@ mod tests {
                 self.evidence(snapshot, approval),
             )
             .expect("issue command")
+        }
+
+        fn private_evidence(&self, snapshot: &str, approval: &str) -> GrantAdmissionEvidence {
+            GrantAdmissionEvidence::from_authority_bindings(
+                parsed!(GrantSnapshotId, snapshot),
+                parsed!(GrantApprovalId, approval),
+                &self.installation,
+                &self.package,
+                parsed!(CapabilityId, "user.own_academic_snapshot.read"),
+                GrantScope::tenant_private_user(self.tenant.clone(), self.user.clone())
+                    .expect("private scope"),
+                ConfirmationPolicy::Ask,
+                &self.registry,
+            )
+            .expect("private admission evidence")
+        }
+
+        fn private_issue(&self, snapshot: &str, approval: &str, command: &str) -> GrantCommand {
+            GrantCommand::issue(
+                parsed!(GrantCommandId, command),
+                self.private_evidence(snapshot, approval),
+            )
+            .expect("private issue command")
         }
 
         fn issued(&self) -> (GrantEvent, GrantAggregate) {
@@ -2185,25 +3109,129 @@ mod tests {
                 "grant-cmd:first-authority",
             ))
             .expect("first");
+        let snapshot = accepted(&first).1.clone();
         let conflict_command = fixture.issue(
             "grant:second",
             "grant-approval:second",
             "grant-cmd:conflict",
         );
+        let key = authority_key_from_aggregate(&snapshot);
+        let assert_execute_corrupt = |mut repository: InMemoryGrantRepository| {
+            assert_eq!(
+                repository.execute(conflict_command.clone()),
+                Err(GrantRepositoryError::CorruptAuthorityIndex)
+            );
+        };
+        let mut missing_index = repository.clone();
+        missing_index.current_authority.remove(&key);
+        assert_execute_corrupt(missing_index);
+        let mut missing_aggregate = repository.clone();
+        missing_aggregate
+            .current_authority
+            .get_mut(&key)
+            .expect("test fixture precondition")
+            .clear();
+        missing_aggregate
+            .current_authority
+            .get_mut(&key)
+            .expect("test fixture precondition")
+            .insert(parsed!(GrantSnapshotId, "grant:missing-conflict-aggregate"));
+        assert_execute_corrupt(missing_aggregate);
+        let mut duplicate_index = repository.clone();
+        let mut duplicate_snapshot = snapshot.clone();
+        duplicate_snapshot.snapshot_id = parsed!(GrantSnapshotId, "grant:duplicate-conflict");
+        duplicate_index.aggregates.insert(
+            duplicate_snapshot.snapshot_id().clone(),
+            duplicate_snapshot.clone(),
+        );
+        duplicate_index
+            .current_authority
+            .get_mut(&key)
+            .expect("test fixture precondition")
+            .insert(duplicate_snapshot.snapshot_id().clone());
+        assert_execute_corrupt(duplicate_index);
+        let mut wrong_key_index = repository.clone();
+        wrong_key_index
+            .aggregates
+            .get_mut(snapshot.snapshot_id())
+            .expect("test fixture precondition")
+            .capability_id = parsed!(CapabilityId, "user.own_academic_snapshot.read");
+        assert_execute_corrupt(wrong_key_index);
+
         let conflict = repository
             .execute(conflict_command.clone())
             .expect("conflict receipt");
         assert_eq!(rejected(&conflict), GrantDecisionError::AuthorityConflict);
-        let snapshot = accepted(&first).1;
         let revoke = GrantCommand::revoke(
             parsed!(GrantCommandId, "grant-cmd:release"),
             snapshot.snapshot_id().clone(),
             snapshot.version().clone(),
         )
         .expect("revoke");
-        repository.execute(revoke).expect("release");
+        let revoke_receipt = repository.execute(revoke).expect("release");
+        let history = repository
+            .event_history(snapshot.snapshot_id())
+            .expect("test fixture precondition");
+        let rebuilt = InMemoryGrantRepository::try_from_histories_and_receipts(
+            vec![(snapshot.snapshot_id().clone(), history.clone())],
+            vec![
+                (first.clone(), None),
+                (conflict.clone(), None),
+                (revoke_receipt.clone(), Some(snapshot.clone())),
+            ],
+        )
+        .expect("historical authority conflict receipt must rebuild after revoke");
+
+        let assert_corrupt = |receipts| {
+            assert!(matches!(
+                InMemoryGrantRepository::try_from_histories_and_receipts(
+                    vec![(snapshot.snapshot_id().clone(), history.clone())],
+                    receipts,
+                ),
+                Err(GrantRepositoryError::CorruptAuthorityIndex)
+            ));
+        };
+        let mut missing_witness = conflict.clone();
+        missing_witness.rejection_witness = None;
+        assert_corrupt(vec![
+            (first.clone(), None),
+            (missing_witness, None),
+            (revoke_receipt.clone(), Some(snapshot.clone())),
+        ]);
+        let mut wrong_key_witness = conflict.clone();
+        if let Some(GrantReceiptWitness::AuthorityConflict {
+            conflicting_snapshot,
+        }) = &mut wrong_key_witness.rejection_witness
+        {
+            conflicting_snapshot.capability_id =
+                parsed!(CapabilityId, "user.own_academic_snapshot.read");
+        }
+        assert_corrupt(vec![
+            (first.clone(), None),
+            (wrong_key_witness, None),
+            (revoke_receipt.clone(), Some(snapshot.clone())),
+        ]);
+        let mut extra_witness = revoke_receipt.clone();
+        extra_witness.rejection_witness = conflict.rejection_witness.clone();
+        assert_corrupt(vec![
+            (first.clone(), None),
+            (conflict.clone(), None),
+            (extra_witness, Some(snapshot.clone())),
+        ]);
+        assert_corrupt(vec![
+            (first.clone(), None),
+            (revoke_receipt.clone(), Some(snapshot.clone())),
+            (conflict.clone(), None),
+        ]);
+        assert_corrupt(vec![
+            (conflict.clone(), None),
+            (first, None),
+            (revoke_receipt, Some(snapshot.clone())),
+        ]);
+
+        let mut idempotent = rebuilt;
         assert_eq!(
-            repository.execute(conflict_command).expect("retry"),
+            idempotent.execute(conflict_command).expect("retry"),
             conflict
         );
     }
@@ -2284,6 +3312,352 @@ mod tests {
             None
         );
     }
+
+    #[test]
+    fn current_installation_grant_set_is_empty_or_sorted_and_revision_bound() {
+        let fixture = Fixture::new();
+        let mut repository = InMemoryGrantRepository::new();
+        let empty = repository
+            .load_current_for_installation(
+                &fixture.tenant,
+                &fixture.user,
+                fixture.installation.installation_id(),
+                fixture.installation.revision(),
+            )
+            .expect("empty set is valid");
+        assert!(empty.grants().is_empty());
+        assert_eq!(empty.tenant_id(), &fixture.tenant);
+        assert_eq!(empty.user_id(), &fixture.user);
+        assert_eq!(
+            empty.installation_id(),
+            fixture.installation.installation_id()
+        );
+        assert_eq!(
+            empty.observed_installation_revision(),
+            fixture.installation.revision()
+        );
+        assert_eq!(
+            empty.grant_set_digest(),
+            &digest_current_installation_grant_set(
+                &fixture.tenant,
+                &fixture.user,
+                fixture.installation.installation_id(),
+                fixture.installation.revision(),
+                &[]
+            )
+        );
+
+        repository
+            .execute(fixture.private_issue(
+                "grant:a-private",
+                "grant-approval:a-private",
+                "grant-cmd:a-private",
+            ))
+            .expect("private grant");
+        repository
+            .execute(fixture.issue(
+                "grant:z-public",
+                "grant-approval:z-public",
+                "grant-cmd:z-public",
+            ))
+            .expect("public grant");
+        let set = repository
+            .load_current_for_installation(
+                &fixture.tenant,
+                &fixture.user,
+                fixture.installation.installation_id(),
+                fixture.installation.revision(),
+            )
+            .expect("current set");
+        assert_eq!(
+            set.grants()
+                .iter()
+                .map(|grant| grant.snapshot_id().as_str())
+                .collect::<Vec<_>>(),
+            vec!["grant:z-public", "grant:a-private"]
+        );
+        let changed_revision = parsed!(InstallationRevision, "installation-revision:future");
+        let changed = repository
+            .load_current_for_installation(
+                &fixture.tenant,
+                &fixture.user,
+                fixture.installation.installation_id(),
+                &changed_revision,
+            )
+            .expect("revision-bound digest");
+        assert_ne!(set.grant_set_digest(), changed.grant_set_digest());
+        assert!(!format!("{set:?}").contains("z-public"));
+    }
+
+    #[test]
+    fn current_installation_grant_set_rejects_corrupt_authority_index_classes() {
+        let fixture = Fixture::new();
+        let mut repository = InMemoryGrantRepository::new();
+        let receipt = repository
+            .execute(fixture.issue(
+                "grant:corrupt",
+                "grant-approval:corrupt",
+                "grant-cmd:corrupt",
+            ))
+            .expect("issue");
+        let snapshot = accepted(&receipt).1.clone();
+        let key = authority_key_from_aggregate(&snapshot);
+        let assert_corrupt = |repository: &InMemoryGrantRepository| {
+            assert_eq!(
+                repository.load_current_for_installation(
+                    &fixture.tenant,
+                    &fixture.user,
+                    fixture.installation.installation_id(),
+                    fixture.installation.revision(),
+                ),
+                Err(GrantRepositoryError::CorruptAuthorityIndex)
+            );
+        };
+
+        let mut missing = repository.clone();
+        missing.current_authority.remove(&key);
+        assert_corrupt(&missing);
+
+        let mut extra_missing_aggregate = repository.clone();
+        extra_missing_aggregate
+            .current_authority
+            .get_mut(&key)
+            .expect("test fixture precondition")
+            .insert(parsed!(GrantSnapshotId, "grant:missing-aggregate"));
+        assert_corrupt(&extra_missing_aggregate);
+
+        let mut duplicate = repository.clone();
+        let mut duplicate_snapshot = snapshot.clone();
+        duplicate_snapshot.snapshot_id = parsed!(GrantSnapshotId, "grant:duplicate");
+        duplicate.aggregates.insert(
+            duplicate_snapshot.snapshot_id().clone(),
+            duplicate_snapshot.clone(),
+        );
+        duplicate
+            .current_authority
+            .get_mut(&key)
+            .expect("test fixture precondition")
+            .insert(duplicate_snapshot.snapshot_id().clone());
+        assert_corrupt(&duplicate);
+
+        let mut wrong_key = repository.clone();
+        let mut wrong_snapshot = snapshot.clone();
+        wrong_snapshot.capability_id = parsed!(CapabilityId, "user.own_academic_snapshot.read");
+        wrong_key
+            .aggregates
+            .insert(snapshot.snapshot_id().clone(), wrong_snapshot);
+        assert_corrupt(&wrong_key);
+
+        let mut revoked_in_index = repository.clone();
+        revoked_in_index
+            .aggregates
+            .get_mut(snapshot.snapshot_id())
+            .expect("test fixture precondition")
+            .state = GrantState::Revoked;
+        assert_corrupt(&revoked_in_index);
+
+        let mut wrong_tenant_row = repository.clone();
+        wrong_tenant_row
+            .aggregates
+            .get_mut(snapshot.snapshot_id())
+            .expect("test fixture precondition")
+            .tenant_id = parsed!(TenantId, "tenant:foreign-grant");
+        assert_corrupt(&wrong_tenant_row);
+    }
+
+    #[test]
+    fn revoked_history_is_excluded_from_current_installation_set() {
+        let fixture = Fixture::new();
+        let mut repository = InMemoryGrantRepository::new();
+        let issue = repository
+            .execute(fixture.issue(
+                "grant:revoked-history",
+                "grant-approval:revoked-history",
+                "grant-cmd:revoked-history",
+            ))
+            .expect("issue");
+        let snapshot = accepted(&issue).1.clone();
+        let revoke = GrantCommand::revoke(
+            parsed!(GrantCommandId, "grant-cmd:revoked-history-revoke"),
+            snapshot.snapshot_id().clone(),
+            snapshot.version().clone(),
+        )
+        .expect("revoke");
+        repository.execute(revoke).expect("revoke receipt");
+        let set = repository
+            .load_current_for_installation(
+                &fixture.tenant,
+                &fixture.user,
+                fixture.installation.installation_id(),
+                fixture.installation.revision(),
+            )
+            .expect("revoked excluded");
+        assert!(set.grants().is_empty());
+        assert_eq!(
+            repository
+                .event_history(snapshot.snapshot_id())
+                .expect("test fixture precondition")
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn grant_receipts_retain_complete_command_for_rebuild_and_rejected_reseed() {
+        let fixture = Fixture::new();
+        let mut repository = InMemoryGrantRepository::new();
+        let issue_command = fixture.issue(
+            "grant:rebuild",
+            "grant-approval:rebuild",
+            "grant-cmd:rebuild",
+        );
+        let issue_receipt = repository.execute(issue_command.clone()).expect("issue");
+        let issued = accepted(&issue_receipt).1.clone();
+        let stale = GrantCommand::mark_stale(
+            parsed!(GrantCommandId, "grant-cmd:rebuild-stale"),
+            issued.snapshot_id().clone(),
+            issued.version().clone(),
+            GrantInvalidationReason::PolicyChanged,
+        )
+        .expect("stale command");
+        let stale_pre = repository
+            .load_exact(issued.snapshot_id())
+            .expect("test fixture precondition");
+        let stale_receipt = repository.execute(stale.clone()).expect("stale");
+        let duplicate_approval = fixture.private_issue(
+            "grant:rebuild-rejected",
+            "grant-approval:rebuild",
+            "grant-cmd:rebuild-rejected",
+        );
+        let rejected_receipt = repository.execute(duplicate_approval).expect("rejected");
+        assert_eq!(
+            rejected(&rejected_receipt),
+            GrantDecisionError::ApprovalAlreadyConsumed
+        );
+        assert!(!format!("{rejected_receipt:?}").contains("rebuild-rejected"));
+
+        let history = repository
+            .event_history(issued.snapshot_id())
+            .expect("test fixture precondition");
+        let rebuilt = InMemoryGrantRepository::try_from_histories_and_receipts(
+            vec![(issued.snapshot_id().clone(), history.clone())],
+            vec![
+                (issue_receipt.clone(), None),
+                (stale_receipt.clone(), stale_pre.clone()),
+                (rejected_receipt.clone(), None),
+            ],
+        )
+        .expect("rebuilt");
+        assert_eq!(
+            rebuilt
+                .event_history(issued.snapshot_id())
+                .expect("test fixture precondition"),
+            history
+        );
+
+        let assert_corrupt = |receipts| {
+            assert!(matches!(
+                InMemoryGrantRepository::try_from_histories_and_receipts(
+                    vec![(issued.snapshot_id().clone(), history.clone())],
+                    receipts,
+                ),
+                Err(GrantRepositoryError::CorruptAuthorityIndex)
+            ));
+        };
+        let mut missing_witness = rejected_receipt.clone();
+        missing_witness.rejection_witness = None;
+        assert_corrupt(vec![
+            (issue_receipt.clone(), None),
+            (stale_receipt.clone(), stale_pre.clone()),
+            (missing_witness, None),
+        ]);
+        let mut wrong_consumed_tuple = rejected_receipt.clone();
+        if let Some(GrantReceiptWitness::ApprovalAlreadyConsumed {
+            consumed_evidence_digest,
+            ..
+        }) = &mut wrong_consumed_tuple.rejection_witness
+        {
+            *consumed_evidence_digest = Sha256Digest::from_bytes(b"wrong-consumed");
+        }
+        assert_corrupt(vec![
+            (issue_receipt.clone(), None),
+            (stale_receipt.clone(), stale_pre.clone()),
+            (wrong_consumed_tuple, None),
+        ]);
+        let mut extra_accepted_witness = stale_receipt.clone();
+        extra_accepted_witness.rejection_witness = rejected_receipt.rejection_witness.clone();
+        assert_corrupt(vec![
+            (issue_receipt.clone(), None),
+            (extra_accepted_witness, stale_pre.clone()),
+            (rejected_receipt.clone(), None),
+        ]);
+        assert_corrupt(vec![
+            (rejected_receipt.clone(), None),
+            (issue_receipt.clone(), None),
+            (stale_receipt.clone(), stale_pre.clone()),
+        ]);
+        let pure_domain = InMemoryGrantRepository::new()
+            .execute(
+                GrantCommand::revoke(
+                    parsed!(GrantCommandId, "grant-cmd:rebuild-missing"),
+                    parsed!(GrantSnapshotId, "grant:rebuild-missing"),
+                    parsed!(GrantVersion, "grant-version:1"),
+                )
+                .expect("missing revoke"),
+            )
+            .expect("pure domain rejection");
+        let mut extra_pure_domain = pure_domain.clone();
+        extra_pure_domain.rejection_witness = rejected_receipt.rejection_witness.clone();
+        assert_corrupt(vec![
+            (issue_receipt.clone(), None),
+            (stale_receipt.clone(), stale_pre.clone()),
+            (rejected_receipt.clone(), None),
+            (extra_pure_domain, None),
+        ]);
+
+        let mut idempotent = rebuilt;
+        assert_eq!(
+            idempotent
+                .execute(stale)
+                .expect("test fixture precondition"),
+            stale_receipt
+        );
+        assert!(matches!(
+            InMemoryGrantRepository::try_from_histories_and_receipts(
+                vec![(issued.snapshot_id().clone(), history)],
+                Vec::new(),
+            ),
+            Err(GrantRepositoryError::CorruptAuthorityIndex)
+        ));
+    }
+
+    #[test]
+    fn grant_event_coupling_digest_is_typed_and_tamper_sensitive() {
+        let fixture = Fixture::new();
+        let (event, aggregate) = fixture.issued();
+        let base = event.canonical_coupling_digest();
+        let mut tampered_sequence = event.clone();
+        tampered_sequence.sequence = GrantEventSequence(2);
+        tampered_sequence.post_version = parsed!(GrantVersion, "grant-version:2");
+        assert_ne!(base, tampered_sequence.canonical_coupling_digest());
+        let stale = GrantCommand::mark_stale(
+            parsed!(GrantCommandId, "grant-cmd:digest-stale"),
+            aggregate.snapshot_id().clone(),
+            aggregate.version().clone(),
+            GrantInvalidationReason::InstallationChanged,
+        )
+        .expect("stale");
+        let stale_event = decide(Some(&aggregate), &stale).expect("stale event");
+        assert_ne!(base, stale_event.canonical_coupling_digest());
+        let mut tampered_payload = stale_event.clone();
+        tampered_payload.payload =
+            GrantEventPayload::MarkedStale(GrantInvalidationReason::PolicyChanged);
+        assert_ne!(
+            stale_event.canonical_coupling_digest(),
+            tampered_payload.canonical_coupling_digest()
+        );
+    }
+
     #[test]
     fn resolver_projection_is_pure_and_denial_side() {
         let fixture = Fixture::new();
