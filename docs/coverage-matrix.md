@@ -61,6 +61,7 @@ Tokens are checked independently; one `long-horizon:` token cannot mask an inval
 | `guides/development.md` | local command/runbook | commands must match current CI/contracts |
 | `guides/github-pages-brief.md` | future frontend/publication handoff | public-readiness gate owns publication permission |
 | `adr/` | decision history | explains why; current plan/contract owns behavior after clarification/amendment |
+| `design/` | subordinate presentation design packets (`Proposal`/`Reviewed`/`Superseded`) | presentation proposal only; defers to plans/contracts/acceptance; never a peer authority; coverage claims stay inside the packet and never enter the acceptance matrix |
 
 ## Rules
 
