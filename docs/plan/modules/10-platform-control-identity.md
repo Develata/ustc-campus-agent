@@ -169,7 +169,7 @@ The hot path is request-context admission: session/account/membership lookup, ex
 - one honest demo/auth adapter boundary;
 - durable runtime account, external-identity link and tenant-membership semantics behind fakes/adapters;
 - session open/expire/revoke;
-- a basic extensible context-profile registry/fact/proposal/current-projection path with unknown fields allowed and sensitive fields denied from prompts by default;
+- a basic extensible context-profile registry/fact/proposal/current-projection path where future fields are added by reviewed registry entries, unknown field keys fail closed, registered-but-unset values remain explicit `Unknown`, and sensitive fields are denied from prompts by default;
 - command/correlation identity and redacted audit linkage.
 
 **Later**
