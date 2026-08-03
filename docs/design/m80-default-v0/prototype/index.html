@@ -240,7 +240,7 @@ const crHint = stale ? " · ⓘ v0.5.0 已应用：权限需复核（server 判�
   : (upd ? (DEMO.enabled ? " · ⓘ 有可用更新 v0.5.0 · 需先停用方可应用（lifecycle ∈ {InstalledDisabled, Disabled}）"
                           : " · ⓘ 有可用更新 v0.5.0 · 应用要求 lifecycle ∈ {InstalledDisabled, Disabled}（server-projected · illustrative）")
          : "");
-const crAct = stale ? ["#S13","复核权限 →"] : (upd && !DEMO.enabled ? ["#S10","查看更新 →"] : ["#S10","管理"]);
+const crAct = stale ? ["#S13","复核权限 →"] : (upd ? ["#S10","查看更新 →"] : ["#S10","管理"]);
 const crRow = `<div class="row${attention?" attn":""}"><div><strong>USTC ChangeRadar</strong><div class="meta">${crState}${crHint}</div></div><a class="btn sec" href="${crAct[0]}">${crAct[1]}</a></div>`;
 const inEnabled = DEMO.enabled && !attention;
 const inDisabled = !DEMO.enabled && !attention;
