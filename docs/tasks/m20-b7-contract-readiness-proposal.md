@@ -60,7 +60,7 @@
   - `scripts/check_repo_contracts.py`
   - `scripts/tests/test_check_repo_contracts.py`
 - `Status projection`: MARKET-001–MARKET-004, MARKET-007, PKG-019, PKG-020 and FP-007 remain `planned`; no case is promoted
-- `Implementation projection`: A1/B7-B exact contracts accepted; source/tests absent; M20/M40 remain `partial-evidence`
+- `Implementation projection`: A1 implemented as semantic in-memory evidence with zero production callers; B7-B exact contract accepted with source/tests absent; M20/M40 remain `partial-evidence`
 
 ### Docs/contract amendment repair receipt
 

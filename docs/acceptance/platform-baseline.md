@@ -60,7 +60,7 @@ A manual or automated case cannot pass without a named owner, exact evidence and
 
 Long-horizon suites remain planned until projected into `matrix.tsv`. New current plan chapters or product-visible features require a current coverage row and an active acceptance binding; catalog-only presence is insufficient.
 
-The accepted M20-B7 A1/B7-B contracts refine future application/composition evidence only. They add no Rust/test implementation and do not alter the active `planned` status of MARKET-001–MARKET-004, MARKET-007, PKG-019, PKG-020 or FP-007 in `matrix.tsv`.
+The M20-B7 A1 contract is implemented as semantic in-memory evidence with zero production callers; the M20-B7-B composition-evidence contract remains accepted but unimplemented. Neither alters the active `planned` status of MARKET-001–MARKET-004, MARKET-007, PKG-019, PKG-020 or FP-007 in `matrix.tsv`.
 
 ### 3.1 ADR traceability baseline
 

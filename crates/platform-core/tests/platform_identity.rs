@@ -1745,7 +1745,14 @@ fn assert_public_surface_is_frozen() {
         (
             "market.rs",
             MARKET_SOURCE,
-            &["authority", "capability", "grant", "installation", "update"] as &[&str],
+            &[
+                "application",
+                "authority",
+                "capability",
+                "grant",
+                "installation",
+                "update",
+            ] as &[&str],
             &ADMITTED_MARKET_ITEMS as &[&str],
             &[] as &[&str],
             false,
@@ -4189,7 +4196,8 @@ const ADMITTED_INVOCATION_ITEMS: [&str; 6] = [
     ),
 ];
 
-const ADMITTED_MARKET_ITEMS: [&str; 12] = [
+const ADMITTED_MARKET_ITEMS: [&str; 13] = [
+    "pub mod application;",
     "pub mod authority;",
     "pub mod capability;",
     "pub mod grant;",

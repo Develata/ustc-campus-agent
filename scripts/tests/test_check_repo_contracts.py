@@ -5736,17 +5736,17 @@ class PlatformAuthorityImplementationTests(unittest.TestCase):
         )
         self.assert_rejected("market authority status marker missing")
 
-    def test_market_authority_b7_accepted_contract_marker_deletion_fails_closed(self) -> None:
+    def test_market_authority_b7_a1_implemented_marker_deletion_fails_closed(self) -> None:
         self.rewrite(
             "docs/plan/modules/30-market-package-lifecycle.md",
-            "exact `M20-B7-A1` application-façade and `M20-B7-B` test-only composition contracts are accepted but unimplemented",
+            "the exact `M20-B7-A1` application façade is implemented as semantic in-memory evidence with zero production callers, while the `M20-B7-B` test-only composition contract remains accepted but unimplemented",
             "B7 contracts are accepted",
         )
         self.assert_rejected("market authority status marker missing")
 
-    def test_market_authority_b7_accepted_contract_marker_decoy_fails_closed(self) -> None:
+    def test_market_authority_b7_a1_implemented_marker_decoy_fails_closed(self) -> None:
         path = self.path("docs/plan/modules/30-market-package-lifecycle.md")
-        marker = "exact `M20-B7-A1` application-façade and `M20-B7-B` test-only composition contracts are accepted but unimplemented"
+        marker = "the exact `M20-B7-A1` application façade is implemented as semantic in-memory evidence with zero production callers, while the `M20-B7-B` test-only composition contract remains accepted but unimplemented"
         text = path.read_text(encoding="utf-8")
         self.assertEqual(text.count(marker), 1)
         text = text.replace(marker, "B7 contracts are accepted", 1)
@@ -5757,14 +5757,14 @@ class PlatformAuthorityImplementationTests(unittest.TestCase):
     def test_market_authority_b7_no_implementation_marker_deletion_fails_closed(self) -> None:
         self.rewrite(
             "docs/plan/modules/30-market-package-lifecycle.md",
-            "Contract acceptance creates no source, production caller, effect intent, executor, durable state or acceptance promotion.",
+            "Neither A1 implementation nor B7-B contract acceptance creates a production caller, effect intent, executor, durable state or acceptance promotion.",
             "Contract acceptance is not implementation.",
         )
         self.assert_rejected("market authority status marker missing")
 
     def test_market_authority_b7_no_implementation_marker_decoy_fails_closed(self) -> None:
         path = self.path("docs/plan/modules/30-market-package-lifecycle.md")
-        marker = "Contract acceptance creates no source, production caller, effect intent, executor, durable state or acceptance promotion."
+        marker = "Neither A1 implementation nor B7-B contract acceptance creates a production caller, effect intent, executor, durable state or acceptance promotion."
         text = path.read_text(encoding="utf-8")
         self.assertEqual(text.count(marker), 1)
         text = text.replace(marker, "Contract acceptance is not implementation.", 1)
@@ -5815,6 +5815,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_acceptance_matrix(issues)",
         "check_acceptance_catalog(issues)",
         "check_rust_doctest_gate(issues)",
+        "check_platform_application_implementation(issues)",
         "check_platform_identity_grammar_authority(issues)",
         "check_platform_authority_implementation(issues)",
         "check_platform_identity_implementation(issues)",
@@ -6315,7 +6316,7 @@ class PlatformSessionImplementationTests(unittest.TestCase):
             self.assertRegex(admitted_file, r"\Acrates/platform-core/src/[a-z_/]+\.rs\Z")
             self.assertRegex(admitted_text, r"\A(?:pub )?use crate::identity::\{[^}]*\};\Z")
             self.assertNotIn(" as ", admitted_text)
-        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 6)
+        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 7)
 
     def test_forbidden_dependency_carrier_fails_closed(self) -> None:
         # A path-qualified call inside a function body declares no item, so the item allowlist
@@ -6541,6 +6542,162 @@ class PlatformSessionImplementationTests(unittest.TestCase):
         self.assert_rejected(
             self.check_session(),
             "check_platform_session_implementation must be invoked from repository main()",
+        )
+
+
+class PlatformApplicationImplementationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        for relative in (
+            checker.PLATFORM_APPLICATION_SOURCE,
+            checker.PLATFORM_APPLICATION_TEST,
+            "scripts/check_repo_contracts.py",
+        ):
+            source = REPO_ROOT / relative
+            destination = self.root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def rewrite(self, relative: str, old: str, new: str) -> None:
+        path = self.root / relative
+        before = path.read_text(encoding="utf-8")
+        self.assertEqual(before.count(old), 1, f"stale application mutation target: {old!r}")
+        after = before.replace(old, new, 1)
+        self.assertNotEqual(before, after, f"no-op application mutation: {old!r}")
+        path.write_text(after, encoding="utf-8")
+
+    def check(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_platform_application_implementation(issues)
+        return issues
+
+    def assert_rejected(self, expected: str) -> None:
+        issues = self.check()
+        self.assertTrue(any(expected in issue for issue in issues), issues)
+
+    def test_market_application_projection_passes_exact_repository_state(self) -> None:
+        self.assertEqual(self.check(), [])
+
+    def test_unknown_public_top_level_struct_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_SOURCE,
+            "pub struct CatalogBrowseQuery {",
+            "pub struct RogueFacade;\n\npub struct CatalogBrowseQuery {",
+        )
+        self.assert_rejected("market application public declaration surface drifted")
+        self.assert_rejected("market application top-level public item inventory drifted")
+
+    def test_unknown_public_service_method_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_SOURCE,
+            "    pub fn browse_catalog(\n",
+            "    pub fn rogue_probe(&self) {}\n\n    pub fn browse_catalog(\n",
+        )
+        self.assert_rejected("market application public declaration surface drifted")
+        self.assert_rejected("market application service public method inventory drifted")
+
+    def test_renamed_facade_method_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_SOURCE,
+            "    pub fn browse_catalog(\n",
+            "    pub fn browse_catalog_v2(\n",
+        )
+        self.assert_rejected("market application service public method inventory drifted")
+
+    def test_unexpected_restricted_authority_escape_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_SOURCE,
+            "pub struct CatalogBrowseQuery {",
+            "pub(crate) fn authority_escape() {}\n\npub struct CatalogBrowseQuery {",
+        )
+        self.assert_rejected("market application has an unclassified or restricted public declaration")
+
+    def test_external_test_registration_removal_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_TEST,
+            "#[test]\nfn anonymous_catalog_paging_is_revision_bound_bounded_and_exact() {",
+            "fn anonymous_catalog_paging_is_revision_bound_bounded_and_exact() {",
+        )
+        self.assert_rejected("market application external acceptance test registration drift")
+
+    def test_external_extra_registered_test_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_TEST,
+            "#[test]\nfn anonymous_catalog_paging_is_revision_bound_bounded_and_exact() {",
+            "#[test]\n#[allow(dead_code)]\nfn rogue_extra_acceptance_test() {}\n\n"
+            "#[test]\nfn anonymous_catalog_paging_is_revision_bound_bounded_and_exact() {",
+        )
+        self.assert_rejected("market application external test inventory drifted")
+
+    def test_external_test_ignore_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_TEST,
+            "#[test]\nfn anonymous_catalog_paging_is_revision_bound_bounded_and_exact() {",
+            "#[test]\n#[ignore]\nfn anonymous_catalog_paging_is_revision_bound_bounded_and_exact() {",
+        )
+        self.assert_rejected("market application external tests must execute unconditionally")
+        self.assert_rejected("market application external acceptance test registration drift")
+
+    def test_external_test_cfg_attr_ignore_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_TEST,
+            "#[test]\nfn anonymous_catalog_paging_is_revision_bound_bounded_and_exact() {",
+            "#[test]\n#[cfg_attr(all(), ignore)]\nfn anonymous_catalog_paging_is_revision_bound_bounded_and_exact() {",
+        )
+        self.assert_rejected("market application external tests must execute unconditionally")
+        self.assert_rejected("market application external acceptance test registration drift")
+
+    def test_internal_test_rename_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_SOURCE,
+            "    fn disable_preserves_owner_ledger_first_idempotency_and_maps_one_event() {",
+            "    fn disable_preserves_owner_ledger_first_idempotency_and_maps_one_event_renamed() {",
+        )
+        self.assert_rejected("market application internal test inventory drifted")
+        self.assert_rejected("market application internal test registration drift")
+
+    def test_internal_test_registration_removal_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_SOURCE,
+            "    #[test]\n    fn disable_preserves_owner_ledger_first_idempotency_and_maps_one_event() {",
+            "    fn disable_preserves_owner_ledger_first_idempotency_and_maps_one_event() {",
+        )
+        self.assert_rejected("market application internal test inventory drifted")
+        self.assert_rejected("market application internal test registration drift")
+
+    def test_internal_test_ignore_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_SOURCE,
+            "    #[test]\n    fn disable_preserves_owner_ledger_first_idempotency_and_maps_one_event() {",
+            "    #[test]\n    #[ignore]\n    fn disable_preserves_owner_ledger_first_idempotency_and_maps_one_event() {",
+        )
+        self.assert_rejected("attribute envelope drifted")
+        self.assert_rejected("market application internal test execution envelope drifted")
+
+    def test_internal_test_cfg_attr_ignore_fails_closed(self) -> None:
+        self.rewrite(
+            checker.PLATFORM_APPLICATION_SOURCE,
+            "    #[test]\n    fn disable_preserves_owner_ledger_first_idempotency_and_maps_one_event() {",
+            "    #[test]\n    #[cfg_attr(all(), ignore)]\n    fn disable_preserves_owner_ledger_first_idempotency_and_maps_one_event() {",
+        )
+        self.assert_rejected("attribute envelope drifted")
+        self.assert_rejected("market application internal test execution envelope drifted")
+
+    def test_checker_not_invoked_from_main_fails_closed(self) -> None:
+        self.rewrite(
+            "scripts/check_repo_contracts.py",
+            "    check_platform_application_implementation(issues)\n",
+            "    # check_platform_application_implementation(issues)\n",
+        )
+        self.assert_rejected(
+            "check_platform_application_implementation must be invoked from repository main()"
         )
 
 

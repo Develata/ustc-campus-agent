@@ -2,15 +2,15 @@
 
 ## Metadata
 
-- `Status`: Accepted `market-lifecycle/v0` contract; canonical B1–B5 evidence and the bounded `M20-B6` update/rollback domain plus semantic fake evidence are implemented, while the exact `M20-B7-A1` application façade and `M20-B7-B` test-only composition contracts are accepted but unimplemented; production callers/issuers, durable lifecycle/update repositories, crash recovery, artifact switching, wire/client delivery and production ToolGateway composition remain planned; pure invocation resolver and call-time recheck remain the adopted items 7–8
+- `Status`: Accepted `market-lifecycle/v0` contract; canonical B1–B5 evidence and the bounded `M20-B6` update/rollback domain plus semantic fake evidence are implemented; the exact `M20-B7-A1` application façade is implemented as semantic in-memory evidence with zero production callers, while the `M20-B7-B` test-only composition contract remains accepted but unimplemented; production callers/issuers, durable lifecycle/update repositories, crash recovery, artifact switching, wire/client delivery and production ToolGateway composition remain planned; pure invocation resolver and call-time recheck remain the adopted items 7–8
 - `Version`: `market-lifecycle/v0`
-- `Last Review`: `2026-08-02`
+- `Last Review`: `2026-08-03`
 - `Owning Plan`: [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)
 - `Large-module Blueprint`: [`../plan/modules/30-market-package-lifecycle.md`](../plan/modules/30-market-package-lifecycle.md)
 - `Counterpart Contracts`: [`plugin-package.md`](plugin-package.md), [`invocation-resolution.md`](invocation-resolution.md), [`permissions.md`](permissions.md), [`agent-plugin-boundary.md`](agent-plugin-boundary.md)
 - `Authority Defers To`: [`../plan/03-platform-authority.md`](../plan/03-platform-authority.md) for state ownership, [`agent-runtime.md`](agent-runtime.md) for run/effect state, and [`invocation-resolution.md`](invocation-resolution.md) for the adopted projection/recheck decision shapes
-- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); exact B7 contract acceptance is not implementation evidence and promotes no row
-- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` package validation/catalog metadata; `crates/platform-core/src/market/capability.rs` for `M20-B2`; `crates/platform-core/src/market/installation.rs` for `M20-B3-s1`; `crates/platform-core/src/market/grant.rs` for `M20-B4`; `crates/platform-core/src/market/authority.rs` for bounded `M20-B5` carrier-by-carrier read transactions and authority assembly; `crates/platform-core/src/market/update.rs` and `crates/platform-core/tests/market_package_update.rs` for bounded `M20-B6` update/rollback domain and semantic package-update repository evidence; `crates/platform-core/src/invocation.rs` for adopted resolver/recheck items 7–8; accepted future B7 carriers are `crates/platform-core/src/market/application.rs` for A1 and composition-root test support under `apps/ustc-agentd/tests/` for B7-B, neither of which exists yet
+- `Acceptance`: implemented `MARKET-005`, `MARKET-006`; planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007` (see [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv)); A1 semantic implementation promotes no acceptance row, and B7-B contract acceptance is not implementation evidence
+- `Primary Code`: `crates/platform-core/src/market.rs` for `M20-B1` package validation/catalog metadata; `crates/platform-core/src/market/capability.rs` for `M20-B2`; `crates/platform-core/src/market/installation.rs` for `M20-B3-s1`; `crates/platform-core/src/market/grant.rs` for `M20-B4`; `crates/platform-core/src/market/authority.rs` for bounded `M20-B5` carrier-by-carrier read transactions and authority assembly; `crates/platform-core/src/market/update.rs` and `crates/platform-core/tests/market_package_update.rs` for bounded `M20-B6` update/rollback domain and semantic package-update repository evidence; `crates/platform-core/src/invocation.rs` for adopted resolver/recheck items 7–8; `crates/platform-core/src/market/application.rs` and `crates/platform-core/tests/market_application.rs` for the implemented `M20-B7-A1` semantic in-memory application façade; composition-root test support under `apps/ustc-agentd/tests/` for `M20-B7-B` remains accepted but unimplemented
 
 ## 1. Scope and authority
 
@@ -916,7 +916,7 @@ M20 MUST NOT create M30 `ToolCallProposal`/`EffectIntent` and MUST NOT call an e
 
 Package update, disable or revoke MUST change only future projections and current call-time denial. It MUST NOT mutate an already frozen `ToolProjectionSnapshot`, an in-flight `RunSpec`, or a historical receipt.
 
-### M20-B7-A1 — accepted application façade contract; implementation planned
+### M20-B7-A1 — implemented application façade contract; semantic in-memory evidence
 
 A1 defines one M20-owned, framework-neutral façade over existing B1–B6 owner ports. Its exact operation set is:
 
@@ -935,7 +935,7 @@ Owner-scoped requests carry checked `TenantId`/`UserId` values as downstream sco
 
 #### Exact Rust surface
 
-The future module is exactly `crates/platform-core/src/market/application.rs`, exported as `pub mod application;`. Its complete public item set is:
+The module is exactly `crates/platform-core/src/market/application.rs`, exported as `pub mod application;`. Its complete public item set is:
 
 ```text
 MarketApplicationConstructionError
@@ -1162,18 +1162,41 @@ Absent and foreign-owned values both map to `NotFound`. Revision/command-ledger 
 
 A1 reuses `InMemoryInstallationRepository`, `InMemoryGrantRepository` and `InMemoryPackageUpdateRepository`; it creates no second aggregate implementation. Independent safe reads identify their owner revisions and do not claim cross-repository atomicity. Invocation projection/recheck remains solely `InvocationAuthorityService` under one verified transaction.
 
-The exact future integration-test functions are:
+The exact external integration-test functions in `crates/platform-core/tests/market_application.rs` are:
 
 ```text
 anonymous_catalog_paging_is_revision_bound_bounded_and_exact
-package_detail_is_exact_without_latest_or_fallback
-owned_reads_hide_foreign_objects_and_exclude_sensitive_carriers
+application_service_debug_is_authority_redacted
+catalog_read_repository_port_returns_exact_and_current_arcs
+current_grants_expose_no_approval_or_history_carriers
+current_grants_hide_foreign_or_absent_authority
 current_grants_require_exact_installation_revision_and_canonical_order
-disable_preserves_owner_ledger_first_idempotency_and_maps_one_event
-application_facade_exposes_no_transport_or_authority_issuer_surface
+disable_absent_and_foreign_installations_are_not_found
+disable_non_enabled_installation_is_lifecycle_denied
+disable_stale_revision_on_installed_is_conflict
+in_memory_catalog_repository_rejects_invalid_construction
+owned_installation_read_is_owner_scoped_and_excludes_sensitive_carriers
+package_detail_is_exact_without_latest_or_fallback
+package_update_absent_maps_to_not_found
 ```
 
-They use production-public API only, assert exact typed variants and admit no test-only public constructor. A1 still proves no process restart, database transaction, migration, event delivery, real API route or production caller.
+The exact internal `#[cfg(test)]` functions in `application.rs` are:
+
+```text
+current_grants_empty_page_observes_exact_revision
+current_grants_expose_no_approval_or_history_carriers
+current_grants_hide_foreign_or_absent_authority
+current_grants_require_exact_installation_revision_and_canonical_order
+disable_preserves_owner_ledger_first_idempotency_and_maps_one_event
+disable_stale_new_command_and_conflicting_reuse_are_conflict
+installation_and_receipt_debug_surfaces_exclude_sensitive_carriers
+owned_installation_absence_and_mismatch_are_not_found
+package_update_absent_and_foreign_are_not_found
+package_update_debug_and_views_exclude_private_evidence
+package_update_read_is_exact_owner_scoped_and_safe
+```
+
+The split is precise: successful `Enabled→Disabled`/idempotency and populated grant/update safe-view proofs require owner-private `pub(in crate::market)` fixture authority and therefore remain internal; external tests use production-public API only and prove public browse/read/denial/empty/redaction surfaces. No public authority constructor, Cargo feature or fake restore API is added. Neither split proves production caller, durability, restart/crash recovery, database transaction, API/UI/CLI/wire delivery or acceptance pass.
 
 ### M20-B7-B — accepted composition-evidence contract; implementation planned
 
@@ -1190,10 +1213,10 @@ B7-B adds no production M40 crate or application code. It is a composition-root 
 This contract does not own:
 
 - anonymous browse/detail delivery through M10/M80 application/query adapters remains planned (`MARKET-001`); the `M20-B1` (historical `B1-1`) anonymous metadata domain read model is implemented but is not delivery evidence;
-- durable installation/grant/enable/disable/update mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); accepted A1 covers only internal safe reads plus Disable with zero production call sites, and accepted B7-B is test-only; neither creates durable state, production issuer authority, artifact switching or acceptance evidence;
+- durable installation/grant/enable/disable/update mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); implemented A1 covers only internal safe reads plus Disable with zero production call sites, and accepted B7-B is test-only; neither creates durable state, production issuer authority, artifact switching or acceptance evidence;
 - a production database/repository transaction, durable update repository, crash-recovery proof or TOCTOU closure (planned);
 - provider, network, MCP, daemon HTTP/SSE or UI adapters;
 - external tool execution, durable journal or crash recovery;
 - M30 `EffectIntent`, M40 executor dispatch, or M51 process isolation.
 
-Current repository status: the pure P0a resolver/recheck is implemented and adopted (`MARKET-005`/`MARKET-006`); B1–B4 provide bounded catalog/capability/installation/grant evidence; bounded B5 adds carrier-by-carrier semantic authority reads; bounded B6 adds pure update/rollback aggregate and atomic in-memory semantic-repository evidence. The exact A1 and B7-B contracts above are accepted, but `application.rs`, `market_application.rs` and `tool_effect_composition.rs` do not exist and no production caller is admitted. No production database, durable grant/update/rollback repository, crash recovery, artifact switch, production grant/enable/update issuer, effect-intent coupling, current-call/in-flight composition implementation or M10/M80 browse/API/UI delivery exists yet. M20 remains `partial-evidence`; `MARKET-001`–`MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020` and `FP-007` remain `planned`, and no current first-party manifest is made runnable by contract acceptance.
+Current repository status: the pure P0a resolver/recheck is implemented and adopted (`MARKET-005`/`MARKET-006`); B1–B4 provide bounded catalog/capability/installation/grant evidence; bounded B5 adds carrier-by-carrier semantic authority reads; bounded B6 adds pure update/rollback aggregate and atomic in-memory semantic-repository evidence; A1 is implemented as semantic in-memory evidence in `application.rs` with `market_application.rs` tests and zero production callers. The exact B7-B contract above is accepted, but `tool_effect_composition.rs` does not exist and no production caller is admitted. No production database, durable grant/update/rollback repository, crash recovery, artifact switch, production grant/enable/update issuer, effect-intent coupling, current-call/in-flight composition implementation or M10/M80 browse/API/UI delivery exists yet. M20 remains `partial-evidence`; `MARKET-001`–`MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020` and `FP-007` remain `planned`, and no current first-party manifest is made runnable by A1 implementation or B7-B contract acceptance.

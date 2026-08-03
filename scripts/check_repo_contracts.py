@@ -2411,6 +2411,200 @@ PLATFORM_GRANT_SOURCE = "crates/platform-core/src/market/grant.rs"
 PLATFORM_GRANT_TEST = "crates/platform-core/tests/market_grant_lifecycle.rs"
 PLATFORM_UPDATE_SOURCE = "crates/platform-core/src/market/update.rs"
 PLATFORM_UPDATE_TEST = "crates/platform-core/tests/market_package_update.rs"
+PLATFORM_APPLICATION_SOURCE = "crates/platform-core/src/market/application.rs"
+PLATFORM_APPLICATION_TEST = "crates/platform-core/tests/market_application.rs"
+PLATFORM_APPLICATION_ADMITTED_PUBLIC_DECLARATIONS = (
+    "pub const fn capability_definition",
+    "pub const fn capability_id",
+    "pub const fn capability_manifest_digest",
+    "pub const fn catalog_revision",
+    "pub const fn catalog_revision",
+    "pub const fn change_class",
+    "pub const fn command_id",
+    "pub const fn command_id",
+    "pub const fn component_id",
+    "pub const fn component_set_digest",
+    "pub const fn configuration_digest",
+    "pub const fn configuration_revision",
+    "pub const fn confirmation_policy",
+    "pub const fn digest",
+    "pub const fn expected_installation_revision",
+    "pub const fn expected_revision",
+    "pub const fn get",
+    "pub const fn implementation_status",
+    "pub const fn install_policy",
+    "pub const fn installation_id",
+    "pub const fn installation_id",
+    "pub const fn installation_id",
+    "pub const fn installation_id",
+    "pub const fn installation_id",
+    "pub const fn installation_id",
+    "pub const fn installation_id",
+    "pub const fn installation_id",
+    "pub const fn installation_revision",
+    "pub const fn kind",
+    "pub const fn limit",
+    "pub const fn next_offset",
+    "pub const fn observed_installation_revision",
+    "pub const fn offset",
+    "pub const fn package_digest",
+    "pub const fn package_digest",
+    "pub const fn package_id",
+    "pub const fn package_id",
+    "pub const fn package_pin",
+    "pub const fn package_version",
+    "pub const fn package_version",
+    "pub const fn post_revision",
+    "pub const fn post_state",
+    "pub const fn revision",
+    "pub const fn revision",
+    "pub const fn rollback_pin",
+    "pub const fn scope",
+    "pub const fn snapshot_id",
+    "pub const fn state",
+    "pub const fn state",
+    "pub const fn state",
+    "pub const fn target_pin",
+    "pub const fn tenant_id",
+    "pub const fn tenant_id",
+    "pub const fn tenant_id",
+    "pub const fn tenant_id",
+    "pub const fn tier",
+    "pub const fn update_id",
+    "pub const fn update_id",
+    "pub const fn user_id",
+    "pub const fn user_id",
+    "pub const fn user_id",
+    "pub const fn user_id",
+    "pub const fn version",
+    "pub const fn version",
+    "pub enum MarketApplicationConstructionError",
+    "pub enum MarketApplicationError",
+    "pub enum MarketApplicationRepositoryError",
+    "pub fn applied_installation_revision",
+    "pub fn browse_catalog",
+    "pub fn capabilities",
+    "pub fn capability_manifest_digest",
+    "pub fn catalog_digest",
+    "pub fn catalog_digest",
+    "pub fn catalog_revision",
+    "pub fn catalog_revision",
+    "pub fn catalog_revision",
+    "pub fn catalog_revision",
+    "pub fn component_declaration_set_digest",
+    "pub fn components",
+    "pub fn components",
+    "pub fn current_grants",
+    "pub fn description",
+    "pub fn disable_installation",
+    "pub fn display_name",
+    "pub fn grants",
+    "pub fn installation",
+    "pub fn new",
+    "pub fn new",
+    "pub fn new",
+    "pub fn new",
+    "pub fn new",
+    "pub fn new",
+    "pub fn new",
+    "pub fn new",
+    "pub fn package_detail",
+    "pub fn package_digest",
+    "pub fn package_id",
+    "pub fn package_id",
+    "pub fn package_update",
+    "pub fn package_version",
+    "pub fn package_version",
+    "pub fn packages",
+    "pub fn publisher",
+    "pub fn source_policy_digest",
+    "pub fn summary",
+    "pub fn try_new",
+    "pub struct CatalogBrowseQuery",
+    "pub struct CatalogPackageQuery",
+    "pub struct CatalogPageLimit",
+    "pub struct DisableInstallationReceiptView",
+    "pub struct DisableInstallationRequest",
+    "pub struct InMemoryCatalogReadRepository",
+    "pub struct MarketApplicationService",
+    "pub struct MarketCatalogPage",
+    "pub struct MarketGrantPage",
+    "pub struct MarketGrantView",
+    "pub struct MarketInstallationView",
+    "pub struct MarketInstalledComponentView",
+    "pub struct MarketPackageDetail",
+    "pub struct MarketPackagePinView",
+    "pub struct MarketPackageSummary",
+    "pub struct MarketUpdateView",
+    "pub struct OwnedInstallationGrantQuery",
+    "pub struct OwnedInstallationQuery",
+    "pub struct OwnedUpdateQuery",
+    "pub trait CatalogReadRepository",
+)
+PLATFORM_APPLICATION_TOP_LEVEL_PUBLIC_ITEMS = (
+    "MarketApplicationConstructionError",
+    "MarketApplicationRepositoryError",
+    "MarketApplicationError",
+    "CatalogPageLimit",
+    "CatalogBrowseQuery",
+    "CatalogPackageQuery",
+    "OwnedInstallationQuery",
+    "OwnedInstallationGrantQuery",
+    "OwnedUpdateQuery",
+    "DisableInstallationRequest",
+    "MarketPackageSummary",
+    "MarketPackageDetail",
+    "MarketCatalogPage",
+    "MarketInstalledComponentView",
+    "MarketPackagePinView",
+    "MarketInstallationView",
+    "MarketGrantView",
+    "MarketGrantPage",
+    "MarketUpdateView",
+    "DisableInstallationReceiptView",
+    "CatalogReadRepository",
+    "InMemoryCatalogReadRepository",
+    "MarketApplicationService",
+)
+PLATFORM_APPLICATION_SERVICE_METHODS = (
+    "new",
+    "browse_catalog",
+    "package_detail",
+    "installation",
+    "current_grants",
+    "package_update",
+    "disable_installation",
+)
+PLATFORM_APPLICATION_UNIT_TEST_FUNCTIONS = (
+    "owned_installation_absence_and_mismatch_are_not_found",
+    "disable_preserves_owner_ledger_first_idempotency_and_maps_one_event",
+    "disable_stale_new_command_and_conflicting_reuse_are_conflict",
+    "installation_and_receipt_debug_surfaces_exclude_sensitive_carriers",
+    "current_grants_require_exact_installation_revision_and_canonical_order",
+    "current_grants_hide_foreign_or_absent_authority",
+    "current_grants_expose_no_approval_or_history_carriers",
+    "current_grants_empty_page_observes_exact_revision",
+    "package_update_read_is_exact_owner_scoped_and_safe",
+    "package_update_absent_and_foreign_are_not_found",
+    "package_update_debug_and_views_exclude_private_evidence",
+)
+PLATFORM_APPLICATION_TEST_FUNCTIONS = (
+    "anonymous_catalog_paging_is_revision_bound_bounded_and_exact",
+    "package_detail_is_exact_without_latest_or_fallback",
+    "in_memory_catalog_repository_rejects_invalid_construction",
+    "catalog_read_repository_port_returns_exact_and_current_arcs",
+    "owned_installation_read_is_owner_scoped_and_excludes_sensitive_carriers",
+    "current_grants_require_exact_installation_revision_and_canonical_order",
+    "current_grants_hide_foreign_or_absent_authority",
+    "current_grants_expose_no_approval_or_history_carriers",
+    "package_update_absent_maps_to_not_found",
+    "disable_absent_and_foreign_installations_are_not_found",
+    "disable_non_enabled_installation_is_lifecycle_denied",
+    "disable_stale_revision_on_installed_is_conflict",
+    "application_service_debug_is_authority_redacted",
+)
+PLATFORM_APPLICATION_ADMITTED_UNCLASSIFIED_PUBLIC: tuple[str, ...] = ()
+PLATFORM_APPLICATION_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS: tuple[str, ...] = ()
 PLATFORM_IDENTITY_KINDS = (
     "TenantId",
     "UserId",
@@ -2677,6 +2871,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/invocation.rs',
  'src/lib.rs',
  'src/market.rs',
+ 'src/market/application.rs',
  'src/market/authority.rs',
  'src/market/capability.rs',
  'src/market/grant.rs',
@@ -2684,6 +2879,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/market/update.rs',
  'src/session.rs',
  'tests/invocation_resolution.rs',
+ 'tests/market_application.rs',
  'tests/market_authority_assembly.rs',
  'tests/market_capability_registry.rs',
  'tests/market_grant_lifecycle.rs',
@@ -2699,6 +2895,7 @@ PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId
 PLATFORM_GRANT_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 PLATFORM_UPDATE_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
+PLATFORM_APPLICATION_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT = (
     "use crate::identity::{SessionId, TenantId, UserId};"
 )
@@ -2716,6 +2913,7 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
     (PLATFORM_GRANT_SOURCE, PLATFORM_GRANT_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_UPDATE_SOURCE, PLATFORM_UPDATE_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_AUTHORITY_SOURCE, PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT),
+    (PLATFORM_APPLICATION_SOURCE, PLATFORM_APPLICATION_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT),
 )
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
@@ -2725,7 +2923,8 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'invocation.rs': (),
  'lib.rs': ('identity', 'invocation', 'market', 'session'),
- 'market.rs': ('authority', 'capability', 'grant', 'installation', 'update'),
+ 'market.rs': ('application', 'authority', 'capability', 'grant', 'installation', 'update'),
+ 'market/application.rs': (),
  'market/authority.rs': (),
  'market/capability.rs': (),
  'market/grant.rs': (),
@@ -2770,7 +2969,8 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
             'pub mod session;',
             '#[cfg(test)] mod tests',
             'use super::*;'),
- 'market.rs': ('pub mod authority;',
+ 'market.rs': ('pub mod application;',
+               'pub mod authority;',
                'pub mod capability;',
                'pub mod grant;',
                'pub mod installation;',
@@ -2783,6 +2983,53 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                'use std::error::Error;',
                'use std::fmt;',
                'type Value = UniqueStringMap;'),
+ 'market/application.rs': ('use crate::identity::{TenantId, UserId};',
+                           'use crate::invocation::{ CapabilityId, CatalogRevision, ComponentId, '
+                           'ComponentKind, ComponentVersion, ConfirmationPolicy, GrantSnapshotId, '
+                           'GrantState, GrantVersion, InstallationId, InstallationRevision, '
+                           'PackageId, PackageVersion, Sha256Digest, };',
+                           'use crate::market::capability::CapabilityDefinition;',
+                           'use crate::market::grant::{GrantRepository, GrantRepositoryError, '
+                           'GrantScope};',
+                           'use crate::market::installation::{ ConfigurationRevision, '
+                           'InstallationCommand, InstallationCommandId, '
+                           'InstallationCommandOutcome, InstallationDecisionError, '
+                           'InstallationRepository, InstallationRepositoryError, '
+                           'InstallationSnapshot, InstalledComponentPin, ManagedInstallationState, };',
+                           'use crate::market::update::{ PackageUpdateId, PackageUpdateRepository, '
+                           'PackageUpdateSnapshot, UpdateChangeClass, UpdateRepositoryError, '
+                           'UpdateRevision, UpdateState, };',
+                           'use crate::market::{ CatalogReadModel, ComponentDeclaration, '
+                           'ImplementationStatus, InstallPolicy, PackageTier, '
+                           'ValidatedPackageManifest, };',
+                           'use std::collections::BTreeMap;',
+                           'use std::fmt;',
+                           'use std::sync::Arc;',
+                           '#[cfg(test)] #[allow(clippy::expect_used, clippy::panic, '
+                           'clippy::unwrap_used)] mod tests',
+                           'use super::*;',
+                           'use crate::invocation::{ CapabilityClass, CapabilityId, '
+                           'CatalogComponentRevision, CatalogPackageRevision, ComponentId, '
+                           'ComponentKind, ComponentVersion, ExecutionIdentity, '
+                           'InvocationPolicySnapshot, PolicyRevision, PolicySnapshotId, '
+                           'SourcePolicyId, };',
+                           'use crate::market::capability::{CapabilityRegistry, '
+                           'load_capability_registry};',
+                           'use crate::market::grant::{ GrantAdmissionEvidence, GrantApprovalId, '
+                           'GrantCommand, GrantCommandId, GrantRepository, GrantScope, '
+                           'InMemoryGrantRepository, };',
+                           'use crate::market::installation::{ ConfigurationKey, '
+                           'ConfigurationValue, EnablePreconditionEvidence, '
+                           'InMemoryInstallationRepository, InstallationCommand, '
+                           'InstallationCommandId, InstallationConfiguration, '
+                           'InstallationPackagePin, InstallationRepository, NonSecretText, '
+                           'SecretRef, SecretRefId, };',
+                           'use crate::market::load_package_manifest;',
+                           'use crate::market::update::{ InMemoryPackageUpdateRepository, '
+                           'UpdateCommand, UpdateCommandId, UpdateDecisionContext, decide as '
+                           'update_decide, evolve as update_evolve, };',
+                           'use std::collections::{BTreeMap, BTreeSet};',
+                           'use std::format;'),
  'market/authority.rs': ('use crate::identity::{TenantId, UserId};',
                          'use crate::invocation::{ AuthorizedInvocation, CapabilityGrantSnapshot, '
                          'CapabilityId, CatalogPackageRevision, CurrentDenyState, GrantSnapshotId, '
@@ -2908,6 +3155,7 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
  'invocation.rs': ('authority_id',),
  'lib.rs': (),
  'market.rs': (),
+ 'market/application.rs': (),
  'market/authority.rs': ('parsed',),
  'market/capability.rs': (),
  'market/grant.rs': ('category_error', 'parsed'),
@@ -2922,6 +3170,13 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_
  'invocation.rs': ('authority_id', 'format', 'write'),
  'lib.rs': ('assert', 'assert_eq', 'include_str', 'panic'),
  'market.rs': ('matches', 'write'),
+ 'market/application.rs': ('assert',
+                           'assert_eq',
+                           'format',
+                           'include_bytes',
+                           'panic',
+                           'unreachable',
+                           'vec'),
  'market/authority.rs': ('assert', 'assert_eq', 'format', 'panic', 'parsed', 'vec', 'write'),
  'market/capability.rs': ('assert', 'assert_eq', 'matches'),
  'market/grant.rs': ('assert',
@@ -3024,7 +3279,48 @@ PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS = (('CapabilityId,', 8),
 # A blanket `impl<T> Extension for T` names no kind and covers all six, so the sibling `impl`
 # surface is an allowlist as well. These are M20 items; a genuine M20 addition is drift that
 # must be admitted here explicitly rather than arriving unseen.
-PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevision',
+PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'application.rs': ('impl CatalogBrowseQuery',
+                  'impl CatalogPackageQuery',
+                  'impl CatalogPageLimit',
+                  'impl CatalogReadRepository for InMemoryCatalogReadRepository',
+                  'impl CatalogReadRepository for NullCatalogRepository',
+                  'impl DisableInstallationReceiptView',
+                  'impl DisableInstallationRequest',
+                  'impl InMemoryCatalogReadRepository',
+                  'impl MarketApplicationService<C, I, G, U> where C: CatalogReadRepository, I: InstallationRepository, G: GrantRepository, U: PackageUpdateRepository,',
+                  'impl MarketCatalogPage',
+                  'impl MarketGrantPage',
+                  'impl MarketGrantView',
+                  'impl MarketInstallationView',
+                  'impl MarketInstalledComponentView',
+                  'impl MarketPackageDetail',
+                  'impl MarketPackagePinView',
+                  'impl MarketPackageSummary',
+                  'impl MarketUpdateView',
+                  'impl OwnedInstallationGrantQuery',
+                  'impl OwnedInstallationQuery',
+                  'impl OwnedUpdateQuery',
+                  'impl PackageUpdateRepository for FakeUpdateRepository',
+                  'impl fmt::Debug for CatalogBrowseQuery',
+                  'impl fmt::Debug for CatalogPackageQuery',
+                  'impl fmt::Debug for CatalogPageLimit',
+                  'impl fmt::Debug for DisableInstallationReceiptView',
+                  'impl fmt::Debug for DisableInstallationRequest',
+                  'impl fmt::Debug for InMemoryCatalogReadRepository',
+                  'impl fmt::Debug for MarketApplicationService<C, I, G, U>',
+                  'impl fmt::Debug for MarketCatalogPage',
+                  'impl fmt::Debug for MarketGrantPage',
+                  'impl fmt::Debug for MarketGrantView',
+                  'impl fmt::Debug for MarketInstallationView',
+                  'impl fmt::Debug for MarketInstalledComponentView',
+                  'impl fmt::Debug for MarketPackageDetail',
+                  'impl fmt::Debug for MarketPackagePinView',
+                  'impl fmt::Debug for MarketPackageSummary',
+                  'impl fmt::Debug for MarketUpdateView',
+                  'impl fmt::Debug for OwnedInstallationGrantQuery',
+                  'impl fmt::Debug for OwnedInstallationQuery',
+                  'impl fmt::Debug for OwnedUpdateQuery'),
+ 'authority.rs': ('impl AuthorityReadRevision',
                   'impl CurrentGrantKey',
                   'impl Error for AuthorityRepositoryError',
                   'impl Error for InvocationRecheckError',
@@ -3366,6 +3662,8 @@ PLATFORM_INVOCATION_PREFIX_TEST_BODY_SHA256 = "e479ca2296589b23729e4ad75d319514a
 PLATFORM_AUTHORITY_STATUS_MARKERS = {
     "docs/contracts/market-lifecycle.md": (
         "bounded `M20-B6` update/rollback domain plus semantic fake evidence are implemented",
+        "the exact `M20-B7-A1` application façade is implemented as semantic in-memory evidence with zero production callers",
+        "the `M20-B7-B` test-only composition contract remains accepted but unimplemented",
         "planned `MARKET-001`, `MARKET-002`, `MARKET-003`, `MARKET-004`, `MARKET-007`, `PKG-019`, `PKG-020`, `FP-007`",
         "not a production catalog/publication authority, durable M90 transaction, grant/enable issuer or effect-intent/I/O boundary",
     ),
@@ -3384,8 +3682,8 @@ PLATFORM_AUTHORITY_STATUS_MARKERS = {
     "docs/plan/modules/00-module-map.md": ("bounded transaction-current authority assembly",),
     "docs/plan/modules/30-market-package-lifecycle.md": (
         "bounded `M20-B5` semantic authority-read transaction/assembly",
-        "exact `M20-B7-A1` application-façade and `M20-B7-B` test-only composition contracts are accepted but unimplemented",
-        "Contract acceptance creates no source, production caller, effect intent, executor, durable state or acceptance promotion.",
+        "the exact `M20-B7-A1` application façade is implemented as semantic in-memory evidence with zero production callers, while the `M20-B7-B` test-only composition contract remains accepted but unimplemented",
+        "Neither A1 implementation nor B7-B contract acceptance creates a production caller, effect intent, executor, durable state or acceptance promotion",
     ),
     "docs/tasks/01-execution-roadmap.md": (
         "`M20-B5 invocation-authority`: bounded implementation is complete",
@@ -4241,6 +4539,7 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive'
  'invocation.rs': ('derive', 'must_use'),
  'lib.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'market.rs': ('derive', 'must_use', 'serde'),
+ 'market/application.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'market/authority.rs': ('cfg', 'derive', 'must_use', 'test'),
  'market/capability.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'market/grant.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
@@ -4992,19 +5291,9 @@ def rust_macro_invocation_arguments(code: str) -> tuple[list[tuple[str, str]], l
     return invocations, unterminated
 
 
-def rust_attribute_block(code: str, name: str) -> list[str] | None:
-    """Returns the attributes attached to `fn <name>`, parsed bracket-balanced.
-
-    Line-based collection cannot see a multiline attribute: the closing `)]` of a wrapped
-    `#[cfg_attr(...)]` does not start with `#[`, so a reverse line scan stops early and the
-    attribute body is never inspected. This walks backwards over balanced `#[ ... ]` groups
-    instead, so multiline `cfg`, `cfg_attr`, `ignore` and `should_panic` are all visible.
-    """
-    signature = re.search(rf"^\s*fn\s+{re.escape(name)}\s*\(", code, flags=re.MULTILINE)
-    if signature is None:
-        return None
+def _rust_attribute_block_before(code: str, cursor: int) -> list[str]:
+    """Returns the balanced outer attributes immediately preceding one Rust item."""
     attributes: list[str] = []
-    cursor = signature.start()
     while True:
         head = code[:cursor].rstrip()
         if not head.endswith("]"):
@@ -5030,6 +5319,32 @@ def rust_attribute_block(code: str, name: str) -> list[str] | None:
         cursor = opener
     attributes.reverse()
     return attributes
+
+
+def rust_attribute_block(code: str, name: str) -> list[str] | None:
+    """Returns the attributes attached to `fn <name>`, parsed bracket-balanced.
+
+    Line-based collection cannot see a multiline attribute: the closing `)]` of a wrapped
+    `#[cfg_attr(...)]` does not start with `#[`, so a reverse line scan stops early and the
+    attribute body is never inspected. This walks backwards over balanced `#[ ... ]` groups
+    instead, so multiline `cfg`, `cfg_attr`, `ignore` and `should_panic` are all visible.
+    """
+    signature = re.search(rf"^\s*fn\s+{re.escape(name)}\s*\(", code, flags=re.MULTILINE)
+    if signature is None:
+        return None
+    return _rust_attribute_block_before(code, signature.start())
+
+
+def rust_registered_test_functions(code: str) -> tuple[str, ...]:
+    """Returns every function carrying `#[test]`, independent of adjacent attributes/layout."""
+    registered: list[str] = []
+    for signature in re.finditer(
+        r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", code, flags=re.ASCII
+    ):
+        attributes = _rust_attribute_block_before(code, signature.start())
+        if any(re.fullmatch(r"#\s*\[\s*test\s*\]", attribute) for attribute in attributes):
+            registered.append(signature.group(1))
+    return tuple(registered)
 
 
 def _rust_function_body(code: str, name: str) -> str | None:
@@ -8987,6 +9302,162 @@ def check_platform_session_implementation(issues: list[str]) -> None:
         )
 
 
+def check_platform_application_implementation(issues: list[str]) -> None:
+    """Pins the M20-B7-A1 public facade and its exact executable test envelope."""
+    source_path = ROOT / PLATFORM_APPLICATION_SOURCE
+    if not source_path.is_file():
+        fail(f"market application carrier missing: {PLATFORM_APPLICATION_SOURCE}", issues)
+        return
+
+    governed = strip_rust_comments_and_literals(source_path.read_text(encoding="utf-8"))
+    public_declarations, unclassified_public = rust_public_declarations(governed)
+    if tuple(public_declarations) != PLATFORM_APPLICATION_ADMITTED_PUBLIC_DECLARATIONS:
+        fail(
+            "market application public declaration surface drifted: "
+            f"expected={PLATFORM_APPLICATION_ADMITTED_PUBLIC_DECLARATIONS} "
+            f"actual={tuple(public_declarations)}",
+            issues,
+        )
+    if tuple(unclassified_public) != PLATFORM_APPLICATION_ADMITTED_UNCLASSIFIED_PUBLIC:
+        fail(
+            "market application has an unclassified or restricted public declaration: "
+            f"expected={PLATFORM_APPLICATION_ADMITTED_UNCLASSIFIED_PUBLIC} "
+            f"actual={tuple(unclassified_public)}",
+            issues,
+        )
+    restricted_public = rust_market_restricted_public_functions(governed)
+    if restricted_public != PLATFORM_APPLICATION_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS:
+        fail(
+            "market application restricted public function surface drifted: "
+            f"expected={PLATFORM_APPLICATION_ADMITTED_RESTRICTED_PUBLIC_FUNCTIONS} "
+            f"actual={restricted_public}",
+            issues,
+        )
+
+    top_level_items = tuple(
+        re.findall(
+            r"(?m)^pub\s+(?:struct|enum|trait)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            governed,
+        )
+    )
+    if top_level_items != PLATFORM_APPLICATION_TOP_LEVEL_PUBLIC_ITEMS:
+        fail(
+            "market application top-level public item inventory drifted: "
+            f"expected={PLATFORM_APPLICATION_TOP_LEVEL_PUBLIC_ITEMS} actual={top_level_items}",
+            issues,
+        )
+
+    service_header = "impl<C, I, G, U> MarketApplicationService<C, I, G, U>"
+    if governed.count(service_header) != 1:
+        fail(
+            "market application service implementation header drifted: "
+            f"expected one exact header actual={governed.count(service_header)}",
+            issues,
+        )
+    else:
+        service_start = governed.index(service_header)
+        service_brace = governed.find("{", service_start + len(service_header))
+        service_block = _rust_balanced_block(governed, service_brace) if service_brace >= 0 else None
+        if service_block is None:
+            fail("market application service implementation block is missing or unterminated", issues)
+        else:
+            service_methods = tuple(
+                re.findall(
+                    r"\bpub\s+(?:(?:const|async|unsafe)\s+)*fn\s+"
+                    r"([A-Za-z_][A-Za-z0-9_]*)",
+                    service_block,
+                )
+            )
+            if service_methods != PLATFORM_APPLICATION_SERVICE_METHODS:
+                fail(
+                    "market application service public method inventory drifted: "
+                    f"expected={PLATFORM_APPLICATION_SERVICE_METHODS} actual={service_methods}",
+                    issues,
+                )
+
+    internal_tests = rust_registered_test_functions(governed)
+    if internal_tests != PLATFORM_APPLICATION_UNIT_TEST_FUNCTIONS:
+        fail(
+            "market application internal test inventory drifted: "
+            f"expected={PLATFORM_APPLICATION_UNIT_TEST_FUNCTIONS} actual={internal_tests}",
+            issues,
+        )
+
+    registered_internal_tests = 0
+    for function in PLATFORM_APPLICATION_UNIT_TEST_FUNCTIONS:
+        attributes = rust_attribute_block(governed, function)
+        if attributes != list(PLATFORM_IDENTITY_REQUIRED_TEST_ATTRIBUTES):
+            fail(
+                f"market application internal test {function} attribute envelope drifted: "
+                f"expected={list(PLATFORM_IDENTITY_REQUIRED_TEST_ATTRIBUTES)} actual={attributes}",
+                issues,
+            )
+        else:
+            registered_internal_tests += 1
+    if registered_internal_tests != len(PLATFORM_APPLICATION_UNIT_TEST_FUNCTIONS):
+        fail(
+            "market application internal test registration drift: expected "
+            f"{len(PLATFORM_APPLICATION_UNIT_TEST_FUNCTIONS)} executable tests "
+            f"actual={registered_internal_tests}",
+            issues,
+        )
+
+    execution_attributes, unterminated_attributes = rust_attributes(governed)
+    if unterminated_attributes:
+        fail(
+            f"market application has unterminated attributes: {unterminated_attributes}",
+            issues,
+        )
+    execution_envelope = tuple(
+        (name, body)
+        for _inner, name, body in execution_attributes
+        if name in {"cfg", "cfg_attr", "ignore", "test"}
+    )
+    expected_execution_envelope = (("cfg", "cfg(test)"),) + (
+        ("test", "test"),
+    ) * len(PLATFORM_APPLICATION_UNIT_TEST_FUNCTIONS)
+    if execution_envelope != expected_execution_envelope:
+        fail(
+            "market application internal test execution envelope drifted: "
+            f"expected={expected_execution_envelope} actual={execution_envelope}",
+            issues,
+        )
+
+    external_path = ROOT / PLATFORM_APPLICATION_TEST
+    if not external_path.is_file():
+        fail(f"market application external test carrier missing: {PLATFORM_APPLICATION_TEST}", issues)
+    else:
+        external_governed = strip_rust_comments_and_literals(
+            external_path.read_text(encoding="utf-8")
+        )
+        external_tests = rust_registered_test_functions(external_governed)
+        if external_tests != PLATFORM_APPLICATION_TEST_FUNCTIONS:
+            fail(
+                "market application external test inventory drifted: "
+                f"expected={PLATFORM_APPLICATION_TEST_FUNCTIONS} actual={external_tests}",
+                issues,
+            )
+
+    _check_bound_rust_test_file(
+        PLATFORM_APPLICATION_TEST,
+        PLATFORM_APPLICATION_TEST_FUNCTIONS,
+        "market application external",
+        issues,
+    )
+
+    checker_path = ROOT / "scripts/check_repo_contracts.py"
+    main_body = checker_path.read_text(encoding="utf-8").split("\ndef main() -> int:", 1)
+    required_call = "check_platform_application_implementation(issues)"
+    invoked = len(main_body) == 2 and any(
+        line.strip() == required_call for line in main_body[1].splitlines()
+    )
+    if not invoked:
+        fail(
+            "check_platform_application_implementation must be invoked from repository main()",
+            issues,
+        )
+
+
 def main() -> int:
     issues: list[str] = []
     check_key_files_present_and_nonempty(issues)
@@ -9002,6 +9473,7 @@ def main() -> int:
     check_acceptance_matrix(issues)
     check_acceptance_catalog(issues)
     check_rust_doctest_gate(issues)
+    check_platform_application_implementation(issues)
     check_platform_identity_grammar_authority(issues)
     check_platform_authority_implementation(issues)
     check_platform_identity_implementation(issues)

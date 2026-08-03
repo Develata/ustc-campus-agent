@@ -4,18 +4,18 @@ This registry names accepted or draft application, API and tool surfaces before 
 
 The implemented single-node Agent state/event contract is defined in [`agent-runtime.md`](agent-runtime.md). The planned finite user-task lifecycle is defined in [`agent-harness.md`](agent-harness.md). The Agent–Plugin seam is [`agent-plugin-boundary/v0`](agent-plugin-boundary.md). The future typed multi-client boundary is [`client-shell/v2`](client-shell.md). None makes the application endpoints below operational.
 
-## M20 application operations — A1 accepted contract, implementation planned
+## M20 application operations — A1 implemented as semantic in-memory evidence with zero production callers; M10 mapping/wire/client admission and production caller remain planned
 
 [`market-lifecycle/v0`](market-lifecycle.md) owns the complete Rust item/signature/privacy/error contract. This registry binds each application operation to that surface:
 
 | Operation | Request | Result | Status |
 |---|---|---|---|
-| `BrowseCatalog` | `CatalogBrowseQuery` | `MarketCatalogPage` | A1 accepted contract; implementation planned |
-| `ReadPackageDetail` | `CatalogPackageQuery` | `MarketPackageDetail` | A1 accepted contract; implementation planned |
-| `ReadOwnedInstallation` | `OwnedInstallationQuery` | `MarketInstallationView` | A1 accepted contract; implementation planned |
-| `ReadOwnedCurrentGrants` | `OwnedInstallationGrantQuery` | `MarketGrantPage` | A1 accepted contract; implementation planned |
-| `ReadOwnedPackageUpdate` | `OwnedUpdateQuery` | `MarketUpdateView` | A1 accepted contract; implementation planned |
-| `DisableOwnedInstallation` | `DisableInstallationRequest` | `DisableInstallationReceiptView` | A1 accepted contract; implementation planned |
+| `BrowseCatalog` | `CatalogBrowseQuery` | `MarketCatalogPage` | A1 implemented as semantic in-memory evidence with zero production callers; M10 mapping/wire/client admission and production caller remain planned |
+| `ReadPackageDetail` | `CatalogPackageQuery` | `MarketPackageDetail` | A1 implemented as semantic in-memory evidence with zero production callers; M10 mapping/wire/client admission and production caller remain planned |
+| `ReadOwnedInstallation` | `OwnedInstallationQuery` | `MarketInstallationView` | A1 implemented as semantic in-memory evidence with zero production callers; M10 mapping/wire/client admission and production caller remain planned |
+| `ReadOwnedCurrentGrants` | `OwnedInstallationGrantQuery` | `MarketGrantPage` | A1 implemented as semantic in-memory evidence with zero production callers; M10 mapping/wire/client admission and production caller remain planned |
+| `ReadOwnedPackageUpdate` | `OwnedUpdateQuery` | `MarketUpdateView` | A1 implemented as semantic in-memory evidence with zero production callers; M10 mapping/wire/client admission and production caller remain planned |
+| `DisableOwnedInstallation` | `DisableInstallationRequest` | `DisableInstallationReceiptView` | A1 implemented as semantic in-memory evidence with zero production callers; M10 mapping/wire/client admission and production caller remain planned |
 | `ResolveToolProjection` | existing M20 projection request | existing `ToolProjectionSnapshot`/`AgentToolsetView` mapping | bounded B5/P0a implementation; no A1 wrapper |
 | `RecheckInvocationAuthority` | existing frozen projection + proposed call | existing `AuthorizedInvocation` or typed denial | bounded B5/P0a implementation; no A1 wrapper |
 
