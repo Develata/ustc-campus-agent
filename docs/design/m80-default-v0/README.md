@@ -130,13 +130,14 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 | Q10 | Grant diff 六分组 presentation vocabulary 与 domain 分类（`GrantChangeClass`/`CapabilityPolicyChange`）的 wire 映射与逐项 reason vocabulary（第二轮新增，`10` 卷 §1/§4） | M20 | 逐项 diff entries + 分类 + reason server-projected；UI 不映射回 domain 判定 |
 | Q11 | 匿名/受限只读 session 是否 admitted（第二轮新增，`09` 卷 §2.4） | M00/M10 | 决定 onboarding「稍后登录」是否存在；server 不投影则按钮不出现 |
 
-## §6 导入与 checker 集成状态（2026-08-03 round-2 repair 更新）
+## §6 导入与 checker 集成状态（2026-08-03 round-3 repair 更新）
 
 `TRACKED FACT`：`scripts/check_repo_contracts.py` 的 `EXPECTED_DOC_DIRECTORIES` 对 `docs/` 做 exact topology 检查。当前实际状态：
 
 - governance slice 已随 Draft PR #34 commit 1 入库：`docs/AGENTS.md`、`docs/README.md`、`docs/coverage-matrix.md` 各加 design 条目，新建 `docs/design/AGENTS.md`（subordinate presentation role、`Proposal/Reviewed/Superseded`、source binding、authority deferral、external asset/prototype rule）与 `docs/design/README.md`（packet 索引）。
 - round-1 review 后 checker 集成已补齐（同 PR repair commit）：`design` 已加入 `EXPECTED_DOC_DIRECTORIES`；`docs/design/AGENTS.md` 与 `docs/design/README.md` 已登记为 key/nonempty files；新增 `check_design_packets`——index status 仅允许 `Proposal|Reviewed|Superseded`、packet 目录与索引精确一致、source commit/tree 为合法 hex 且经 `git rev-parse` 与实际 Git 对象比对一致、packet README metadata 与索引一致；mutation tests 覆盖 missing/empty governance files、未知多余 docs 目录 fail-closed、index/status/binding drift。
 - round-2 repair（2026-08-03）：source binding 校验加严为**两步 Git 对象类型检查**（先 `git rev-parse --verify <oid>^{commit}` 确认 commit 对象类型，再 `<oid>^{tree}` 取 tree；tree OID 冒充 commit 一律 fail-closed），新增 stub mutation test 与真实仓库 end-to-end 类型测试；CI `docs-and-contracts` job 的 checkout 改为 `fetch-depth: 0`（保证 source binding 对象在 CI 可解析，`CAMPAIGN_CI_WORKFLOW_SHA256` pin 同步更新）；shallow-clone 复现验证见 §7「仓库检查」行。
+- round-3 repair（2026-08-03，仅 16B/storyboard/README/02 §5.2 计数同步；checker/tests/CI 冻结未动）：prototype 演示状态模型重做——draft ≠ committed（S05/S13 勾选仅写草案，返回/取消不提交；committed 仅由 S06 批准、S10 应用更新（演示）、S13 批准、S12 服务器确认（演示）四个显式转场改变）；update 状态机建模为 pre-apply → grants stale → reapproved（stale 时 S10 权限行如实失效、启用不可用 + reason；reapproved 后 S10/S09 不再显示「有可用更新」）；capability set 同步 `10` 卷 §2.2（v0.5.0 新增「读取课程公告源」、移除「推送变化通知」→ 授权终止 history-only 只读标注，不 invisible 携带；02 §5.2 变化摘要计数同步）；S12 改为 pending → 显式「服务器确认（演示）」两步，确认后 S10/S09 均投影 Enabled；非 ChangeRadar 插件「管理」动作改 disabled + out-of-prototype 标注；「Apply 仅 Disabled」措辞统一为 lifecycle ∈ {InstalledDisabled, Disabled}。
 - 本 packet 当前为仓库内 Draft PR #34 的 review surface：`python3 scripts/check_repo_contracts.py` PASS；保持 Draft，非 merge-ready（review/merge 前置见 PR body）。
 
 ## §7 最终自查（2026-08-02 第二轮：review 补卷后更新）
@@ -154,9 +155,9 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 | Design 越权为 domain authority | 无；`10` 卷明确六分组为 presentation vocabulary 且与 `GrantChangeClass`/`CapabilityPolicyChange` 区分（Q10） |
 | 每卷 `Illustrative / No live backend` | 11/11 文件具备（含 prototype banner） |
 | 对比度实测 | `05` 卷 §6：两方向 light/dark 全 role 计算（第一轮 review 独立复算 56 对全部吻合） |
-| Prototype 验证 | 16 screen/state IDs 定义齐全（13 main S01–S13 + 3 failure-branch S06a/S07a/S11a）；全部 hash 链接目标可解析（16↔16）；JS 语法校验通过；无外部网络引用；a11y：main landmark、可见 focus、hash 导航后 focus 回到 heading、disabled destructive 动作 aria-describedby 说明；target size 声明收窄为动作按钮（`button`/`.btn`）与 checkbox 行 ≥44px，inline 文本链接按 WCAG 2.2 §2.5.8 inline 例外（`07` §6）；授权流诚实性：S05/S13 勾选经 client-side 演示状态实时改变 S06/S08/S10/S11 摘要；S07a unknown/reconcile 演示态；S09/S10 update-available 状态一致（v0.5.0，server-projected，`07` §3）；browser smoke 全 16 屏 × 320/390/768/1200 无横向溢出 |
+| Prototype 验证 | 16 screen/state IDs 定义齐全（13 main S01–S13 + 3 failure-branch S06a/S07a/S11a）；全部 hash 链接目标可解析（16↔16）；JS 语法校验通过；无外部网络引用；a11y：main landmark、可见 focus、hash 导航后 focus 回到 heading、disabled destructive 动作 aria-describedby 说明；target size 声明收窄为动作按钮（`button`/`.btn`）与 checkbox 行 ≥44px，inline 文本链接按 WCAG 2.2 §2.5.8 inline 例外（`07` §6）；授权流诚实性（round-3）：draft ≠ committed——S13 勾选 c 后返回，S10 已授权集合不变；仅 S13 批准后改变；S05 授予 b 后 S13 显式标注 b 移除（授权终止，不进入复核集合）；pre-update S10 不把 c 列为 v0.4 当前未授权项；复核批准后 S10 不再显示「有可用更新 v0.5.0」；S11→S12 pending → 显式「服务器确认（演示）」后 S10/S09 均投影 Enabled；Affairs Navigator / Opportunity Graph「管理」disabled + out-of-prototype，不导航到 S10；S07a unknown/reconcile 演示态；S09/S10 update 状态一致（v0.5.0，server-projected，`07` §3）；browser smoke 全 16 屏 × 320/390/768/1200 无横向溢出 |
 | Stage B dependency | 各 artifact 行与各卷末尾标明 |
-| 仓库检查 | 本地（complete clone，Draft PR #34 round-2 repair head）：`git diff --check` clean；`python3 scripts/check_repo_contracts.py` PASS（含 design topology/index/status/source-binding；source binding 为两步 Git 对象类型校验：先 `<oid>^{commit}` 后 `<oid>^{tree}`）；`python3 -m unittest scripts.tests.test_check_repo_contracts` PASS；shallow-clone 复现验证（depth-1 clone 缺 source 对象 → `check_design_packets` fail-closed，对应 CI checkout `fetch-depth: 0`）。CI（exact head）三绿状态以 PR body 记录为准——本行不预写 CI 结果 |
+| 仓库检查 | 本地（complete clone，Draft PR #34 round-3 repair head）：`git diff --check` clean；`python3 scripts/check_repo_contracts.py` PASS（含 design topology/index/status/source-binding；source binding 为两步 Git 对象类型校验：先 `<oid>^{commit}` 后 `<oid>^{tree}`）；`python3 -m unittest scripts.tests.test_check_repo_contracts` PASS（round-3 未改动 checker/tests，沿用既有测试基线）；shallow-clone 复现验证（depth-1 clone 缺 source 对象 → `check_design_packets` fail-closed，对应 CI checkout `fetch-depth: 0`）。CI（exact head）三绿状态以 PR body 记录为准——本行不预写 CI 结果 |
 
 ### 本轮未实现/未验证
 
