@@ -175,6 +175,7 @@ Package detail [审查安装]
 
 - `TRACKED FACT`：capability 的 scope/risk/auto-grant policy 由 registry 而非 package author 拥有（`docs/plan/04-market-and-plugin-lifecycle.md` §6，:118-123；`crates/platform-core/src/market/capability.rs`）。
 - Expanded/高风险项醒目且**非默认选中**；拒绝单项 → server 决定是否整体不可安装（availability 投影），UI 不自行推导“部分安装”。
+- 未勾选项**不进入授予集合**；后续摘要、安装 receipt 与启用前 review 只反映已批准能力；未授权能力对应功能由 server 投影为不可用（denied/unavailable 如实呈现）。
 
 ### 4.5 Step ④ 最终精确摘要
 
@@ -182,7 +183,8 @@ Package detail [审查安装]
 │ 确认安装方案                        步骤 4/4   │
 │  · 安装 ustc.change-radar 0.4.0（digest 9f2c…） │
 │  · 配置 revision：cfg-…（摘要）                 │
-│  · 授予能力：2 项（清单同上）                    │
+│  · 授予能力：1 项（读取校园信息源 · read）       │
+│  · 未授予：推送变化通知（未勾选 → 不授权）        │
 │  · 安装后状态：已安装，未启用                    │
 │ [批准此安装方案]  ← 绑定 exact plan 的显式审批    │
 ```
@@ -368,7 +370,7 @@ Goal：一眼回答「我装了什么、哪些需要我处理」；list 是 atte
 │ ② Supporting reason：服务器投影 · 如「等待权限复核」            │
 │ ──────────────────────────────────────────────────────────────│
 │ ③ Secondary facets（分行，不堆 chip）                          │
-│   权限        ✓ 2 项已授权 / ⓘ 需复核（安装变更后）            │
+│   权限        ✓ 1 项已授权 / ⓘ 需复核（安装变更后）            │
 │   更新        ⓘ 有可用更新 v0.5.0 · 需先停用                   │
 │   运行时      ✓ 可用 / ⚠ 异常（server reason）                 │
 │   可调用性    ✓ 可调用 / ⓘ 不可调用：原因…                     │
@@ -409,7 +411,8 @@ Goal：一眼回答「我装了什么、哪些需要我处理」；list 是 atte
 │ 启用 USTC ChangeRadar？                           │
 │ 启用后：                                          │
 │  · 插件将按已授权能力开始工作                     │
-│  · 已授权：2 项（清单可查看 → 权限 facet）        │
+│  · 已授权：1 项（read；清单可查看 → 权限 facet）  │
+│  · 未授予：推送变化通知（未勾选 → 不授权，功能不可用）│
 │ 不影响：历史记录与配置保持不变                    │
 │                    [取消]        [启用插件]      │
 └──────────────────────────────────────────────────┘

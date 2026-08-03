@@ -1024,6 +1024,26 @@ class DesignPacketContractTests(unittest.TestCase):
             self.check_design_packets(),
         )
 
+    def test_design_packet_tree_oid_as_source_commit_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/design/README.md",
+            f"commit `{self.REAL_SOURCE_COMMIT}`",
+            f"commit `{self.REAL_SOURCE_TREE}`",
+        )
+        self.assertTrue(
+            any("not resolvable in Git" in issue for issue in self.check_design_packets())
+        )
+
+    def test_git_commit_tree_hex_enforces_commit_object_type(self) -> None:
+        resolver = self.original_resolver
+        setattr(checker, "ROOT", REPO_ROOT)
+        try:
+            self.assertEqual(resolver(self.REAL_SOURCE_COMMIT), self.REAL_SOURCE_TREE)
+            self.assertIsNone(resolver(self.REAL_SOURCE_TREE))
+            self.assertIsNone(resolver("0" * 40))
+        finally:
+            setattr(checker, "ROOT", self.root)
+
 
 class MarketLifecycleContractTests(unittest.TestCase):
     """The owning market lifecycle contract is registered, non-empty and drift-checked.

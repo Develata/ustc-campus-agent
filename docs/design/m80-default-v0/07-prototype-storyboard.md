@@ -11,7 +11,7 @@ Delivered: interaction storyboard（16A，本卷 §2–§5）
 Delivered: actual clickable prototype（16B，`prototype/index.html`，2026-08-02 第二轮）
 ```
 
-- 第一轮判断「无 no-code 工具、不写 HTML」已被 Develata 决策覆盖（2026-08-02）：16B 以**自包含静态 HTML** 交付。该文件是设计演示物，**不是** retained frontend skeleton、不含任何 API/route/DTO 发明、不引入仓库代码；全部转场在真实系统中对应 server 确认事件，prototype 内以显式「演示」标注模拟。
+- 第一轮判断「无 no-code 工具、不写 HTML」已被 Develata 决策覆盖（2026-08-02）：16B 以**自包含静态 HTML** 交付。该文件是设计演示物，**不是** retained frontend skeleton、不含任何 API/route/DTO 发明；它是 disposable HTML/JS review artifact（non-product、non-retained M80 frontend），S05/S13 勾选通过 client-side 演示状态实时改变后续摘要（真实系统中为 server 投影）；repository checker/tests/CI 集成属于 PR repair 范围，非本 packet candidate 内容；全部转场在真实系统中对应 server 确认事件，prototype 内以显式「演示」标注模拟。
 - 导入仓库时的义务：screen-flow specification（本卷）+ screen IDs/transition table（§3）+ 静态文件本体 + 本卷 revision + export timestamp（2026-08-02）；文件 digest 在入库 commit 中由 Git 记录。
 
 ## 2. Journey 覆盖
@@ -59,6 +59,8 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 
 本 prototype 共 **16 个 screen/state IDs**：13 个 main screens（S01–S13）+ 3 个 failure-branch states（S06a、S07a、S11a）。README 索引、本表与 `prototype/index.html` 三者保持一致。
 
+S09 与 S10 共享同一 server-projected update-available 状态（v0.5.0；当前 InstalledDisabled，B6 narrowed：Apply 仅 Disabled）；更新审查/应用流线框见 `02` 卷 §5–§6，不在 16B screens 内。S11a/S13 的「安装变更后权限需复核」对应该更新场景。
+
 ## 4. 关键转场注释
 
 | Transition | Trigger | Pending | Server 确认 | Focus | Back/cancel | Android 行为 |
@@ -96,7 +98,7 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 Illustrative / No live backend
 ```
 
-未勾选能力不进入「已授权」集合；对应功能由 server 投影为不可用（denied/unavailable 如实呈现），见 `prototype/index.html` S05/S06 与 `02` 卷 §3。
+未勾选能力不进入「已授权」集合；对应功能由 server 投影为不可用（denied/unavailable 如实呈现），见 `prototype/index.html` S05/S06 与 `02` 卷 §3；16B 中 S05/S13 勾选通过 client-side 演示状态实时改变 S06/S08/S10/S11 摘要（真实系统中为 server 投影）。
 
 **S06a Plan drift（failure branch）**
 
@@ -144,7 +146,8 @@ USTC ChangeRadar 已开始工作。[查看插件]
 - fake data 明确标记；no live backend；no invented API/DTO/route；
 - no local click-as-success；action availability/reason 视为 server-owned projection；
 - install 完成与 Enable 分离；failure 不自动跳过 review；
-- Android 复杂 approval 用 full-page flow，不把 diff 塞进小 bottom sheet。
+- Android 复杂 approval 用 full-page flow，不把 diff 塞进小 bottom sheet；
+- target-size 声明范围：动作按钮（`button`/`.btn`）与 checkbox 行（`label.ck`）≥44px；原型导航与失败分支演示的 inline 文本链接按 WCAG 2.2 §2.5.8 inline 例外处理，不声明 44px。
 
 ## 7. 本卷 UNRESOLVED
 

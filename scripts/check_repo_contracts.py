@@ -102,7 +102,7 @@ AUTONOMOUS_CAMPAIGN_CATALOG_ONLY_IDS = (
 AUTONOMOUS_CAMPAIGN_CATALOG_PATH = "docs/acceptance/platform-baseline.md"
 CAMPAIGN_CI_WORKFLOW_PATH = ".github/workflows/ci.yml"
 CAMPAIGN_CI_WORKFLOW_SHA256 = (
-    "a812c3a467803a8a8199461e538c3cf1feed657bbc82cff0718f472b5a6e3572"
+    "919080325ade109dab32b556cbc97fb3fcd5844e45ad72e3b74ad231cb669146"
 )
 VALID_CAMPAIGN_LANE_STATUSES = {"queued", "active", "paused", "completed", "rejected"}
 S0_REVIEW_AUTHORITY_LINKS = (
@@ -1103,11 +1103,11 @@ DESIGN_PACKET_STATUSES = {"Proposal", "Reviewed", "Superseded"}
 DESIGN_INDEX_PATH = "docs/design/README.md"
 
 
-def git_commit_tree_hex(commit: str) -> str | None:
-    """Resolve `<commit>^{tree}` in the repository; None when unresolvable."""
+def git_rev_parse_oid(oid: str, object_type: str) -> str | None:
+    """Resolve `<oid>^{<object_type>}` in the repository; None when unresolvable."""
     try:
         completed = subprocess.run(
-            ["git", "-C", str(ROOT), "rev-parse", "--verify", f"{commit}^{{tree}}"],
+            ["git", "-C", str(ROOT), "rev-parse", "--verify", f"{oid}^{{{object_type}}}"],
             capture_output=True,
             check=False,
             text=True,
@@ -1117,8 +1117,15 @@ def git_commit_tree_hex(commit: str) -> str | None:
         return None
     if completed.returncode != 0:
         return None
-    tree = completed.stdout.strip()
-    return tree if re.fullmatch(r"[0-9a-f]{40}", tree) else None
+    value = completed.stdout.strip()
+    return value if re.fullmatch(r"[0-9a-f]{40}", value) else None
+
+
+def git_commit_tree_hex(commit: str) -> str | None:
+    """Resolve `<commit>^{tree}`; None unless `<commit>` names a commit object."""
+    if git_rev_parse_oid(commit, "commit") is None:
+        return None
+    return git_rev_parse_oid(commit, "tree")
 
 
 def check_design_packets(issues: list[str]) -> None:
