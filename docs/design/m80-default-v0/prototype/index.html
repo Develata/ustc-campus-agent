@@ -86,18 +86,25 @@ const PENDING_NOTE = `<p class="note">※ 真实系统中此转场由 server typ
 //   DEMO.applied v0.5.0 已应用（pin 已切换）
 //   DEMO.stale   授权已失效（Apply 后需逐项复核；B6 Stale(InstallationChanged)，bounded domain evidence）
 //   DEMO.enabled server 已确认 Enabled
-// 仅以下四个显式演示转场可改变 committed：
+//   DEMO.enablePending 启用请求已提交待确认（仅 S11「启用插件」显式请求可设置；
+//     应用更新时清除；direct #S12 不产生 pending）
+// 仅以下显式演示转场可改变 committed：
 //   S06「批准此安装方案」→ 提交安装审批草案
 //   S10「应用更新（演示）」→ applied=true, stale=true（真实系统为 typed command + server 事件）
 //   S13「批准已勾选权限」→ 提交复核草案（fresh approval），stale=false
-//   S12「服务器确认：已启用（演示）」→ enabled=true
+//   S11「启用插件」→ enablePending=true（仅提交请求，非成功）
+//   S12「服务器确认：已启用（演示）」→ enabled=true（要求 enablePending && !stale && !enabled；
+//     premise 不满足时 confirm disabled + aria-describedby 暴露原因，状态不变）
 // draft（勾选草案）：D5（S05 安装审批）、D13（S13 复核）；返回/取消/离开均不提交，
 //   决不直接改写 committed。
 //
-// Capability sets（与 10 卷 §2.2 分组 diff 一致）：
+// Capability sets（canonical fixture，与 10 卷 §2.2 分组 diff 一致）：
 //   v0.4.0 = {a 读取校园信息源(read), b 推送变化通知(effect)}
-//   v0.5.0 = {a, c 读取课程公告源(read)}（c 新增；b 移除 → 授权终止 history-only，只读标注）
-const DEMO = { grants:{a:true,b:false,c:false}, applied:false, stale:false, enabled:false };
+//   v0.5.0 = {a, c 读取课程公告源(read)}
+//   diff：a = Unchanged（continuity 重新批准，默认接受）；b = Removed（授权终止
+//   history-only，只读标注，不进复核集合）；c = Added（非默认选中）；
+//   Expanded/Narrowed/MetadataChanged = 0（空分组仍呈现，见 10 卷 §2.2）
+const DEMO = { grants:{a:true,b:false,c:false}, applied:false, stale:false, enabled:false, enablePending:false };
 let D5 = null, D13 = null;
 const GRANT_NAMES = {a:"读取校园信息源", b:"推送变化通知", c:"读取课程公告源"};
 const V04 = ["a","b"], V05 = ["a","c"];
@@ -118,12 +125,13 @@ document.addEventListener("click",(e)=>{
   if(!t) return;
   const act=t.getAttribute("data-demo");
   if(act==="commit-install" && D5){ DEMO.grants.a=D5.a; DEMO.grants.b=D5.b; location.hash="#S07"; }
-  if(act==="apply-update" && !DEMO.applied && !DEMO.enabled){ DEMO.applied=true; DEMO.stale=true; render(); }
+  if(act==="apply-update" && !DEMO.applied && !DEMO.enabled){ DEMO.applied=true; DEMO.stale=true; DEMO.enablePending=false; render(); }
   if(act==="commit-rereview" && D13 && DEMO.applied && DEMO.stale){
     DEMO.grants.a=D13.a; DEMO.grants.c=D13.c; DEMO.grants.b=false; // b 在 v0.5.0 移除：授权终止（history-only）
     DEMO.stale=false; location.hash="#S11";
   }
-  if(act==="confirm-enable" && !DEMO.enabled){ DEMO.enabled=true; render(); }
+  if(act==="enable-install" && !DEMO.stale && !DEMO.enabled){ DEMO.enablePending=true; location.hash="#S12"; }
+  if(act==="confirm-enable" && DEMO.enablePending && !DEMO.stale && !DEMO.enabled){ DEMO.enablePending=false; DEMO.enabled=true; render(); }
 });
 
 const S = {};
@@ -132,8 +140,8 @@ S.S01 = `
 ${IDX}
 <div class="rows">
   <div class="row"><div><strong>USTC ChangeRadar</strong><div class="meta">校园官方信息源变化追踪（illustrative）· USTC Campus Agent 团队 · v0.4.0 · 未安装<br>权限摘要：读取 2 项校园信息源</div></div><a class="btn sec" href="#S02">查看详情</a></div>
-  <div class="row"><div><strong>USTC Affairs Navigator</strong><div class="meta">结构化办事指南（illustrative）· v0.3.1 · 已安装<br>权限摘要：读取办事流程数据</div><div class="meta">详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled>管理</button></div>
-  <div class="row"><div><strong>Campus Opportunity Graph</strong><div class="meta">机会匹配（开发中 · illustrative）· v0.2.0 · 已安装<br>权限摘要：读取机会数据 · 请求你的资料授权</div><div class="meta">详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled>管理</button></div>
+  <div class="row"><div><strong>USTC Affairs Navigator</strong><div class="meta">结构化办事指南（illustrative）· v0.3.1 · 已安装<br>权限摘要：读取办事流程数据</div><div class="meta" id="s01-an-note">管理不可用：详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled aria-describedby="s01-an-note">管理</button></div>
+  <div class="row"><div><strong>Campus Opportunity Graph</strong><div class="meta">机会匹配（开发中 · illustrative）· v0.2.0 · 已安装<br>权限摘要：读取机会数据 · 请求你的资料授权</div><div class="meta" id="s01-og-note">管理不可用：详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled aria-describedby="s01-og-note">管理</button></div>
 </div>
 <p class="note">「状态」列仅为 catalog 层事实；不显示 runtime health。仅 ChangeRadar 具备对应 detail screen（S10）；其余插件的「管理」以 disabled 如实标注，不导航到他插件详情。</p>`;
 
@@ -222,28 +230,35 @@ return `
 <div class="actions"><a class="btn sec" href="#S09">稍后启用</a><a class="btn" href="#S09">前往插件管理</a></div>`;};
 
 S.S09 = () => {
-const updHint = DEMO.stale ? " · ⓘ v0.5.0 已应用：权限需复核（server 判定）"
-  : (!DEMO.applied ? " · ⓘ 有可用更新 v0.5.0 · 应用要求 lifecycle ∈ {InstalledDisabled, Disabled}（server-projected · illustrative）"
-  : " · v0.5.0 已应用 · 权限已复核");
-const crRow = DEMO.enabled
-  ? `<div class="row"><div><strong>USTC ChangeRadar</strong><div class="meta">已启用（server-confirmed · 演示）${!DEMO.applied?" · ⓘ 有可用更新 v0.5.0 · 需先停用方可应用（lifecycle ∈ {InstalledDisabled, Disabled}）":""}</div></div><a class="btn sec" href="#S10">管理</a></div>`
-  : `<div class="row attn"><div><strong>USTC ChangeRadar</strong><div class="meta">已安装，未启用（演示路径中的新装实例）${updHint}</div></div><a class="btn sec" href="${DEMO.stale?"#S13":"#S10"}">${DEMO.stale?"复核权限 →":(!DEMO.applied?"查看更新 →":"管理")}</a></div>`;
-const attnRows = DEMO.enabled ? "" : crRow;
-const enabledCount = 1 + (DEMO.enabled?1:0);
+// attention-first（02 卷 §7.1）：update available 或 grants stale → 「需要你处理」置顶，
+// 与 lifecycle 分组正交；Enabled + update available 仍入 attention（lifecycle label 保留），
+// 仅当 update/stale 等 attention 全部消失后才落入普通 Enabled group。
+const upd = !DEMO.applied, stale = DEMO.stale;
+const attention = upd || stale;
+const crState = DEMO.enabled ? "已启用（server-confirmed · 演示）" : "已安装，未启用（演示路径中的新装实例）";
+const crHint = stale ? " · ⓘ v0.5.0 已应用：权限需复核（server 判定）"
+  : (upd ? (DEMO.enabled ? " · ⓘ 有可用更新 v0.5.0 · 需先停用方可应用（lifecycle ∈ {InstalledDisabled, Disabled}）"
+                          : " · ⓘ 有可用更新 v0.5.0 · 应用要求 lifecycle ∈ {InstalledDisabled, Disabled}（server-projected · illustrative）")
+         : "");
+const crAct = stale ? ["#S13","复核权限 →"] : (upd && !DEMO.enabled ? ["#S10","查看更新 →"] : ["#S10","管理"]);
+const crRow = `<div class="row${attention?" attn":""}"><div><strong>USTC ChangeRadar</strong><div class="meta">${crState}${crHint}</div></div><a class="btn sec" href="${crAct[0]}">${crAct[1]}</a></div>`;
+const inEnabled = DEMO.enabled && !attention;
+const inDisabled = !DEMO.enabled && !attention;
 return `
 <header class="top"><h1>我的插件</h1><a class="btn sec" href="#S01">浏览市场</a></header>
-<p class="scrid">S09 · 分组：需要你处理 → 已启用 → 已停用（illustrative；分组随演示状态实时投影）</p>
+<p class="scrid">S09 · 分组：需要你处理 → 已启用 → 已停用（attention-first：update/stale 优先于 lifecycle 分组 · 02 卷 §7.1）</p>
 ${IDX}
-<h2>需要你处理（${DEMO.enabled?0:1}）</h2>
-<div class="rows">${DEMO.enabled?`<div class="row"><div class="meta">（空 · 当前无待处理事项）</div></div>`:attnRows}</div>
-<h2>已启用（${enabledCount}）</h2>
+<h2>需要你处理（${attention?1:0}）</h2>
+<div class="rows">${attention?crRow:`<div class="row"><div class="meta">（空 · 当前无待处理事项）</div></div>`}</div>
+<h2>已启用（${1+(inEnabled?1:0)}）</h2>
 <div class="rows">
-${DEMO.enabled?crRow:""}
-<div class="row"><div><strong>校园机会图谱</strong><div class="meta">已启用 · 最后验证 2026-08-01</div><div class="meta">详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled>管理</button></div>
+${inEnabled?crRow:""}
+<div class="row"><div><strong>校园机会图谱</strong><div class="meta">已启用 · 最后验证 2026-08-01</div><div class="meta" id="s09-og-note">管理不可用：详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled aria-describedby="s09-og-note">管理</button></div>
 </div>
-<h2>已停用（1）</h2>
+<h2>已停用（${1+(inDisabled?1:0)}）</h2>
 <div class="rows">
-<div class="row"><div><strong>USTC Affairs Navigator</strong><div class="meta">已停用 · 2026-07-28 由你停用（illustrative）</div><div class="meta">详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled>管理</button></div>
+${inDisabled?crRow:""}
+<div class="row"><div><strong>USTC Affairs Navigator</strong><div class="meta">已停用 · 2026-07-28 由你停用（illustrative）</div><div class="meta" id="s09-an-note">管理不可用：详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled aria-describedby="s09-an-note">管理</button></div>
 </div>`;};
 
 S.S10 = () => {
@@ -263,7 +278,7 @@ if(DEMO.stale){
   <div style="margin-top:8px"><a class="btn" href="#S13">复核权限</a></div>`;
 }else if(!DEMO.applied){
   upd = `ⓘ 有可用更新 v0.5.0（新增能力：读取课程公告源 · 移除能力：推送变化通知 · 逐项 diff 见 10 卷 §2.2）· 应用要求 lifecycle ∈ {InstalledDisabled, Disabled}（server-projected）
-  <div style="margin-top:8px"><button data-demo="apply-update"${DEMO.enabled?" disabled":""}>应用更新（演示）</button>${DEMO.enabled?`<span class="meta"> 不可用：当前 Enabled，需先停用（lifecycle ∈ {InstalledDisabled, Disabled}；停用流不在 16B 范围）</span>`:""}</div>`;
+  <div style="margin-top:8px"><button data-demo="apply-update"${DEMO.enabled?" disabled aria-describedby=\"s10-upd-note\"":""}>应用更新（演示）</button>${DEMO.enabled?`<span class="meta" id="s10-upd-note"> 不可用：当前 Enabled，需先停用（lifecycle ∈ {InstalledDisabled, Disabled}；停用流不在 16B 范围）</span>`:""}</div>`;
 }else{
   upd = `✓ 当前版本 v0.5.0 · 权限已复核 · 无待应用更新`;
 }
@@ -314,7 +329,7 @@ return `
 ${d.length?`<li>未授权：${d.join("、")} — 对应功能保持不可用（server 投影），不阻塞启用</li>`:""}
 <li>不影响：历史记录与配置保持不变</li>
 </ul>
-<div class="actions"><a class="btn sec" href="#S10">取消</a><a class="btn" href="#S12">启用插件</a></div>
+<div class="actions"><a class="btn sec" href="#S10">取消</a><button class="btn" data-demo="enable-install">启用插件</button></div>
 <div class="demo">失败分支演示：<a href="#S11a">S11a 暂时无法启用：权限需复核</a></div>`;};
 
 S.S11a = `
@@ -327,26 +342,29 @@ S.S12 = () => DEMO.enabled ? `
 <header class="top"><h1>✓ 已启用</h1><span class="scrid">S12 · server 确认（演示）</span></header>
 <div class="ok">USTC ChangeRadar 已开始工作。克制确认：inline 状态更新 + 动态记录，无庆祝动效。</div>
 <p class="note">S10/S09 的 Enabled 呈现由此确认状态投影；本地点击不产生成功。</p>
-<div class="actions"><a class="btn" href="#S10">查看插件</a></div>` : `
+<div class="actions"><a class="btn" href="#S10">查看插件</a></div>` : (DEMO.enablePending && !DEMO.stale) ? `
 <header class="top"><h1>启用请求已提交…</h1><span class="scrid">S12 · pending（演示）</span></header>
 <p>「启用插件」仅提交请求；成功仅由 server 确认。你可以离开此页面。</p>
 ${PENDING_NOTE}
-<div class="actions"><a class="btn sec" href="#S09">离开，去我的插件</a><button data-demo="confirm-enable">服务器确认：已启用（演示）</button></div>`;
+<div class="actions"><a class="btn sec" href="#S09">离开，去我的插件</a><button data-demo="confirm-enable">服务器确认：已启用（演示）</button></div>` : `
+<header class="top"><h1>启用结果（status/receipt）</h1><span class="scrid">S12 · 前提不满足（演示）</span></header>
+<p class="note" id="s12-block-note">确认不可用：${DEMO.stale?"授权已失效（server 判定）——需先完成权限复核（S13），再经 S11 显式提交启用请求":"无待确认的启用请求——启用请求仅能从启用复核屏（S11）显式「启用插件」提交；direct #S12 不产生 pending，本屏不改变任何状态"}。</p>
+<div class="actions"><a class="btn sec" href="#S09">返回我的插件</a><button disabled aria-describedby="s12-block-note">服务器确认：已启用（演示）</button></div>`;
 
 S.S13 = () => {
 const premise = DEMO.applied && DEMO.stale;
-const guard = premise ? "" : `<p class="note">ⓘ 当前演示基线尚未处于「更新已应用、授权失效」状态；以下为该分支的样例呈现（批准动作已禁用）。真实系统中本屏仅由 server availability 投影进入（02 卷 §7.4 V4）；可经 S10「应用更新（演示）」进入真实演示路径。</p>`;
+const guard = premise ? "" : `<p class="note" id="s13-guard-note">ⓘ 当前演示基线尚未处于「更新已应用、授权失效」状态；以下为该分支的样例呈现（批准动作已禁用）。真实系统中本屏仅由 server availability 投影进入（02 卷 §7.4 V4）；可经 S10「应用更新（演示）」进入真实演示路径。</p>`;
 return `
 <header class="top"><h1>权限复核</h1><span class="scrid">S13 · grant re-review（B6 bounded domain evidence，非 production）</span></header>
 ${guard}
-<p>因安装变更（更新 v0.5.0），以下授权已失效（服务器判定），需逐项重新批准；<strong>未勾选项不会被授权</strong>。勾选为复核<strong>草案</strong>：「返回」不改变 S10/S11 已授权集合；仅「批准已勾选权限」提交 fresh approval。</p>
-<label class="ck"><input type="checkbox" data-scope="rereview" data-grant="a"${D13.a?" checked":""}> <strong>读取校园信息源（read）</strong><div class="meta">范围不变 → 重新批准（continuity；仍是 fresh approval）</div></label>
-<label class="ck"><input type="checkbox" data-scope="rereview" data-grant="c"${D13.c?" checked":""}> <strong>读取课程公告源（read）</strong> ⚠<div class="meta">新增（v0.5.0）· 非默认选中 · 未勾选 = 不授权，对应功能由服务器投影为不可用</div></label>
+<p>因安装变更（更新 v0.5.0），以下授权已失效（服务器判定），需逐项重新批准；<strong>未勾选项不会被授权</strong>。勾选为复核<strong>草案</strong>：「返回」不改变 S10/S11 已授权集合；仅「批准已勾选权限」提交 fresh approval。canonical fixture（10 卷 §2.2）：Added 1 · Removed 1 · Unchanged 1 · Expanded/Narrowed/MetadataChanged 0。</p>
+<label class="ck"><input type="checkbox" data-scope="rereview" data-grant="a"${D13.a?" checked":""}> <strong>读取校园信息源（read）</strong><div class="meta">不变（Unchanged · 范围不变）→ 重新批准（continuity；仍是 fresh approval；默认接受可取消）</div></label>
+<label class="ck"><input type="checkbox" data-scope="rereview" data-grant="c"${D13.c?" checked":""}> <strong>读取课程公告源（read）</strong> ⚠<div class="meta">新增（Added · v0.5.0）· 非默认选中 · 未勾选 = 不授权，对应功能由服务器投影为不可用</div></label>
 <ul class="clean">
-<li><span class="meta">移除（只读）：推送变化通知（effect）— v0.5.0 不再请求该能力；${DEMO.grants.b?"你此前已授权 → 复核批准后授权终止（history-only · server 执行），无需操作":"你此前未授权，无授权终止"}。已移除能力不进入复核集合（10 卷 §2.2 Removed 分组）。</span></li>
+<li><span class="meta">移除（Removed · 只读）：推送变化通知（effect）— v0.5.0 不再请求该能力；${DEMO.grants.b?"你此前已授权 → 复核批准后授权终止（history-only · server 执行），无需操作":"你此前未授权，无授权终止"}。已移除能力不进入复核集合（10 卷 §2.2 Removed 分组）。</span></li>
 </ul>
 <p class="note">不提供「沿用旧授权」路径；逐项拒绝的后果由 server availability 投影。</p>
-<div class="actions"><a class="btn sec" href="#S10">返回</a><button data-demo="commit-rereview"${premise?"":" disabled"}>批准已勾选权限</button></div>`;};
+<div class="actions"><a class="btn sec" href="#S10">返回</a><button data-demo="commit-rereview"${premise?"":" disabled aria-describedby=\"s13-guard-note\""}>批准已勾选权限</button></div>`;};
 
 let prevId = null;
 function render(){

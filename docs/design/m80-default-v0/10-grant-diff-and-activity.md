@@ -31,22 +31,19 @@
 │ ┌────────────────────────────────────────────────────────────┐│
 │ │ ☐ 读取课程公告源（read）                                    ││
 │ │   范围：教务处公告 · 风险：中（registry 定义）              ││
-│ │   说明：本次更新新增的能力请求                              ││
+│ │   说明：本次更新新增的能力请求 · 非默认选中                 ││
 │ ├────────────────────────────────────────────────────────────┤│
-│ │ 扩大（Expanded）· 1 项                        ⚠ 需重新批准 ││
-│ │ ☐ 读取校园信息源（read）                                    ││
-│ │   范围变化：默认公告板 → 全部公告板（server-projected）     ││
-│ │   风险：低 → 中（registry 定义）                            ││
-│ │   ※ 醒目标注，非默认选中                                    ││
-│ ├────────────────────────────────────────────────────────────┤│
-│ │ 收窄（Narrowed）· 0 项 · 不变（Unchanged）· 1 项（折叠）    ││
+│ │ 扩大（Expanded）· 0 项 · 收窄（Narrowed）· 0 项             ││
 │ ├────────────────────────────────────────────────────────────┤│
 │ │ 移除（Removed）· 1 项                                      ││
 │ │   · 向你推送变化通知（effect）— 新版本不再请求；            ││
 │ │     对应授权将终止（history-only），无需操作（只读行）      ││
 │ ├────────────────────────────────────────────────────────────┤│
-│ │ 元数据变化（MetadataChanged）· 1 项（折叠 disclosure）      ││
-│ │   · 定义描述修订；scope/risk 未变（server-projected）       ││
+│ │ 不变（Unchanged）· 1 项                                    ││
+│ │   · 读取校园信息源（read）— scope/risk 未变（server-proj.） ││
+│ │     continuity 重新批准（默认接受，可逐项查看）             ││
+│ ├────────────────────────────────────────────────────────────┤│
+│ │ 元数据变化（MetadataChanged）· 0 项                         ││
 │ └────────────────────────────────────────────────────────────┘│
 │ ──────────────────────────────────────────────────────────────│
 │ ⚠ 批准仅对当前这一个方案/安装修订有效；方案变化后需重新审查。   │
@@ -57,6 +54,7 @@
 规则：
 
 - 分组顺序固定：Added → Expanded → Removed → Narrowed → Unchanged → MetadataChanged；空分组显示「0 项」或折叠，不消失（用户要确认「没有新增」这一事实）。
+- **canonical fixture（本 packet 全卷一致）**：v0.4.0 → v0.5.0 为 Added 1（读取课程公告源）· Removed 1（推送变化通知）· Unchanged 1（读取校园信息源，continuity 重新批准，默认接受）· Expanded 0 · Narrowed 0 · MetadataChanged 0；与 `02` 卷 §5.2 变化摘要、`07`/S13 复核屏及 prototype 演示状态一致。
 - **Expanded 醒目且非默认选中**；Added 非默认选中；Narrowed/Unchanged/MetadataChanged 默认接受但可逐项查看；Removed 只读（授权终止由 server 执行，UI 不提供「保留已移除能力」）。
 - 每项呈现：用户语言名称 + effect/data 类别 + exact scope before→after + registry-owned risk + server-projected reason；scope 差异用 before→after 对照，不用模糊「有变化」。
 - 「批准这些变化」绑定 exact plan/installation revision（与 `02` 卷 §5.2 批准语义一致）；plan drift → blocking banner + 回 review；approval consumed → immutable activity entry，不复用。
