@@ -47,10 +47,10 @@
 
 ## 设计结论（PROPOSAL）
 
-- 采用两阶段节奏：**Stage A**（本 packet）交付 IA、default template、semantic status system、核心 journey、action/slot seam 与两套视觉方向；**Stage B**（真实 vertical slice 之后）校准 exact copy、stream timing、density、真机生命周期并冻结 component API/tokens。
+- 采用两阶段节奏：**Stage A**（本 packet）交付 IA、default template、semantic status system、核心 journey、action/slot seam 与三套视觉方向；**Stage B**（真实 vertical slice 之后）校准 exact copy、stream timing、density、真机生命周期并冻结 component API/tokens。
 - 页面中心是“学生此刻要理解或完成的事”，不是架构名词、聊天框或运维指标。
 - Signature：**Evidence spine / 证据脊柱**——procedure、change、opportunity、run detail 用同一种安静的 source→revision→decision→receipt 关系表达。
-- 推荐视觉方向：**Direction A — Quiet Evidence System** 为 core system；Direction B 的 warmth 仅进入 empty/onboarding/editorial illustration。理由见 `05-visual-directions-and-tokens.md`。
+- 推荐视觉方向（2026-08-04 Develata 决策）：**Direction C — Campus Blueprint**（黑白蓝冷调，亮蓝 accent `#2563EB`）为 core system，全线统一；原 Direction A/B 保留为已评估未采纳的决策记录，原「B 的 warmth 进 empty/onboarding」规则取消。理由与对比度实测见 `05-visual-directions-and-tokens.md` §4/§7。
 - 拒绝：generic purple-gradient AI dashboard、three-equal-card hero、nested cards、全站 glass、把所有 noun 升为一级 tab。
 
 ## 17 项 artifact traceability matrix
@@ -68,7 +68,7 @@
 | 9 | First-party entry patterns | `03` §4–§6 | Delivered | PROPOSAL | High-fidelity 每产品一个代表 detail + shared spine | 全部 product data/actions provisional | — | pending |
 | 10 | Layout customization | `04` §2 | Delivered | PROPOSAL | Mid-fidelity desktop+Android | generic schema 待 rule-of-three | — | pending |
 | 11 | Component/state inventory | `04` §3 | Delivered | PROPOSAL | Named primitives + anatomy + variants | component API 未冻结 | — | pending |
-| 12 | Design tokens | `05` 全卷 | Delivered | PROPOSAL | 两套 token 集 + 对比 + 推荐 + 实测对比度 | final values 待 browser/device 测试 | — | pending |
+| 12 | Design tokens | `05` 全卷 | Delivered | PROPOSAL | 三套 token 集 + 比较 + 推荐（2026-08-04 翻转为 C）+ 实测对比度 | final values 待 browser/device 测试 | — | pending |
 | 13 | Interaction annotations | `04` §4 | Delivered | PROPOSAL | trigger/precondition/pending/confirmation/focus/recovery | exact timing/stream reconnect 待 Stage B | — | pending |
 | 14 | Accessibility annotations | `06` §2 | Delivered | PROPOSAL | 核心屏 keyboard/touch/reader/contrast/reduced-motion | 实现后真实 audit | — | pending |
 | 15 | State atlas | `04` §5 | Delivered | PROPOSAL | 全状态族（含 drift/consumed/partial-reconnect/version-skew） | 真实 copy 长度 | — | pending |
@@ -104,7 +104,7 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 | `docs/design/m80-default-v0/02-market-and-lifecycle-journeys.md` | artifacts 5–7：catalog/detail/update-rollback/installed-list/enable-disable-revoke-uninstall |
 | `docs/design/m80-default-v0/03-agent-and-first-party-journeys.md` | artifacts 8–9：Agent chat/run timeline + 三个 first-party journeys |
 | `docs/design/m80-default-v0/04-components-states-and-interactions.md` | artifacts 10/11/13/15：组件清单、状态族、destructive 模式、onboarding |
-| `docs/design/m80-default-v0/05-visual-directions-and-tokens.md` | artifact 12：Direction A/B + design tokens |
+| `docs/design/m80-default-v0/05-visual-directions-and-tokens.md` | artifact 12：Direction A/B/C + design tokens |
 | `docs/design/m80-default-v0/06-responsive-and-accessibility.md` | artifact 14：responsive + WCAG 2.2 AA（对比度实测表） |
 | `docs/design/m80-default-v0/07-prototype-storyboard.md` | artifact 16A：S01–S13 storyboard + 16B 交付说明 |
 | `docs/design/m80-default-v0/08-handoff-and-redlines.md` | artifact 17：handoff contract + redlines |
@@ -139,6 +139,7 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 - round-2 repair（2026-08-03）：source binding 校验加严为**两步 Git 对象类型检查**（先 `git rev-parse --verify <oid>^{commit}` 确认 commit 对象类型，再 `<oid>^{tree}` 取 tree；tree OID 冒充 commit 一律 fail-closed），新增 stub mutation test 与真实仓库 end-to-end 类型测试；CI `docs-and-contracts` job 的 checkout 改为 `fetch-depth: 0`（保证 source binding 对象在 CI 可解析，`CAMPAIGN_CI_WORKFLOW_SHA256` pin 同步更新）；shallow-clone 复现验证见 §7「仓库检查」行。
 - round-3 repair（2026-08-03，仅 16B/storyboard/README/02 §5.2 计数同步；checker/tests/CI 冻结未动）：prototype 演示状态模型重做——draft ≠ committed（S05/S13 勾选仅写草案，返回/取消不提交；committed 仅由 S06 批准、S10 应用更新（演示）、S13 批准、S12 服务器确认（演示）四个显式转场改变）；update 状态机建模为 pre-apply → grants stale → reapproved（stale 时 S10 权限行如实失效、启用不可用 + reason；reapproved 后 S10/S09 不再显示「有可用更新」）；capability set 同步 `10` 卷 §2.2（v0.5.0 新增「读取课程公告源」、移除「推送变化通知」→ 授权终止 history-only 只读标注，不 invisible 携带；02 §5.2 变化摘要计数同步）；S12 改为 pending → 显式「服务器确认（演示）」两步，确认后 S10/S09 均投影 Enabled；非 ChangeRadar 插件「管理」动作改 disabled + out-of-prototype 标注；「Apply 仅 Disabled」措辞统一为 lifecycle ∈ {InstalledDisabled, Disabled}。
 - round-4 repair（2026-08-03，仅 16B/storyboard/README/02 §5.2/10 §2.2；checker/tests/CI 冻结未动）：**canonical capability fixture 统一**——`10` 卷 §2.2 原把「读取校园信息源」呈现为 Expanded（默认公告板 → 全部公告板）而 §2.3/S13/prototype 呈现为 same-scope continuity，构成 permission expansion 冒充 continuity 预选；现全 packet 统一为 a = Unchanged（continuity 重新批准，默认接受）、b = Removed、c = Added、Expanded/Narrowed/MetadataChanged = 0（空分组仍呈现）；**S12 premise guard**——新增 enablePending 状态：仅 S11「启用插件」显式请求可设置，确认要求 `enablePending && !stale && !enabled`，direct `#S12` 不产生 pending 且确认动作 disabled + aria-describedby 暴露原因（修复 stale → direct #S12 → confirm 可绕过复核的漏洞）；**S09 attention-first 修正**——update available 或 grants stale 时 ChangeRadar 一律入「需要你处理」（Enabled + update available 保留 lifecycle label 仍置顶），全部 attention 消失后才入普通 Enabled 分组，消除「attention 空态 + 同 row 显示待处理更新」矛盾；**disabled 动作 programmatic reason**——全部 disabled 按钮（S01/S09 管理、S10 停用/应用更新/启用、S12 确认、S13 批准、danger zone）均有非空 aria-describedby 关联。
+- round-6 repair（2026-08-04，仅 05/16B/README；checker/tests/CI 冻结未动；继 round-5 micro-repair——S09 action 矩阵、`10` §2.2 分组顺序、仓库检查行 head）：**视觉方向翻转（Develata 决策）**——新增 Direction C — Campus Blueprint（黑白蓝冷调：白底 + 近黑 ink `#0D0D0F` + 亮蓝 accent `#2563EB`），推荐翻转为 C 为 core system 且全线统一；原 Direction A/B 保留为已评估未采纳的决策记录；原「B warmth 进 empty/onboarding」规则取消（亲和力改由 editorial illustration 与口语 microcopy 表达）；`05` 卷 §6/§7 重编号为 §7/§8、比较备忘录加 C 列、C-light/C-dark 对比度全配对实算达标（normal ≥4.5、accent vs divider 4.17 ≥3.0）；prototype `:root` 换 C-light tokens、warn/ok 底色冷化、按钮 radius 6→8px（仍在 6–10 envelope 内）；结构/状态机/文案/aria 未动。
 - 本 packet 当前为仓库内 Draft PR #34 的 review surface：`python3 scripts/check_repo_contracts.py` PASS；保持 Draft，非 merge-ready（review/merge 前置见 PR body）。
 
 ## §7 最终自查（2026-08-02 第二轮：review 补卷后更新）
@@ -155,10 +156,10 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 | API/implementation/readiness invention | 无；prototype 无任何 API/route/DTO 声明，转场显式标注「演示/server 确认」 |
 | Design 越权为 domain authority | 无；`10` 卷明确六分组为 presentation vocabulary 且与 `GrantChangeClass`/`CapabilityPolicyChange` 区分（Q10） |
 | 每卷 `Illustrative / No live backend` | 11/11 文件具备（含 prototype banner） |
-| 对比度实测 | `05` 卷 §6：两方向 light/dark 全 role 计算（第一轮 review 独立复算 56 对全部吻合） |
+| 对比度实测 | `05` 卷 §7：三方向 light/dark 全 role 计算（A/B 两方向 56 对经第一轮 review 独立复算全部吻合；C-light/C-dark 于 round-6 实算，normal ≥4.5、非文本 ≥3.0 全达标） |
 | Prototype 验证 | 16 screen/state IDs 定义齐全（13 main S01–S13 + 3 failure-branch S06a/S07a/S11a）；全部 hash 链接目标可解析（16↔16）；JS 语法校验通过；无外部网络引用；a11y：main landmark、可见 focus、hash 导航后 focus 回到 heading、disabled destructive 动作 aria-describedby 说明；target size 声明收窄为动作按钮（`button`/`.btn`）与 checkbox 行 ≥44px，inline 文本链接按 WCAG 2.2 §2.5.8 inline 例外（`07` §6）；授权流诚实性（round-3）：draft ≠ committed——S13 勾选 c 后返回，S10 已授权集合不变；仅 S13 批准后改变；S05 授予 b 后 S13 显式标注 b 移除（授权终止，不进入复核集合）；pre-update S10 不把 c 列为 v0.4 当前未授权项；复核批准后 S10 不再显示「有可用更新 v0.5.0」；S11→S12 pending → 显式「服务器确认（演示）」后 S10/S09 均投影 Enabled；Affairs Navigator / Opportunity Graph「管理」disabled + out-of-prototype，不导航到 S10；S07a unknown/reconcile 演示态；S09/S10 update 状态一致（v0.5.0，server-projected，`07` §3）；round-4：canonical capability fixture 全 packet 一致（a = Unchanged continuity 默认接受 · b = Removed 只读 · c = Added 非默认选中 · Expanded/Narrowed/MetadataChanged 0；02 §5.2 / 07 / 10 §2.2 / prototype 同一份 ledger）；stale → direct `#S12` 确认动作 disabled 且状态不变（enablePending 前提）；S11 请求 → S12 pending → 确认后正常 Enabled；Enabled + update available 时 ChangeRadar 位于「需要你处理」（attention-first），Enabled + 无待处理更新时位于「已启用」；遍历全部 `button:disabled`：aria-describedby 均指向存在元素且原因文本非空；browser smoke 全 16 屏 × 320/390/768/1200 无横向溢出 |
 | Stage B dependency | 各 artifact 行与各卷末尾标明 |
-| 仓库检查 | 本地（complete clone，Draft PR #34 round-4 repair head）：`git diff --check` clean；`python3 scripts/check_repo_contracts.py` PASS（含 design topology/index/status/source-binding；source binding 为两步 Git 对象类型校验：先 `<oid>^{commit}` 后 `<oid>^{tree}`）；`python3 -m unittest scripts.tests.test_check_repo_contracts` PASS（round-4 未改动 checker/tests，沿用既有测试基线）；shallow-clone 复现验证（depth-1 clone 缺 source 对象 → `check_design_packets` fail-closed，对应 CI checkout `fetch-depth: 0`）。CI（exact head）三绿状态以 PR body 记录为准——本行不预写 CI 结果 |
+| 仓库检查 | 本地（complete clone，Draft PR #34 round-6 repair head）：`git diff --check` clean；`python3 scripts/check_repo_contracts.py` PASS（含 design topology/index/status/source-binding；source binding 为两步 Git 对象类型校验：先 `<oid>^{commit}` 后 `<oid>^{tree}`）；`python3 -m unittest scripts.tests.test_check_repo_contracts` PASS（round-6 未改动 checker/tests，沿用既有测试基线）；shallow-clone 复现验证（depth-1 clone 缺 source 对象 → `check_design_packets` fail-closed，对应 CI checkout `fetch-depth: 0`）。CI（exact head）三绿状态以 PR body 记录为准——本行不预写 CI 结果 |
 
 ### 本轮未实现/未验证
 

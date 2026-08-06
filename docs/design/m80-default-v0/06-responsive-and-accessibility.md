@@ -27,7 +27,7 @@
 ### 2.1 对比度
 
 - Normal text ≥4.5:1，large text ≥3:1；focus/interactive boundaries ≥3:1 对邻近色。
-- 实测记录见 `05` 卷 §6（两套方向 light/dark 全部 role 已计算；translucency fallback 需 Stage B 复测）。
+- 实测记录见 `05` 卷 §7（三套方向 light/dark 全部 role 已计算；translucency fallback 需 Stage B 复测）。
 
 ### 2.2 Semantic structure
 

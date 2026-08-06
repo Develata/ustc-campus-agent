@@ -17,9 +17,9 @@
 <title>USTC Campus Agent — 设计原型（Illustrative / No live backend）</title>
 <style>
 :root{
-  --canvas:#FAF9F7; --surface:#FFFFFF; --subtle:#F2F0EC;
-  --ink:#1C1B1A; --muted:#5B5750; --divider:#E3E0DA;
-  --accent:#2E5A66; --danger:#8C3B33; --warning:#7A5C1E; --success:#3C6B4F;
+  --canvas:#FFFFFF; --surface:#FFFFFF; --subtle:#F7F8FA;
+  --ink:#0D0D0F; --muted:#5B6470; --divider:#E4E7EC;
+  --accent:#2563EB; --danger:#D92D20; --warning:#B54708; --success:#067A46;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--canvas);color:var(--ink);
@@ -39,7 +39,7 @@ h2{font-size:16px;margin:28px 0 8px;font-weight:600}
 .row .meta{font-size:13px;color:var(--muted)}
 .row .btn{white-space:nowrap;flex:none}
 .attn{border-left:3px solid var(--warning);padding-left:12px}
-button,.btn{font:inherit;font-size:14px;padding:8px 18px;border-radius:6px;
+button,.btn{font:inherit;font-size:14px;padding:8px 18px;border-radius:8px;
   border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;
   text-decoration:none;display:inline-flex;align-items:center;justify-content:center;
   min-height:44px;min-width:44px}
@@ -49,9 +49,9 @@ button:disabled{opacity:.45;cursor:not-allowed}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
 input[type=checkbox]{width:24px;height:24px;vertical-align:middle;flex:none}
 .note{font-size:13px;color:var(--muted);margin:10px 0}
-.warn{background:#FBF6EC;border:1px solid var(--divider);border-left:3px solid var(--warning);
+.warn{background:#F9F5EF;border:1px solid var(--divider);border-left:3px solid var(--warning);
   padding:12px 14px;margin:14px 0;font-size:14px}
-.ok{background:#F1F6F2;border-left:3px solid var(--success);padding:12px 14px;margin:14px 0}
+.ok{background:#F0F7F2;border-left:3px solid var(--success);padding:12px 14px;margin:14px 0}
 ul.clean{list-style:none;padding:0;margin:8px 0}
 ul.clean li{padding:10px 4px;border-bottom:1px solid var(--divider)}
 label.ck{display:block;min-height:44px;padding:10px 4px;border-bottom:1px solid var(--divider);cursor:pointer}
