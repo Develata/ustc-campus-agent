@@ -30,9 +30,13 @@ body{margin:0;background:var(--canvas);color:var(--ink);
   padding:8px 20px;font-size:13px;color:var(--muted);text-align:center}
 header.top{display:flex;justify-content:space-between;align-items:baseline;
   padding:28px 0 12px;border-bottom:1px solid var(--divider);margin-bottom:20px;gap:12px;flex-wrap:wrap}
-h1{font-size:22px;margin:0;font-weight:600}
-h2{font-size:16px;margin:28px 0 8px;font-weight:600}
+h1{font-size:24px;margin:0;font-weight:600}
+h2{font-size:18px;margin:28px 0 8px;font-weight:600}
 .scrid{font-size:12px;color:var(--muted);font-family:ui-monospace,monospace}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:500;line-height:1.5;white-space:nowrap}
+.badge.on{background:var(--accent);color:#fff}
+.badge.off{background:var(--subtle);color:var(--muted)}
+.badge.attn{background:#F9F5EF;color:var(--warning);border:1px solid var(--divider)}
 .rows{border-top:1px solid var(--divider)}
 .row{display:flex;justify-content:space-between;align-items:center;gap:16px;
   padding:14px 4px;border-bottom:1px solid var(--divider);flex-wrap:wrap}
@@ -45,8 +49,11 @@ button,.btn{font:inherit;font-size:14px;padding:8px 18px;border-radius:8px;
   min-height:44px;min-width:44px}
 button.sec,.btn.sec{background:transparent;color:var(--accent)}
 button.danger{background:var(--danger);border-color:var(--danger)}
-button:disabled{opacity:.45;cursor:not-allowed}
+button:disabled{background:var(--divider);border-color:var(--divider);color:var(--muted);cursor:not-allowed}
+button.sec:disabled{background:transparent;border-color:var(--divider);color:var(--muted)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+.chg{border:1px solid var(--divider);border-radius:8px;padding:2px 14px 10px;margin:14px 0}
+.chg-h{font-size:13px;font-weight:600;color:var(--muted);margin:10px 0 2px}
 input[type=checkbox]{width:24px;height:24px;vertical-align:middle;flex:none}
 .note{font-size:13px;color:var(--muted);margin:10px 0;overflow-wrap:anywhere}
 .warn{background:#F9F5EF;border:1px solid var(--divider);border-left:3px solid var(--warning);
@@ -167,7 +174,7 @@ S.S03 = `
 <li>来源 digest：sha256:9f2c…（illustrative）</li>
 <li>组件清单：见技术细节（折叠）</li>
 </ul>
-<div class="actions"><a class="btn sec" href="#S02">取消</a><a class="btn" href="#S04">继续</a></div>`;
+<div class="actions"><a class="btn sec" href="#S02">取消</a><a class="btn" href="#S04">下一步：配置</a></div>`;
 
 S.S04 = `
 <header class="top"><h1>配置</h1><span class="step">步骤 2/4 · S04</span></header>
@@ -176,7 +183,7 @@ S.S04 = `
 <li>通知板：默认公告板 ▾</li>
 <li>凭证引用：无（此插件不需要）<div class="meta">若需凭证：仅显示 SecretRef 状态，永不显示明文</div></li>
 </ul>
-<div class="actions"><a class="btn sec" href="#S03">上一步</a><a class="btn" href="#S05">继续</a></div>`;
+<div class="actions"><a class="btn sec" href="#S03">上一步</a><a class="btn" href="#S05">下一步：权限审批</a></div>`;
 
 S.S05 = () => `
 <header class="top"><h1>权限审批</h1><span class="step">步骤 3/4 · S05</span></header>
@@ -184,7 +191,7 @@ S.S05 = () => `
 <label class="ck"><input type="checkbox" data-scope="install" data-grant="a"${D5.a?" checked":""}> <strong>读取校园信息源（read）</strong><div class="meta">范围：默认公告板 · 风险：低（registry 定义）· 勾选 = 批准</div></label>
 <label class="ck"><input type="checkbox" data-scope="install" data-grant="b"${D5.b?" checked":""}> <strong>向你推送变化通知（effect）</strong> ⚠<div class="meta">范围：本设备 · 风险：中 · 非默认选中 · 未勾选 = 不授权</div></label>
 <p class="note">权限定义来自平台 registry；插件不能自定风险等级。未授权能力对应的功能由服务器投影为不可用（denied/unavailable 如实呈现），不会随成功路径被携带。</p>
-<div class="actions"><a class="btn sec" href="#S04">上一步</a><a class="btn" href="#S06">继续</a></div>`;
+<div class="actions"><a class="btn sec" href="#S04">上一步</a><a class="btn" href="#S06">下一步：确认安装方案</a></div>`;
 
 S.S06 = () => {
 const g=["a","b"].filter((k)=>D5[k]).map((k)=>GRANT_NAMES[k]);
@@ -199,7 +206,7 @@ ${d.length?`<li>未授予：${d.join("、")}（未勾选 → 不授权；对应�
 <li>安装后状态：已安装，未启用</li>
 </ul>
 <div class="warn">⚠ 批准仅对这一个方案有效；方案变化后需要重新审查。点击「批准此安装方案」才提交授权（演示中仅此转场改变已授权集合）。</div>
-<div class="actions"><a class="btn sec" href="#S05">返回</a><button data-demo="commit-install">批准此安装方案</button></div>
+<div class="actions"><a class="btn sec" href="#S05">上一步</a><button data-demo="commit-install">批准此安装方案</button></div>
 <div class="demo">失败分支演示：<a href="#S06a">S06a 方案已变化（plan drift）</a></div>`;};
 
 S.S06a = `
@@ -235,13 +242,15 @@ S.S09 = () => {
 // 仅当 update/stale 等 attention 全部消失后才落入普通 Enabled group。
 const upd = !DEMO.applied, stale = DEMO.stale;
 const attention = upd || stale;
-const crState = DEMO.enabled ? "已启用（server-confirmed · 演示）" : "已安装，未启用（演示路径中的新装实例）";
-const crHint = stale ? " · ⓘ v0.5.0 已应用：权限需复核（server 判定）"
-  : (upd ? (DEMO.enabled ? " · ⓘ 有可用更新 v0.5.0 · 需先停用方可应用（lifecycle ∈ {InstalledDisabled, Disabled}）"
-                          : " · ⓘ 有可用更新 v0.5.0 · 应用要求 lifecycle ∈ {InstalledDisabled, Disabled}（server-projected · illustrative）")
-         : "");
+const crBadge = stale ? `<span class="badge attn">权限需复核</span>`
+  : (DEMO.enabled ? `<span class="badge on">已启用</span>` : `<span class="badge off">已安装，未启用</span>`);
+const crDetail = stale
+  ? "已安装，未启用 · ⓘ v0.5.0 已应用：授权失效（server 判定）"
+  : (upd ? (DEMO.enabled ? "server-confirmed · ⓘ 有可用更新 v0.5.0 · 需先停用方可应用（lifecycle ∈ {InstalledDisabled, Disabled}）"
+                          : "有可用更新 v0.5.0 · 应用要求 lifecycle ∈ {InstalledDisabled, Disabled}（server-projected · illustrative）")
+         : "server-confirmed · 演示");
 const crAct = stale ? ["#S13","复核权限 →"] : (upd ? ["#S10","查看更新 →"] : ["#S10","管理"]);
-const crRow = `<div class="row${attention?" attn":""}"><div><strong>USTC ChangeRadar</strong><div class="meta">${crState}${crHint}</div></div><a class="btn sec" href="${crAct[0]}">${crAct[1]}</a></div>`;
+const crRow = `<div class="row${attention?" attn":""}"><div><strong>USTC ChangeRadar</strong><div class="meta">${crBadge} ${crDetail}</div></div><a class="btn sec" href="${crAct[0]}">${crAct[1]}</a></div>`;
 const inEnabled = DEMO.enabled && !attention;
 const inDisabled = !DEMO.enabled && !attention;
 return `
@@ -262,7 +271,11 @@ ${inDisabled?crRow:""}
 </div>`;};
 
 S.S10 = () => {
-const lifecycle = DEMO.enabled ? "<strong>① 状态：已启用（Enabled · server-confirmed 演示）</strong>" : "<strong>① 状态：已安装，未启用（InstalledDisabled）</strong>";
+const lifecycle = DEMO.enabled
+  ? `<span class="badge on">已启用</span> <span class="meta">① 状态 · Enabled · server-confirmed 演示（仅 lifecycle 事实）</span>`
+  : (DEMO.stale
+    ? `<span class="badge attn">权限需复核</span> <span class="meta">① 状态 · 已安装，未启用（InstalledDisabled）· 授权失效需复核（仅 lifecycle 事实）</span>`
+    : `<span class="badge off">已安装，未启用</span> <span class="meta">① 状态 · InstalledDisabled（仅 lifecycle 事实）</span>`);
 let perm;
 if(DEMO.stale){
   perm = `ⓘ 授权已失效（安装变更 · 服务器判定；B6 Stale(InstallationChanged)，bounded domain evidence）· 需逐项复核后方可恢复可用`;
@@ -297,14 +310,14 @@ return `
 <header class="top"><h1>USTC ChangeRadar</h1>${enableAction}</header>
 <p class="scrid">S10 · 分层状态（六层分离呈现 · illustrative）</p>
 <ul class="clean">
-<li>${lifecycle} <span class="meta">（仅 lifecycle 事实）</span></li>
+<li>${lifecycle}</li>
 <li>② 说明：服务器投影 · ${DEMO.enabled?"已启用（演示）":"等待启用"}</li>
 <li>权限　　${perm}</li>
 ${removedNote}
 <li>更新　　${upd}</li>
-<li>运行时　${runtime}</li>
-<li>可调用性　${callable}</li>
-<li>新鲜度　${fresh}</li>
+<li><span class="meta">运行时　${runtime}</span></li>
+<li><span class="meta">可调用性　${callable}</span></li>
+<li><span class="meta">新鲜度　${fresh}</span></li>
 </ul>
 ${enableNote}
 <p class="note">更新审查完整线框见 02 卷 §5–§6；16B 以显式「应用更新（演示）」转场建模 update 状态（pre-apply → grants stale → 复核后无待应用更新）；真实系统中 Apply 后另有确认窗口（AppliedPendingConfirmation → Confirmed，B6 bounded），本演示简化为单一应用转场。</p>
@@ -318,7 +331,7 @@ if(DEMO.stale){
 <header class="top"><h1>暂时无法启用</h1><span class="scrid">S11 · 不可用（server reason · 演示）</span></header>
 <div class="warn">原因：安装变更后权限需要复核（服务器判定）。</div>
 <p class="note">unavailable + server reason + 指向解决路径；不合并多个前置。与 S11a 失败分支同语义；真实系统中由 server availability 投影。</p>
-<div class="actions"><a class="btn sec" href="#S10">返回</a><a class="btn" href="#S13">复核权限</a></div>`;
+<div class="actions"><a class="btn sec" href="#S10">返回插件详情</a><a class="btn" href="#S13">复核权限</a></div>`;
 }
 const g=grantedNames(), d=deniedNames();
 return `
@@ -336,7 +349,7 @@ S.S11a = `
 <header class="top"><h1>暂时无法启用</h1><span class="scrid">S11a · 失败分支</span></header>
 <div class="warn">原因：安装变更后权限需要复核（服务器判定）。</div>
 <p class="note">unavailable + server reason + 指向解决路径；不合并多个前置。</p>
-<div class="actions"><a class="btn sec" href="#S10">返回</a><a class="btn" href="#S13">复核权限</a></div>`;
+<div class="actions"><a class="btn sec" href="#S10">返回插件详情</a><a class="btn" href="#S13">复核权限</a></div>`;
 
 S.S12 = () => DEMO.enabled ? `
 <header class="top"><h1>✓ 已启用</h1><span class="scrid">S12 · server 确认（演示）</span></header>
@@ -348,8 +361,8 @@ S.S12 = () => DEMO.enabled ? `
 ${PENDING_NOTE}
 <div class="actions"><a class="btn sec" href="#S09">离开，去我的插件</a><button data-demo="confirm-enable">服务器确认：已启用（演示）</button></div>` : `
 <header class="top"><h1>启用结果（status/receipt）</h1><span class="scrid">S12 · 前提不满足（演示）</span></header>
-<p class="note" id="s12-block-note">确认不可用：${DEMO.stale?"授权已失效（server 判定）——需先完成权限复核（S13），再经 S11 显式提交启用请求":"无待确认的启用请求——启用请求仅能从启用复核屏（S11）显式「启用插件」提交；direct #S12 不产生 pending，本屏不改变任何状态"}。</p>
-<div class="actions"><a class="btn sec" href="#S09">返回我的插件</a><button disabled aria-describedby="s12-block-note">服务器确认：已启用（演示）</button></div>`;
+<div class="warn">⚠ 服务端确认尚不可用：${DEMO.stale?"授权已失效（服务器判定）——需先完成权限复核，再经启用确认页重新提交":"无待确认的启用请求——启用请求只能从启用确认页显式提交；本页不会产生待确认请求，也不会改变任何状态"}。</div>
+<div class="actions"><a class="btn sec" href="#S09">返回我的插件</a></div>`;
 
 S.S13 = () => {
 const premise = DEMO.applied && DEMO.stale;
@@ -357,14 +370,23 @@ const guard = premise ? "" : `<p class="note" id="s13-guard-note">ⓘ 当前演�
 return `
 <header class="top"><h1>权限复核</h1><span class="scrid">S13 · grant re-review（B6 bounded domain evidence，非 production）</span></header>
 ${guard}
-<p>因安装变更（更新 v0.5.0），以下授权已失效（服务器判定），需逐项重新批准；<strong>未勾选项不会被授权</strong>。勾选为复核<strong>草案</strong>：「返回」不改变 S10/S11 已授权集合；仅「批准已勾选权限」提交 fresh approval。canonical fixture（10 卷 §2.2）：Added 1 · Removed 1 · Unchanged 1 · Expanded/Narrowed/MetadataChanged 0。</p>
+<p>因安装变更（更新 v0.5.0），以下授权已失效（服务器判定），需逐项重新批准；<strong>未勾选项不会被授权</strong>。勾选为复核<strong>草案</strong>：「返回插件详情」不改变 S10/S11 已授权集合；仅「批准已勾选权限」提交 fresh approval。</p>
+<div class="chg">
+<div class="chg-h">保留 · Unchanged（范围未变 · 仍需重新批准 · 默认接受可取消）</div>
 <label class="ck"><input type="checkbox" data-scope="rereview" data-grant="a"${D13.a?" checked":""}> <strong>读取校园信息源（read）</strong><div class="meta">不变（Unchanged · 范围不变）→ 重新批准（continuity；仍是 fresh approval；默认接受可取消）</div></label>
+</div>
+<div class="chg">
+<div class="chg-h">新增 · Added（v0.5.0 · 非默认选中 · 未勾选 = 不授权）</div>
 <label class="ck"><input type="checkbox" data-scope="rereview" data-grant="c"${D13.c?" checked":""}> <strong>读取课程公告源（read）</strong> ⚠<div class="meta">新增（Added · v0.5.0）· 非默认选中 · 未勾选 = 不授权，对应功能由服务器投影为不可用</div></label>
+</div>
+<div class="chg">
+<div class="chg-h">移除 · Removed（只读 · 不进入复核集合）</div>
 <ul class="clean">
-<li><span class="meta">移除（Removed · 只读）：推送变化通知（effect）— v0.5.0 不再请求该能力；${DEMO.grants.b?"你此前已授权 → 复核批准后授权终止（history-only · server 执行），无需操作":"你此前未授权，无授权终止"}。已移除能力不进入复核集合（10 卷 §2.2 Removed 分组）。</span></li>
+<li><span class="meta">推送变化通知（effect）— v0.5.0 不再请求该能力；${DEMO.grants.b?"你此前已授权 → 复核批准后授权终止（history-only · server 执行），无需操作":"你此前未授权，无授权终止"}。</span></li>
 </ul>
-<p class="note">不提供「沿用旧授权」路径；逐项拒绝的后果由 server availability 投影。</p>
-<div class="actions"><a class="btn sec" href="#S10">返回</a><button data-demo="commit-rereview"${premise?"":" disabled aria-describedby=\"s13-guard-note\""}>批准已勾选权限</button></div>`;};
+</div>
+<p class="note">canonical fixture（10 卷 §2.2）：Added 1 · Removed 1 · Unchanged 1 · Expanded/Narrowed/MetadataChanged 0；不提供「沿用旧授权」路径；逐项拒绝的后果由 server availability 投影。</p>
+<div class="actions"><a class="btn sec" href="#S10">返回插件详情</a><button data-demo="commit-rereview"${premise?"":" disabled aria-describedby=\"s13-guard-note\""}>批准已勾选权限</button></div>`;};
 
 let prevId = null;
 function render(){

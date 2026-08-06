@@ -249,6 +249,10 @@ Semantic tokens 独立校验（同一 role 在 light/dark 各自达标）；dark
 | success / warning / info / stale on canvas | 5.41 / 5.43 / 7.69 / 4.97 | pass |
 | success / warning / info / stale on subtle | 5.09 / 5.11 / 7.23 / 4.68 | pass |
 | accent vs divider（focus 边界邻近对比） | 4.17 | pass（≥3.0） |
+| muted on divider（disabled 灰态文字） | 4.84 | pass |
+| divider on canvas（disabled 背景/边框） | 1.35 | WCAG 1.4.3 disabled 豁免；文字本身 4.84 达标 |
+
+disabled 灰态（2026-08-06 round-8 起）：filled 按钮 disabled = divider 底 + muted 字（上表 4.84）；`.sec` disabled = muted 字 + divider 边框（muted on canvas 6.00）。弃 opacity 机制；`.badge.attn`（attention 态）背景同 `.warn` 底 `#F9F5EF`。
 
 **C-dark**：ink 17.38/16.47；muted 7.87/6.96；accent 8.00/7.58；canvas-on-accent 8.00；canvas-on-danger 6.67；success 8.77、warning 8.78、danger 6.67、info 7.54、stale 6.01；muted on subtle 6.96。全部 pass。
 

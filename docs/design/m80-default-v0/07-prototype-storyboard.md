@@ -12,7 +12,7 @@ Delivered: actual clickable prototype（16B，`prototype/index.html`，2026-08-0
 ```
 
 - 第一轮判断「无 no-code 工具、不写 HTML」已被 Develata 决策覆盖（2026-08-02）：16B 以**自包含静态 HTML** 交付。该文件是设计演示物，**不是** retained frontend skeleton、不含任何 API/route/DTO 发明；它是 disposable HTML/JS review artifact（non-product、non-retained M80 frontend），以 client-side 演示状态模拟 server 投影；repository checker/tests/CI 集成属于 PR repair 范围，非本 packet candidate 内容；全部转场在真实系统中对应 server 确认事件，prototype 内以显式「演示」标注模拟。
-- 演示状态模型（2026-08-03 round-3；round-4 补 enablePending 前提）：**draft ≠ committed**。S05/S13 勾选仅写入草案（D5/D13），返回/取消/离开不提交；committed（已授权集合 / update applied / grants stale / Enabled）仅由显式演示转场改变——S06「批准此安装方案」、S10「应用更新（演示）」、S13「批准已勾选权限」、S11「启用插件」（仅置 enablePending，非成功）、S12「服务器确认：已启用（演示）」（要求 `enablePending && !stale && !enabled`；premise 不满足时确认动作 disabled 并以 aria-describedby 暴露原因，direct `#S12` 不产生 pending、不改变任何状态）。S10/S09/S11 摘要只反映 committed。capability set（canonical fixture，与 `10` 卷 §2.2 一致）：v0.4.0 = {读取校园信息源, 推送变化通知}；v0.5.0 = {读取校园信息源, 读取课程公告源}——diff 为 Added 1（读取课程公告源，非默认选中）· Removed 1（推送变化通知，授权终止 history-only，只读标注，不进复核集合）· Unchanged 1（读取校园信息源，continuity 重新批准，默认接受）· Expanded/Narrowed/MetadataChanged 0。
+- 演示状态模型（2026-08-03 round-3；round-4 补 enablePending 前提）：**draft ≠ committed**。S05/S13 勾选仅写入草案（D5/D13），返回/取消/离开不提交；committed（已授权集合 / update applied / grants stale / Enabled）仅由显式演示转场改变——S06「批准此安装方案」、S10「应用更新（演示）」、S13「批准已勾选权限」、S11「启用插件」（仅置 enablePending，非成功）、S12「服务器确认：已启用（演示）」（要求 `enablePending && !stale && !enabled`；premise 不满足时确认动作以非按钮状态块（warn + 原因文字）呈现，round-8 起不再渲染 disabled 主按钮，direct `#S12` 不产生 pending、不改变任何状态）。S10/S09/S11 摘要只反映 committed。capability set（canonical fixture，与 `10` 卷 §2.2 一致）：v0.4.0 = {读取校园信息源, 推送变化通知}；v0.5.0 = {读取校园信息源, 读取课程公告源}——diff 为 Added 1（读取课程公告源，非默认选中）· Removed 1（推送变化通知，授权终止 history-only，只读标注，不进复核集合）· Unchanged 1（读取校园信息源，continuity 重新批准，默认接受）· Expanded/Narrowed/MetadataChanged 0。
 - 导入仓库时的义务：screen-flow specification（本卷）+ screen IDs/transition table（§3）+ 静态文件本体 + 本卷 revision + export timestamp（2026-08-02）；文件 digest 在入库 commit 中由 Git 记录。
 
 ## 2. Journey 覆盖
@@ -41,9 +41,9 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 |---|---|---|---|---|
 | S01 | Market browse | loading/empty/no-results/stale/error | 查看详情 | →S02 |
 | S02 | Package detail | normal/not-runnable/already-installed/stale | 审查安装 | →S03 / →S10（已安装） |
-| S03 | Install review ① 精确包 | plan-loading/conflict | 继续 | →S04 / cancel→S02 |
-| S04 | Install review ② 配置 | invalid/secret-ref-unavailable | 继续 | →S05 / back→S03 |
-| S05 | Install review ③ 权限审批 | denied/high-risk-unchecked | 继续 | →S06 / back→S04 |
+| S03 | Install review ① 精确包 | plan-loading/conflict | 下一步：配置 | →S04 / cancel→S02 |
+| S04 | Install review ② 配置 | invalid/secret-ref-unavailable | 下一步：权限审批 | →S05 / back→S03 |
+| S05 | Install review ③ 权限审批 | denied/high-risk-unchecked | 下一步：确认安装方案 | →S06 / back→S04 |
 | S06 | Install review ④ 最终摘要 | drift（S06a）/conflict | 批准此安装方案（提交草案 → committed） | →S07 / back→S05 |
 | S06a | Plan drift banner 态 | — | 重新生成方案 | →S03' |
 | S07 | Install pending | pending/unknown-outcome | （等待） | →S08 / unknown→S07a |
@@ -53,7 +53,7 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 | S10 | Installation detail | 十变体（见 `02` 卷 §7.4）；演示建模 pre-apply/stale/reapproved | 启用 / 应用更新（演示） | →S11 / stale→S13 |
 | S11 | Enable review | unavailable（stale → S11a 同语义块）/pending/conflict | 启用插件（仅置 enablePending 提交请求） | →S12 / back→S10 |
 | S11a | Enable unavailable：需权限复核 | — | 复核权限 | →S13 |
-| S12 | Enable pending → Enabled 确认 | pending → server 确认（演示）；premise 不满足 → 确认 disabled + reason | 服务器确认：已启用（演示） | →S10 |
+| S12 | Enable pending → Enabled 确认 | pending → server 确认（演示）；premise 不满足 → 非按钮状态块（warn + reason，round-8 起） | 服务器确认：已启用（演示） | →S10 |
 | S13 | Grant re-review | stale-grant/scope-change；勾选为草案，返回不提交 | 批准已勾选权限（fresh approval → committed） | →S11 / back→S10 |
 
 （S13 语义来源：B6 收窄 posture，bounded implemented domain evidence，packet 仍 proposal-only；carrier 未定。）
@@ -62,7 +62,7 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 
 S09 与 S10 共享同一演示 update 状态（v0.5.0；server-projected）：**pre-apply**（有可用更新；应用要求 lifecycle ∈ {InstalledDisabled, Disabled}）→ S10「应用更新（演示）」→ **grants stale**（S10 权限行如实显示失效、启用不可用 + reason、复核权限入口；S11 呈现 S11a 同语义块）→ S13 逐项复核（草案；返回不提交；v0.5.0 已移除的「推送变化通知」以只读行标注、不进入复核集合；新增的「读取课程公告源」非默认选中）→ S13「批准已勾选权限」→ **reapproved**（S10/S09 不再显示「有可用更新 v0.5.0」，权限行按 v0.5.0 capability set 呈现）。更新审查完整线框见 `02` 卷 §5–§6；真实系统中 Apply 后另有确认窗口（AppliedPendingConfirmation → Confirmed，B6 bounded），16B 简化为单一应用转场。S11a/S13 的「安装变更后权限需复核」对应该更新场景。
 
-S09 分组为 **attention-first**（`02` 卷 §7.1）：update available 或 grants stale 存在时，ChangeRadar 一律进入「需要你处理」置顶分组（lifecycle label 保留如实显示，如「已启用 · ⓘ 有可用更新 v0.5.0 · 需先停用方可应用」）；仅当 update/stale 等 attention 全部消失后，Enabled 实例才落入普通「已启用」分组。counts、row placement、reason 与 action 同步投影，不出现「attention 为空 + 同一 row 又显示待处理更新」的矛盾态。
+S09 分组为 **attention-first**（`02` 卷 §7.1）：update available 或 grants stale 存在时，ChangeRadar 一律进入「需要你处理」置顶分组（lifecycle label 保留如实显示：状态 badge「已启用 / 已安装，未启用 / 权限需复核」+ meta 内「ⓘ 有可用更新 v0.5.0 · 需先停用方可应用」等提示，round-8 起）；仅当 update/stale 等 attention 全部消失后，Enabled 实例才落入普通「已启用」分组。counts、row placement、reason 与 action 同步投影，不出现「attention 为空 + 同一 row 又显示待处理更新」的矛盾态。
 
 ## 4. 关键转场注释
 
@@ -98,7 +98,7 @@ S09 分组为 **attention-first**（`02` 卷 §7.1）：update available 或 gra
 │  · 安装后状态：已安装，未启用                    │
 │                                                 │
 │ ⚠ 批准仅对这一个方案有效。                       │
-│ [批准此安装方案]            [返回]      [取消]   │
+│ [批准此安装方案]            [上一步]             │
 └──────────────────────────────────────────────────┘
 Illustrative / No live backend
 ```
@@ -148,13 +148,13 @@ Illustrative / No live backend
     克制确认：inline state 更新 + activity entry；无 confetti。
 ```
 
-本地点击不产生成功：Enabled 状态仅由「服务器确认（演示）」转场写入 committed，此后 S10/S09 均投影 Enabled（S09 分组同步：无其他 attention 时 ChangeRadar 移入「已启用」，「需要你处理」为空态如实呈现；若仍有 update available 等 attention，则按 attention-first 规则留在「需要你处理」）。**premise guard**：direct `#S12` 不产生 pending——无待确认请求（或 grants stale）时本屏呈现「启用结果（status/receipt）」前提不满足态，确认动作 disabled 并以 aria-describedby 关联非空原因文本（指向 S11/S13 解决路径），任何状态不变。
+本地点击不产生成功：Enabled 状态仅由「服务器确认（演示）」转场写入 committed，此后 S10/S09 均投影 Enabled（S09 分组同步：无其他 attention 时 ChangeRadar 移入「已启用」，「需要你处理」为空态如实呈现；若仍有 update available 等 attention，则按 attention-first 规则留在「需要你处理」）。**premise guard**：direct `#S12` 不产生 pending——无待确认请求（或 grants stale）时本屏呈现「启用结果（status/receipt）」前提不满足态，确认动作以非按钮状态块（warn 容器 + 原因文字，round-8 起）呈现，任何状态不变。
 
 **S13 Grant re-review（stale-grant 复核）**
 
 - 进入前提：S10「应用更新（演示）」后 grants stale；直接 hash 进入时以「样例呈现」标注并禁用批准动作（真实系统中本屏仅由 server availability 投影进入，`02` 卷 §7.4 V4）。
-- 勾选为草案：「返回」不改变 S10/S11 已授权集合；仅「批准已勾选权限」提交 fresh approval。
-- 复核集合 = 已授权且在 v0.5.0 保留的能力（a = Unchanged continuity，默认接受可取消）+ v0.5.0 新增能力（c = Added，非默认选中）；v0.5.0 移除的能力（b = Removed）以只读行显式标注（已授权 → 授权终止 history-only；未授权 → 无授权终止），不进入复核集合，不 invisible 携带。canonical fixture 计数：Added 1 · Removed 1 · Unchanged 1 · Expanded/Narrowed/MetadataChanged 0（与 `10` 卷 §2.2 分组 diff、`02` 卷 §5.2 变化摘要一致）。
+- 勾选为草案：「返回插件详情」不改变 S10/S11 已授权集合；仅「批准已勾选权限」提交 fresh approval。
+- 复核集合 = 已授权且在 v0.5.0 保留的能力（a = Unchanged continuity，默认接受可取消）+ v0.5.0 新增能力（c = Added，非默认选中）；v0.5.0 移除的能力（b = Removed）以只读行显式标注（已授权 → 授权终止 history-only；未授权 → 无授权终止），不进入复核集合，不 invisible 携带。canonical fixture 计数：Added 1 · Removed 1 · Unchanged 1 · Expanded/Narrowed/MetadataChanged 0（与 `10` 卷 §2.2 分组 diff、`02` 卷 §5.2 变化摘要一致）。round-8 起三组以分组容器呈现（分组标题「保留 / 新增 / 移除」+ 括号契约词 Unchanged/Added/Removed），fixture 计数句移入 note（技术层可查）。
 
 ## 6. Prototype 纪律（16B 必须保持）
 
@@ -164,7 +164,7 @@ Illustrative / No live backend
 - update 演示状态机：pre-apply →（应用更新（演示））→ grants stale →（复核批准）→ reapproved；stale 时启用不可用 + reason；reapproved 后不再显示「有可用更新」；应用要求措辞一律 lifecycle ∈ {InstalledDisabled, Disabled}；
 - install 完成与 Enable 分离；failure 不自动跳过 review；
 - 非 ChangeRadar 插件的「管理」动作为 out-of-prototype：disabled + 如实标注，不导航到 ChangeRadar detail（S10）；
-- 所有 disabled 动作必须 programmatically 暴露原因：`aria-describedby` 指向存在的元素且原因文本非空（S01/S09 out-of-prototype 管理、S10 停用/应用更新/启用、S12 前提不满足确认、S13 样例呈现批准、danger zone 同规则）；
+- 所有 disabled 动作必须 programmatically 暴露原因：`aria-describedby` 指向存在的元素且原因文本非空（S01/S09 out-of-prototype 管理、S10 停用/应用更新/启用、S13 样例呈现批准、danger zone 同规则）；S12 前提不满足确认自 round-8 起为非按钮状态块（warn 容器直接呈现原因），不再是 disabled action；
 - Android 复杂 approval 用 full-page flow，不把 diff 塞进小 bottom sheet；
 - target-size 声明范围：动作按钮（`button`/`.btn`）与 checkbox 行（`label.ck`）≥44px；原型导航与失败分支演示的 inline 文本链接按 WCAG 2.2 §2.5.8 inline 例外处理，不声明 44px。
 
