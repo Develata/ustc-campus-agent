@@ -5,7 +5,7 @@
 > 覆盖 artifact：12 Design tokens（三套方向 + 比较 + 推荐）
 > 对比度数字为 WCAG 2.x 相对亮度公式实际计算值（公式与结果表见 §7），非肉眼判断。所有 token 数值为 `PROPOSED_DESIGN_TOKEN` 起点，Stage B 以真实 browser/device 测试冻结。
 
-## 1. Direction A — Quiet Evidence System（推荐）
+## 1. Direction A — Quiet Evidence System（已评估未采纳）
 
 ### 1.1 概念
 
@@ -199,7 +199,7 @@ Mono：sha256:9f2c…c41a（摘要可复制）
 - Measure：reading content 约 64–72 汉字 visual measure；technical diff 可更宽；titles 允许两行。
 - Spacing：4px base；8/12/16/24/32/48 semantic steps；section spacing > component spacing > inline gap。
 - Grid：desktop 12-column 仅作 alignment；Android 4-column；content edges 与 actions 共享 anchor。
-- Radius：small controls 6–10；bounded panels 12–16；不全站大圆角。
+- Radius：small controls 6–10；bounded panels 12–16；不全站大圆角。S13 分组容器 `.chg` 按 small controls 档取值 8px（与按钮一致，视觉上为控件系而非 bounded panel）。
 - Border/shadow：1px divider 优先；shadow 仅 overlay/floating control；content 不靠重阴影分层。
 - Icons：单一 coherent outlined/filled 状态对，约 1.5–2px stroke；icon-only 必有 accessible name；不混 emoji（本 packet 线框中的符号仅为 ASCII 占位）。
 - Materials：content 标准 surfaces；translucency 仅少量 navigation/overlay 且有 reduced-transparency fallback；不 glassify cards。
@@ -250,7 +250,7 @@ Semantic tokens 独立校验（同一 role 在 light/dark 各自达标）；dark
 | success / warning / info / stale on subtle | 5.09 / 5.11 / 7.23 / 4.68 | pass |
 | accent vs divider（focus 边界邻近对比） | 4.17 | pass（≥3.0） |
 | muted on divider（disabled 灰态文字） | 4.84 | pass |
-| divider on canvas（disabled 背景/边框） | 1.35 | WCAG 1.4.3 disabled 豁免；文字本身 4.84 达标 |
+| divider on canvas（disabled 背景/边框） | 1.24 | WCAG 1.4.3 disabled 豁免；文字本身 4.84 达标 |
 
 disabled 灰态（2026-08-06 round-8 起）：filled 按钮 disabled = divider 底 + muted 字（上表 4.84）；`.sec` disabled = muted 字 + divider 边框（muted on canvas 6.00）。弃 opacity 机制；`.badge.attn`（attention 态）背景同 `.warn` 底 `#F9F5EF`。
 

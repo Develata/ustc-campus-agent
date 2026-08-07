@@ -101,7 +101,7 @@ const PENDING_NOTE = `<p class="note">※ 真实系统中此转场由 server typ
 //   S13「批准已勾选权限」→ 提交复核草案（fresh approval），stale=false
 //   S11「启用插件」→ enablePending=true（仅提交请求，非成功）
 //   S12「服务器确认：已启用（演示）」→ enabled=true（要求 enablePending && !stale && !enabled；
-//     premise 不满足时 confirm disabled + aria-describedby 暴露原因，状态不变）
+//     premise 不满足时渲染非按钮 warn 状态块（原因 + 返回动作），不渲染 disabled 主按钮，状态不变）
 // draft（勾选草案）：D5（S05 安装审批）、D13（S13 复核）；返回/取消/离开均不提交，
 //   决不直接改写 committed。
 //
@@ -361,7 +361,7 @@ S.S12 = () => DEMO.enabled ? `
 ${PENDING_NOTE}
 <div class="actions"><a class="btn sec" href="#S09">离开，去我的插件</a><button data-demo="confirm-enable">服务器确认：已启用（演示）</button></div>` : `
 <header class="top"><h1>启用结果（status/receipt）</h1><span class="scrid">S12 · 前提不满足（演示）</span></header>
-<div class="warn">⚠ 服务端确认尚不可用：${DEMO.stale?"授权已失效（服务器判定）——需先完成权限复核，再经启用确认页重新提交":"无待确认的启用请求——启用请求只能从启用确认页显式提交；本页不会产生待确认请求，也不会改变任何状态"}。</div>
+<div class="warn">⚠ 服务端确认尚不可用：${DEMO.stale?"授权已失效（服务器判定）——需先完成权限复核，再经启用复核屏（S11）重新提交启用请求":"无待确认的启用请求——启用请求仅能从启用复核屏（S11）显式「启用插件」提交；本页不会产生待确认请求，也不会改变任何状态"}。</div>
 <div class="actions"><a class="btn sec" href="#S09">返回我的插件</a></div>`;
 
 S.S13 = () => {
