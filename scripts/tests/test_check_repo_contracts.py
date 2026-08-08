@@ -5917,6 +5917,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_platform_identity_implementation(issues)",
         "check_platform_session_contract(issues)",
         "check_platform_session_implementation(issues)",
+        "check_p1_source_revision_contract(issues)",
         "check_module_registry(issues)",
         "check_s0_architecture_review(issues)",
     )
@@ -6639,6 +6640,235 @@ class PlatformSessionImplementationTests(unittest.TestCase):
             self.check_session(),
             "check_platform_session_implementation must be invoked from repository main()",
         )
+
+
+class SourceRegistryContractTests(unittest.TestCase):
+    """P1-0 exact contract/readiness carrier; no Rust implementation is assumed yet."""
+
+    FILES = (
+        "docs/acceptance/matrix.tsv",
+        "docs/contracts/source-import.md",
+        "docs/plan/modules/70-campus-trust-source-pipeline.md",
+        "docs/tasks/01-execution-roadmap.md",
+        "docs/tasks/p1-source-revision-readiness-proposal.md",
+        "scripts/check_repo_contracts.py",
+    )
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        for rel in self.FILES:
+            destination = self.root / rel
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(REPO_ROOT / rel, destination)
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        self.original_packet_sha = cast(
+            str, getattr(checker, "P1_SOURCE_REVISION_PACKET_SHA256")
+        )
+        self.original_packet_bytes = cast(
+            int, getattr(checker, "P1_SOURCE_REVISION_PACKET_BYTES")
+        )
+        self.original_contract_sha = cast(
+            str, getattr(checker, "P1_SOURCE_IMPORT_CONTRACT_SHA256")
+        )
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        setattr(checker, "P1_SOURCE_REVISION_PACKET_SHA256", self.original_packet_sha)
+        setattr(checker, "P1_SOURCE_REVISION_PACKET_BYTES", self.original_packet_bytes)
+        setattr(checker, "P1_SOURCE_IMPORT_CONTRACT_SHA256", self.original_contract_sha)
+        self.temporary_directory.cleanup()
+
+    def path(self, rel: str) -> Path:
+        return self.root / rel
+
+    def check_p1(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_p1_source_revision_contract(issues)
+        return issues
+
+    def rewrite(self, rel: str, old: str, new: str) -> None:
+        path = self.path(rel)
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, f"missing/duplicate mutation target in {rel}: {old}")
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def rebind_packet_digest(self) -> None:
+        path = self.path(checker.P1_SOURCE_REVISION_PROPOSAL)
+        data = path.read_bytes()
+        begin = (checker.P1_SOURCE_REVISION_PACKET_BEGIN + "\n").encode()
+        end = checker.P1_SOURCE_REVISION_PACKET_END.encode()
+        self.assertEqual(data.count(begin), 1)
+        self.assertEqual(data.count(end), 1)
+        packet = data.split(begin, 1)[1].split(end, 1)[0]
+        digest = hashlib.sha256(packet).hexdigest()
+        text = data.decode("utf-8")
+        old = (
+            f"- `Packet digest`: `sha256:{self.original_packet_sha}` "
+            f"over `{self.original_packet_bytes}` bytes"
+        )
+        current = (
+            f"- `Packet digest`: `sha256:{getattr(checker, 'P1_SOURCE_REVISION_PACKET_SHA256')}` "
+            f"over `{getattr(checker, 'P1_SOURCE_REVISION_PACKET_BYTES')}` bytes"
+        )
+        marker = current if current in text else old
+        self.assertEqual(text.count(marker), 1)
+        replacement = f"- `Packet digest`: `sha256:{digest}` over `{len(packet)}` bytes"
+        path.write_text(text.replace(marker, replacement, 1), encoding="utf-8")
+        setattr(checker, "P1_SOURCE_REVISION_PACKET_SHA256", digest)
+        setattr(checker, "P1_SOURCE_REVISION_PACKET_BYTES", len(packet))
+
+    def rebind_contract_digest(self) -> None:
+        digest = hashlib.sha256(self.path(checker.P1_SOURCE_IMPORT_CONTRACT).read_bytes()).hexdigest()
+        setattr(checker, "P1_SOURCE_IMPORT_CONTRACT_SHA256", digest)
+
+    def assert_rejected(self, expected: str) -> None:
+        issues = self.check_p1()
+        self.assertTrue(any(expected in issue for issue in issues), issues)
+
+    def test_p1_0_exact_candidate_passes(self) -> None:
+        self.assertEqual(self.check_p1(), [])
+
+    def test_packet_digest_drift_fails_closed(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "one construction-ready `source-import/v0` contract",
+            "one permissive `source-import/v0` contract",
+        )
+        self.assert_rejected("P1 source/revision exact packet drift")
+
+    def test_p1_0_missing_path_fails_after_digest_rebound(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "## 3. P1-0 contract/readiness scope\n\nP1-0 may edit exactly:\n\n```text\ndocs/contracts/source-import.md\ndocs/plan/modules/70-campus-trust-source-pipeline.md\n",
+            "## 3. P1-0 contract/readiness scope\n\nP1-0 may edit exactly:\n\n```text\ndocs/contracts/source-import.md\n",
+        )
+        self.rebind_packet_digest()
+        self.assert_rejected("P1-0 exact writable path allowlist drifted")
+
+    def test_p1_0_extra_path_fails_after_digest_rebound(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "scripts/tests/test_check_repo_contracts.py\n```\n\nP1-0 must:",
+            "scripts/tests/test_check_repo_contracts.py\nREADME.md\n```\n\nP1-0 must:",
+        )
+        self.rebind_packet_digest()
+        self.assert_rejected("P1-0 exact writable path allowlist drifted")
+
+    def test_p1_1_extra_path_fails_after_digest_rebound(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "scripts/tests/test_check_repo_contracts.py\n```\n\nThe implementation is the exact B1",
+            "scripts/tests/test_check_repo_contracts.py\nCargo.toml\n```\n\nThe implementation is the exact B1",
+        )
+        self.rebind_packet_digest()
+        self.assert_rejected("P1-1 exact writable path allowlist drifted")
+
+    def test_source_object_drift_fails_closed(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            f"- `Source commit`: `{checker.P1_SOURCE_REVISION_SOURCE_COMMIT}`",
+            f"- `Source commit`: `{'0' * 40}`",
+        )
+        self.assert_rejected("P1 source/revision outer metadata missing/duplicated")
+
+    def test_src_001_premature_promotion_fails_closed(self) -> None:
+        matrix = self.path("docs/acceptance/matrix.tsv")
+        lines = matrix.read_text(encoding="utf-8").splitlines()
+        index = next(i for i, line in enumerate(lines) if line.startswith("SRC-001\t"))
+        fields = lines[index].split("\t")
+        self.assertEqual(fields[5], "planned")
+        fields[5] = "implemented"
+        lines[index] = "\t".join(fields)
+        matrix.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self.assert_rejected("P1-0 requires SRC-001 to remain planned")
+
+    def test_m60_state_promotion_fails_closed(self) -> None:
+        self.rewrite(
+            "docs/plan/modules/70-campus-trust-source-pipeline.md",
+            "- `Implementation State`: `planned`",
+            "- `Implementation State`: `partial-evidence`",
+        )
+        self.assert_rejected("P1 source/revision status projection drifted")
+
+    def test_concrete_source_approval_fails_after_contract_digest_rebound(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_IMPORT_CONTRACT,
+            "- `Proposed 2025 SourceId`: `ustc-teach-calendar-fall-2025`",
+            "- `Proposed 2025 SourceId`: `ustc-teach-calendar-fall-2025`\n- `Review state`: `Approved`",
+        )
+        self.rebind_contract_digest()
+        self.assert_rejected("P1 concrete source candidate approval posture drifted")
+
+    def test_duplicate_url_alias_fails_after_contract_digest_rebound(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_IMPORT_CONTRACT,
+            "- duplicate `SourceId` or duplicate canonical `SourceUrl` is rejected without replacing the first definition;",
+            "- duplicate `SourceId` is rejected; duplicate canonical `SourceUrl` aliases are accepted;",
+        )
+        self.rebind_contract_digest()
+        self.assert_rejected("P1 source-import truth projection missing/duplicated")
+
+    def test_model_inference_source_authority_fails_after_contract_digest_rebound(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_IMPORT_CONTRACT,
+            "`ModelInference` is rejected by `SourceDefinition::proposed`: an explanation class cannot become a source definition or approval candidate.",
+            "`ModelInference` is accepted by `SourceDefinition::proposed` as a source definition and approval candidate.",
+        )
+        self.rebind_contract_digest()
+        self.assert_rejected("P1 source-import truth projection missing/duplicated")
+
+    def test_raw_source_fixture_fails_closed(self) -> None:
+        fixture = self.root / "market/fixtures/calendar-2025-fall.body"
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        fixture.write_bytes(b"synthetic")
+        self.assert_rejected("P1 raw source evidence must remain outside repository")
+
+    def test_remote_shipping_drift_fails_after_packet_digest_rebound(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "This packet authorizes no push, PR, merge, tag, release or deployment.",
+            "This packet authorizes push and PR after local tests.",
+        )
+        self.rebind_packet_digest()
+        self.assert_rejected("P1 source/revision packet semantic carrier drifted")
+
+    def test_p1_0_go_receipt_removal_fails_closed(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "### P1-0 exact-candidate GO receipt",
+            "### P1-0 review receipt pending",
+        )
+        self.assert_rejected("P1-0 GO receipt missing/duplicated")
+
+    def test_contract_acceptance_reversion_fails_after_contract_digest_rebound(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_IMPORT_CONTRACT,
+            "- `Status`: Accepted for bounded `M60-B1 source-registry`; later M60 slices remain planned",
+            "- `Status`: P1-0 candidate; exact contract review pending",
+        )
+        self.rebind_contract_digest()
+        self.assert_rejected("P1 source-import truth projection missing/duplicated")
+
+    def test_remote_shipping_authority_expansion_fails_closed(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "- `Remote shipping`: feature-branch push authorized after final local validation; PR/merge/tag/release remain forbidden",
+            "- `Remote shipping`: push, PR and merge authorized after local validation",
+        )
+        self.assert_rejected("P1 source/revision outer metadata missing/duplicated")
+
+    def test_checker_entrypoint_is_bound_outside_the_checker(self) -> None:
+        source = self.path("scripts/check_repo_contracts.py").read_text(encoding="utf-8")
+        main = source.split("\ndef main() -> int:", 1)
+        self.assertEqual(len(main), 2)
+        calls = [
+            line
+            for line in main[1].splitlines()
+            if line.strip() == "check_p1_source_revision_contract(issues)"
+        ]
+        self.assertEqual(calls, ["    check_p1_source_revision_contract(issues)"])
 
 
 if __name__ == "__main__":

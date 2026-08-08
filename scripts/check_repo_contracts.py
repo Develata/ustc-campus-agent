@@ -9101,6 +9101,243 @@ def check_platform_session_implementation(issues: list[str]) -> None:
         )
 
 
+P1_SOURCE_REVISION_PROPOSAL = "docs/tasks/p1-source-revision-readiness-proposal.md"
+P1_SOURCE_IMPORT_CONTRACT = "docs/contracts/source-import.md"
+P1_SOURCE_REVISION_PACKET_BEGIN = "<!-- P1_SOURCE_REVISION_EXACT_PACKET:BEGIN -->"
+P1_SOURCE_REVISION_PACKET_END = "<!-- P1_SOURCE_REVISION_EXACT_PACKET:END -->"
+P1_SOURCE_REVISION_PACKET_SHA256 = (
+    "11529705aca4e19ae52bde8ec5a69571c2c3cc6d1157057ac77dd69f78aa65f9"
+)
+P1_SOURCE_REVISION_PACKET_BYTES = 8479
+P1_SOURCE_IMPORT_CONTRACT_SHA256 = (
+    "1b8ab679d2b190c62b267ee84702c26f50a2806e30aa774d5a05b3e73f84dc7e"
+)
+P1_SOURCE_REVISION_SOURCE_COMMIT = "2f4de29032560ff3e13d9994b33a3aff14243f44"
+P1_SOURCE_REVISION_SOURCE_TREE = "53e266c47fdb07d50a734faa24bb11ac4bc5527d"
+P1_0_ALLOWED_PATHS = (
+    "docs/contracts/source-import.md",
+    "docs/plan/modules/70-campus-trust-source-pipeline.md",
+    "docs/tasks/01-execution-roadmap.md",
+    "docs/tasks/p1-source-revision-readiness-proposal.md",
+    "scripts/check_repo_contracts.py",
+    "scripts/tests/test_check_repo_contracts.py",
+)
+P1_1_ALLOWED_PATHS = (
+    "crates/platform-core/src/lib.rs",
+    "crates/platform-core/src/source_registry.rs",
+    "crates/platform-core/tests/source_registry.rs",
+    "docs/acceptance/matrix.tsv",
+    "docs/acceptance/platform-baseline.md",
+    "docs/contracts/source-import.md",
+    "docs/plan/modules/70-campus-trust-source-pipeline.md",
+    "docs/tasks/01-execution-roadmap.md",
+    "docs/tasks/p1-source-revision-readiness-proposal.md",
+    "scripts/check_repo_contracts.py",
+    "scripts/tests/test_check_repo_contracts.py",
+)
+P1_PLANNED_MATRIX_CASES = ("SRC-001", "SRC-010", "SRC-011", "SRC-012")
+
+
+def _p1_exact_fenced_paths(packet: str, heading: str) -> tuple[str, ...] | None:
+    start = packet.find(heading)
+    if start == -1:
+        return None
+    fence_start = packet.find("```text\n", start)
+    fence_end = packet.find("\n```", fence_start + len("```text\n"))
+    if fence_start == -1 or fence_end == -1:
+        return None
+    body = packet[fence_start + len("```text\n") : fence_end]
+    return tuple(line for line in body.splitlines() if line)
+
+
+def check_p1_source_revision_contract(issues: list[str]) -> None:
+    proposal_path = ROOT / P1_SOURCE_REVISION_PROPOSAL
+    contract_path = ROOT / P1_SOURCE_IMPORT_CONTRACT
+    for rel, path in (
+        (P1_SOURCE_REVISION_PROPOSAL, proposal_path),
+        (P1_SOURCE_IMPORT_CONTRACT, contract_path),
+    ):
+        if not path.is_file():
+            fail(f"P1 source/revision carrier missing: {rel}", issues)
+            return
+
+    proposal_bytes = proposal_path.read_bytes()
+    contract_bytes = contract_path.read_bytes()
+    begin = (P1_SOURCE_REVISION_PACKET_BEGIN + "\n").encode()
+    end = P1_SOURCE_REVISION_PACKET_END.encode()
+    if proposal_bytes.count(begin) != 1 or proposal_bytes.count(end) != 1:
+        fail("P1 source/revision packet markers must each occur exactly once", issues)
+        return
+    packet = proposal_bytes.split(begin, 1)[1].split(end, 1)[0]
+    packet_sha = hashlib.sha256(packet).hexdigest()
+    if len(packet) != P1_SOURCE_REVISION_PACKET_BYTES or packet_sha != P1_SOURCE_REVISION_PACKET_SHA256:
+        fail(
+            "P1 source/revision exact packet drift: "
+            f"expected bytes={P1_SOURCE_REVISION_PACKET_BYTES} sha256={P1_SOURCE_REVISION_PACKET_SHA256} "
+            f"actual bytes={len(packet)} sha256={packet_sha}",
+            issues,
+        )
+
+    contract_sha = hashlib.sha256(contract_bytes).hexdigest()
+    if contract_sha != P1_SOURCE_IMPORT_CONTRACT_SHA256:
+        fail(
+            "P1 source-import contract drift: "
+            f"expected {P1_SOURCE_IMPORT_CONTRACT_SHA256} actual={contract_sha}",
+            issues,
+        )
+
+    proposal = proposal_bytes.decode("utf-8")
+    packet_text = packet.decode("utf-8")
+    required_outer = (
+        f"- `Source commit`: `{P1_SOURCE_REVISION_SOURCE_COMMIT}`",
+        f"- `Source tree`: `{P1_SOURCE_REVISION_SOURCE_TREE}`",
+        f"- `Packet digest`: `sha256:{P1_SOURCE_REVISION_PACKET_SHA256}` over `{P1_SOURCE_REVISION_PACKET_BYTES}` bytes",
+        "- `Source candidate`: `ustc-teach-calendar-fall` remains `Proposed`",
+        "- `Stage`: `P1_0_CLOSURE_CANDIDATE`",
+        "- `P1-0 review`: `GO`; exact-candidate receipt recorded below",
+        "- `Remote shipping`: feature-branch push authorized after final local validation; PR/merge/tag/release remain forbidden",
+    )
+    for token in required_outer:
+        if proposal.count(token) != 1:
+            fail(f"P1 source/revision outer metadata missing/duplicated: {token}", issues)
+
+    if _p1_exact_fenced_paths(packet_text, "## 3. P1-0 contract/readiness scope") != P1_0_ALLOWED_PATHS:
+        fail("P1-0 exact writable path allowlist drifted", issues)
+    if _p1_exact_fenced_paths(packet_text, "## 4. P1-1 exact implementation scope") != P1_1_ALLOWED_PATHS:
+        fail("P1-1 exact writable path allowlist drifted", issues)
+
+    packet_tokens = (
+        "preserve M60 as `planned`, M70 as `design-only` and every acceptance row's current status",
+        "It must remain `Proposed`; no concrete row is instantiated as `Approved` in production data, fixtures or docs.",
+        "This packet authorizes no push, PR, merge, tag, release or deployment.",
+        "promote only matrix row `SRC-001`",
+        "SRC-010 planned\nSRC-011 planned\nSRC-012 planned",
+        "It adds no dependency, adapter, network access, DNS/redirect logic, clock, persistence, parser, raw snapshot, normalized snapshot, source revision, diff, baseline or product feed",
+    )
+    for token in packet_tokens:
+        if packet_text.count(token) != 1:
+            fail(f"P1 source/revision packet semantic carrier drifted: {token}", issues)
+
+    receipt_tokens = (
+        "### P1-0 exact-candidate GO receipt",
+        "manifest `sha256:32e7f67c16b5b23e39435d45a40b662e6f6fa719a3c4d28d97ff7d5f9b82b645`",
+        "archive `sha256:989b126f594fa048c1dddf65083f36581e9b77fa81ca7bd95891f15703076d26`",
+        "- `Verdict`: `GO`",
+        "- `Blockers`: `[]`",
+        "- `P1-1 recommendation`: `ELIGIBLE`",
+        "- `Report`: `sha256:d4f9cb7706d4f7b114c0e40541deb041dbe24fb6df57356d70be04540b5e4bae`",
+    )
+    for token in receipt_tokens:
+        if proposal.count(token) != 1:
+            fail(f"P1-0 GO receipt missing/duplicated: {token}", issues)
+
+    contract = contract_bytes.decode("utf-8")
+    blueprint = (ROOT / "docs/plan/modules/70-campus-trust-source-pipeline.md").read_text(
+        encoding="utf-8"
+    )
+    contract_tokens = (
+        "- `Status`: Accepted for bounded `M60-B1 source-registry`; later M60 slices remain planned",
+        "- `Version`: `source-import/v0`",
+        "- `Current Contract`: accepted [`source-import/v0`]",
+        "- `Implementation State`: `planned`",
+        "`SourceReviewState` is exactly:",
+        "`SourceReviewState` is the bounded B1 review-admission state only.",
+        "`Suspended` and `Revoked`, with their evidence-bearing transitions, must be accepted before any live M60-B2 retrieval adapter",
+        "P1-1 introduces five nominal string values",
+        "owner:            SourceOwner",
+        "reviewer:        SourceReviewerId",
+        "Every new definition starts as `Proposed`.",
+        "SourceDefinition::proposed(",
+        "No constructor takes `SourceReviewState`",
+        "`ModelInference` is rejected by `SourceDefinition::proposed`",
+        "OwnerControlCharacter { byte_index: usize }\nNonSourceAuthority\n```",
+        "No aggregate, state, receipt, definition, registry or registry error implements Serde in B1.",
+        "This candidate family stays `Proposed` throughout P1-0 and P1-1.",
+        "duplicate `SourceId` or duplicate canonical `SourceUrl` is rejected",
+        "DuplicateUrl { url: SourceUrl }",
+        "P1-0 changes no acceptance status.",
+        "promote only `SRC-001` if its exact registered binding passes",
+        "keep `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row unchanged",
+        "add no dependency, adapter, network call, persistence, clock, parser or concrete approved source",
+    )
+    combined = contract + "\n" + blueprint
+    for token in contract_tokens:
+        if combined.count(token) != 1:
+            fail(f"P1 source-import truth projection missing/duplicated: {token}", issues)
+
+    candidate_start = contract.find("## 11. Concrete source candidate: proposed only")
+    candidate_end = contract.find("## 12. P1-1 implementation slice", max(candidate_start, 0))
+    if candidate_start == -1 or candidate_end == -1:
+        fail("P1 concrete source candidate section missing", issues)
+    else:
+        candidate = contract[candidate_start:candidate_end]
+        required_candidate_lines = (
+            "- `Proposed source family label` (not a B1 `SourceId`): `ustc-teach-calendar-fall`",
+            "- `Proposed 2025 SourceId`: `ustc-teach-calendar-fall-2025`",
+            "- `Proposed 2026 SourceId`: `ustc-teach-calendar-fall-2026`",
+            "- `2025 URL`: `https://www.teach.ustc.edu.cn/calendar/19081.html`",
+            "- `2026 URL`: `https://www.teach.ustc.edu.cn/calendar/20135.html`",
+            "- `Candidate minimum interval`: `21600` seconds",
+            "- `Candidate maximum response`: `131072` bytes",
+            "This candidate family stays `Proposed` throughout P1-0 and P1-1.",
+        )
+        for token in required_candidate_lines:
+            if candidate.count(token) != 1:
+                fail(f"P1 concrete source candidate carrier drifted: {token}", issues)
+        if candidate.count("Approved") != 0 or candidate.count("approved") != 1:
+            fail("P1 concrete source candidate approval posture drifted", issues)
+
+    matrix_path = ROOT / "docs/acceptance/matrix.tsv"
+    if not matrix_path.is_file():
+        fail("P1 source/revision matrix carrier missing", issues)
+    else:
+        rows = {
+            fields[0]: fields
+            for line in matrix_path.read_text(encoding="utf-8").splitlines()[1:]
+            if (fields := line.split("\t"))
+        }
+        for case_id in P1_PLANNED_MATRIX_CASES:
+            fields = rows.get(case_id)
+            if fields is None or len(fields) < 6 or fields[5] != "planned":
+                fail(f"P1-0 requires {case_id} to remain planned", issues)
+
+    roadmap = (ROOT / "docs/tasks/01-execution-roadmap.md").read_text(encoding="utf-8")
+    for rel, text, token in (
+        (
+            "docs/plan/modules/70-campus-trust-source-pipeline.md",
+            blueprint,
+            "- `Implementation State`: `planned`",
+        ),
+        (
+            "docs/tasks/01-execution-roadmap.md",
+            roadmap,
+            "The source remains `Proposed`; raw HTML remains outside Git; no acceptance row or module state is promoted by P1-0.",
+        ),
+        (
+            "docs/tasks/01-execution-roadmap.md",
+            roadmap,
+            "Develata's later operation-specific instruction authorizes a feature-branch push only after final local validation; PR, merge, tag, release, source approval and retrieval remain unauthorized.",
+        ),
+    ):
+        if text.count(token) != 1:
+            fail(f"P1 source/revision status projection drifted in {rel}: {token}", issues)
+
+    forbidden_fixture_names = {
+        "calendar-2025-fall.body",
+        "calendar-2026-fall.body",
+        "uca-p1-calendar-source-recon-20260808.tar.gz",
+    }
+    tracked_like = {
+        path.name
+        for path in ROOT.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+    leaked = sorted(forbidden_fixture_names & tracked_like)
+    if leaked:
+        fail(f"P1 raw source evidence must remain outside repository: {leaked}", issues)
+
+
+
 def main() -> int:
     issues: list[str] = []
     check_key_files_present_and_nonempty(issues)
@@ -9122,6 +9359,7 @@ def main() -> int:
     check_platform_identity_implementation(issues)
     check_platform_session_contract(issues)
     check_platform_session_implementation(issues)
+    check_p1_source_revision_contract(issues)
     check_module_registry(issues)
     check_s0_architecture_review(issues)
     if issues:

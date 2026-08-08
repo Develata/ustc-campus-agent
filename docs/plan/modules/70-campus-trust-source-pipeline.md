@@ -6,9 +6,10 @@
 - `Status`: Accepted blueprint; implementation planned, limited synthetic planner evidence exists
 - `Implementation State`: `planned`
 - `Version`: `m60-campus-trust/v0`
-- `Last Review`: `2026-07-25`
+- `Last Review`: `2026-08-08`
 - `Owning Plan`: [`../05-campus-trust-kernel.md`](../05-campus-trust-kernel.md)
-- `Primary code area`: future source/trust crates; current fixture semantics in `crates/course-planning/`
+- `Current Contract`: accepted [`source-import/v0`](../../contracts/source-import.md) under the exact P1-0 GO receipt in [`P1 source/revision readiness`](../../tasks/p1-source-revision-readiness-proposal.md)
+- `Primary code area`: future `crates/platform-core/src/source_registry.rs` for bounded B1; current fixture semantics in `crates/course-planning/`
 
 ## 1. Purpose
 
@@ -30,6 +31,8 @@
 ```text
 SourceDefinition / SourcePolicy
 SourceStatus: Proposed | Approved | Suspended | Revoked
+  (bounded P1-1 B1 freezes Proposed/Approved review admission only; operational
+   Suspended/Revoked must land before any live B2 retrieval adapter)
 RetrievalLease / Observation
 RawSnapshot / NormalizedSnapshot
 SourceRevision: Observed | Parsed | Accepted | Archived | Rejected

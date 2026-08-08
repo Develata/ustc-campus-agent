@@ -244,7 +244,9 @@ Arbitrary central `stdio` command execution is outside this lane.
 
 **Prerequisite**: one concrete public source receives owner, URL/retrieval, permission/rate and parser-fixture review.
 
-- `M60-B1 source-registry`: stable identity, owner, policy and status.
+`P1-0` now carries the accepted, construction-ready `source-import/v0` contract and a concrete `ustc-teach-calendar-fall` review candidate under [`p1-source-revision-readiness-proposal.md`](p1-source-revision-readiness-proposal.md). The source remains `Proposed`; raw HTML remains outside Git; no acceptance row or module state is promoted by P1-0. Exact-candidate review is `GO`, so the bounded local P1-1 B1 implementation lane is admitted. This is not part of the older W1 campaign grant. Develata's later operation-specific instruction authorizes a feature-branch push only after final local validation; PR, merge, tag, release, source approval and retrieval remain unauthorized.
+
+- `M60-B1 source-registry`: stable identity, owner, policy and status; exact P1-1 boundary is `source-import/v0` §§3–7 and the P1 proposal packet.
 - `M60-B2 retrieval-policy`: safe exact host/path, redirects, content/time/size/rate.
 - `M60-B3 lease-snapshot`: deterministic lease and immutable raw evidence.
 - `M60-B4 normalize-parser`: deterministic peers with exact identity/fixtures.
