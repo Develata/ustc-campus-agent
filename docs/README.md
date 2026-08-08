@@ -25,6 +25,7 @@ USTC Campus Agent uses a proportionate docs-as-code structure: detailed authorit
 | [`tasks/`](tasks/) | How are large modules split, committed, independently accepted and assembled? |
 | [`guides/`](guides/) | How do contributors develop, review and prepare future publication? |
 | [`adr/`](adr/) | Why were major architecture decisions made? |
+| [`design/`](design/) | How are UI/presentation candidates proposed and reviewed? (subordinate layer; proposals only, never behavior authority) |
 
 [`coverage-matrix.md`](coverage-matrix.md) maps the live layers. [`AGENTS.md`](AGENTS.md) defines documentation authority and editing discipline.
 

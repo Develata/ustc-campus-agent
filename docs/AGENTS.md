@@ -14,6 +14,7 @@
 - `tasks/`: large-module work policy, small-module batches and assembly order; tasks do not override plans.
 - `guides/`: contributor, local-development and publication handoffs.
 - `adr/`: time-ordered architecture decisions; ADRs explain why, while current plans define how.
+- `design/`: subordinate UI/presentation design packets; proposals bound to an exact source revision; never product, domain or lifecycle authority.
 - `coverage-matrix.md`: explicit mapping across blueprint, feature, contract and acceptance layers.
 
 Raw discovery notes, rejected drafts, personal infrastructure, private backup procedures and copied chat/workspace archives do not belong in repository documentation.
@@ -37,6 +38,7 @@ Before changing product or runtime behavior:
 - Tasks schedule work but MUST NOT redefine product topology or invariants.
 - Overview and guides summarize; they MUST link to, rather than duplicate, owning contracts.
 - ADRs are decision history. An amended ADR is not current behavior authority.
+- Design packets present and review; they MUST NOT redefine plans, contracts, acceptance status or lifecycle semantics, and `Proposal` is not acceptance.
 - Code is a projection of approved plans/contracts, not an excuse to weaken them.
 
 ## Editing discipline

@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<!--
+  M80 Default v0 — Clickable Prototype (Deliverable 16B)
+  Classification: External disposable executable prototype · Deliverable 16B only ·
+  Non-product · Non-retained M80 frontend · No backend/API · No readiness evidence.
+  Illustrative / No live backend — 全部数据为设计样例，无真实后端、无真实安装、无真实授权。
+  Status: Reviewed · Source: 2f4de29032560ff3e13d9994b33a3aff14243f44
+  本文件为设计演示物，不是 retained frontend skeleton；不包含任何 API/route/DTO 声明。
+  设计评审（Hermes terminal verdict）已完成；Reviewed 不代表 implementation、readiness、
+  domain authority 或 acceptance。
+  所有「服务器确认（演示）」与「应用更新（演示）」转场在真实系统中对应 server typed result/event。
+  Screens: 16 screen/state IDs（13 main S01–S13 + 3 failure-branch S06a/S07a/S11a），hash 导航；
+  与 07-prototype-storyboard.md §3 transition table 一致。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>USTC Campus Agent — 设计原型（Illustrative / No live backend）</title>
+<style>
+:root{
+  --canvas:#FFFFFF; --surface:#FFFFFF; --subtle:#F7F8FA;
+  --ink:#0D0D0F; --muted:#5B6470; --divider:#E4E7EC;
+  --accent:#2563EB; --danger:#D92D20; --warning:#B54708; --success:#067A46;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  line-height:1.65;font-size:15px}
+.shell{max-width:760px;margin:0 auto;padding:0 20px 96px}
+.banner{background:var(--subtle);border-bottom:1px solid var(--divider);
+  padding:8px 20px;font-size:13px;color:var(--muted);text-align:center}
+header.top{display:flex;justify-content:space-between;align-items:baseline;
+  padding:28px 0 12px;border-bottom:1px solid var(--divider);margin-bottom:20px;gap:12px;flex-wrap:wrap}
+h1{font-size:24px;margin:0;font-weight:600}
+h2{font-size:18px;margin:28px 0 8px;font-weight:600}
+.scrid{font-size:12px;color:var(--muted);font-family:ui-monospace,monospace}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:500;line-height:1.5;white-space:nowrap}
+.badge.on{background:var(--accent);color:#fff}
+.badge.off{background:var(--subtle);color:var(--muted)}
+.badge.attn{background:#F9F5EF;color:var(--warning);border:1px solid var(--divider)}
+.rows{border-top:1px solid var(--divider)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding:14px 4px;border-bottom:1px solid var(--divider);flex-wrap:wrap}
+.row .meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.row .btn{white-space:nowrap;flex:none}
+.attn{border-left:3px solid var(--warning);padding-left:12px}
+button,.btn{font:inherit;font-size:14px;padding:8px 18px;border-radius:8px;
+  border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;min-width:44px}
+button.sec,.btn.sec{background:transparent;color:var(--accent)}
+button.danger{background:var(--danger);border-color:var(--danger)}
+button:disabled{background:var(--divider);border-color:var(--divider);color:var(--muted);cursor:not-allowed}
+button.sec:disabled{background:transparent;border-color:var(--divider);color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+.chg{border:1px solid var(--divider);border-radius:8px;padding:2px 14px 10px;margin:14px 0}
+.chg-h{font-size:13px;font-weight:600;color:var(--muted);margin:10px 0 2px}
+input[type=checkbox]{width:24px;height:24px;vertical-align:middle;flex:none}
+.note{font-size:13px;color:var(--muted);margin:10px 0;overflow-wrap:anywhere}
+.warn{background:#F9F5EF;border:1px solid var(--divider);border-left:3px solid var(--warning);
+  padding:12px 14px;margin:14px 0;font-size:14px;overflow-wrap:anywhere}
+.ok{background:#F0F7F2;border-left:3px solid var(--success);padding:12px 14px;margin:14px 0;overflow-wrap:anywhere}
+ul.clean{list-style:none;padding:0;margin:8px 0}
+ul.clean li{padding:10px 4px;border-bottom:1px solid var(--divider);overflow-wrap:anywhere}
+ul.clean .meta{overflow-wrap:anywhere}
+p .meta{overflow-wrap:anywhere} /* S02/S10 lifecycle 行（p 内 span.meta）长文本防护 */
+label.ck{display:block;min-height:44px;padding:10px 4px;border-bottom:1px solid var(--divider);cursor:pointer}
+label.ck .meta{font-size:13px;color:var(--muted);margin-left:24px;overflow-wrap:anywhere}
+.actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px;flex-wrap:wrap}
+.step{font-size:13px;color:var(--muted);text-align:right}
+.demo{margin-top:28px;padding-top:12px;border-top:1px dashed var(--divider);font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.demo a{color:var(--accent)}
+footer{margin-top:40px;padding-top:12px;border-top:1px solid var(--divider);
+  font-size:12px;color:var(--muted);text-align:center}
+nav.idx{font-size:13px;margin:8px 0}
+nav.idx a{color:var(--accent);margin-right:8px;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="banner">Illustrative / No live backend — 设计原型 · 全部数据与转场为演示 · Status: Reviewed · 设计评审已完成，不代表 implementation/readiness/domain authority/acceptance</div>
+<main class="shell" id="app"></main>
+<script>
+"use strict";
+const IDX = `<nav class="idx">原型导航：
+<a href="#S01">S01 市场</a><a href="#S09">S09 我的插件</a><a href="#S10">S10 插件详情</a>
+<span class="scrid">完整流转见各页按钮；S0x 编号对应 07-prototype-storyboard.md §3</span></nav>`;
+const FOOT = `<footer>USTC Campus Agent 设计原型 · 学生竞赛项目，非学校官方服务 · Illustrative / No live backend</footer>`;
+const PENDING_NOTE = `<p class="note">※ 真实系统中此转场由 server typed result/event 确认；此处为演示。</p>`;
+
+// ── Client-side 演示状态模型 ─────────────────────────────────────────────
+// 真实系统中以下全部为 server 投影（grants/receipts/lifecycle 由 platform 拥有）；
+// 本原型以内存状态模拟，用于演示语义而非实现语义。
+//
+// committed（已批准/已确认，S10/S09/S11 摘要只反映它）：
+//   DEMO.grants  已授权能力集合（仅显式批准可改变）
+//   DEMO.applied v0.5.0 已应用（pin 已切换）
+//   DEMO.stale   授权已失效（Apply 后需逐项复核；B6 Stale(InstallationChanged)，bounded domain evidence）
+//   DEMO.enabled server 已确认 Enabled
+//   DEMO.enablePending 启用请求已提交待确认（仅 S11「启用插件」显式请求可设置；
+//     应用更新时清除；direct #S12 不产生 pending）
+// 仅以下显式演示转场可改变 committed：
+//   S06「批准此安装方案」→ 提交安装审批草案
+//   S10「应用更新（演示）」→ applied=true, stale=true（真实系统为 typed command + server 事件）
+//   S13「批准已勾选权限」→ 提交复核草案（fresh approval），stale=false
+//   S11「启用插件」→ enablePending=true（仅提交请求，非成功）
+//   S12「服务器确认：已启用（演示）」→ enabled=true（要求 enablePending && !stale && !enabled；
+//     premise 不满足时渲染非按钮 warn 状态块（原因 + 返回动作），不渲染 disabled 主按钮，状态不变）
+// draft（勾选草案）：D5（S05 安装审批）、D13（S13 复核）；返回/取消/离开均不提交，
+//   决不直接改写 committed。
+//
+// Capability sets（canonical fixture，与 10 卷 §2.2 分组 diff 一致）：
+//   v0.4.0 = {a 读取校园信息源(read), b 推送变化通知(effect)}
+//   v0.5.0 = {a, c 读取课程公告源(read)}
+//   diff：a = Unchanged（continuity 重新批准，默认接受）；b = Removed（授权终止
+//   history-only，只读标注，不进复核集合）；c = Added（非默认选中）；
+//   Expanded/Narrowed/MetadataChanged = 0（空分组仍呈现，见 10 卷 §2.2）
+const DEMO = { grants:{a:true,b:false,c:false}, applied:false, stale:false, enabled:false, enablePending:false };
+let viewUninstalled = false; // 非 committed 视图标志：S01「安装流程演示」进入 S02 的未安装基线视图；不改变 DEMO
+let D5 = null, D13 = null;
+let s13ReturnToken = false; // one-shot return token：S13 → 相邻屏时 armed，紧接该相邻屏 → S13 时消费并保留一次草稿
+const S13_NEIGHBORS = ["S09","S10","S11","S11a"];
+const GRANT_NAMES = {a:"读取校园信息源", b:"推送变化通知", c:"读取课程公告源"};
+const V04 = ["a","b"], V05 = ["a","c"];
+const curSet = () => DEMO.applied ? V05 : V04;
+const grantedNames = () => curSet().filter((k)=>DEMO.grants[k]).map((k)=>GRANT_NAMES[k]);
+const deniedNames  = () => curSet().filter((k)=>!DEMO.grants[k]).map((k)=>GRANT_NAMES[k]);
+
+document.addEventListener("change",(e)=>{
+  const t=e.target;
+  if(!(t instanceof HTMLInputElement)) return;
+  const g=t.getAttribute("data-grant"), scope=t.getAttribute("data-scope");
+  if(!g) return;
+  if(scope==="install" && D5) D5[g]=t.checked;
+  if(scope==="rereview" && D13) D13[g]=t.checked;
+});
+document.addEventListener("click",(e)=>{
+  const t=e.target instanceof Element ? e.target.closest("[data-demo]") : null;
+  if(!t) return;
+  const act=t.getAttribute("data-demo");
+  if(act==="uninstalled-view"){ viewUninstalled=true; } // 视图标志，仅影响 S02 分支；不改变 DEMO
+  if(act==="commit-install" && D5){
+    DEMO.grants={a:D5.a, b:D5.b, c:false}; // 原子重建 fresh v0.4（complete-disabled）：清旧 update/lifecycle/pending/grant-c/draft
+    DEMO.applied=false; DEMO.stale=false; DEMO.enabled=false; DEMO.enablePending=false;
+    D13=null; s13ReturnToken=false; viewUninstalled=false; location.hash="#S07";
+  }
+  if(act==="apply-update" && !DEMO.applied && !DEMO.enabled){
+    DEMO.applied=true; DEMO.stale=true; DEMO.enablePending=false;
+    D13=null; s13ReturnToken=false; // authority-changing action（同屏 render 亦然）：旧 D13 与 return token 失效
+    render();
+  }
+  if(act==="commit-rereview" && D13 && DEMO.applied && DEMO.stale){
+    DEMO.grants.a=D13.a; DEMO.grants.c=D13.c; DEMO.grants.b=false; // b 在 v0.5.0 移除：授权终止（history-only）
+    DEMO.stale=false; location.hash="#S11";
+  }
+  if(act==="enable-install" && !DEMO.stale && !DEMO.enabled){ DEMO.enablePending=true; location.hash="#S12"; }
+  if(act==="confirm-enable" && DEMO.enablePending && !DEMO.stale && !DEMO.enabled){ DEMO.enablePending=false; DEMO.enabled=true; render(); }
+});
+
+const S = {};
+S.S01 = () => {
+const crBadge = DEMO.stale ? `<span class="badge attn">权限需复核</span>`
+  : (DEMO.enabled ? `<span class="badge on">已启用</span>` : `<span class="badge off">已安装，未启用</span>`);
+const crState = DEMO.stale ? "授权失效，需复核（server 判定）"
+  : (DEMO.enabled ? "已启用（server-confirmed · illustrative）"
+     : (DEMO.applied ? "已安装，未启用 · 当前版本 v0.5.0 · 权限已复核"
+        : "已安装，未启用 · v0.4.0 · ⓘ 有可用更新 v0.5.0"));
+return `
+<header class="top"><h1>插件市场</h1><span class="scrid">S01 · 状态: 正常（illustrative）</span></header>
+${IDX}
+<div class="rows">
+  <div class="row"><div><strong>USTC ChangeRadar</strong><div class="meta">${crBadge} 校园官方信息源变化追踪（illustrative）· USTC Campus Agent 团队 · ${crState}<br>权限摘要：读取 2 项校园信息源</div></div><a class="btn sec" href="#S02">查看详情</a></div>
+  <div class="row"><div><strong>USTC Affairs Navigator</strong><div class="meta">结构化办事指南（illustrative）· v0.3.1 · 已安装<br>权限摘要：读取办事流程数据</div><div class="meta" id="s01-an-note">管理不可用：详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled aria-describedby="s01-an-note">管理</button></div>
+  <div class="row"><div><strong>Campus Opportunity Graph</strong><div class="meta">机会匹配（开发中 · illustrative）· v0.2.0 · 已安装<br>权限摘要：读取机会数据 · 请求你的资料授权</div><div class="meta" id="s01-og-note">管理不可用：详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled aria-describedby="s01-og-note">管理</button></div>
+</div>
+<p class="note">「状态」列仅为 catalog 层事实；不显示 runtime health。仅 ChangeRadar 具备对应 detail screen（S10）；其余插件的「管理」以 disabled 如实标注，不导航到他插件详情。</p>
+<div class="demo">安装流程演示（未安装基线）：<a href="#S02" data-demo="uninstalled-view">ChangeRadar 未安装时的审查安装流程（S02→S03→S04→S05→S06→S07→S08）→</a>（视图仅演示，不改变当前状态）</div>`;};
+
+S.S02 = () => {
+if(viewUninstalled){
+  return `
+<header class="top"><h1>USTC ChangeRadar</h1><a class="btn" href="#S03">审查安装</a></header>
+<p class="scrid">S02 · v0.4.0 · USTC Campus Agent 团队 · 未安装基线视图（演示）</p>
+<h2>这个插件做什么</h2><p>追踪经审核的校园信息源，发布语义化变化。（illustrative）</p>
+<h2>权限能力（Capabilities）</h2>
+<ul class="clean"><li>读取校园信息源（read · 低风险）<div class="meta">范围与风险由平台 registry 定义</div></li></ul>
+<h2>来源与信任</h2>
+<ul class="clean">
+<li>声明来源：market/ 目录内 reviewed manifest</li>
+<li>实现状态：design-only（当前无可执行组件）— 如实呈现</li>
+<li>版本历史 / digest：技术细节（折叠）</li>
+</ul>
+<div class="demo">安装前基线的市场呈现（S01 行显示「未安装 · 查看详情」）；安装后的管理呈现见 <a href="#S10">S10</a>。</div>`;
+}
+const lifecycle = DEMO.stale
+  ? `<span class="badge attn">权限需复核</span> <span class="meta">已安装，未启用（InstalledDisabled）· 授权失效需复核（server 判定）</span>`
+  : (DEMO.enabled
+    ? `<span class="badge on">已启用</span> <span class="meta">server-confirmed 演示 · 运行中</span>`
+    : `<span class="badge off">已安装，未启用</span> <span class="meta">InstalledDisabled（仅 lifecycle 事实）</span>`);
+return `
+<header class="top"><h1>USTC ChangeRadar</h1><a class="btn" href="#S10">管理</a></header>
+<p class="scrid">S02 · ${DEMO.applied?"v0.5.0":"v0.4.0"} · USTC Campus Agent 团队</p>
+<p>${lifecycle}</p>
+<h2>这个插件做什么</h2><p>追踪经审核的校园信息源，发布语义化变化。（illustrative）</p>
+<h2>权限能力（Capabilities）</h2>
+<ul class="clean"><li>读取校园信息源（read · 低风险）<div class="meta">范围与风险由平台 registry 定义</div></li></ul>
+<h2>来源与信任</h2>
+<ul class="clean">
+<li>声明来源：market/ 目录内 reviewed manifest</li>
+<li>实现状态：design-only（当前无可执行组件）— 如实呈现</li>
+<li>版本历史 / digest：技术细节（折叠）</li>
+</ul>
+<div class="demo">安装流演示见 S01「安装流程演示（未安装基线）」入口；<a href="#S10">前往插件管理（S10）</a>。</div>`;};
+
+S.S03 = `
+<header class="top"><h1>安装 USTC ChangeRadar</h1><span class="step">步骤 1/4 · S03</span></header>
+<h2>将要安装的精确版本</h2>
+<ul class="clean">
+<li>包：ustc.change-radar</li>
+<li>版本：0.4.0（精确 pin，不会自动跟随新版）</li>
+<li>来源 digest：sha256:9f2c…（illustrative）</li>
+<li>组件清单：见技术细节（折叠）</li>
+</ul>
+<div class="actions"><a class="btn sec" href="#S02">取消</a><a class="btn" href="#S04">下一步：配置</a></div>`;
+
+S.S04 = `
+<header class="top"><h1>配置</h1><span class="step">步骤 2/4 · S04</span></header>
+<ul class="clean">
+<li>检查频率：每 6 小时 ▾（typed enum）</li>
+<li>通知板：默认公告板 ▾</li>
+<li>凭证引用：无（此插件不需要）<div class="meta">若需凭证：仅显示 SecretRef 状态，永不显示明文</div></li>
+</ul>
+<div class="actions"><a class="btn sec" href="#S03">上一步</a><a class="btn" href="#S05">下一步：权限审批</a></div>`;
+
+S.S05 = () => `
+<header class="top"><h1>权限审批</h1><span class="step">步骤 3/4 · S05</span></header>
+<p>此插件请求以下能力，逐项确认；<strong>未勾选项不会被授权</strong>。勾选为<strong>草案</strong>：仅 S06「批准此安装方案」提交后才会改变已授权集合（S10/S11 摘要只反映已批准状态）。</p>
+<label class="ck"><input type="checkbox" data-scope="install" data-grant="a"${D5.a?" checked":""}> <strong>读取校园信息源（read）</strong><div class="meta">范围：默认公告板 · 风险：低（registry 定义）· 勾选 = 批准</div></label>
+<label class="ck"><input type="checkbox" data-scope="install" data-grant="b"${D5.b?" checked":""}> <strong>向你推送变化通知（effect）</strong> ⚠<div class="meta">范围：本设备 · 风险：中 · 非默认选中 · 未勾选 = 不授权</div></label>
+<p class="note">权限定义来自平台 registry；插件不能自定风险等级。未授权能力对应的功能由服务器投影为不可用（denied/unavailable 如实呈现），不会随成功路径被携带。</p>
+<div class="actions"><a class="btn sec" href="#S04">上一步</a><a class="btn" href="#S06">下一步：确认安装方案</a></div>`;
+
+S.S06 = () => {
+const g=["a","b"].filter((k)=>D5[k]).map((k)=>GRANT_NAMES[k]);
+const d=["a","b"].filter((k)=>!D5[k]).map((k)=>GRANT_NAMES[k]);
+return `
+<header class="top"><h1>确认安装方案</h1><span class="step">步骤 4/4 · S06</span></header>
+<ul class="clean">
+<li>安装 ustc.change-radar 0.4.0（digest 9f2c…）</li>
+<li>配置 revision：cfg-…（摘要）</li>
+<li>授予能力（待批准草案）：${g.length} 项（${g.length?g.join("、"):"无"}）</li>
+${d.length?`<li>未授予：${d.join("、")}（未勾选 → 不授权；对应功能将由服务器投影为不可用）</li>`:""}
+<li>安装后状态：已安装，未启用</li>
+</ul>
+<div class="warn">⚠ 批准仅对这一个方案有效；方案变化后需要重新审查。点击「批准此安装方案」才提交授权（演示中仅此转场改变已授权集合）。</div>
+<div class="actions"><a class="btn sec" href="#S05">上一步</a><button data-demo="commit-install">批准此安装方案</button></div>
+<div class="demo">失败分支演示：<a href="#S06a">S06a 方案已变化（plan drift）</a></div>`;};
+
+S.S06a = `
+<header class="top"><h1>方案已变化</h1><span class="scrid">S06a · 失败分支</span></header>
+<div class="warn">⚠ 你审查的方案与当前方案不一致，之前的批准不再适用。</div>
+<p class="note">真实系统中由 server 事件投影；不会隐藏 diff，也不会自动重新批准。</p>
+<div class="actions"><a class="btn" href="#S03">重新生成方案并审查</a></div>`;
+
+S.S07 = `
+<header class="top"><h1>安装进行中…</h1><span class="scrid">S07 · pending（演示）</span></header>
+<p>请求已提交。你可以离开此页面，稍后从「我的插件」查看。</p>
+${PENDING_NOTE}
+<div class="actions"><a class="btn sec" href="#S09">离开，去我的插件</a><a class="btn" href="#S08">服务器确认：已安装（演示）</a></div>
+<div class="demo">失败分支演示：<a href="#S07a">S07a 结果未知（unknown outcome）→ 核对</a></div>`;
+
+S.S07a = `
+<header class="top"><h1>正在核对安装结果</h1><span class="scrid">S07a · unknown outcome · reconcile（演示）</span></header>
+<div class="warn">⚠ 请求可能已被服务器接受；正在按请求标识核对结果，不会重复提交。</div>
+<p class="note">真实系统中由 cursor/resync 事件驱动（Q5）；reconcile 结果为 server-owned 投影。</p>
+<div class="actions"><a class="btn sec" href="#S09">离开，去我的插件</a><a class="btn" href="#S08">重试核对：已确认安装（演示）</a></div>`;
+
+S.S08 = () => {
+const d=deniedNames();
+return `
+<header class="top"><h1>✓ 已安装，尚未启用</h1><span class="scrid">S08 · terminal success（演示）</span></header>
+<div class="ok">USTC ChangeRadar 0.4.0 已安装。启用后插件才会开始工作；你可以随时在插件管理中启用。</div>
+<p class="note">安装完成与启用是两个独立动作；无静默启用。${d.length?`未授权能力（${d.join("、")}）不随安装/启用生效，对应功能由服务器投影为不可用。`:"已批准能力随启用生效。"}</p>
+<div class="actions"><a class="btn sec" href="#S09">稍后启用</a><a class="btn" href="#S09">前往插件管理</a></div>`;};
+
+S.S09 = () => {
+// attention-first（02 卷 §7.1）：update available 或 grants stale → 「需要你处理」置顶，
+// 与 lifecycle 分组正交；Enabled + update available 仍入 attention（lifecycle label 保留），
+// 仅当 update/stale 等 attention 全部消失后才落入普通 Enabled group。
+const upd = !DEMO.applied, stale = DEMO.stale;
+const attention = upd || stale;
+const crBadge = stale ? `<span class="badge attn">权限需复核</span>`
+  : (DEMO.enabled ? `<span class="badge on">已启用</span>` : `<span class="badge off">已安装，未启用</span>`);
+const crDetail = stale
+  ? "已安装，未启用 · ⓘ v0.5.0 已应用：授权失效（server 判定）"
+  : (upd ? (DEMO.enabled ? "server-confirmed · ⓘ 有可用更新 v0.5.0 · 需先停用方可应用（lifecycle ∈ {InstalledDisabled, Disabled}）"
+                          : "有可用更新 v0.5.0 · 应用要求 lifecycle ∈ {InstalledDisabled, Disabled}（server-projected · illustrative）")
+         : "server-confirmed · 演示");
+const crAct = stale ? ["#S13","复核权限 →"] : (upd ? ["#S10","查看更新 →"] : ["#S10","管理"]);
+const crRow = `<div class="row${attention?" attn":""}"><div><strong>USTC ChangeRadar</strong><div class="meta">${crBadge} ${crDetail}</div></div><a class="btn sec" href="${crAct[0]}">${crAct[1]}</a></div>`;
+const inEnabled = DEMO.enabled && !attention;
+const inDisabled = !DEMO.enabled && !attention;
+return `
+<header class="top"><h1>我的插件</h1><a class="btn sec" href="#S01">浏览市场</a></header>
+<p class="scrid">S09 · 分组：需要你处理 → 已启用 → 已停用（attention-first：update/stale 优先于 lifecycle 分组 · 02 卷 §7.1）</p>
+${IDX}
+<h2>需要你处理（${attention?1:0}）</h2>
+<div class="rows">${attention?crRow:`<div class="row"><div class="meta">（空 · 当前无待处理事项）</div></div>`}</div>
+<h2>已启用（${1+(inEnabled?1:0)}）</h2>
+<div class="rows">
+${inEnabled?crRow:""}
+<div class="row"><div><strong>校园机会图谱</strong><div class="meta">已启用 · 最后验证 2026-08-01</div><div class="meta" id="s09-og-note">管理不可用：详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled aria-describedby="s09-og-note">管理</button></div>
+</div>
+<h2>已停用（${1+(inDisabled?1:0)}）</h2>
+<div class="rows">
+${inDisabled?crRow:""}
+<div class="row"><div><strong>USTC Affairs Navigator</strong><div class="meta">已停用 · 2026-07-28 由你停用（illustrative）</div><div class="meta" id="s09-an-note">管理不可用：详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled aria-describedby="s09-an-note">管理</button></div>
+</div>`;};
+
+S.S10 = () => {
+const lifecycle = DEMO.enabled
+  ? `<span class="badge on">已启用</span> <span class="meta">① 状态 · Enabled · server-confirmed 演示（仅 lifecycle 事实）</span>`
+  : (DEMO.stale
+    ? `<span class="badge attn">权限需复核</span> <span class="meta">① 状态 · 已安装，未启用（InstalledDisabled）· 授权失效需复核（仅 lifecycle 事实）</span>`
+    : `<span class="badge off">已安装，未启用</span> <span class="meta">① 状态 · InstalledDisabled（仅 lifecycle 事实）</span>`);
+let perm;
+if(DEMO.stale){
+  perm = `ⓘ 授权已失效（安装变更 · 服务器判定；B6 Stale(InstallationChanged)，bounded domain evidence）· 需逐项复核后方可恢复可用`;
+}else{
+  const g=grantedNames(), d=deniedNames();
+  perm = `${g.length?"✓":"ⓘ"} ${g.length} 项已授权（install/复核时批准）${d.length?` · ⓘ 未授权：${d.join("、")} → 对应功能不可用（server 投影）`:""}`;
+}
+const removedNote = (DEMO.applied && !DEMO.stale)
+  ? `<li>移除　　v0.5.0 不再请求「推送变化通知」· 授权已终止（history-only · server 执行；10 卷 §2.2 Removed 分组）</li>` : "";
+let upd;
+if(DEMO.stale){
+  upd = `ⓘ v0.5.0 已应用 · 授权失效，需复核（grants stale · server 判定）
+  <div style="margin-top:8px"><a class="btn" href="#S13">复核权限</a></div>`;
+}else if(!DEMO.applied){
+  upd = `ⓘ 有可用更新 v0.5.0（新增能力：读取课程公告源 · 移除能力：推送变化通知 · 逐项 diff 见 10 卷 §2.2）· 应用要求 lifecycle ∈ {InstalledDisabled, Disabled}（server-projected）
+  <div style="margin-top:8px"><button data-demo="apply-update"${DEMO.enabled?" disabled aria-describedby=\"s10-upd-note\"":""}>应用更新（演示）</button>${DEMO.enabled?`<span class="meta" id="s10-upd-note"> 不可用：当前 Enabled，需先停用（lifecycle ∈ {InstalledDisabled, Disabled}；停用流不在 16B 范围）</span>`:""}</div>`;
+}else{
+  upd = `✓ 当前版本 v0.5.0 · 权限已复核 · 无待应用更新`;
+}
+const enableAction = DEMO.enabled
+  ? `<button class="sec" disabled aria-describedby="s10-enable-note">停用</button>`
+  : (DEMO.stale
+    ? `<button disabled aria-describedby="s10-enable-note">启用</button>`
+    : `<a class="btn" href="#S11">启用</a>`);
+const enableNote = DEMO.enabled
+  ? `<p class="note" id="s10-enable-note">停用流不在 16B screens（out-of-prototype）；真实系统中停用后可应用更新（02 卷 §5）。</p>`
+  : (DEMO.stale ? `<p class="note" id="s10-enable-note">启用不可用：需先完成权限复核（server reason · 02 卷 §7.4 V4）。</p>` : "");
+const runtime = DEMO.enabled ? "已启用（不显示健康词汇 · illustrative）" : "— 未启用（不显示健康词汇）";
+const callable = DEMO.enabled ? "✓ 已启用，可调用（illustrative）" : "ⓘ 未启用，不可调用";
+const fresh = DEMO.applied ? "更新于 2026-08-03（演示）" : "安装于 2026-08-02（illustrative）";
+return `
+<header class="top"><h1>USTC ChangeRadar</h1>${enableAction}</header>
+<p class="scrid">S10 · 分层状态（六层分离呈现 · illustrative）</p>
+<ul class="clean">
+<li>${lifecycle}</li>
+<li>② 说明：服务器投影 · ${DEMO.enabled?"已启用（演示）":"等待启用"}</li>
+<li>权限　　${perm}</li>
+${removedNote}
+<li>更新　　${upd}</li>
+<li><span class="meta">运行时　${runtime}</span></li>
+<li><span class="meta">可调用性　${callable}</span></li>
+<li><span class="meta">新鲜度　${fresh}</span></li>
+</ul>
+${enableNote}
+<p class="note">更新审查完整线框见 02 卷 §5–§6；16B 以显式「应用更新（演示）」转场建模 update 状态（pre-apply → grants stale → 复核后无待应用更新）；真实系统中 Apply 后另有确认窗口（AppliedPendingConfirmation → Confirmed，B6 bounded），本演示简化为单一应用转场。</p>
+<h2>Danger zone</h2>
+<div class="actions" style="justify-content:flex-start"><button class="danger" disabled aria-describedby="s10-danger-note">撤销授权</button><button class="danger" disabled aria-describedby="s10-danger-note">卸载</button></div>
+<p class="note" id="s10-danger-note">演示原型中不执行 destructive 动作（disabled 原因）；真实语义为 typed confirmation，可用性与 reason 由 server 投影（02 卷 §7.5）。</p>`;};
+
+S.S11 = () => {
+if(DEMO.stale){
+  return `
+<header class="top"><h1>暂时无法启用</h1><span class="scrid">S11 · 不可用（server reason · 演示）</span></header>
+<div class="warn">原因：安装变更后权限需要复核（服务器判定）。</div>
+<p class="note">unavailable + server reason + 指向解决路径；不合并多个前置。与 S11a 失败分支同语义；真实系统中由 server availability 投影。</p>
+<div class="actions"><a class="btn sec" href="#S10">返回插件详情</a><a class="btn" href="#S13">复核权限</a></div>`;
+}
+const g=grantedNames(), d=deniedNames();
+return `
+<header class="top"><h1>启用 USTC ChangeRadar？</h1><span class="scrid">S11 · Enable review</span></header>
+<ul class="clean">
+<li>启用后：插件将按已授权能力开始工作</li>
+<li>已授权：${g.length} 项（${g.length?g.join("、"):"无"}；以逐项审批记录为准，可在详情权限行查看）</li>
+${d.length?`<li>未授权：${d.join("、")} — 对应功能保持不可用（server 投影），不阻塞启用</li>`:""}
+<li>不影响：历史记录与配置保持不变</li>
+</ul>
+<div class="actions"><a class="btn sec" href="#S10">取消</a><button class="btn" data-demo="enable-install">启用插件</button></div>
+<div class="demo">失败分支演示：<a href="#S11a">S11a 暂时无法启用：权限需复核</a></div>`;};
+
+S.S11a = `
+<header class="top"><h1>暂时无法启用</h1><span class="scrid">S11a · 失败分支</span></header>
+<div class="warn">原因：安装变更后权限需要复核（服务器判定）。</div>
+<p class="note">unavailable + server reason + 指向解决路径；不合并多个前置。</p>
+<div class="actions"><a class="btn sec" href="#S10">返回插件详情</a><a class="btn" href="#S13">复核权限</a></div>`;
+
+S.S12 = () => DEMO.enabled ? `
+<header class="top"><h1>✓ 已启用</h1><span class="scrid">S12 · server 确认（演示）</span></header>
+<div class="ok">USTC ChangeRadar 已开始工作。克制确认：inline 状态更新 + 动态记录，无庆祝动效。</div>
+<p class="note">S10/S09 的 Enabled 呈现由此确认状态投影；本地点击不产生成功。</p>
+<div class="actions"><a class="btn" href="#S10">查看插件</a></div>` : (DEMO.enablePending && !DEMO.stale) ? `
+<header class="top"><h1>启用请求已提交…</h1><span class="scrid">S12 · pending（演示）</span></header>
+<p>「启用插件」仅提交请求；成功仅由 server 确认。你可以离开此页面。</p>
+${PENDING_NOTE}
+<div class="actions"><a class="btn sec" href="#S09">离开，去我的插件</a><button data-demo="confirm-enable">服务器确认：已启用（演示）</button></div>` : `
+<header class="top"><h1>启用结果（status/receipt）</h1><span class="scrid">S12 · 前提不满足（演示）</span></header>
+<div class="warn">⚠ 服务端确认尚不可用：${DEMO.stale?"授权已失效（服务器判定）——需先完成权限复核，再经启用复核屏（S11）重新提交启用请求":"无待确认的启用请求——启用请求仅能从启用复核屏（S11）显式「启用插件」提交；本页不会产生待确认请求，也不会改变任何状态"}。</div>
+<div class="actions"><a class="btn sec" href="#S09">返回我的插件</a></div>`;
+
+S.S13 = () => {
+const premise = DEMO.applied && DEMO.stale;
+const guard = premise ? "" : `<p class="note" id="s13-guard-note">ⓘ 当前演示基线尚未处于「更新已应用、授权失效」状态；以下为该分支的样例呈现（批准动作已禁用）。真实系统中本屏仅由 server availability 投影进入（02 卷 §7.4 V4）；可经 S10「应用更新（演示）」进入真实演示路径。</p>`;
+return `
+<header class="top"><h1>权限复核</h1><span class="scrid">S13 · grant re-review（B6 bounded domain evidence，非 production）</span></header>
+${guard}
+<p>因安装变更（更新 v0.5.0），以下授权已失效（服务器判定），需逐项重新批准；<strong>未勾选项不会被授权</strong>。勾选为复核<strong>草案</strong>：「返回插件详情」不改变 S10/S11 已授权集合；仅「批准已勾选权限」提交 fresh approval。</p>
+<div class="chg">
+<div class="chg-h">保留 · Unchanged（范围未变 · 仍需重新批准 · 默认接受可取消）</div>
+<label class="ck"><input type="checkbox" data-scope="rereview" data-grant="a"${D13.a?" checked":""}> <strong>读取校园信息源（read）</strong><div class="meta">不变（Unchanged · 范围不变）→ 重新批准（continuity；仍是 fresh approval；默认接受可取消）</div></label>
+</div>
+<div class="chg">
+<div class="chg-h">新增 · Added（v0.5.0 · 非默认选中 · 未勾选 = 不授权）</div>
+<label class="ck"><input type="checkbox" data-scope="rereview" data-grant="c"${D13.c?" checked":""}> <strong>读取课程公告源（read）</strong> ⚠<div class="meta">新增（Added · v0.5.0）· 非默认选中 · 未勾选 = 不授权，对应功能由服务器投影为不可用</div></label>
+</div>
+<div class="chg">
+<div class="chg-h">移除 · Removed（只读 · 不进入复核集合）</div>
+<ul class="clean">
+<li><span class="meta">推送变化通知（effect）— v0.5.0 不再请求该能力；${DEMO.grants.b?"你此前已授权 → 复核批准后授权终止（history-only · server 执行），无需操作":"你此前未授权，无授权终止"}。</span></li>
+</ul>
+</div>
+<p class="note">canonical fixture（10 卷 §2.2）：Added 1 · Removed 1 · Unchanged 1 · Expanded/Narrowed/MetadataChanged 0；不提供「沿用旧授权」路径；逐项拒绝的后果由 server availability 投影。</p>
+<div class="actions"><a class="btn sec" href="#S10">返回插件详情</a><button data-demo="commit-rereview"${premise?"":" disabled aria-describedby=\"s13-guard-note\""}>批准已勾选权限</button></div>`;};
+
+let prevId = null;
+function render(){
+  const id=(location.hash||"#S01").slice(1);
+  if(viewUninstalled && !["S02","S03","S04","S05","S06","S06a","S07","S07a","S08"].includes(id)) viewUninstalled=false;
+  if(id==="S05" && prevId!=="S05" && prevId!=="S06") D5={a:true,b:false};
+  if(id==="S06" && D5===null) D5={a:true,b:false};
+  // S13 one-shot return token：
+  //   仅 S13 → 相邻屏（S09/S10/S11/S11a）时 armed；
+  //   紧接着该相邻屏 → S13 时消费并保留一次草稿；
+  //   访问任何第三屏立即清除；无 token 的 S13 re-entry 重置 D13={a:true,c:false}；
+  //   S13 same-screen render（prevId==="S13"）不清当前 draft。
+  if(id==="S13"){
+    if(D13===null) D13={a:true,c:false};
+    if(prevId!=="S13" && !s13ReturnToken) D13={a:true,c:false};
+    s13ReturnToken=false;
+  }else if(prevId==="S13" && S13_NEIGHBORS.includes(id)){
+    s13ReturnToken=true;
+  }else if(id!==prevId){
+    s13ReturnToken=false;
+  }
+  prevId=id;
+  const app=document.getElementById("app");
+  const tpl=S[id]||S.S01;
+  app.innerHTML=(typeof tpl==="function"?tpl():tpl)+FOOT;
+  window.scrollTo(0,0);
+  const heading=app.querySelector("h1");
+  if(heading){heading.setAttribute("tabindex","-1");heading.focus({preventScroll:true});}
+}
+addEventListener("hashchange",render);
+render();
+</script>
+</body>
+</html>
