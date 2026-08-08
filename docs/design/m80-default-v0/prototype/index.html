@@ -62,6 +62,7 @@ input[type=checkbox]{width:24px;height:24px;vertical-align:middle;flex:none}
 ul.clean{list-style:none;padding:0;margin:8px 0}
 ul.clean li{padding:10px 4px;border-bottom:1px solid var(--divider);overflow-wrap:anywhere}
 ul.clean .meta{overflow-wrap:anywhere}
+p .meta{overflow-wrap:anywhere} /* S02/S10 lifecycle 行（p 内 span.meta）长文本防护 */
 label.ck{display:block;min-height:44px;padding:10px 4px;border-bottom:1px solid var(--divider);cursor:pointer}
 label.ck .meta{font-size:13px;color:var(--muted);margin-left:24px;overflow-wrap:anywhere}
 .actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px;flex-wrap:wrap}
@@ -134,7 +135,11 @@ document.addEventListener("click",(e)=>{
   if(!t) return;
   const act=t.getAttribute("data-demo");
   if(act==="uninstalled-view"){ viewUninstalled=true; } // 视图标志，仅影响 S02 分支；不改变 DEMO
-  if(act==="commit-install" && D5){ DEMO.grants.a=D5.a; DEMO.grants.b=D5.b; viewUninstalled=false; location.hash="#S07"; }
+  if(act==="commit-install" && D5){
+    DEMO.grants={a:D5.a, b:D5.b, c:false}; // 原子重建 fresh v0.4（complete-disabled）：清旧 update/lifecycle/pending/grant-c/draft
+    DEMO.applied=false; DEMO.stale=false; DEMO.enabled=false; DEMO.enablePending=false;
+    D13=null; viewUninstalled=false; location.hash="#S07";
+  }
   if(act==="apply-update" && !DEMO.applied && !DEMO.enabled){ DEMO.applied=true; DEMO.stale=true; DEMO.enablePending=false; render(); }
   if(act==="commit-rereview" && D13 && DEMO.applied && DEMO.stale){
     DEMO.grants.a=D13.a; DEMO.grants.c=D13.c; DEMO.grants.b=false; // b 在 v0.5.0 移除：授权终止（history-only）
@@ -429,7 +434,9 @@ function render(){
   if(id==="S05" && prevId!=="S05" && prevId!=="S06") D5={a:true,b:false};
   if(id==="S06" && D5===null) D5={a:true,b:false};
   if(id==="S13" && D13===null) D13={a:true,c:false};
-  if(id==="S13" && prevId!=="S13" && prevId!=="S10") D13={a:true,c:false}; // 从 S10 返回保留草稿（与 S05/S06 规则对称）
+  // one-shot immediate-return：从 S13 相邻屏（S09/S10/S11/S11a，均为其入口/出口）往返保留草稿；
+  // 其余重入（新会话）重置为默认勾选（与 S05/S06 规则对称）
+  if(id==="S13" && prevId!=="S13" && !["S09","S10","S11","S11a"].includes(prevId)) D13={a:true,c:false};
   prevId=id;
   const app=document.getElementById("app");
   const tpl=S[id]||S.S01;
