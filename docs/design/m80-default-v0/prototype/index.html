@@ -142,7 +142,11 @@ document.addEventListener("click",(e)=>{
     DEMO.applied=false; DEMO.stale=false; DEMO.enabled=false; DEMO.enablePending=false;
     D13=null; s13ReturnToken=false; viewUninstalled=false; location.hash="#S07";
   }
-  if(act==="apply-update" && !DEMO.applied && !DEMO.enabled){ DEMO.applied=true; DEMO.stale=true; DEMO.enablePending=false; render(); }
+  if(act==="apply-update" && !DEMO.applied && !DEMO.enabled){
+    DEMO.applied=true; DEMO.stale=true; DEMO.enablePending=false;
+    D13=null; s13ReturnToken=false; // authority-changing action（同屏 render 亦然）：旧 D13 与 return token 失效
+    render();
+  }
   if(act==="commit-rereview" && D13 && DEMO.applied && DEMO.stale){
     DEMO.grants.a=D13.a; DEMO.grants.c=D13.c; DEMO.grants.b=false; // b 在 v0.5.0 移除：授权终止（history-only）
     DEMO.stale=false; location.hash="#S11";
