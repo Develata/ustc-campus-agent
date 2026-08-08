@@ -428,7 +428,8 @@ function render(){
   if(viewUninstalled && !["S02","S03","S04","S05","S06","S06a","S07","S07a","S08"].includes(id)) viewUninstalled=false;
   if(id==="S05" && prevId!=="S05" && prevId!=="S06") D5={a:true,b:false};
   if(id==="S06" && D5===null) D5={a:true,b:false};
-  if(id==="S13" && prevId!=="S13") D13={a:true,c:false};
+  if(id==="S13" && D13===null) D13={a:true,c:false};
+  if(id==="S13" && prevId!=="S13" && prevId!=="S10") D13={a:true,c:false}; // 从 S10 返回保留草稿（与 S05/S06 规则对称）
   prevId=id;
   const app=document.getElementById("app");
   const tpl=S[id]||S.S01;
