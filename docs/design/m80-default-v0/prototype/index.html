@@ -116,6 +116,8 @@ const PENDING_NOTE = `<p class="note">※ 真实系统中此转场由 server typ
 const DEMO = { grants:{a:true,b:false,c:false}, applied:false, stale:false, enabled:false, enablePending:false };
 let viewUninstalled = false; // 非 committed 视图标志：S01「安装流程演示」进入 S02 的未安装基线视图；不改变 DEMO
 let D5 = null, D13 = null;
+let s13ReturnToken = false; // one-shot return token：S13 → 相邻屏时 armed，紧接该相邻屏 → S13 时消费并保留一次草稿
+const S13_NEIGHBORS = ["S09","S10","S11","S11a"];
 const GRANT_NAMES = {a:"读取校园信息源", b:"推送变化通知", c:"读取课程公告源"};
 const V04 = ["a","b"], V05 = ["a","c"];
 const curSet = () => DEMO.applied ? V05 : V04;
@@ -138,7 +140,7 @@ document.addEventListener("click",(e)=>{
   if(act==="commit-install" && D5){
     DEMO.grants={a:D5.a, b:D5.b, c:false}; // 原子重建 fresh v0.4（complete-disabled）：清旧 update/lifecycle/pending/grant-c/draft
     DEMO.applied=false; DEMO.stale=false; DEMO.enabled=false; DEMO.enablePending=false;
-    D13=null; viewUninstalled=false; location.hash="#S07";
+    D13=null; s13ReturnToken=false; viewUninstalled=false; location.hash="#S07";
   }
   if(act==="apply-update" && !DEMO.applied && !DEMO.enabled){ DEMO.applied=true; DEMO.stale=true; DEMO.enablePending=false; render(); }
   if(act==="commit-rereview" && D13 && DEMO.applied && DEMO.stale){
@@ -433,10 +435,20 @@ function render(){
   if(viewUninstalled && !["S02","S03","S04","S05","S06","S06a","S07","S07a","S08"].includes(id)) viewUninstalled=false;
   if(id==="S05" && prevId!=="S05" && prevId!=="S06") D5={a:true,b:false};
   if(id==="S06" && D5===null) D5={a:true,b:false};
-  if(id==="S13" && D13===null) D13={a:true,c:false};
-  // one-shot immediate-return：从 S13 相邻屏（S09/S10/S11/S11a，均为其入口/出口）往返保留草稿；
-  // 其余重入（新会话）重置为默认勾选（与 S05/S06 规则对称）
-  if(id==="S13" && prevId!=="S13" && !["S09","S10","S11","S11a"].includes(prevId)) D13={a:true,c:false};
+  // S13 one-shot return token：
+  //   仅 S13 → 相邻屏（S09/S10/S11/S11a）时 armed；
+  //   紧接着该相邻屏 → S13 时消费并保留一次草稿；
+  //   访问任何第三屏立即清除；无 token 的 S13 re-entry 重置 D13={a:true,c:false}；
+  //   S13 same-screen render（prevId==="S13"）不清当前 draft。
+  if(id==="S13"){
+    if(D13===null) D13={a:true,c:false};
+    if(prevId!=="S13" && !s13ReturnToken) D13={a:true,c:false};
+    s13ReturnToken=false;
+  }else if(prevId==="S13" && S13_NEIGHBORS.includes(id)){
+    s13ReturnToken=true;
+  }else if(id!==prevId){
+    s13ReturnToken=false;
+  }
   prevId=id;
   const app=document.getElementById("app");
   const tpl=S[id]||S.S01;
