@@ -257,6 +257,8 @@ Arbitrary central `stdio` command execution is outside this lane.
 
 This lane precedes real product source integration, but each product can develop against exact M60 fixtures.
 
+`P1-1` has implemented bounded `M60-B1 source-registry` as a review candidate: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` are present, `SRC-001` is promoted to `implemented` bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`, and the dedicated checker/test carriers are extended. `M60` overall and `M60-B2` through `M60-B8` remain `planned`; `SRC-010`, `SRC-011` and `SRC-012` remain `planned`. The `ustc-teach-calendar-fall` candidate remains `Proposed`. P1-1 review, local commit and push remain pending; no PR, merge, tag, release, source approval or retrieval is authorized.
+
 ## 13. First-party product lanes
 
 The product implementation order remains:

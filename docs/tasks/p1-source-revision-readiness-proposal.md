@@ -2,12 +2,13 @@
 
 ## Mutable state
 
-- `Stage`: `P1_0_CLOSURE_CANDIDATE`
+- `Stage`: `P1_1_CLOSURE_CANDIDATE`
 - `P1-0 review`: `GO`; exact-candidate receipt recorded below
-- `P1-0 local commit`: this scoped P1-0 commit
-- `P1-1 implementation`: pending
-- `P1-1 review`: pending
-- `P1-1 local commit`: pending
+- `P1-0 local commit`: committed and pushed at exact HEAD `7491cb640b7d670822dbb39f165897e4145795a3`
+- `P1-1 implementation`: candidate present (bounded `M60-B1 source-registry` implemented as a review candidate)
+- `P1-1 review`: `GO`; exact-candidate receipt recorded below
+- `P1-1 local commit`: this scoped P1-1 commit
+- `P1-1 push`: pending
 - `Source candidate`: `ustc-teach-calendar-fall` remains `Proposed`
 - `Remote shipping`: feature-branch push authorized after final local validation; PR/merge/tag/release remain forbidden
 
@@ -206,3 +207,29 @@ Stop and return to Develata before mutation if:
 - `Report`: `sha256:d4f9cb7706d4f7b114c0e40541deb041dbe24fb6df57356d70be04540b5e4bae`
 - `Custody`: pre/post verification both bound packet `11529705aca4e19ae52bde8ec5a69571c2c3cc6d1157057ac77dd69f78aa65f9` and contract candidate `688f2e6c957ab34c763c8884bf56100bf2f4a22a21a62550abead11482a7f979`
 - `Closure`: accept unchanged §1–13 semantics as `source-import/v0` for bounded P1-1 B1 implementation; keep the real USTC source family `Proposed`, M60 `planned`, M70 `design-only`, and every acceptance row unchanged in P1-0
+
+## P1-1 implementation scope amendment
+
+- `Status`: explicitly authorized by Develata on 2026-08-08 and admitted into the P1-1 closure candidate
+- `Develata authorization`: `授权该单一路径的窄范围 scope amendment（推荐）`
+- `Original packet`: unchanged at `sha256:11529705aca4e19ae52bde8ec5a69571c2c3cc6d1157057ac77dd69f78aa65f9` over `8479` bytes
+- `Added path`: `crates/platform-core/tests/platform_identity.rs`
+- `Trigger`: the mandatory package gate proved that this pre-existing external authority test freezes `lib.rs` module declarations and fails when `source_registry` becomes reachable
+- `Permitted delta`: add only `source_registry` to that exact module-declaration expectation; do not weaken its lexical, compile-negative, identity or closure assertions
+- `§11 waiver`: waive the exact-packet stop condition for this one closure-carrier path only
+- `Boundary`: the amended P1-1 writable set is the original eleven paths plus this one closure carrier; no other scope, dependency, source approval, retrieval, PR, merge, tag or release authority is added
+- `Evidence`: `cargo test --locked -p ustc-campus-agent-core` reached `platform_identity::identity_values_are_exact_and_nominal` and reported actual modules `["identity", "invocation", "market", "session", "source_registry"]` versus the original four-module expectation
+
+### P1-1 amended exact-candidate GO receipt
+
+- `Reviewer`: fresh Dongfengyun OMO lead over `USTC/glm-5.2-107`; direct independent A/B/C review without background agents
+- `Object`: base HEAD `7491cb640b7d670822dbb39f165897e4145795a3`; 12-path manifest `sha256:f69f7293db1bedfefa1c96c406988f119180721fadeca3df8724025c28b69a08`; archive `sha256:b9b9d3ab33a17e0e8dcf3aed552f91fd312913f65cc225f2f4b9f1a5886e93d9`; contract `sha256:cfe8cc648c704557e3abcbcf06c09dab045aa3adfc5e2e417f770cb0ce24c65d`
+- `Historical packet`: unchanged at `8479` bytes / `sha256:11529705aca4e19ae52bde8ec5a69571c2c3cc6d1157057ac77dd69f78aa65f9`
+- `Scope`: original eleven P1-1 paths plus only `crates/platform-core/tests/platform_identity.rs` under the amendment above
+- `Local gates`: focused source-registry 23/23 PASS; package tests/doctests PASS; full workspace Rust test + all-target clippy `-D warnings` RC=0; checker PASS; SourceRegistryContractTests 22/22 PASS; registration 1/1 PASS; full Python 508/508 PASS; fmt/diff-check PASS
+- `Verdict`: `GO`
+- `Blockers`: `[]`
+- `Commit recommendation`: `ELIGIBLE`
+- `Report`: `sha256:03ce12a655766c9d9a4f224a4175168ae6146a9edfaf1b9ac8510507364735f2`
+- `Custody`: read-only pre/post verification both bound the exact 12-path working object; no reviewed byte drifted
+- `Closure`: this receipt is marker-external and changes no reviewed Rust/API/contract/acceptance semantics; final commit still requires focused closeout gates and a narrow exact-delta review

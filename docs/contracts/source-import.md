@@ -2,13 +2,13 @@
 
 ## Metadata
 
-- `Status`: Accepted for bounded `M60-B1 source-registry`; later M60 slices remain planned
+- `Status`: Accepted for bounded `M60-B1 source-registry`, implemented as a review candidate; later M60 slices remain planned
 - `Version`: `source-import/v0`
 - `Last Review`: `2026-08-08`
 - `Owning Blueprint`: [`M60 Campus Trust and Source Pipeline`](../plan/modules/70-campus-trust-source-pipeline.md)
 - `Depends On`: [`module-boundaries.md`](module-boundaries.md) and the existing crate-root `SourceAuthority` order
-- `Acceptance`: current matrix rows `SRC-001`, `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted
-- `Primary Code`: none in P1-0; a later accepted P1-1 may add `crates/platform-core/src/source_registry.rs`
+- `Acceptance`: `SRC-001` is `implemented` as a bounded `M60-B1 source-registry` review candidate bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted
+- `Primary Code`: `crates/platform-core/src/source_registry.rs` for bounded B1 (P1-1 review candidate)
 
 ## 1. Scope and authority
 
@@ -365,7 +365,7 @@ This candidate family stays `Proposed` throughout P1-0 and P1-1. The family labe
 
 ## 12. P1-1 implementation slice
 
-After independent GO on the exact P1-0 packet, P1-1 may implement only M60-B1:
+After independent GO on the exact P1-0 packet, P1-1 implements only M60-B1 as a review candidate:
 
 - add `crates/platform-core/src/source_registry.rs`;
 - add one `pub mod source_registry;` declaration in `crates/platform-core/src/lib.rs`;
@@ -375,13 +375,15 @@ After independent GO on the exact P1-0 packet, P1-1 may implement only M60-B1:
 - keep `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row unchanged;
 - add no dependency, adapter, network call, persistence, clock, parser or concrete approved source.
 
-The required positive/negative evidence covers every grammar edge, no-echo errors, duplicate rejection, missing/proposed/already-approved states, first-receipt preservation, failed-transition atomicity, exact API closure and zero I/O/dependency widening.
+The P1-1 review candidate is present in the working tree; its review, local commit and push remain pending. The required positive/negative evidence covers every grammar edge, no-echo errors, duplicate rejection, missing/proposed/already-approved states, first-receipt preservation, failed-transition atomicity, exact API closure and zero I/O/dependency widening.
 
 ## 13. Acceptance projection
 
 P1-0 changes no acceptance status.
 
-P1-1 may change only `SRC-001` from `planned` to `implemented` after all of these exist on one exact revision:
+P1-1 promotes only `SRC-001` from `planned` to `implemented` as a bounded `M60-B1 source-registry` review candidate. The bounded B1 evidence — stable identity, owner, exact canonical URL, retrieval-policy value, proposed/approved review state and pure registry transitions — is implemented in `crates/platform-core/src/source_registry.rs` and proven by `cargo test --locked -p ustc-campus-agent-core --test source_registry`. `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row remain unchanged. `M60` overall and `M60-B2` through `M60-B8` remain planned, so the implemented `SRC-001` does not establish a reviewed source/revision/baseline or any live retrieval path.
+
+The full P1-1 gate chain that the implemented `SRC-001` review candidate must still clear on one exact revision before review close is:
 
 ```text
 python3 scripts/check_repo_contracts.py --ci

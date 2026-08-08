@@ -5918,6 +5918,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_platform_session_contract(issues)",
         "check_platform_session_implementation(issues)",
         "check_p1_source_revision_contract(issues)",
+        "check_p1_source_registry_implementation(issues)",
         "check_module_registry(issues)",
         "check_s0_architecture_review(issues)",
     )
@@ -6643,7 +6644,7 @@ class PlatformSessionImplementationTests(unittest.TestCase):
 
 
 class SourceRegistryContractTests(unittest.TestCase):
-    """P1-0 exact contract/readiness carrier; no Rust implementation is assumed yet."""
+    """P1-1 source-registry implementation carrier; exact contract/readiness + Rust gate."""
 
     FILES = (
         "docs/acceptance/matrix.tsv",
@@ -6651,6 +6652,10 @@ class SourceRegistryContractTests(unittest.TestCase):
         "docs/plan/modules/70-campus-trust-source-pipeline.md",
         "docs/tasks/01-execution-roadmap.md",
         "docs/tasks/p1-source-revision-readiness-proposal.md",
+        "crates/platform-core/src/lib.rs",
+        "crates/platform-core/src/source_registry.rs",
+        "crates/platform-core/tests/source_registry.rs",
+        "crates/platform-core/tests/platform_identity.rs",
         "scripts/check_repo_contracts.py",
     )
 
@@ -6686,6 +6691,11 @@ class SourceRegistryContractTests(unittest.TestCase):
     def check_p1(self) -> list[str]:
         issues: list[str] = []
         checker.check_p1_source_revision_contract(issues)
+        return issues
+
+    def check_impl(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_p1_source_registry_implementation(issues)
         return issues
 
     def rewrite(self, rel: str, old: str, new: str) -> None:
@@ -6727,8 +6737,15 @@ class SourceRegistryContractTests(unittest.TestCase):
         issues = self.check_p1()
         self.assertTrue(any(expected in issue for issue in issues), issues)
 
+    def assert_impl_rejected(self, expected: str) -> None:
+        issues = self.check_impl()
+        self.assertTrue(any(expected in issue for issue in issues), issues)
+
     def test_p1_0_exact_candidate_passes(self) -> None:
         self.assertEqual(self.check_p1(), [])
+
+    def test_p1_1_source_registry_passes(self) -> None:
+        self.assertEqual(self.check_impl(), [])
 
     def test_packet_digest_drift_fails_closed(self) -> None:
         self.rewrite(
@@ -6763,7 +6780,43 @@ class SourceRegistryContractTests(unittest.TestCase):
             "scripts/tests/test_check_repo_contracts.py\nCargo.toml\n```\n\nThe implementation is the exact B1",
         )
         self.rebind_packet_digest()
-        self.assert_rejected("P1-1 exact writable path allowlist drifted")
+        self.assert_rejected("P1-1 exact packet writable path allowlist drifted")
+
+    def test_p1_1_scope_amendment_carrier_removal_fails_closed(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "- `Added path`: `crates/platform-core/tests/platform_identity.rs`",
+            "- `Added path`: `crates/platform-core/tests/removed.rs`",
+        )
+        self.assert_rejected("P1-1 implementation scope amendment missing/duplicated")
+
+    def test_p1_1_scope_authorization_receipt_removal_fails_closed(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "- `Develata authorization`: `授权该单一路径的窄范围 scope amendment（推荐）`",
+            "- `Develata authorization`: missing",
+        )
+        self.assert_rejected("P1-1 implementation scope amendment missing/duplicated")
+
+    def test_platform_identity_module_closure_removal_fails_closed(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REGISTRY_IDENTITY_TEST,
+            checker.P1_SOURCE_REGISTRY_IDENTITY_MODULE_EXPECTATION,
+            '&["identity", "invocation", "market", "session"] as &[&str],',
+        )
+        self.assert_impl_rejected(
+            "P1-1 platform-identity module expectation must admit source_registry exactly once"
+        )
+
+    def test_platform_identity_item_closure_removal_fails_closed(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REGISTRY_IDENTITY_TEST,
+            checker.P1_SOURCE_REGISTRY_IDENTITY_ITEM_EXPECTATION,
+            '    "pub mod removed;",',
+        )
+        self.assert_impl_rejected(
+            "P1-1 platform-identity item expectation must admit source_registry exactly once"
+        )
 
     def test_source_object_drift_fails_closed(self) -> None:
         self.rewrite(
@@ -6773,16 +6826,27 @@ class SourceRegistryContractTests(unittest.TestCase):
         )
         self.assert_rejected("P1 source/revision outer metadata missing/duplicated")
 
-    def test_src_001_premature_promotion_fails_closed(self) -> None:
+    def test_src_001_reversion_fails_closed(self) -> None:
         matrix = self.path("docs/acceptance/matrix.tsv")
         lines = matrix.read_text(encoding="utf-8").splitlines()
         index = next(i for i, line in enumerate(lines) if line.startswith("SRC-001\t"))
         fields = lines[index].split("\t")
-        self.assertEqual(fields[5], "planned")
-        fields[5] = "implemented"
+        self.assertEqual(fields[5], "implemented")
+        fields[5] = "planned"
         lines[index] = "\t".join(fields)
         matrix.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        self.assert_rejected("P1-0 requires SRC-001 to remain planned")
+        self.assert_rejected("P1-1 requires SRC-001 to be implemented")
+
+    def test_src_001_binding_drift_fails_closed(self) -> None:
+        matrix = self.path("docs/acceptance/matrix.tsv")
+        lines = matrix.read_text(encoding="utf-8").splitlines()
+        index = next(i for i, line in enumerate(lines) if line.startswith("SRC-001\t"))
+        fields = lines[index].split("\t")
+        self.assertEqual(fields[5], "implemented")
+        fields[3] = "cargo test --locked -p ustc-campus-agent-core --lib"
+        lines[index] = "\t".join(fields)
+        matrix.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self.assert_rejected("P1-1 requires SRC-001 to be implemented with exact binding")
 
     def test_m60_state_promotion_fails_closed(self) -> None:
         self.rewrite(
@@ -6842,10 +6906,18 @@ class SourceRegistryContractTests(unittest.TestCase):
         )
         self.assert_rejected("P1-0 GO receipt missing/duplicated")
 
+    def test_p1_1_go_receipt_removal_fails_closed(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "### P1-1 amended exact-candidate GO receipt",
+            "### P1-1 review receipt pending",
+        )
+        self.assert_rejected("P1-1 GO receipt missing/duplicated")
+
     def test_contract_acceptance_reversion_fails_after_contract_digest_rebound(self) -> None:
         self.rewrite(
             checker.P1_SOURCE_IMPORT_CONTRACT,
-            "- `Status`: Accepted for bounded `M60-B1 source-registry`; later M60 slices remain planned",
+            "- `Status`: Accepted for bounded `M60-B1 source-registry`, implemented as a review candidate; later M60 slices remain planned",
             "- `Status`: P1-0 candidate; exact contract review pending",
         )
         self.rebind_contract_digest()
