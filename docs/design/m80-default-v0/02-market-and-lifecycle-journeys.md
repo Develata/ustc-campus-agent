@@ -45,6 +45,7 @@
 
 - dense list/rows：name/value proposition/publisher/exact version/capability summary/分层 status；不做 decorative card grid。
 - 「状态」列只表示 **catalog 层事实**（未安装/已安装/已被撤销不可见等 server-projected label）；不显示 runtime health、不显示“健康/正常”。
+- 本卷线框以 **未安装基线** 呈现市场（ChangeRadar 行「未安装 · 查看详情」）；16B prototype 的 ChangeRadar 行由 DEMO 驱动（初始基线为已安装），未安装基线经 S01「安装流程演示」入口呈现（见 `07` 卷 §3/§5 与 `prototype/index.html`）。
 - 实现姿态如实呈现：planned/development 的 package 显示对应 label（如「开发中」），不伪装 ready。
 - Primary per row「查看详情」；installed 时「管理」；filter reset secondary。
 

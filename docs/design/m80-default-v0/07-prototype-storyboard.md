@@ -39,8 +39,8 @@ S11a Enable unavailable：权限需复核 → S13 Grant re-review → S11
 
 | ID | Screen | 主要状态族 | Primary action | 出口 |
 |---|---|---|---|---|
-| S01 | Market browse | loading/empty/no-results/stale/error | 查看详情 | →S02 |
-| S02 | Package detail | normal/not-runnable/already-installed/stale | 审查安装 | →S03 / →S10（已安装） |
+| S01 | Market browse | loading/empty/no-results/stale/error；ChangeRadar 行 DEMO 驱动（初始已安装基线） | 查看详情 | →S02 |
+| S02 | Package detail | normal/not-runnable/already-installed/stale | 审查安装（未安装基线视图）/ 管理（已安装） | →S03（未安装）/ →S10（已安装） |
 | S03 | Install review ① 精确包 | plan-loading/conflict | 下一步：配置 | →S04 / cancel→S02 |
 | S04 | Install review ② 配置 | invalid/secret-ref-unavailable | 下一步：权限审批 | →S05 / back→S03 |
 | S05 | Install review ③ 权限审批 | denied/high-risk-unchecked | 下一步：确认安装方案 | →S06 / back→S04 |
@@ -83,7 +83,7 @@ S09 分组为 **attention-first**（`02` 卷 §7.1）：update available 或 gra
 
 ## 5. 逐屏 storyboard（关键屏）
 
-**S01 Market browse**——见 `02` 卷 §2.2 线框。假数据标注「illustrative」；状态列仅 catalog 事实。
+**S01 Market browse**——见 `02` 卷 §2.2 线框。假数据标注「illustrative」；状态列仅 catalog 事实。ChangeRadar 行由 DEMO 驱动（初始基线：已安装，未启用 · v0.4.0 · 有可用更新 v0.5.0；授权失效时 badge.attn「权限需复核」，启用后 badge.on「已启用」）；S01 底部提供「安装流程演示（未安装基线）」入口（`viewUninstalled` 视图标志，非 committed）→ S02 未安装分支「审查安装」→ S03–S08 安装流；离开安装流屏即复位视图标志。
 
 **S06 Final summary / exact approval**
 

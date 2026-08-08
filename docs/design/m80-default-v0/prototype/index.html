@@ -60,12 +60,13 @@ input[type=checkbox]{width:24px;height:24px;vertical-align:middle;flex:none}
   padding:12px 14px;margin:14px 0;font-size:14px;overflow-wrap:anywhere}
 .ok{background:#F0F7F2;border-left:3px solid var(--success);padding:12px 14px;margin:14px 0;overflow-wrap:anywhere}
 ul.clean{list-style:none;padding:0;margin:8px 0}
-ul.clean li{padding:10px 4px;border-bottom:1px solid var(--divider)}
+ul.clean li{padding:10px 4px;border-bottom:1px solid var(--divider);overflow-wrap:anywhere}
+ul.clean .meta{overflow-wrap:anywhere}
 label.ck{display:block;min-height:44px;padding:10px 4px;border-bottom:1px solid var(--divider);cursor:pointer}
 label.ck .meta{font-size:13px;color:var(--muted);margin-left:24px;overflow-wrap:anywhere}
 .actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px;flex-wrap:wrap}
 .step{font-size:13px;color:var(--muted);text-align:right}
-.demo{margin-top:28px;padding-top:12px;border-top:1px dashed var(--divider);font-size:13px;color:var(--muted)}
+.demo{margin-top:28px;padding-top:12px;border-top:1px dashed var(--divider);font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .demo a{color:var(--accent)}
 footer{margin-top:40px;padding-top:12px;border-top:1px solid var(--divider);
   font-size:12px;color:var(--muted);text-align:center}
@@ -112,6 +113,7 @@ const PENDING_NOTE = `<p class="note">※ 真实系统中此转场由 server typ
 //   history-only，只读标注，不进复核集合）；c = Added（非默认选中）；
 //   Expanded/Narrowed/MetadataChanged = 0（空分组仍呈现，见 10 卷 §2.2）
 const DEMO = { grants:{a:true,b:false,c:false}, applied:false, stale:false, enabled:false, enablePending:false };
+let viewUninstalled = false; // 非 committed 视图标志：S01「安装流程演示」进入 S02 的未安装基线视图；不改变 DEMO
 let D5 = null, D13 = null;
 const GRANT_NAMES = {a:"读取校园信息源", b:"推送变化通知", c:"读取课程公告源"};
 const V04 = ["a","b"], V05 = ["a","c"];
@@ -131,7 +133,8 @@ document.addEventListener("click",(e)=>{
   const t=e.target instanceof Element ? e.target.closest("[data-demo]") : null;
   if(!t) return;
   const act=t.getAttribute("data-demo");
-  if(act==="commit-install" && D5){ DEMO.grants.a=D5.a; DEMO.grants.b=D5.b; location.hash="#S07"; }
+  if(act==="uninstalled-view"){ viewUninstalled=true; } // 视图标志，仅影响 S02 分支；不改变 DEMO
+  if(act==="commit-install" && D5){ DEMO.grants.a=D5.a; DEMO.grants.b=D5.b; viewUninstalled=false; location.hash="#S07"; }
   if(act==="apply-update" && !DEMO.applied && !DEMO.enabled){ DEMO.applied=true; DEMO.stale=true; DEMO.enablePending=false; render(); }
   if(act==="commit-rereview" && D13 && DEMO.applied && DEMO.stale){
     DEMO.grants.a=D13.a; DEMO.grants.c=D13.c; DEMO.grants.b=false; // b 在 v0.5.0 移除：授权终止（history-only）
@@ -142,19 +145,29 @@ document.addEventListener("click",(e)=>{
 });
 
 const S = {};
-S.S01 = `
+S.S01 = () => {
+const crBadge = DEMO.stale ? `<span class="badge attn">权限需复核</span>`
+  : (DEMO.enabled ? `<span class="badge on">已启用</span>` : `<span class="badge off">已安装，未启用</span>`);
+const crState = DEMO.stale ? "授权失效，需复核（server 判定）"
+  : (DEMO.enabled ? "已启用（server-confirmed · illustrative）"
+     : (DEMO.applied ? "已安装，未启用 · 当前版本 v0.5.0 · 权限已复核"
+        : "已安装，未启用 · v0.4.0 · ⓘ 有可用更新 v0.5.0"));
+return `
 <header class="top"><h1>插件市场</h1><span class="scrid">S01 · 状态: 正常（illustrative）</span></header>
 ${IDX}
 <div class="rows">
-  <div class="row"><div><strong>USTC ChangeRadar</strong><div class="meta">校园官方信息源变化追踪（illustrative）· USTC Campus Agent 团队 · v0.4.0 · 未安装<br>权限摘要：读取 2 项校园信息源</div></div><a class="btn sec" href="#S02">查看详情</a></div>
+  <div class="row"><div><strong>USTC ChangeRadar</strong><div class="meta">${crBadge} 校园官方信息源变化追踪（illustrative）· USTC Campus Agent 团队 · ${crState}<br>权限摘要：读取 2 项校园信息源</div></div><a class="btn sec" href="#S02">查看详情</a></div>
   <div class="row"><div><strong>USTC Affairs Navigator</strong><div class="meta">结构化办事指南（illustrative）· v0.3.1 · 已安装<br>权限摘要：读取办事流程数据</div><div class="meta" id="s01-an-note">管理不可用：详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled aria-describedby="s01-an-note">管理</button></div>
   <div class="row"><div><strong>Campus Opportunity Graph</strong><div class="meta">机会匹配（开发中 · illustrative）· v0.2.0 · 已安装<br>权限摘要：读取机会数据 · 请求你的资料授权</div><div class="meta" id="s01-og-note">管理不可用：详情屏不在 16B 范围（out-of-prototype）</div></div><button class="sec" disabled aria-describedby="s01-og-note">管理</button></div>
 </div>
-<p class="note">「状态」列仅为 catalog 层事实；不显示 runtime health。仅 ChangeRadar 具备对应 detail screen（S10）；其余插件的「管理」以 disabled 如实标注，不导航到他插件详情。</p>`;
+<p class="note">「状态」列仅为 catalog 层事实；不显示 runtime health。仅 ChangeRadar 具备对应 detail screen（S10）；其余插件的「管理」以 disabled 如实标注，不导航到他插件详情。</p>
+<div class="demo">安装流程演示（未安装基线）：<a href="#S02" data-demo="uninstalled-view">ChangeRadar 未安装时的审查安装流程（S02→S03→S04→S05→S06→S07→S08）→</a>（视图仅演示，不改变当前状态）</div>`;};
 
-S.S02 = `
+S.S02 = () => {
+if(viewUninstalled){
+  return `
 <header class="top"><h1>USTC ChangeRadar</h1><a class="btn" href="#S03">审查安装</a></header>
-<p class="scrid">S02 · v0.4.0 · USTC Campus Agent 团队</p>
+<p class="scrid">S02 · v0.4.0 · USTC Campus Agent 团队 · 未安装基线视图（演示）</p>
 <h2>这个插件做什么</h2><p>追踪经审核的校园信息源，发布语义化变化。（illustrative）</p>
 <h2>权限能力（Capabilities）</h2>
 <ul class="clean"><li>读取校园信息源（read · 低风险）<div class="meta">范围与风险由平台 registry 定义</div></li></ul>
@@ -163,7 +176,28 @@ S.S02 = `
 <li>声明来源：market/ 目录内 reviewed manifest</li>
 <li>实现状态：design-only（当前无可执行组件）— 如实呈现</li>
 <li>版本历史 / digest：技术细节（折叠）</li>
-</ul>`;
+</ul>
+<div class="demo">安装前基线的市场呈现（S01 行显示「未安装 · 查看详情」）；安装后的管理呈现见 <a href="#S10">S10</a>。</div>`;
+}
+const lifecycle = DEMO.stale
+  ? `<span class="badge attn">权限需复核</span> <span class="meta">已安装，未启用（InstalledDisabled）· 授权失效需复核（server 判定）</span>`
+  : (DEMO.enabled
+    ? `<span class="badge on">已启用</span> <span class="meta">server-confirmed 演示 · 运行中</span>`
+    : `<span class="badge off">已安装，未启用</span> <span class="meta">InstalledDisabled（仅 lifecycle 事实）</span>`);
+return `
+<header class="top"><h1>USTC ChangeRadar</h1><a class="btn" href="#S10">管理</a></header>
+<p class="scrid">S02 · ${DEMO.applied?"v0.5.0":"v0.4.0"} · USTC Campus Agent 团队</p>
+<p>${lifecycle}</p>
+<h2>这个插件做什么</h2><p>追踪经审核的校园信息源，发布语义化变化。（illustrative）</p>
+<h2>权限能力（Capabilities）</h2>
+<ul class="clean"><li>读取校园信息源（read · 低风险）<div class="meta">范围与风险由平台 registry 定义</div></li></ul>
+<h2>来源与信任</h2>
+<ul class="clean">
+<li>声明来源：market/ 目录内 reviewed manifest</li>
+<li>实现状态：design-only（当前无可执行组件）— 如实呈现</li>
+<li>版本历史 / digest：技术细节（折叠）</li>
+</ul>
+<div class="demo">安装流演示见 S01「安装流程演示（未安装基线）」入口；<a href="#S10">前往插件管理（S10）</a>。</div>`;};
 
 S.S03 = `
 <header class="top"><h1>安装 USTC ChangeRadar</h1><span class="step">步骤 1/4 · S03</span></header>
@@ -391,6 +425,7 @@ ${guard}
 let prevId = null;
 function render(){
   const id=(location.hash||"#S01").slice(1);
+  if(viewUninstalled && !["S02","S03","S04","S05","S06","S06a","S07","S07a","S08"].includes(id)) viewUninstalled=false;
   if(id==="S05" && prevId!=="S05" && prevId!=="S06") D5={a:true,b:false};
   if(id==="S06" && D5===null) D5={a:true,b:false};
   if(id==="S13" && prevId!=="S13") D13={a:true,c:false};
