@@ -1,7 +1,7 @@
 # 03 — Agent and First-party Journeys
 
 > **Illustrative / No live backend** — 本卷全部线框与示例数据为设计样例。
-> Packet: `m80-default-v0` · Status: `Proposal` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
+> Packet: `m80-default-v0` · Status: `Reviewed` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
 > 覆盖 artifacts：8 Agent thread/run · 9 First-party Plugin entry patterns
 
 ## 1. 本卷 authority 前提

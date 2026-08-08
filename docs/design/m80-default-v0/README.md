@@ -8,13 +8,14 @@
 |---|---|
 | Packet | `m80-default-v0` |
 | Task | `M80-KIMI-K3-UI-BRIEF-V0` |
-| Status | `Proposal` |
+| Status | `Reviewed` |
+| Reviewed | 2026-08-08 Hermes terminal verdict（`PARENT_CHROMIUM_REVIEW=GO` `INDEPENDENT_REVIEW=GO` `ACCEPTED_BLOCKERS=NONE` `F10_DIRECTION_C=CLOSE` `REPOSITORY_CONTENT_TECHNICAL=GO` `PACKET_CANDIDATE=READY_FOR_PROMOTION`）——reviewed candidate commit `fe36fb413b36cc736008527636bd6d595e7efa89` / tree `dce096239b9ff34c9d28317e991b0f28f7054806`；independent review GO；CI run `31252138324`（docs-and-contracts PASS + rust PASS）双绿。**Reviewed 不代表 implementation、readiness、domain authority 或 acceptance**——terminal design review 已完成；product/domain/lifecycle 权威仍在 plan/contracts/features/acceptance（`docs/design/AGENTS.md`） |
 | Implementation evidence | none |
 | Readiness claim | none |
 | Source commit | `2f4de29032560ff3e13d9994b33a3aff14243f44` |
 | Source tree | `53e266c47fdb07d50a734faa24bb11ac4bc5527d` |
 | Source relation | 绑定 `origin/main` @ `2f4de29`（2026-08-02 第二轮 rebind 核验；首轮绑定 `5e9e5b9`，因 M20-B6 实现合入发生 drift，见 Source drift 记录） |
-| Publication | 2026-08-02 经 Deve-hermes operation-specific 授权，以 frozen review surface 发布于 `docs/design/m80-default-v0/`（Draft PR #34，保持 Draft，非 merge-ready；round-1 review repair 已补齐 checker 集成，见 §6） |
+| Publication | 2026-08-02 经 Deve-hermes operation-specific 授权发布于 `docs/design/m80-default-v0/`（Draft PR #34，保持 Draft，非 merge-ready；round-1 review repair 已补齐 checker 集成，见 §6）；2026-08-08 Hermes terminal verdict（F10 CLOSE）后 promotion-only 更新为 `Reviewed`（reviewed candidate 见上表；PR body closeout 待 promotion exact-head CI 通过后执行） |
 | Working copy | 仓库外 `/home/deve/gitclone/ustc-campus-agent-design/m80-default-v0/`（非 Git root，仅为工作副本） |
 | Language | Chinese-first；英文仅作 optional secondary label |
 
@@ -57,23 +58,23 @@
 
 | # | Artifact | Owning file/section | Status | 标签 | Stage A fidelity | Stage B calibration dependency | External ref | Reviewer disposition |
 |---:|---|---|---|---|---|---|---|---|
-| 1 | IA map | `01` §2 | Delivered | PROPOSAL | High-confidence structure | 真实使用可调 label/order，不动 authority | — | pending |
-| 2 | Desktop/PWA shell wireframes | `01` §3 | Delivered | PROPOSAL | Mid-fidelity（small/medium/desktop ASCII） | exact breakpoints 待真实内容 | — | pending |
-| 3 | Android shell wireframes | `01` §4 | Delivered | PROPOSAL | Mid-fidelity（portrait + medium） | 真机 lifecycle/touch tuning | — | pending |
-| 4 | Home default layout | `01` §5 | Delivered | PROPOSAL | High-fidelity default + empty/offline/attention variants | widget density/order 待真实数据 | — | pending |
-| 5 | Market browse/detail/install | `02` §2–§4 | Delivered | PROPOSAL | High-fidelity flow 至 complete-disabled | carrier/copy 待 M10/M20 vertical slice | — | pending |
-| 6 | Update/rollback review | `02` §5–§6 | Delivered | PROPOSAL（B6 narrowed 语义，bounded implemented domain evidence） | High-fidelity exact diff + disable-first + drift | B6 非 production/durable；eligibility/Confirmed 的 wire 边界未定案 | — | pending |
-| 7 | Installed Plugin state system | `02` §7 | Delivered | PROPOSAL | High-fidelity；8+ 状态变体 | runtime/callability projection contract 未定 | — | pending |
-| 8 | Agent thread/run | `03` §2–§3 | Delivered | PROPOSAL | Mid-high fidelity | exact events/timing 待 HarnessRun/stream | — | pending |
-| 9 | First-party entry patterns | `03` §4–§6 | Delivered | PROPOSAL | High-fidelity 每产品一个代表 detail + shared spine | 全部 product data/actions provisional | — | pending |
-| 10 | Layout customization | `04` §2 | Delivered | PROPOSAL | Mid-fidelity desktop+Android | generic schema 待 rule-of-three | — | pending |
-| 11 | Component/state inventory | `04` §3 | Delivered | PROPOSAL | Named primitives + anatomy + variants | component API 未冻结 | — | pending |
-| 12 | Design tokens | `05` 全卷 | Delivered | PROPOSAL | 三套 token 集 + 比较 + 推荐（2026-08-04 翻转为 C）+ 实测对比度 | final values 待 browser/device 测试 | — | pending |
-| 13 | Interaction annotations | `04` §4 | Delivered | PROPOSAL | trigger/precondition/pending/confirmation/focus/recovery | exact timing/stream reconnect 待 Stage B | — | pending |
-| 14 | Accessibility annotations | `06` §2 | Delivered | PROPOSAL | 核心屏 keyboard/touch/reader/contrast/reduced-motion | 实现后真实 audit | — | pending |
-| 15 | State atlas | `04` §5 | Delivered | PROPOSAL | 全状态族（含 drift/consumed/partial-reconnect/version-skew） | 真实 copy 长度 | — | pending |
-| 16 | Clickable prototype | `07` 全卷 + `prototype/index.html` | **16A + 16B Delivered** | PROPOSAL | Storyboard：screen/state IDs + transition table + failure branch；16B：自包含静态 HTML（16 screen/state IDs，hash 导航） | 16B 为设计演示物，非 retained frontend skeleton；Stage B 以真实实现校准 | 无外部 URL；文件在 packet 内 | pending |
-| 17 | Redline/handoff notes | `08` 全卷 | Delivered | PROPOSAL | spacing/type/layout/behavior specs | 无 Dioxus component/API 发明 | — | pending |
+| 1 | IA map | `01` §2 | Delivered | PROPOSAL | High-confidence structure | 真实使用可调 label/order，不动 authority | — | Reviewed |
+| 2 | Desktop/PWA shell wireframes | `01` §3 | Delivered | PROPOSAL | Mid-fidelity（small/medium/desktop ASCII） | exact breakpoints 待真实内容 | — | Reviewed |
+| 3 | Android shell wireframes | `01` §4 | Delivered | PROPOSAL | Mid-fidelity（portrait + medium） | 真机 lifecycle/touch tuning | — | Reviewed |
+| 4 | Home default layout | `01` §5 | Delivered | PROPOSAL | High-fidelity default + empty/offline/attention variants | widget density/order 待真实数据 | — | Reviewed |
+| 5 | Market browse/detail/install | `02` §2–§4 | Delivered | PROPOSAL | High-fidelity flow 至 complete-disabled | carrier/copy 待 M10/M20 vertical slice | — | Reviewed |
+| 6 | Update/rollback review | `02` §5–§6 | Delivered | PROPOSAL（B6 narrowed 语义，bounded implemented domain evidence） | High-fidelity exact diff + disable-first + drift | B6 非 production/durable；eligibility/Confirmed 的 wire 边界未定案 | — | Reviewed |
+| 7 | Installed Plugin state system | `02` §7 | Delivered | PROPOSAL | High-fidelity；8+ 状态变体 | runtime/callability projection contract 未定 | — | Reviewed |
+| 8 | Agent thread/run | `03` §2–§3 | Delivered | PROPOSAL | Mid-high fidelity | exact events/timing 待 HarnessRun/stream | — | Reviewed |
+| 9 | First-party entry patterns | `03` §4–§6 | Delivered | PROPOSAL | High-fidelity 每产品一个代表 detail + shared spine | 全部 product data/actions provisional | — | Reviewed |
+| 10 | Layout customization | `04` §2 | Delivered | PROPOSAL | Mid-fidelity desktop+Android | generic schema 待 rule-of-three | — | Reviewed |
+| 11 | Component/state inventory | `04` §3 | Delivered | PROPOSAL | Named primitives + anatomy + variants | component API 未冻结 | — | Reviewed |
+| 12 | Design tokens | `05` 全卷 | Delivered | PROPOSAL | 三套 token 集 + 比较 + 推荐（2026-08-04 翻转为 C）+ 实测对比度 | final values 待 browser/device 测试 | — | Reviewed |
+| 13 | Interaction annotations | `04` §4 | Delivered | PROPOSAL | trigger/precondition/pending/confirmation/focus/recovery | exact timing/stream reconnect 待 Stage B | — | Reviewed |
+| 14 | Accessibility annotations | `06` §2 | Delivered | PROPOSAL | 核心屏 keyboard/touch/reader/contrast/reduced-motion | 实现后真实 audit | — | Reviewed |
+| 15 | State atlas | `04` §5 | Delivered | PROPOSAL | 全状态族（含 drift/consumed/partial-reconnect/version-skew） | 真实 copy 长度 | — | Reviewed |
+| 16 | Clickable prototype | `07` 全卷 + `prototype/index.html` | **16A + 16B Delivered** | PROPOSAL | Storyboard：screen/state IDs + transition table + failure branch；16B：自包含静态 HTML（16 screen/state IDs，hash 导航） | 16B 为设计演示物，非 retained frontend skeleton；Stage B 以真实实现校准 | 无外部 URL；文件在 packet 内 | Reviewed |
+| 17 | Redline/handoff notes | `08` 全卷 | Delivered | PROPOSAL | spacing/type/layout/behavior specs | 无 Dioxus component/API 发明 | — | Reviewed |
 
 Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delivered**。第一轮 16B deferred（无 no-code 工具）经独立 review 记录为 F4 scope 缺口；Develata 2026-08-02 决策以自包含静态 HTML 补齐（见 `07` §1 决策记录）。
 
@@ -95,7 +96,7 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 
 `assets/` 子目录（wireframes/mockups/prototype-exports）预留给未来外部 no-code tool 的静态 exports；本轮无外部资产，不创建空目录。所有线框以 ASCII 内联于各卷。
 
-## Candidate manifest（frozen review surface 文件清单）
+## Candidate manifest（review surface 文件清单）
 
 | Git path | Role |
 |---|---|
@@ -144,7 +145,7 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 - round-8 repair（2026-08-06，仅 16B prototype + 05/07/README；checker/tests/CI 冻结未动；继 round-7 edge hardening）：**低成本视觉组**（两栏布局与 S01 市场产品化明确排除）——状态 badge 三态（`.badge.on` 已启用 / `.badge.off` 已安装未启用 / `.badge.attn` 权限需复核，S09/S10 状态行，原文保留在 meta）；h1 22→24px、h2 16→18px；disabled 弃 opacity 改显式灰态（filled = divider 底 + muted 字，`.sec` = muted 字 + divider 边框；05 §7 补实测 muted on divider 4.84，WCAG 1.4.3 disabled 豁免但仍达标）；按钮文案结果导向（S03/S04/S05「继续」→「下一步：配置/权限审批/确认安装方案」、S06「返回」→「上一步」、S11/S11a/S13「返回」→「返回插件详情」，06 §3 同一动作全流程同名规则）；S12 前提不满足确认改非按钮状态块（warn 容器 + 原因文字，不再渲染 disabled 主按钮与 aria-describedby，07 §6 纪律同步）；S13 权限三组分组容器（分组标题「保留/新增/移除」+ 括号契约词 Unchanged/Added/Removed，canonical fixture 计数句移入 note）；S10 次要行（运行时/可调用性/新鲜度）muted 化（A6）。「四层结构」（hero 摘要/任务摘要/折叠详情/危险区）记为未来切片方向，本轮不做。
 - round-8.1 repair（2026-08-07，仅 16B prototype + 05/07/README；checker/tests/CI 冻结未动）：**review-repair（3 lane 独立评审 0 BLOCKER；SHOULD_FIX 全清）**——S12 前提不满足 warn 文案自相矛盾修复（「启用确认页」误指 → 恢复 S11 启用复核屏指代，两分支均不再自称确认页）；05 §1 A 标题残留「（推荐）」→「（已评估未采纳）」（与 C 翻转一致）；README §7 自查行 stale「S12 确认动作 disabled」→「非按钮 warn 状态块」；05 §7 divider on canvas 实测 1.35 → 1.24（独立复算 #E4E7EC → L=0.7970 → 1.05/0.847=1.24）；prototype 头部注释同步非按钮状态块；07 §5 S11a 线框「返回」→「返回插件详情」（53 列等宽保持）；README round-7 行覆盖表述精确化（12 屏 + 2 分支 = 14 组）；05 §5.2 `.chg` 8px 归类说明（small controls 档）。
 - round-8.2 repair（2026-08-08，仅 16B prototype + 02/07/README；checker/tests/CI 冻结未动；继 round-8.1）：**S01/S02 初始基线自洽（评审 F1，方案 A 彻底版）**——S01 ChangeRadar 行由 DEMO 驱动（初始基线：已安装，未启用 · v0.4.0 · ⓘ 有可用更新 v0.5.0；stale → badge.attn「权限需复核」；enabled → badge.on「已启用」），消除「S01 未安装 vs S09/S10 已安装」同屏矛盾；S02 双分支（未安装基线视图「审查安装」→S03 安装流，`viewUninstalled` 非 committed 视图标志，经 S01「安装流程演示（未安装基线）」入口进入，离开安装流屏即复位；已安装分支「管理」→S10 + lifecycle 行）；安装提交（S06）后视图标志复位；overflow-wrap 扩展至 `ul.clean li`/`ul.clean .meta`/`.demo`/`p .meta`（评审 F2 附带的极端值注入缺口 + round-8.2c 补 S02 lifecycle meta 证据缺口，18 组全过）；**S13 draft 对称（评审 F2；round-8.2c 收窄为相邻屏 one-shot 语义；round-8.2d 补 one-shot return token，exact-head 复审 BLOCKED→修复）**——S13 以 one-shot return token 保留草稿：仅 S13 → 相邻屏（S09/S10/S11/S11a，即其入口/出口）时 armed，紧接着该相邻屏 → S13 时消费并保留一次，访问任何第三屏立即清除，无 token 的 S13 re-entry 重置为默认勾选（如 S13→S10→S09→S10→S13 重置），S13 same-screen render 不清 draft；round-8.2e（exact-head 复审 BLOCKED→修复）：**authority-changing action（尤其 S10「应用更新（演示）」）即使同屏 render 也清除旧 D13 与 return token**（Apply 前编辑的 draft 不得泄漏为 fresh approval）；**commit-install 原子重建（round-8.2c）**——提交安装后 DEMO 重建为 fresh v0.4 complete-disabled（清除旧 update/lifecycle/pending/grant-c/draft/token 状态），S02 scrid 回 v0.4.0；02 卷 §2.2 线框标注未安装基线说明；07 卷 §3/§5 同步。
-- 本 packet 当前为仓库内 Draft PR #34 的 review surface：`python3 scripts/check_repo_contracts.py` PASS；保持 Draft，非 merge-ready（review/merge 前置见 PR body）。
+- 本 packet 当前为仓库内 Draft PR #34 的 review surface：`python3 scripts/check_repo_contracts.py` PASS；2026-08-08 Hermes terminal verdict（GO，F10 CLOSE）后 promotion 为 `Reviewed`——**Reviewed 不代表 implementation、readiness、domain authority 或 acceptance**（见 Packet metadata Reviewed 行与 `docs/design/AGENTS.md`）；PR 保持 Draft，非 merge-ready（promotion exact-head CI 与 PR body closeout 待办）。
 
 ## §7 最终自查（2026-08-02 第二轮：review 补卷后更新）
 
@@ -152,7 +153,7 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 |---|---|
 | Source drift 复查 | 第二轮中检测到 drift：`origin/main` 前进至 `2f4de29`（PR #33，M20-B6 bounded 实现合入）；packet 已 rebind 至 `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`，受影响语义逐项复核（B6 posture 不变；disabled 两态谓词已统一；全部行号锚点更新）；收尾复查无新 drift |
 | M20-B6 状态重述 | packet 内容仍 “proposed, not accepted authority”（b6 :42），但语义已有 bounded Rust 实现（`crate::market::update`；supporting evidence only）；`02`/`07`/`10`/prototype 已全部改为 “bounded implemented domain evidence，非 production/durable” 表述 |
-| 独立 review 处置（2026-08-02 第一轮 review 汇报） | F1（4 缺失面）→ `09`/`10` 补卷；F2（2 薄面）→ `02` §7.1/§7.5 加厚；F3（3 intents）→ `09` §5；F4 → Develata 决策以 `prototype/index.html` 补齐 16B；F5/F6/F7/F8/F9 → 已修；F10 → 冻结待下一轮决策 |
+| 独立 review 处置（2026-08-02 第一轮 review 汇报） | F1（4 缺失面）→ `09`/`10` 补卷；F2（2 薄面）→ `02` §7.1/§7.5 加厚；F3（3 intents）→ `09` §5；F4 → Develata 决策以 `prototype/index.html` 补齐 16B；F5/F6/F7/F8/F9 → 已修；F10 → **CLOSE**（2026-08-08 Hermes terminal verdict `F10_DIRECTION_C=CLOSE`，视觉样例 fidelity 以文本级为准，不再等待下一轮决策） |
 | 20/20 required surfaces | 第一轮 16/20；第二轮补齐 first-run/connectivity（`09` §2–§3）、grant diff（`10` §2）、activity/audit（`10` §3）、settings（`09` §4）；installed list 与 enable/disable/revoke/uninstall 加厚（`02` §7.1/§7.5） |
 | 17 项 artifact 映射 | 全部 Delivered（16 = 16A + 16B） |
 | brief §9.5 client/system intents | `GetClientCompatibility`/`GetServerReadiness`/`GetCurrentUserContext` 已补（`09` §5），全部 `PROPOSED_SEMANTIC_INTENT` |
@@ -163,11 +164,10 @@ Deliverable 16 状态：**16A storyboard + 16B clickable prototype 均已 Delive
 | 对比度实测 | `05` 卷 §7：三方向 light/dark 全 role 计算（A/B 两方向 56 对经第一轮 review 独立复算全部吻合；C-light/C-dark 于 round-6 实算，normal ≥4.5、非文本 ≥3.0 全达标；round-8 补 disabled 灰态实测：muted on divider 4.84） |
 | Prototype 验证 | 16 screen/state IDs 定义齐全（13 main S01–S13 + 3 failure-branch S06a/S07a/S11a）；全部 hash 链接目标可解析（16↔16）；JS 语法校验通过；无外部网络引用；a11y：main landmark、可见 focus、hash 导航后 focus 回到 heading、disabled destructive 动作 aria-describedby 说明；target size 声明收窄为动作按钮（`button`/`.btn`）与 checkbox 行 ≥44px，inline 文本链接按 WCAG 2.2 §2.5.8 inline 例外（`07` §6）；授权流诚实性（round-3）：draft ≠ committed——S13 勾选 c 后返回，S10 已授权集合不变；仅 S13 批准后改变；S05 授予 b 后 S13 显式标注 b 移除（授权终止，不进入复核集合）；pre-update S10 不把 c 列为 v0.4 当前未授权项；复核批准后 S10 不再显示「有可用更新 v0.5.0」；S11→S12 pending → 显式「服务器确认（演示）」后 S10/S09 均投影 Enabled；Affairs Navigator / Opportunity Graph「管理」disabled + out-of-prototype，不导航到 S10；S07a unknown/reconcile 演示态；S09/S10 update 状态一致（v0.5.0，server-projected，`07` §3）；S01/S02 初始基线自洽（round-8.2）：ChangeRadar 行 DEMO 驱动，初始「已安装，未启用 · v0.4.0 · ⓘ 有可用更新 v0.5.0」与 S09/S10 一致，S02 已安装分支「管理」→S10；未安装基线经 S01「安装流程演示」入口（`viewUninstalled` 视图标志，非 committed）→S02「审查安装」→S03–S08 安装流，离开安装流屏即复位；commit-install 原子重建（round-8.2c）：安装提交后 fresh v0.4 complete-disabled（applied/stale/enabled/pending/c 全清、D13 清除、S02 scrid v0.4.0）；S13 draft one-shot return token（round-8.2d）：S13→相邻屏（S09/S10/S11/S11a）armed、紧接返回消费保留一次、第三屏清除、无 token re-entry 重置（S13→S10→S09→S10→S13 重置）、same-screen render 不清 draft、commit-install 清 token；authority-changing action 清 draft（round-8.2e）：S10「应用更新（演示）」即使同屏 render 也清除旧 D13 与 return token，Apply 前编辑的 draft 不泄漏为 fresh approval；round-4：canonical capability fixture 全 packet 一致（a = Unchanged continuity 默认接受 · b = Removed 只读 · c = Added 非默认选中 · Expanded/Narrowed/MetadataChanged 0；02 §5.2 / 07 / 10 §2.2 / prototype 同一份 ledger）；stale → direct `#S12` 渲染非按钮 warn 状态块（原因 + 复核路径，不渲染 disabled 主按钮）且状态不变（enablePending 前提）；S11 请求 → S12 pending → 确认后正常 Enabled；Enabled + update available 时 ChangeRadar 位于「需要你处理」（attention-first），Enabled + 无待处理更新时位于「已启用」；遍历全部 `button:disabled`：aria-describedby 均指向存在元素且原因文本非空；browser smoke 全 16 屏 × 320/390/768/1200 无横向溢出 |
 | Stage B dependency | 各 artifact 行与各卷末尾标明 |
-| 仓库检查 | 本地（complete clone，Draft PR #34 round-8 repair head）：`git diff --check` clean；`python3 scripts/check_repo_contracts.py` PASS（含 design topology/index/status/source-binding；source binding 为两步 Git 对象类型校验：先 `<oid>^{commit}` 后 `<oid>^{tree}`）；`python3 -m unittest scripts.tests.test_check_repo_contracts` PASS（round-7/round-8 未改动 checker/tests，沿用既有测试基线）；shallow-clone 复现验证（depth-1 clone 缺 source 对象 → `check_design_packets` fail-closed，对应 CI checkout `fetch-depth: 0`）。CI（exact head）双绿状态以 PR body 记录为准——本行不预写 CI 结果 |
+| 仓库检查 | 本地（complete clone，Draft PR #34 promotion head `fe36fb4`）：`git diff --check` clean；`python3 scripts/check_repo_contracts.py` PASS（含 design topology/index/status/source-binding；source binding 为两步 Git 对象类型校验：先 `<oid>^{commit}` 后 `<oid>^{tree}`）；`python3 -m unittest scripts.tests.test_check_repo_contracts` PASS（round-7/round-8 未改动 checker/tests，沿用既有测试基线）；shallow-clone 复现验证（depth-1 clone 缺 source 对象 → `check_design_packets` fail-closed，对应 CI checkout `fetch-depth: 0`）。CI（exact head `fe36fb4`）双绿：run `31252138324` docs-and-contracts PASS + rust PASS |
 
 ### 本轮未实现/未验证
 
-- F10 视觉样例真实渲染 fidelity（文本级，冻结待下一轮决策）；
 - 真实物理设备的对比度、排印、touch、lifecycle 验证（Stage B；本轮已做 Chromium 320/390/768/1200 渲染 smoke）；
 - 各 `PROPOSED_SEMANTIC_INTENT` 的 carrier 校准（待 M10/M20 vertical slice）；
 - Prototype 完整 screen reader / keyboard-only 走查（本轮已修静态 a11y 语义；真实 AT audit 属 Stage B）。

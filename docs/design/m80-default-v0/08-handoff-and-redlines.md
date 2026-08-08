@@ -1,7 +1,7 @@
 # 08 — Handoff and Redlines
 
 > **Illustrative / No live backend** — 本卷为实现交接规格；不含 Dioxus component/API 发明，不含代码。
-> Packet: `m80-default-v0` · Status: `Proposal` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
+> Packet: `m80-default-v0` · Status: `Reviewed` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
 > 覆盖 artifact：17 Redline/handoff notes
 
 ## 1. 交接定位

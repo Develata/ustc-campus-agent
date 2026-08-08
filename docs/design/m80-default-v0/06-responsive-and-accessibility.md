@@ -1,7 +1,7 @@
 # 06 — Responsive and Accessibility
 
 > **Illustrative / No live backend** — 本卷全部示例为设计样例。
-> Packet: `m80-default-v0` · Status: `Proposal` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
+> Packet: `m80-default-v0` · Status: `Reviewed` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
 > 覆盖 artifact：14 Accessibility annotations（含 responsive、localization、motion、light/dark）
 
 ## 1. Responsive strategy（Web/PWA 与 Android 对照）

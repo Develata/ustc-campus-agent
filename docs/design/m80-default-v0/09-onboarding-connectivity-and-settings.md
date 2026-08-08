@@ -1,7 +1,7 @@
 # 09 — Onboarding, Connectivity and Settings
 
 > **Illustrative / No live backend** — 本卷全部线框、示例数据与状态为设计样例；无真实服务器、无真实账号、无真实连接。
-> Packet: `m80-default-v0` · Status: `Proposal` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
+> Packet: `m80-default-v0` · Status: `Reviewed` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
 > 覆盖 required surfaces：First run / server connectivity（brief §6.1）· Settings/accessibility（brief §6.18）· client/system semantic intents（brief §9.5）
 > 本卷为独立 review 后补卷（2026-08-02 第二轮），补齐首轮缺失面。
 

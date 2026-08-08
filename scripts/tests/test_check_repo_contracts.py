@@ -954,7 +954,7 @@ class DesignPacketContractTests(unittest.TestCase):
     def test_design_packet_invalid_status_fails_closed(self) -> None:
         self.replace_once(
             "docs/design/README.md",
-            "| [`m80-default-v0/`](m80-default-v0/) | M80 Default v0 UI design candidate: 17 artifact proposals, 20 required surfaces, 16B disposable static prototype | Proposal |",
+            "| [`m80-default-v0/`](m80-default-v0/) | M80 Default v0 UI design candidate: 17 artifact proposals, 20 required surfaces, 16B disposable static prototype | Reviewed |",
             "| [`m80-default-v0/`](m80-default-v0/) | M80 Default v0 UI design candidate: 17 artifact proposals, 20 required surfaces, 16B disposable static prototype | Draft |",
         )
         self.assertTrue(
@@ -1000,8 +1000,8 @@ class DesignPacketContractTests(unittest.TestCase):
     def test_design_packet_readme_status_drift_fails_closed(self) -> None:
         self.replace_once(
             "docs/design/m80-default-v0/README.md",
-            "| Status | `Proposal` |",
             "| Status | `Reviewed` |",
+            "| Status | `Proposal` |",
         )
         self.assertTrue(
             any("README status drift" in issue for issue in self.check_design_packets())

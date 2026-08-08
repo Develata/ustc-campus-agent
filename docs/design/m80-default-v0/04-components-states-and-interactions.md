@@ -1,7 +1,7 @@
 # 04 — Components, States and Interactions
 
 > **Illustrative / No live backend** — 本卷全部组件名、状态与示例为设计样例；组件名是 presentation vocabulary，不是 Dioxus component/API 声明。
-> Packet: `m80-default-v0` · Status: `Proposal` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
+> Packet: `m80-default-v0` · Status: `Reviewed` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
 > 覆盖 artifacts：10 Layout customization · 11 Component/state inventory · 13 Interaction annotations · 15 State atlas
 
 ## 1. 总原则

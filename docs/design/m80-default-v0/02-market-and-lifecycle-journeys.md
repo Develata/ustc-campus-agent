@@ -1,7 +1,7 @@
 # 02 — Market and Lifecycle Journeys
 
 > **Illustrative / No live backend** — 本卷全部线框、示例数据与状态为设计样例；所有 update/rollback 画面基于 M20-B6 收窄语义：B6 packet 内容仍声明 “proposed, not accepted authority”（`docs/tasks/campaign-w1-m20-b6.md:42`），但该语义已有 **bounded Rust 实现**（`crate::market::update`，2026-08-02 PR #33；supporting domain/semantic-fake evidence only，非 production/durable/API，不提升 MARKET-004/PKG-020）。
-> Packet: `m80-default-v0` · Status: `Proposal` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
+> Packet: `m80-default-v0` · Status: `Reviewed` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
 > 覆盖 artifacts：5 Market browse/detail/install · 6 Update/rollback review · 7 Installed Plugin state system
 
 ## 1. 本卷 authority 前提

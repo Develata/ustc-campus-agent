@@ -1,7 +1,7 @@
 # 10 — Grant Diff Review and Activity History
 
 > **Illustrative / No live backend** — 本卷全部线框、示例数据与状态为设计样例；无真实授权、无真实事件流。
-> Packet: `m80-default-v0` · Status: `Proposal` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
+> Packet: `m80-default-v0` · Status: `Reviewed` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
 > 覆盖 required surfaces：Capability/grant diff review（brief §6.11）· Activity/audit history（brief §6.17）
 > 本卷为独立 review 后补卷（2026-08-02 第二轮），补齐首轮缺失面；`02` 卷 §5.2 原「查看逐项权限差异」悬空链接的目的地即本卷 §2。
 

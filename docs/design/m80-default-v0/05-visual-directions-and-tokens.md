@@ -1,7 +1,7 @@
 # 05 — Visual Directions and Tokens
 
 > **Illustrative / No live backend** — 本卷全部视觉样例为设计样例。
-> Packet: `m80-default-v0` · Status: `Proposal` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
+> Packet: `m80-default-v0` · Status: `Reviewed` · Source: `2f4de29032560ff3e13d9994b33a3aff14243f44` / tree `53e266c47fdb07d50a734faa24bb11ac4bc5527d`
 > 覆盖 artifact：12 Design tokens（三套方向 + 比较 + 推荐）
 > 对比度数字为 WCAG 2.x 相对亮度公式实际计算值（公式与结果表见 §7），非肉眼判断。所有 token 数值为 `PROPOSED_DESIGN_TOKEN` 起点，Stage B 以真实 browser/device 测试冻结。
 
