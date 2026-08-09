@@ -2,15 +2,15 @@
 
 ## Mutable state
 
-- `Stage`: `P1_1_CLOSURE_CANDIDATE`
+- `Stage`: `P1_1_PR_OPEN`
 - `P1-0 review`: `GO`; exact-candidate receipt recorded below
 - `P1-0 local commit`: committed and pushed at exact HEAD `7491cb640b7d670822dbb39f165897e4145795a3`
 - `P1-1 implementation`: candidate present (bounded `M60-B1 source-registry` implemented as a review candidate)
 - `P1-1 review`: `GO`; exact-candidate receipt recorded below
-- `P1-1 local commit`: this scoped P1-1 commit
-- `P1-1 push`: pending
+- `P1-1 local commit`: implementation commit `9616c3f074dd0a006794c4be76b66698a337a9ac`; marker-external status follow-ups remain separate
+- `P1-1 push`: feature branch pushed; PR `#38` open
 - `Source candidate`: `ustc-teach-calendar-fall` remains `Proposed`
-- `Remote shipping`: feature-branch push authorized after final local validation; PR/merge/tag/release remain forbidden
+- `Remote shipping`: feature-branch push, PR, Actions CI/run and workflow dispatch authorized; merge/tag/release remain forbidden
 
 ## Authority receipt
 
@@ -18,9 +18,20 @@ Develata selected the corrected posture on 2026-08-08:
 
 > P1-0 independent GO 后，自动本地实现并提交 P1-1 source-registry；不 push。
 
-On 2026-08-08, after P1-0 reached exact-candidate GO, Develata additionally authorized pushing the feature branch after final local validation. This later instruction changes only remote-operation authority: it does not authorize PR, merge, tag, release, deployment, source approval or retrieval.
+On 2026-08-08, after P1-0 reached exact-candidate GO, Develata additionally authorized pushing the feature branch after final local validation.
 
-This receipt authorizes the finite local workflow in the exact packet below. It does not self-authorize broader module work, source approval, network retrieval, raw-fixture publication, push, PR, merge, tag, release or deployment; feature-branch push authority comes only from the later instruction recorded above.
+On 2026-08-09, after P1-1 reached reviewed commit `9616c3f074dd0a006794c4be76b66698a337a9ac`, Develata explicitly authorized Actions runs, CI, PR creation and workflow dispatch:
+
+> 可以创建actions run,ci,pr ,dispatch。
+
+This later operation-specific grant admits PR `#38` and its CI/read-back surfaces. It does not authorize merge, tag, release, deployment, source approval, source retrieval, raw-fixture publication or implementation of the next module. The immutable packet below remains historical authority for P1-0/P1-1 semantics; these later grants change only remote-operation authority.
+
+### PR/CI receipt
+
+- `PR`: `#38` (`https://github.com/Develata/ustc-campus-agent/pull/38`), open against `main`
+- `Semantic implementation head`: `9616c3f074dd0a006794c4be76b66698a337a9ac`
+- `First PR exact-head CI`: run `31285180718`, `rust` and `docs-and-contracts` both `success`
+- `Status-follow-up rule`: any later marker-external status-only commit must receive replacement exact-head PR CI before merge eligibility
 
 ## Exact packet identity
 

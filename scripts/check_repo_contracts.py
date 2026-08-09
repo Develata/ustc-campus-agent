@@ -9241,14 +9241,18 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
         f"- `Source tree`: `{P1_SOURCE_REVISION_SOURCE_TREE}`",
         f"- `Packet digest`: `sha256:{P1_SOURCE_REVISION_PACKET_SHA256}` over `{P1_SOURCE_REVISION_PACKET_BYTES}` bytes",
         "- `Source candidate`: `ustc-teach-calendar-fall` remains `Proposed`",
-        "- `Stage`: `P1_1_CLOSURE_CANDIDATE`",
+        "- `Stage`: `P1_1_PR_OPEN`",
         "- `P1-0 review`: `GO`; exact-candidate receipt recorded below",
         "- `P1-0 local commit`: committed and pushed at exact HEAD `7491cb640b7d670822dbb39f165897e4145795a3`",
         "- `P1-1 implementation`: candidate present (bounded `M60-B1 source-registry` implemented as a review candidate)",
         "- `P1-1 review`: `GO`; exact-candidate receipt recorded below",
-        "- `P1-1 local commit`: this scoped P1-1 commit",
-        "- `P1-1 push`: pending",
-        "- `Remote shipping`: feature-branch push authorized after final local validation; PR/merge/tag/release remain forbidden",
+        "- `P1-1 local commit`: implementation commit `9616c3f074dd0a006794c4be76b66698a337a9ac`; marker-external status follow-ups remain separate",
+        "- `P1-1 push`: feature branch pushed; PR `#38` open",
+        "- `Remote shipping`: feature-branch push, PR, Actions CI/run and workflow dispatch authorized; merge/tag/release remain forbidden",
+        "- `PR`: `#38` (`https://github.com/Develata/ustc-campus-agent/pull/38`), open against `main`",
+        "- `Semantic implementation head`: `9616c3f074dd0a006794c4be76b66698a337a9ac`",
+        "- `First PR exact-head CI`: run `31285180718`, `rust` and `docs-and-contracts` both `success`",
+        "- `Status-follow-up rule`: any later marker-external status-only commit must receive replacement exact-head PR CI before merge eligibility",
     )
     for token in required_outer:
         if proposal.count(token) != 1:
@@ -9420,7 +9424,7 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
         (
             "docs/tasks/01-execution-roadmap.md",
             roadmap,
-            "Develata's later operation-specific instruction authorizes a feature-branch push only after final local validation; PR, merge, tag, release, source approval and retrieval remain unauthorized.",
+            "Develata's later operation-specific instructions authorize the feature-branch push, PR, Actions CI/run and workflow dispatch; merge, tag, release, source approval and retrieval remain unauthorized.",
         ),
     ):
         if text.count(token) != 1:

@@ -244,7 +244,7 @@ Arbitrary central `stdio` command execution is outside this lane.
 
 **Prerequisite**: one concrete public source receives owner, URL/retrieval, permission/rate and parser-fixture review.
 
-`P1-0` now carries the accepted, construction-ready `source-import/v0` contract and a concrete `ustc-teach-calendar-fall` review candidate under [`p1-source-revision-readiness-proposal.md`](p1-source-revision-readiness-proposal.md). The source remains `Proposed`; raw HTML remains outside Git; no acceptance row or module state is promoted by P1-0. Exact-candidate review is `GO`, so the bounded local P1-1 B1 implementation lane is admitted. This is not part of the older W1 campaign grant. Develata's later operation-specific instruction authorizes a feature-branch push only after final local validation; PR, merge, tag, release, source approval and retrieval remain unauthorized.
+`P1-0` now carries the accepted, construction-ready `source-import/v0` contract and a concrete `ustc-teach-calendar-fall` review candidate under [`p1-source-revision-readiness-proposal.md`](p1-source-revision-readiness-proposal.md). The source remains `Proposed`; raw HTML remains outside Git; no acceptance row or module state is promoted by P1-0. Exact-candidate review is `GO`, so the bounded local P1-1 B1 implementation lane is admitted. This is not part of the older W1 campaign grant. Develata's later operation-specific instructions authorize the feature-branch push, PR, Actions CI/run and workflow dispatch; merge, tag, release, source approval and retrieval remain unauthorized.
 
 - `M60-B1 source-registry`: stable identity, owner, policy and status; exact P1-1 boundary is `source-import/v0` §§3–7 and the P1 proposal packet.
 - `M60-B2 retrieval-policy`: safe exact host/path, redirects, content/time/size/rate.
@@ -257,7 +257,7 @@ Arbitrary central `stdio` command execution is outside this lane.
 
 This lane precedes real product source integration, but each product can develop against exact M60 fixtures.
 
-`P1-1` has implemented bounded `M60-B1 source-registry` as a review candidate: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` are present, `SRC-001` is promoted to `implemented` bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`, and the dedicated checker/test carriers are extended. `M60` overall and `M60-B2` through `M60-B8` remain `planned`; `SRC-010`, `SRC-011` and `SRC-012` remain `planned`. The `ustc-teach-calendar-fall` candidate remains `Proposed`. P1-1 review, local commit and push remain pending; no PR, merge, tag, release, source approval or retrieval is authorized.
+`P1-1` has implemented bounded `M60-B1 source-registry`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` are present, `SRC-001` is promoted to `implemented` bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`, and the dedicated checker/test carriers are extended. `M60` overall and `M60-B2` through `M60-B8` remain `planned`; `SRC-010`, `SRC-011` and `SRC-012` remain `planned`. The `ustc-teach-calendar-fall` candidate remains `Proposed`. Implementation commit `9616c3f074dd0a006794c4be76b66698a337a9ac` is independently reviewed, pushed and open as PR `#38`; its first exact-head PR CI run `31285180718` is green. Any marker-external status-only follow-up requires replacement exact-head PR CI before merge eligibility. Merge, tag, release, source approval and retrieval remain unauthorized.
 
 ## 13. First-party product lanes
 

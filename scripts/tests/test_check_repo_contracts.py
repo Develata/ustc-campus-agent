@@ -6926,8 +6926,16 @@ class SourceRegistryContractTests(unittest.TestCase):
     def test_remote_shipping_authority_expansion_fails_closed(self) -> None:
         self.rewrite(
             checker.P1_SOURCE_REVISION_PROPOSAL,
-            "- `Remote shipping`: feature-branch push authorized after final local validation; PR/merge/tag/release remain forbidden",
-            "- `Remote shipping`: push, PR and merge authorized after local validation",
+            "- `Remote shipping`: feature-branch push, PR, Actions CI/run and workflow dispatch authorized; merge/tag/release remain forbidden",
+            "- `Remote shipping`: feature-branch push, PR, Actions CI/run, workflow dispatch and merge authorized",
+        )
+        self.assert_rejected("P1 source/revision outer metadata missing/duplicated")
+
+    def test_pr_ci_receipt_removal_fails_closed(self) -> None:
+        self.rewrite(
+            checker.P1_SOURCE_REVISION_PROPOSAL,
+            "- `PR`: `#38` (`https://github.com/Develata/ustc-campus-agent/pull/38`), open against `main`",
+            "- `PR`: pending",
         )
         self.assert_rejected("P1 source/revision outer metadata missing/duplicated")
 
