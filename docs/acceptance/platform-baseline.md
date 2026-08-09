@@ -317,6 +317,8 @@ ustc-agentctl acceptance matrix-check --strict --format json
 
 ### Source Registry — `SRC-*`
 
+Current projection: only `SRC-001` is implemented, and only as a bounded `M60-B1 source-registry` review candidate (exact active binding `cargo test --locked -p ustc-campus-agent-core --test source_registry` in [`matrix.tsv`](matrix.tsv)); `M60` overall and `M60-B2` through `M60-B8` remain planned, so `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only `SRC-*` row below remain non-pass.
+
 | Case ID | Assertion | Binding | Required gate |
 | --- | --- | --- | --- |
 | `SRC-001` | every source has stable identity, authority class, owner and retrieval policy | rust-unit | PR |

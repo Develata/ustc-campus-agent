@@ -33,7 +33,7 @@ HARNESS-010	harness	hooks or process exit cannot complete a node without structu
 FP-001	first-party	Affairs Navigator answers one reviewed structured procedure with conditions steps effective time provenance and uncertainty	future integration test	core-demo	planned	product
 FP-002	first-party	ChangeRadar replays one approved source revision into one reviewed semantic change without advancing baseline on failure	future integration test	core-demo	planned	backend
 FP-007	first-party	each default first-party Plugin can be disabled and re-enabled independently	future three-installation disable/re-enable integration/browser test	core-demo	planned	backend
-SRC-001	source	every approved source has stable identity authority owner URL retrieval parser rate and permission review	future schema/unit test	core-demo	planned	product
+SRC-001	source	every approved source has stable identity authority owner URL retrieval parser rate and permission review	cargo test --locked -p ustc-campus-agent-core --test source_registry	core-demo	implemented	product
 SRC-011	source	every accepted source revision binds immutable raw and normalized digests observed and effective time parser identity and provenance	future integration test	core-demo	planned	backend
 SRC-010	source	privileged retrieval rejects arbitrary URL redirect DNS IP content type size and timeout violations	future security/integration test	release	planned	security
 SRC-012	source	accepted baseline advances only after snapshot parse normalize diff candidate and evidence durable success	future fault-injection integration test	release	planned	backend

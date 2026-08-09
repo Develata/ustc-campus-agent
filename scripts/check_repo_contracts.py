@@ -2801,6 +2801,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/market/installation.rs',
  'src/market/update.rs',
  'src/session.rs',
+ 'src/source_registry.rs',
  'tests/invocation_resolution.rs',
  'tests/market_authority_assembly.rs',
  'tests/market_capability_registry.rs',
@@ -2810,6 +2811,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'tests/market_package_update.rs',
  'tests/platform_identity.rs',
  'tests/platform_session.rs',
+ 'tests/source_registry.rs',
  'tests/support/invocation_fixture.rs',
  'tests/support/invocation_fixture_executor.rs')
 PLATFORM_IDENTITY_ADMITTED_REEXPORT = "pub use crate::identity::{TenantId, UserId};"
@@ -2842,14 +2844,15 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
 # introduce a module the scan never reads.
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'invocation.rs': (),
- 'lib.rs': ('identity', 'invocation', 'market', 'session'),
+ 'lib.rs': ('identity', 'invocation', 'market', 'session', 'source_registry'),
  'market.rs': ('authority', 'capability', 'grant', 'installation', 'update'),
  'market/authority.rs': (),
  'market/capability.rs': (),
  'market/grant.rs': (),
  'market/installation.rs': (),
  'market/update.rs': (),
- 'session.rs': ()}
+ 'session.rs': (),
+ 'source_registry.rs': ()}
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
 # the spelling `crate::identity` is not the same as accounting for the use tree that contains
 # it. `#[path = "identity_hidden.txt"] pub mod identity;` keeps the admitted name while Cargo
@@ -2886,6 +2889,7 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
             'pub mod invocation;',
             'pub mod market;',
             'pub mod session;',
+            'pub mod source_registry;',
             '#[cfg(test)] mod tests',
             'use super::*;'),
  'market.rs': ('pub mod authority;',
@@ -3016,7 +3020,19 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                 'use serde::{Deserialize, Deserializer, Serialize};',
                 'use crate::identity::{SessionId, TenantId, UserId};',
                 '#[cfg(test)] mod tests',
-                'use super::*;')}
+                'use super::*;'),
+ 'source_registry.rs': ('use std::collections::BTreeMap;',
+                        'use std::error::Error;',
+                        'use std::fmt;',
+                        'use std::str::FromStr;',
+                        'use serde::de;',
+                        'use serde::{Deserialize, Deserializer, Serialize, Serializer};',
+                        'use crate::SourceAuthority;',
+                        'type Error = SourceValueError;',
+                        'type Error = SourceValueError;',
+                        'type Err = SourceValueError;',
+                        '#[cfg(test)] mod tests',
+                        'use super::*;')}
 # A macro is the remaining item category that can add API to a governed type without naming it
 # in a `use`, a `type` or an `impl` header: `macro_rules! m { ($t:ty) => { impl AsRef<str> for
 # $t { .. } } }` plus `m!(TenantId);` implements a trait for an identity kind while every
@@ -3031,7 +3047,8 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
  'market/grant.rs': ('category_error', 'parsed'),
  'market/installation.rs': (),
  'market/update.rs': ('parsed',),
- 'session.rs': ()}
+ 'session.rs': (),
+ 'source_registry.rs': ('source_value',)}
 # Macro INVOCATION names are pinned too, not screened for `include!`. A splicing macro can be
 # reached whatever the spelling — `include /* x */ !("f.rs")` contains no `include!` substring —
 # so the admitted name set per governed source is exact. `include_str!` stays admitted in
@@ -3073,7 +3090,14 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_
                       'unreachable',
                       'vec',
                       'write'),
- 'session.rs': ('assert', 'assert_eq', 'matches', 'panic', 'write')}
+ 'session.rs': ('assert', 'assert_eq', 'matches', 'panic', 'write'),
+ 'source_registry.rs': ('assert',
+                        'assert_eq',
+                        'concat',
+                        'matches',
+                        'source_value',
+                        'stringify',
+                        'write')}
 PLATFORM_IDENTITY_ADMITTED_TEST_MACRO_INVOCATIONS = (
     "assert",
     "assert_eq",
@@ -3304,8 +3328,25 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
                 'impl fmt::Debug for CredentialEvidenceDigest',
                 'impl fmt::Display for SessionDomainError',
                 'impl fmt::Display for SessionValueError',
-                'impl-arg Into<String>',
-                'impl-arg Into<String>'),
+                 'impl-arg Into<String>',
+                 'impl-arg Into<String>'),
+ 'source_registry.rs': ('impl $name',
+                        "impl Deserialize<'de> for $name",
+                        'impl Error for SourceRegistryError',
+                        'impl Error for SourceValueError',
+                        'impl FromStr for $name',
+                        'impl Serialize for $name',
+                        'impl SourceDefinition',
+                        'impl SourceRegistry',
+                        'impl SourceRetrievalPolicy',
+                        'impl SourceReviewReceipt',
+                        'impl SourceValueError',
+                        'impl TryFrom<&str> for $name',
+                        'impl TryFrom<String> for $name',
+                        'impl fmt::Display for $name',
+                        'impl fmt::Display for SourceRegistryError',
+                        'impl fmt::Display for SourceValueError',
+                        'impl-arg Into<String>'),
  'update.rs': ('impl AcceptedSnapshotForTest for UpdateCommandOutcome',
                'impl AuthorityCarrierBinding',
                'impl Error for UpdateConstructionError',
@@ -4363,7 +4404,8 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive'
  'market/grant.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'market/installation.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'market/update.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
- 'session.rs': ('cfg', 'derive', 'must_use', 'serde', 'test')}
+ 'session.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
+ 'source_registry.rs': ('$attribute', 'allow', 'cfg', 'derive', 'doc', 'must_use', 'test')}
 # `market/grant.rs` carries lint-affecting `allow` attributes, so names alone are not enough:
 # freeze the complete normalized attribute-body multiset. Counts are literal reviewed evidence,
 # not a minimum or a projection generated from the governed source at checker runtime.
@@ -9101,6 +9143,559 @@ def check_platform_session_implementation(issues: list[str]) -> None:
         )
 
 
+P1_SOURCE_REVISION_PROPOSAL = "docs/tasks/p1-source-revision-readiness-proposal.md"
+P1_SOURCE_IMPORT_CONTRACT = "docs/contracts/source-import.md"
+P1_SOURCE_REVISION_PACKET_BEGIN = "<!-- P1_SOURCE_REVISION_EXACT_PACKET:BEGIN -->"
+P1_SOURCE_REVISION_PACKET_END = "<!-- P1_SOURCE_REVISION_EXACT_PACKET:END -->"
+P1_SOURCE_REVISION_PACKET_SHA256 = (
+    "11529705aca4e19ae52bde8ec5a69571c2c3cc6d1157057ac77dd69f78aa65f9"
+)
+P1_SOURCE_REVISION_PACKET_BYTES = 8479
+P1_SOURCE_IMPORT_CONTRACT_SHA256 = (
+    "cfe8cc648c704557e3abcbcf06c09dab045aa3adfc5e2e417f770cb0ce24c65d"
+)
+P1_SOURCE_REVISION_SOURCE_COMMIT = "2f4de29032560ff3e13d9994b33a3aff14243f44"
+P1_SOURCE_REVISION_SOURCE_TREE = "53e266c47fdb07d50a734faa24bb11ac4bc5527d"
+P1_0_ALLOWED_PATHS = (
+    "docs/contracts/source-import.md",
+    "docs/plan/modules/70-campus-trust-source-pipeline.md",
+    "docs/tasks/01-execution-roadmap.md",
+    "docs/tasks/p1-source-revision-readiness-proposal.md",
+    "scripts/check_repo_contracts.py",
+    "scripts/tests/test_check_repo_contracts.py",
+)
+P1_1_PACKET_ALLOWED_PATHS = (
+    "crates/platform-core/src/lib.rs",
+    "crates/platform-core/src/source_registry.rs",
+    "crates/platform-core/tests/source_registry.rs",
+    "docs/acceptance/matrix.tsv",
+    "docs/acceptance/platform-baseline.md",
+    "docs/contracts/source-import.md",
+    "docs/plan/modules/70-campus-trust-source-pipeline.md",
+    "docs/tasks/01-execution-roadmap.md",
+    "docs/tasks/p1-source-revision-readiness-proposal.md",
+    "scripts/check_repo_contracts.py",
+    "scripts/tests/test_check_repo_contracts.py",
+)
+P1_1_SCOPE_AMENDMENT_PATH = "crates/platform-core/tests/platform_identity.rs"
+P1_1_ALLOWED_PATHS = P1_1_PACKET_ALLOWED_PATHS + (P1_1_SCOPE_AMENDMENT_PATH,)
+P1_PLANNED_MATRIX_CASES = ("SRC-010", "SRC-011", "SRC-012")
+P1_IMPLEMENTED_MATRIX_CASES = ("SRC-001",)
+P1_IMPLEMENTED_MATRIX_BINDING = (
+    "cargo test --locked -p ustc-campus-agent-core --test source_registry"
+)
+
+
+def _p1_exact_fenced_paths(packet: str, heading: str) -> tuple[str, ...] | None:
+    start = packet.find(heading)
+    if start == -1:
+        return None
+    fence_start = packet.find("```text\n", start)
+    fence_end = packet.find("\n```", fence_start + len("```text\n"))
+    if fence_start == -1 or fence_end == -1:
+        return None
+    body = packet[fence_start + len("```text\n") : fence_end]
+    return tuple(line for line in body.splitlines() if line)
+
+
+def check_p1_source_revision_contract(issues: list[str]) -> None:
+    proposal_path = ROOT / P1_SOURCE_REVISION_PROPOSAL
+    contract_path = ROOT / P1_SOURCE_IMPORT_CONTRACT
+    for rel, path in (
+        (P1_SOURCE_REVISION_PROPOSAL, proposal_path),
+        (P1_SOURCE_IMPORT_CONTRACT, contract_path),
+    ):
+        if not path.is_file():
+            fail(f"P1 source/revision carrier missing: {rel}", issues)
+            return
+
+    proposal_bytes = proposal_path.read_bytes()
+    contract_bytes = contract_path.read_bytes()
+    begin = (P1_SOURCE_REVISION_PACKET_BEGIN + "\n").encode()
+    end = P1_SOURCE_REVISION_PACKET_END.encode()
+    if proposal_bytes.count(begin) != 1 or proposal_bytes.count(end) != 1:
+        fail("P1 source/revision packet markers must each occur exactly once", issues)
+        return
+    packet = proposal_bytes.split(begin, 1)[1].split(end, 1)[0]
+    packet_sha = hashlib.sha256(packet).hexdigest()
+    if len(packet) != P1_SOURCE_REVISION_PACKET_BYTES or packet_sha != P1_SOURCE_REVISION_PACKET_SHA256:
+        fail(
+            "P1 source/revision exact packet drift: "
+            f"expected bytes={P1_SOURCE_REVISION_PACKET_BYTES} sha256={P1_SOURCE_REVISION_PACKET_SHA256} "
+            f"actual bytes={len(packet)} sha256={packet_sha}",
+            issues,
+        )
+
+    contract_sha = hashlib.sha256(contract_bytes).hexdigest()
+    if contract_sha != P1_SOURCE_IMPORT_CONTRACT_SHA256:
+        fail(
+            "P1 source-import contract drift: "
+            f"expected {P1_SOURCE_IMPORT_CONTRACT_SHA256} actual={contract_sha}",
+            issues,
+        )
+
+    proposal = proposal_bytes.decode("utf-8")
+    packet_text = packet.decode("utf-8")
+    required_outer = (
+        f"- `Source commit`: `{P1_SOURCE_REVISION_SOURCE_COMMIT}`",
+        f"- `Source tree`: `{P1_SOURCE_REVISION_SOURCE_TREE}`",
+        f"- `Packet digest`: `sha256:{P1_SOURCE_REVISION_PACKET_SHA256}` over `{P1_SOURCE_REVISION_PACKET_BYTES}` bytes",
+        "- `Source candidate`: `ustc-teach-calendar-fall` remains `Proposed`",
+        "- `Stage`: `P1_1_PR_OPEN`",
+        "- `P1-0 review`: `GO`; exact-candidate receipt recorded below",
+        "- `P1-0 local commit`: committed and pushed at exact HEAD `7491cb640b7d670822dbb39f165897e4145795a3`",
+        "- `P1-1 implementation`: candidate present (bounded `M60-B1 source-registry` implemented as a review candidate)",
+        "- `P1-1 review`: `GO`; exact-candidate receipt recorded below",
+        "- `P1-1 local commit`: implementation commit `9616c3f074dd0a006794c4be76b66698a337a9ac`; marker-external status follow-ups remain separate",
+        "- `P1-1 push`: feature branch pushed; PR `#38` open",
+        "- `Remote shipping`: feature-branch push, PR, Actions CI/run and workflow dispatch authorized; merge/tag/release remain forbidden",
+        "- `PR`: `#38` (`https://github.com/Develata/ustc-campus-agent/pull/38`), open against `main`",
+        "- `Semantic implementation head`: `9616c3f074dd0a006794c4be76b66698a337a9ac`",
+        "- `First PR exact-head CI`: run `31285180718`, `rust` and `docs-and-contracts` both `success`",
+        "- `Status-follow-up rule`: any later marker-external status-only commit must receive replacement exact-head PR CI before merge eligibility",
+    )
+    for token in required_outer:
+        if proposal.count(token) != 1:
+            fail(f"P1 source/revision outer metadata missing/duplicated: {token}", issues)
+
+    amendment_tokens = (
+        "## P1-1 implementation scope amendment",
+        "- `Status`: explicitly authorized by Develata on 2026-08-08 and admitted into the P1-1 closure candidate",
+        "- `Develata authorization`: `授权该单一路径的窄范围 scope amendment（推荐）`",
+        "- `Original packet`: unchanged at `sha256:11529705aca4e19ae52bde8ec5a69571c2c3cc6d1157057ac77dd69f78aa65f9` over `8479` bytes",
+        f"- `Added path`: `{P1_1_SCOPE_AMENDMENT_PATH}`",
+        "- `Permitted delta`: add only `source_registry` to that exact module-declaration expectation; do not weaken its lexical, compile-negative, identity or closure assertions",
+        "- `§11 waiver`: waive the exact-packet stop condition for this one closure-carrier path only",
+        "- `Boundary`: the amended P1-1 writable set is the original eleven paths plus this one closure carrier; no other scope, dependency, source approval, retrieval, PR, merge, tag or release authority is added",
+    )
+    for token in amendment_tokens:
+        if proposal.count(token) != 1:
+            fail(f"P1-1 implementation scope amendment missing/duplicated: {token}", issues)
+
+    if _p1_exact_fenced_paths(packet_text, "## 3. P1-0 contract/readiness scope") != P1_0_ALLOWED_PATHS:
+        fail("P1-0 exact writable path allowlist drifted", issues)
+    if _p1_exact_fenced_paths(packet_text, "## 4. P1-1 exact implementation scope") != P1_1_PACKET_ALLOWED_PATHS:
+        fail("P1-1 exact packet writable path allowlist drifted", issues)
+
+    packet_tokens = (
+        "preserve M60 as `planned`, M70 as `design-only` and every acceptance row's current status",
+        "It must remain `Proposed`; no concrete row is instantiated as `Approved` in production data, fixtures or docs.",
+        "This packet authorizes no push, PR, merge, tag, release or deployment.",
+        "promote only matrix row `SRC-001`",
+        "SRC-010 planned\nSRC-011 planned\nSRC-012 planned",
+        "It adds no dependency, adapter, network access, DNS/redirect logic, clock, persistence, parser, raw snapshot, normalized snapshot, source revision, diff, baseline or product feed",
+    )
+    for token in packet_tokens:
+        if packet_text.count(token) != 1:
+            fail(f"P1 source/revision packet semantic carrier drifted: {token}", issues)
+
+    receipt_tokens = (
+        "### P1-0 exact-candidate GO receipt",
+        "manifest `sha256:32e7f67c16b5b23e39435d45a40b662e6f6fa719a3c4d28d97ff7d5f9b82b645`",
+        "archive `sha256:989b126f594fa048c1dddf65083f36581e9b77fa81ca7bd95891f15703076d26`",
+        "- `Verdict`: `GO`",
+        "- `Blockers`: `[]`",
+        "- `P1-1 recommendation`: `ELIGIBLE`",
+        "- `Report`: `sha256:d4f9cb7706d4f7b114c0e40541deb041dbe24fb6df57356d70be04540b5e4bae`",
+    )
+    p1_0_receipt_start = proposal.find("### P1-0 exact-candidate GO receipt")
+    p1_0_receipt_end = proposal.find("\n## ", p1_0_receipt_start)
+    p1_0_receipt = (
+        proposal[p1_0_receipt_start:p1_0_receipt_end]
+        if p1_0_receipt_start != -1 and p1_0_receipt_end != -1
+        else ""
+    )
+    for token in receipt_tokens:
+        if p1_0_receipt.count(token) != 1:
+            fail(f"P1-0 GO receipt missing/duplicated: {token}", issues)
+
+    p1_1_receipt_tokens = (
+        "### P1-1 amended exact-candidate GO receipt",
+        "12-path manifest `sha256:f69f7293db1bedfefa1c96c406988f119180721fadeca3df8724025c28b69a08`",
+        "archive `sha256:b9b9d3ab33a17e0e8dcf3aed552f91fd312913f65cc225f2f4b9f1a5886e93d9`",
+        "full Python 508/508 PASS",
+        "- `Verdict`: `GO`",
+        "- `Blockers`: `[]`",
+        "- `Commit recommendation`: `ELIGIBLE`",
+        "- `Report`: `sha256:03ce12a655766c9d9a4f224a4175168ae6146a9edfaf1b9ac8510507364735f2`",
+        "- `Closure`: this receipt is marker-external and changes no reviewed Rust/API/contract/acceptance semantics; final commit still requires focused closeout gates and a narrow exact-delta review",
+    )
+    p1_1_receipt_start = proposal.find("### P1-1 amended exact-candidate GO receipt")
+    p1_1_receipt = proposal[p1_1_receipt_start:] if p1_1_receipt_start != -1 else ""
+    for token in p1_1_receipt_tokens:
+        if p1_1_receipt.count(token) != 1:
+            fail(f"P1-1 GO receipt missing/duplicated: {token}", issues)
+
+    contract = contract_bytes.decode("utf-8")
+    blueprint = (ROOT / "docs/plan/modules/70-campus-trust-source-pipeline.md").read_text(
+        encoding="utf-8"
+    )
+    contract_tokens = (
+        "- `Status`: Accepted for bounded `M60-B1 source-registry`, implemented as a review candidate; later M60 slices remain planned",
+        "- `Version`: `source-import/v0`",
+        "- `Current Contract`: accepted [`source-import/v0`]",
+        "- `Implementation State`: `planned`",
+        "`SourceReviewState` is exactly:",
+        "`SourceReviewState` is the bounded B1 review-admission state only.",
+        "`Suspended` and `Revoked`, with their evidence-bearing transitions, must be accepted before any live M60-B2 retrieval adapter",
+        "P1-1 introduces five nominal string values",
+        "owner:            SourceOwner",
+        "reviewer:        SourceReviewerId",
+        "Every new definition starts as `Proposed`.",
+        "SourceDefinition::proposed(",
+        "No constructor takes `SourceReviewState`",
+        "`ModelInference` is rejected by `SourceDefinition::proposed`",
+        "OwnerControlCharacter { byte_index: usize }\nNonSourceAuthority\n```",
+        "No aggregate, state, receipt, definition, registry or registry error implements Serde in B1.",
+        "This candidate family stays `Proposed` throughout P1-0 and P1-1.",
+        "duplicate `SourceId` or duplicate canonical `SourceUrl` is rejected",
+        "DuplicateUrl { url: SourceUrl }",
+        "P1-0 changes no acceptance status.",
+        "promote only `SRC-001` if its exact registered binding passes",
+        "keep `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row unchanged",
+        "add no dependency, adapter, network call, persistence, clock, parser or concrete approved source",
+    )
+    combined = contract + "\n" + blueprint
+    for token in contract_tokens:
+        if combined.count(token) != 1:
+            fail(f"P1 source-import truth projection missing/duplicated: {token}", issues)
+
+    candidate_start = contract.find("## 11. Concrete source candidate: proposed only")
+    candidate_end = contract.find("## 12. P1-1 implementation slice", max(candidate_start, 0))
+    if candidate_start == -1 or candidate_end == -1:
+        fail("P1 concrete source candidate section missing", issues)
+    else:
+        candidate = contract[candidate_start:candidate_end]
+        required_candidate_lines = (
+            "- `Proposed source family label` (not a B1 `SourceId`): `ustc-teach-calendar-fall`",
+            "- `Proposed 2025 SourceId`: `ustc-teach-calendar-fall-2025`",
+            "- `Proposed 2026 SourceId`: `ustc-teach-calendar-fall-2026`",
+            "- `2025 URL`: `https://www.teach.ustc.edu.cn/calendar/19081.html`",
+            "- `2026 URL`: `https://www.teach.ustc.edu.cn/calendar/20135.html`",
+            "- `Candidate minimum interval`: `21600` seconds",
+            "- `Candidate maximum response`: `131072` bytes",
+            "This candidate family stays `Proposed` throughout P1-0 and P1-1.",
+        )
+        for token in required_candidate_lines:
+            if candidate.count(token) != 1:
+                fail(f"P1 concrete source candidate carrier drifted: {token}", issues)
+        if candidate.count("Approved") != 0 or candidate.count("approved") != 1:
+            fail("P1 concrete source candidate approval posture drifted", issues)
+
+    matrix_path = ROOT / "docs/acceptance/matrix.tsv"
+    if not matrix_path.is_file():
+        fail("P1 source/revision matrix carrier missing", issues)
+    else:
+        rows = {
+            fields[0]: fields
+            for line in matrix_path.read_text(encoding="utf-8").splitlines()[1:]
+            if (fields := line.split("\t"))
+        }
+        for case_id in P1_PLANNED_MATRIX_CASES:
+            fields = rows.get(case_id)
+            if fields is None or len(fields) < 6 or fields[5] != "planned":
+                fail(f"P1-1 requires {case_id} to remain planned", issues)
+        for case_id in P1_IMPLEMENTED_MATRIX_CASES:
+            fields = rows.get(case_id)
+            if (
+                fields is None
+                or len(fields) < 6
+                or fields[5] != "implemented"
+                or fields[3] != P1_IMPLEMENTED_MATRIX_BINDING
+            ):
+                fail(
+                    f"P1-1 requires {case_id} to be implemented with exact binding "
+                    f"{P1_IMPLEMENTED_MATRIX_BINDING!r}",
+                    issues,
+                )
+
+    roadmap = (ROOT / "docs/tasks/01-execution-roadmap.md").read_text(encoding="utf-8")
+    for rel, text, token in (
+        (
+            "docs/plan/modules/70-campus-trust-source-pipeline.md",
+            blueprint,
+            "- `Implementation State`: `planned`",
+        ),
+        (
+            "docs/tasks/01-execution-roadmap.md",
+            roadmap,
+            "The source remains `Proposed`; raw HTML remains outside Git; no acceptance row or module state is promoted by P1-0.",
+        ),
+        (
+            "docs/tasks/01-execution-roadmap.md",
+            roadmap,
+            "Develata's later operation-specific instructions authorize the feature-branch push, PR, Actions CI/run and workflow dispatch; merge, tag, release, source approval and retrieval remain unauthorized.",
+        ),
+    ):
+        if text.count(token) != 1:
+            fail(f"P1 source/revision status projection drifted in {rel}: {token}", issues)
+
+    forbidden_fixture_names = {
+        "calendar-2025-fall.body",
+        "calendar-2026-fall.body",
+        "uca-p1-calendar-source-recon-20260808.tar.gz",
+    }
+    tracked_like = {
+        path.name
+        for path in ROOT.rglob("*")
+        if path.is_file() and ".git" not in path.parts
+    }
+    leaked = sorted(forbidden_fixture_names & tracked_like)
+    if leaked:
+        fail(f"P1 raw source evidence must remain outside repository: {leaked}", issues)
+
+
+P1_SOURCE_REGISTRY_SOURCE = "crates/platform-core/src/source_registry.rs"
+P1_SOURCE_REGISTRY_TEST = "crates/platform-core/tests/source_registry.rs"
+P1_SOURCE_REGISTRY_LIB = "crates/platform-core/src/lib.rs"
+P1_SOURCE_REGISTRY_IDENTITY_TEST = P1_1_SCOPE_AMENDMENT_PATH
+P1_SOURCE_REGISTRY_IDENTITY_MODULE_EXPECTATION = """&[
+                "identity",
+                "invocation",
+                "market",
+                "session",
+                "source_registry",
+            ] as &[&str],"""
+P1_SOURCE_REGISTRY_IDENTITY_ITEM_EXPECTATION = '    "pub mod source_registry;",'
+
+P1_SOURCE_REGISTRY_PUB_TYPES = (
+    "pub enum SourceValueErrorKind",
+    "pub struct SourceValueError",
+    "pub struct SourceRetrievalPolicy",
+    "pub struct SourceReviewReceipt",
+    "pub enum SourceReviewState",
+    "pub struct SourceDefinition",
+    "pub enum SourceRegistryError",
+    "pub struct SourceRegistry",
+)
+
+P1_SOURCE_REGISTRY_MACRO_TYPES = (
+    "SourceId",
+    "SourceOwner",
+    "SourceUrl",
+    "SourceReviewerId",
+    "SourceReviewEvidenceId",
+)
+
+P1_SOURCE_REGISTRY_FORBIDDEN_CARRIERS = (
+    "std::fs",
+    "std::io",
+    "std::net",
+    "std::path",
+    "std::process",
+    "std::sync",
+    "std::thread",
+    "std::time::Instant",
+    "std::time::SystemTime",
+    "tokio",
+    "reqwest",
+    "hyper",
+    "ureq",
+    "serde_json",
+    "include_str",
+    "include_bytes",
+)
+
+P1_SOURCE_REGISTRY_NO_SERDE_AGGREGATES = (
+    "SourceDefinition",
+    "SourceReviewState",
+    "SourceReviewReceipt",
+    "SourceRegistry",
+    "SourceRegistryError",
+    "SourceRetrievalPolicy",
+    "SourceValueError",
+    "SourceValueErrorKind",
+)
+
+P1_SOURCE_REGISTRY_EXPECTED_TEST_FUNCTIONS = frozenset({
+    "source_id_family_enforces_grammar_and_precedence",
+    "source_id_family_values_are_nominally_distinct",
+    "source_owner_enforces_grammar_and_precedence",
+    "source_url_enforces_grammar_and_precedence",
+    "source_url_rejects_non_ascii_in_correct_position",
+    "source_value_errors_never_echo_rejected_input",
+    "retrieval_policy_enforces_bounds_and_precedence",
+    "review_receipt_is_total_and_exposes_all_fields",
+    "proposed_rejects_model_inference",
+    "proposed_accepts_non_model_inference_authorities",
+    "definition_accessors_return_correct_types",
+    "registry_starts_empty",
+    "propose_then_get_works",
+    "propose_rejects_duplicate_source_id",
+    "propose_rejects_duplicate_url",
+    "approve_missing_rejects",
+    "approve_then_approved_works",
+    "approve_already_approved_preserves_first_receipt",
+    "approved_rejects_missing_and_proposed",
+    "failed_operations_preserve_registry_unchanged",
+    "registry_error_display_and_source_chain",
+    "no_aggregate_serde_decode_exists",
+    "no_concrete_approved_ustc_source_in_production_data",
+})
+
+P1_SOURCE_REGISTRY_NO_IO_DECLARATION = "performs no I/O, reads no clock, computes no digest, resolves no"
+
+
+def check_p1_source_registry_implementation(issues: list[str]) -> None:
+    """Verify the bounded M60-B1 source-registry implementation against source-import/v0.
+
+    This is the P1-1 implementation gate: it verifies that the Rust source-registry
+    kernel and its acceptance test satisfy every invariant the contract freezes for
+    bounded B1 — exact public type surface, no Default, no I/O or dependency widening,
+    no public struct fields, no Serde on aggregates, no forbidden constructors on
+    SourceDefinition, exact test function inventory, and the lib.rs module declaration.
+    """
+    source_path = ROOT / P1_SOURCE_REGISTRY_SOURCE
+    test_path = ROOT / P1_SOURCE_REGISTRY_TEST
+    lib_path = ROOT / P1_SOURCE_REGISTRY_LIB
+    identity_test_path = ROOT / P1_SOURCE_REGISTRY_IDENTITY_TEST
+    for rel, path in (
+        (P1_SOURCE_REGISTRY_SOURCE, source_path),
+        (P1_SOURCE_REGISTRY_TEST, test_path),
+        (P1_SOURCE_REGISTRY_LIB, lib_path),
+        (P1_SOURCE_REGISTRY_IDENTITY_TEST, identity_test_path),
+    ):
+        if not path.is_file():
+            fail(f"P1-1 source-registry carrier missing: {rel}", issues)
+            return
+
+    source = source_path.read_text(encoding="utf-8")
+    test = test_path.read_text(encoding="utf-8")
+    lib = lib_path.read_text(encoding="utf-8")
+    identity_test = identity_test_path.read_text(encoding="utf-8")
+    stripped = strip_rust_comments_and_literals(source)
+
+    # lib.rs module declaration and the pre-existing external authority-test closure carrier.
+    if "pub mod source_registry;" not in lib:
+        fail("P1-1 source-registry module declaration missing in lib.rs", issues)
+    if identity_test.count(P1_SOURCE_REGISTRY_IDENTITY_MODULE_EXPECTATION) != 1:
+        fail(
+            "P1-1 platform-identity module expectation must admit source_registry exactly once",
+            issues,
+        )
+    if identity_test.count(P1_SOURCE_REGISTRY_IDENTITY_ITEM_EXPECTATION) != 1:
+        fail(
+            "P1-1 platform-identity item expectation must admit source_registry exactly once",
+            issues,
+        )
+
+    # Exact public type surface — every contract type must be present.  The
+    # eight non-macro types have direct `pub struct`/`pub enum` declarations;
+    # the five nominal value types are generated by `source_value!` and appear
+    # as invocation arguments, not as `pub struct $name`.
+    for decl in P1_SOURCE_REGISTRY_PUB_TYPES:
+        if decl not in source:
+            fail(f"P1-1 source-registry public type missing: {decl!r}", issues)
+    for macro_type in P1_SOURCE_REGISTRY_MACRO_TYPES:
+        if f"source_value!" not in source or macro_type not in source:
+            fail(
+                f"P1-1 source-registry macro-generated type missing: {macro_type!r}",
+                issues,
+            )
+
+    # No Default: neither derive nor impl.
+    if re.search(r"derive\([^)]*\bDefault\b", source):
+        fail("P1-1 source-registry must not derive Default on any type", issues)
+    if "impl Default for" in source:
+        fail("P1-1 source-registry must not impl Default on any type", issues)
+
+    # No I/O, network, clock, persistence, or dependency widening.  Checked
+    # against the comment-stripped source so compile_fail doctests that name a
+    # carrier (e.g. `serde_json::from_str`) do not false-positive.
+    for carrier in P1_SOURCE_REGISTRY_FORBIDDEN_CARRIERS:
+        if carrier in stripped:
+            fail(
+                f"P1-1 source-registry must not widen I/O or dependencies: {carrier!r}",
+                issues,
+            )
+
+    # The source must carry its no-I/O declaration verbatim in its module doc.
+    if P1_SOURCE_REGISTRY_NO_IO_DECLARATION not in source:
+        fail("P1-1 source-registry no-I/O declaration missing", issues)
+
+    # No public struct field: every struct field must be private.  The pattern
+    # `pub <word>:` matches a field declaration with a `pub` visibility prefix
+    # but not `pub fn`, `pub const fn`, `pub struct`, `pub enum`, `pub use`, or
+    # `pub mod` — those have `fn`/`const`/`struct`/`enum`/`use`/`mod` as the
+    # next token, not a field name followed by `:`.
+    pub_fields = re.findall(r"pub\s+\w+\s*:", source)
+    if pub_fields:
+        fail(
+            f"P1-1 source-registry must not expose public struct fields: {pub_fields}",
+            issues,
+        )
+
+    # No Serde on aggregates: only the five nominal value types may implement
+    # Serialize/Deserialize.  The macro generates them for `$name`, so no
+    # concrete aggregate type name should appear in a Serde impl.
+    for aggregate in P1_SOURCE_REGISTRY_NO_SERDE_AGGREGATES:
+        if f"impl Serialize for {aggregate}" in source:
+            fail(
+                f"P1-1 source-registry aggregate must not implement Serialize: {aggregate}",
+                issues,
+            )
+        if re.search(rf"impl\s+Deserialize<'\w+>\s+for\s+{aggregate}\b", source):
+            fail(
+                f"P1-1 source-registry aggregate must not implement Deserialize: {aggregate}",
+                issues,
+            )
+
+    # No forbidden constructors on SourceDefinition: the only public
+    # constructor is `proposed`.  No `new`, `approved`, `from_parts`, or
+    # `builder` may appear in its impl block.  Brace-match the impl block on
+    # the stripped source so nested braces in match arms do not confuse the
+    # boundary.
+    impl_marker = "impl SourceDefinition {"
+    impl_start = stripped.find(impl_marker)
+    if impl_start != -1:
+        depth = 0
+        for i in range(impl_start, len(stripped)):
+            if stripped[i] == "{":
+                depth += 1
+            elif stripped[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    impl_body = stripped[impl_start : i + 1]
+                    for forbidden in (
+                        "pub fn new(",
+                        "pub fn approved(",
+                        "pub fn from_parts(",
+                        "pub fn builder(",
+                    ):
+                        if forbidden in impl_body:
+                            fail(
+                                f"P1-1 source-registry SourceDefinition must not expose "
+                                f"{forbidden[:-1]!r}",
+                                issues,
+                            )
+                    break
+
+    # No constructor takes SourceReviewState as a parameter: the review state
+    # is set only by the registry approval transition, never by a definition
+    # constructor.  Check that `SourceReviewState` does not appear as a
+    # parameter type in `pub fn proposed`.
+    proposed_match = re.search(r"pub fn proposed\(([^)]*)\)", source, re.DOTALL)
+    if proposed_match and "SourceReviewState" in proposed_match.group(1):
+        fail(
+            "P1-1 source-registry SourceDefinition::proposed must not take SourceReviewState",
+            issues,
+        )
+
+    # Exact test function inventory: the acceptance test must carry exactly the
+    # 23 contract-mandated test functions.
+    test_functions = set(re.findall(r"#\[test\]\s*\n\s*fn (\w+)\(", test))
+    missing = P1_SOURCE_REGISTRY_EXPECTED_TEST_FUNCTIONS - test_functions
+    extra = test_functions - P1_SOURCE_REGISTRY_EXPECTED_TEST_FUNCTIONS
+    if missing:
+        fail(f"P1-1 source-registry acceptance test missing functions: {sorted(missing)}", issues)
+    if extra:
+        fail(f"P1-1 source-registry acceptance test has extra functions: {sorted(extra)}", issues)
+
+    # The test file must reference the bound acceptance row.
+    if "SRC-001" not in test:
+        fail("P1-1 source-registry acceptance test must reference SRC-001", issues)
+
+
 def main() -> int:
     issues: list[str] = []
     check_key_files_present_and_nonempty(issues)
@@ -9122,6 +9717,8 @@ def main() -> int:
     check_platform_identity_implementation(issues)
     check_platform_session_contract(issues)
     check_platform_session_implementation(issues)
+    check_p1_source_revision_contract(issues)
+    check_p1_source_registry_implementation(issues)
     check_module_registry(issues)
     check_s0_architecture_review(issues)
     if issues:

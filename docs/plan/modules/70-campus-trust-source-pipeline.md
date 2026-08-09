@@ -3,12 +3,13 @@
 ## Metadata
 
 - `Module ID`: `M60`
-- `Status`: Accepted blueprint; implementation planned, limited synthetic planner evidence exists
+- `Status`: Accepted blueprint; `M60` overall remains planned, but bounded `M60-B1 source-registry` is implemented as a P1-1 review candidate
 - `Implementation State`: `planned`
 - `Version`: `m60-campus-trust/v0`
-- `Last Review`: `2026-07-25`
+- `Last Review`: `2026-08-08`
 - `Owning Plan`: [`../05-campus-trust-kernel.md`](../05-campus-trust-kernel.md)
-- `Primary code area`: future source/trust crates; current fixture semantics in `crates/course-planning/`
+- `Current Contract`: accepted [`source-import/v0`](../../contracts/source-import.md) under the exact P1-0 GO receipt in [`P1 source/revision readiness`](../../tasks/p1-source-revision-readiness-proposal.md)
+- `Primary code area`: `crates/platform-core/src/source_registry.rs` for bounded `M60-B1` (P1-1 review candidate); `M60-B2` through `M60-B8` remain future; current fixture semantics in `crates/course-planning/`
 
 ## 1. Purpose
 
@@ -30,6 +31,8 @@
 ```text
 SourceDefinition / SourcePolicy
 SourceStatus: Proposed | Approved | Suspended | Revoked
+  (bounded P1-1 B1 freezes Proposed/Approved review admission only; operational
+   Suspended/Revoked must land before any live B2 retrieval adapter)
 RetrievalLease / Observation
 RawSnapshot / NormalizedSnapshot
 SourceRevision: Observed | Parsed | Accepted | Archived | Rejected
