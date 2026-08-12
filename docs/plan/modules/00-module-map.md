@@ -4,8 +4,8 @@
 
 - `Layer`: Large-module architecture
 - `Status`: Accepted current skeleton
-- `Version`: `module-map/v3`
-- `Last Review`: `2026-07-31`
+- `Version`: `module-map/v3.1`
+- `Last Review`: `2026-08-12`
 - `Owning Constitution`: [`../00-engineering-constitution.md`](../00-engineering-constitution.md)
 - `Counterpart Contract`: [`../../contracts/module-boundaries.md`](../../contracts/module-boundaries.md)
 - `Counterpart Tasks`: [`../../tasks/00-module-work-policy.md`](../../tasks/00-module-work-policy.md), [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md)
@@ -23,11 +23,11 @@ A large module is an independently owned and independently testable part. “Lar
 | `M40` | Tool Gateway and Execution | `partial-evidence` | Agent tool protocol mapping, call correlation, current authorization ordering, intent/executor/receipt/result sequence | grants, Agent phases, package declarations | protocol values + fake conformance implemented |
 | `M50` | Model Provider Integration | `planned` | typed provider profiles, request/stream normalization, token estimation, timeout/cancel/error mapping | run authority, tool grants, prompt truth | planned |
 | `M51` | MCP Binding and Executor | `planned` | reviewed MCP endpoint/component binding, discovery/schema snapshot, protocol session, bounded tool execution | Market publication, grant decisions, Agent loop | planned |
-| `M60` | Campus Trust and Source Pipeline | `planned` | source registry, retrieval policy, immutable revision, normalization, provenance, accepted baseline and publication gate | product-specific rendering, arbitrary crawling, UI | contract only; planner fixtures provide limited evidence |
+| `M60` | Campus Trust and Source Pipeline | `planned` | source registry, retrieval policy, immutable revision, normalization, provenance, accepted baseline and publication gate | product-specific rendering, arbitrary crawling, UI | accepted contract only; `source-import/v1` and `source-retrieval/v0` accepted under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET`; bounded B1 implementation under `source-import/v0`; planner fixtures provide limited evidence; superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical |
 | `M70` | USTC ChangeRadar | `design-only` | semantic change candidates/events, board scope, approval and feed behavior | generic source authority, other product state | manifest/design only |
 | `M71` | USTC Affairs Navigator | `design-only` | reviewed tree/procedure artifacts, lookup, supersession and publication journey | generic source authority, full-corpus RAG as truth | manifest/design only |
 | `M72` | Campus Opportunity Graph | `bounded-spike` | opportunity facts, qualification/dependency/conflict, tenant profile projection and planning journeys | public source authority, cross-user profile state | offline Course Planning spike only |
-| `M80` | Client Core and Interaction Shells | `planned` | framework-neutral typed client behavior; peer Dioxus Web/Android, `ustc-agent` user/automation CLI and inbound MCP adapters; later iOS/desktop | domain calculation/mutation, direct repository/executor access, Agent/Market/Plugin/source authority, operator `ustc-agentctl`, outbound M51 execution, peer-shell subprocess dependencies | architecture accepted; no client-core or peer adapter implementation |
+| `M80` | Client Core and Interaction Shells | `planned` | framework-neutral typed client behavior; peer Dioxus Web/Android, `ustc-agent` user/automation CLI and inbound MCP adapters; later admitted Windows peer, with iOS/other desktop candidates later | domain calculation/mutation, direct repository/executor access, Agent/Market/Plugin/source authority, operator `ustc-agentctl`, outbound M51 execution, peer-shell subprocess dependencies | phased external-Agent architecture accepted; Windows not a current required gate; no client-core or peer adapter implementation |
 | `M90` | Platform Infrastructure and Operations | `governance-baseline` | repository implementations for storage, journal, evidence, clock, queue, config, secrets, telemetry and Docker Compose deployment/recovery wiring | domain transition rules and product policy | CI/checker baseline only |
 
 `State key` is the machine-checked implementation-evidence posture shared with every module blueprint and the roadmap lane registry:
@@ -102,7 +102,7 @@ Dependency rules:
 | `crates/client-core` (future) | M80-owned framework-neutral user-client behavior and fake-M10 conformance | M10-owned client-protocol values plus M80 auth/transport/reconnect abstractions; no outer-framework or backend implementation |
 | `apps/ustc-agent` (future) | ordinary-user and noninteractive automation CLI | client-core, CLI parser/rendering and user auth-profile adapter only |
 | inbound MCP adapter (future) | selected external-Agent tools/resources | client-core plus MCP outer protocol mapping; no M51/domain/operator reach-through |
-| `apps/ustc-client` (future) | shared Dioxus Web/Android Fullstack source | client-core, presentation state, Dioxus target adapters and M10 server-function declarations only |
+| `apps/ustc-client` (future) | shared Dioxus Web/Android Fullstack source and later admitted Windows presentation target | client-core, presentation state, Dioxus target adapters and M10 server-function declarations only; Windows packaging/session/update remains a separate gate |
 | module standalone tests | independent acceptance against fakes | owning module internals plus fake public counterparts |
 | `apps/ustc-agentd/tests` | cross-module ordering and wiring proof | public contracts, never private fields |
 

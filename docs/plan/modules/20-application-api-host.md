@@ -3,10 +3,10 @@
 ## Metadata
 
 - `Module ID`: `M10`
-- `Status`: Accepted blueprint amended for Dioxus, user CLI and inbound MCP peer clients; daemon skeleton exists, application ingress implementation planned
+- `Status`: Accepted blueprint amended for one versioned application-operation registry and phased Dioxus, user CLI and inbound MCP projections; daemon skeleton exists, application ingress implementation planned
 - `Implementation State`: `skeleton`
-- `Version`: `m10-application-ingress/v2`
-- `Last Review`: `2026-07-31`
+- `Version`: `m10-application-ingress/v2.1`
+- `Last Review`: `2026-08-12`
 - `Composition`: `apps/ustc-agentd`
 - `Primary code area`: `apps/ustc-agentd/`, future M10-owned `crates/client-protocol/`, plus shared Dioxus server-function declarations in the Fullstack application boundary
 
@@ -21,6 +21,7 @@
 - request/response/error/compatibility mapping;
 - idempotency/precondition and audit context;
 - one-ingress-to-one-application-operation dispatch.
+- one canonical operation/schema registry from which HTTP, Dioxus, CLI and inbound-MCP allowlists are projected.
 
 It translates and coordinates. It does not become a second implementation of domain rules.
 
@@ -63,6 +64,8 @@ Market browse/detail and installation commands
 HarnessRun create/read/answer/cancel/events
 first-party product queries/actions added only with their contracts
 ```
+
+Operation IDs are transport-neutral. A CLI command tree, MCP tool registry or GUI action registry is an allowlisted projection, not a new application service. If two adapters expose the same operation, authorization, result/error/provenance/audit semantics remain equal; the adapters do not need identical command sets. M10 binds exact schema identity/digest so a data, permission, effect or target widening can stale old grants before dispatch.
 
 Public DTOs contain stable IDs, explicit status and safe summaries. Unknown fields/versions follow the endpoint contract; they are never silently interpreted as a nearby variant.
 
@@ -147,7 +150,7 @@ Record ingress/route ID, protocol/API version, client build/target, request/corr
 
 Dioxus server functions, `ustc-agent`/inbound-MCP HTTP/SSE routes, other public REST/SSE routes and future internal transports are peer ingress adapters over the same application ports. Adding or replacing one transport must not duplicate domain logic or make one client shell a subprocess dependency of another.
 
-Dioxus clients may bind to versioned generated server-function routes and typed event handles. `ustc-agent` and inbound MCP bind to only the explicit endpoint subset registered for their real heterogeneous consumption; the MCP adapter remains outside M10 and calls those routes through M80 client-core. Public clients bind only to endpoints explicitly marked public in the interface registry. Independently released Android, CLI and MCP artifacts retain declared compatibility windows; shared source types alone are not compatibility proof.
+Dioxus clients may bind to versioned generated server-function routes and typed event handles. `ustc-agent` and inbound MCP bind to only the explicit endpoint subset registered for their real heterogeneous consumption; the MCP adapter remains outside M10 and calls those routes through M80 client-core. The first inbound-MCP profile is public-read Streamable HTTP; private read/draft projections are later explicit delegated-profile slices. Public clients bind only to endpoints explicitly marked public in the interface registry. Independently released Android, CLI and MCP artifacts retain declared compatibility windows; shared source types alone are not compatibility proof.
 
 ## 12. Performance path
 
@@ -159,6 +162,7 @@ Hot paths are request decode/admission, compatibility checks, read-model seriali
 
 - health/build/protocol compatibility for every admitted client target;
 - one explicit read-only HTTP/JSON operation consumed by `ustc-agent` and projected by one least-privilege inbound MCP tool/resource;
+- exact operation, schema digest, permission/effect class and per-adapter allowlist with stale-grant behavior on widening;
 - Dioxus Fullstack server-function query/command/event ingress for one real Web journey;
 - the same semantic client-core result/error/event behavior consumed by Android, CLI and inbound MCP where the operation applies;
 - read-only Market browse/detail;
@@ -183,7 +187,7 @@ Hot paths are request decode/admission, compatibility checks, read-model seriali
 
 ## 14. Small-module decomposition
 
-1. `ingress-registry` — server-function/public route/version/error registry.
+1. `ingress-registry` — canonical operation/schema plus server-function/public-route/adapter-allowlist/version/error registry.
 2. `ingress-contract` — first-party/public request/response/event/compatibility values.
 3. `request-admission` — bounds, M00 actor, client version and precondition mapping.
 4. `server-function-adapter` — Dioxus/Axum endpoint declarations and dispatch.

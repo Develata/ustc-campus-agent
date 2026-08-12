@@ -3,13 +3,13 @@
 ## Metadata
 
 - `Layer`: Shared campus authority
-- `Status`: Contract accepted; Source Registry implementation and concrete source approval planned
-- `Version`: `0.1.0`
-- `Last Review`: `2026-07-25`
+- `Status`: Contract accepted under R11 M60-B2 two-layer transport architecture; `source-import/v1` and `source-retrieval/v0` are current contract authority per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); bounded `M60-B1 source-registry` remains implemented under `source-import/v0` (P1-1); operational `Suspended`/`Revoked` lifecycle precondition applies before any live B2 retrieval adapter; concrete source approval, retained B2 implementation and network retrieval remain unauthorized; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
+- `Version`: `0.3.0`
+- `Last Review`: `2026-08-12`
 - `Authority Owns`: source identity, immutable revision, authority order, temporal/conflict/provenance state, baseline advancement and publication gates
 - `Authority Defers To`: source-import/data-model contracts for exact shapes and package sourcePolicy for requested scope
 - `Counterpart Features`: all documents under `docs/features/`
-- `Counterpart Contracts`: `docs/contracts/source-import.md`, `docs/contracts/data-models.md`
+- `Counterpart Contracts`: `docs/contracts/source-import.md`, `docs/contracts/source-retrieval.md`, `docs/contracts/data-models.md`
 - `Counterpart Acceptance`: `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*`
 - `Primary Code Areas`: future source/knowledge modules; current `crates/course-planning/`
 - `Large-module Blueprint`: [`modules/70-campus-trust-source-pipeline.md`](modules/70-campus-trust-source-pipeline.md)
@@ -53,7 +53,8 @@ Invariants:
 - `source_id` is stable across URL/path/title changes.
 - `Approved` requires explicit owner, authority, URL, retrieval, parser, rate and permission review.
 - wildcard domains are at most egress ceilings; every source still needs exact host/path review.
-- `Suspended` or `Revoked` blocks new fetch while preserving historical evidence.
+- `Suspended` blocks new retrieval while preserving historical evidence; `Revoked` is terminal and irreversible.
+- `SourceAuthorityRevision` is a monotone non-zero counter incremented on every retrievability-affecting transition; every mutation requires expected-revision CAS.
 - declarations contain no credential, private endpoint or user session.
 - login/cookie/token sources require a separate identity and data-class review; they are not public defaults.
 
@@ -98,7 +99,7 @@ Crash/retry uses deterministic revision/event identities. Publishing is a separa
 
 ## 5. Fetch security
 
-Privileged fetch accepts only an `Approved` SourceDefinition or a separately reviewed candidate. It MUST enforce:
+Privileged fetch accepts only a current `Approved` SourceDefinition projected as `RetrievalSubject` with exact `SourceAuthorityRevision`, then separately admitted through the authority/idempotency/lease transaction before any effect. A reviewed/model-proposed candidate remains `Proposed` and cannot be fetched. It MUST enforce:
 
 - HTTPS by default and exact reviewed host/path policy;
 - DNS/IP revalidation and redirect reauthorization on every hop;
@@ -166,11 +167,12 @@ Default recovery:
 
 ## 10. Verification
 
-Current executable evidence is limited to the synthetic Course Planning fixture and its `COURSE-*` cases. Source/Procedure/Radar cases remain planned until a concrete reviewed public source and its parser fixtures are approved.
+Current executable evidence is limited to the synthetic Course Planning fixture and its `COURSE-*` cases plus the bounded `M60-B1 source-registry` under `source-import/v0` (`SRC-001`). `source-import/v1` and `source-retrieval/v0` are accepted contract authority under R11; no v1 Rust implementation exists. Source/Procedure/Radar cases remain planned until a concrete reviewed public source and its parser fixtures are approved.
 
 Primary entries:
-
 - `docs/contracts/source-import.md`
+- `docs/contracts/source-retrieval.md`
 - `docs/contracts/data-models.md`
+- `docs/tasks/m60-b2-retrieval-policy-readiness-proposal.md`
 - `market/fixtures/course-planning/minimal-v0.json`
 - `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*` in `docs/acceptance/matrix.tsv`

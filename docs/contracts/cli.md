@@ -2,11 +2,11 @@
 
 ## Metadata
 
-- `Status`: current operator CLI contract plus accepted planned user/automation CLI boundary
-- `Version`: `cli/v2`
-- `Last Review`: `2026-07-31`
+- `Status`: current operator CLI contract plus accepted phased user/automation CLI boundary
+- `Version`: `cli/v2.1`
+- `Last Review`: `2026-08-12`
 - `Owning plans`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md), [`M90 Infrastructure and Operations`](../plan/modules/90-infrastructure-operations.md)
-- `Counterpart contract`: [`client-shell/v2`](client-shell.md)
+- `Counterpart contract`: [`client-shell/v2.1`](client-shell.md)
 - `Acceptance`: implemented command-specific evidence below; planned `CLIENT-008` and `CLIENT-009`
 
 ## 1. Binary and privilege split
@@ -79,9 +79,11 @@ ustc-agent capabilities list --format json
 ustc-agent market packages list --format json
 ```
 
-Exact options, DTO schema versions and route bindings are fixed in the first accepted command-registry slice before implementation. Product-specific query/command/event families are added only after their owning M10/application contracts and active acceptance rows exist.
+These commands project `server.info`, `capability.list` and `market.package.list` from [`interfaces.md`](interfaces.md). Exact options, DTO schema versions and route bindings are fixed in the first accepted command-registry slice before implementation. Product-specific query/command/event families are added only after their owning M10/application contracts and active acceptance rows exist. Command spelling never creates an operation absent from that registry.
 
 The initial CLI does not include install/grant/source-publish/operator actions, an embedded model loop or a generic arbitrary HTTP/tool invocation command.
+
+After real campus-product contracts exist, the CLI lane may add read-only projections in the existing product order: `affairs search/get` first, then approved ChangeRadar and Opportunity Graph operations. Cultivation programs use `program`; tenant-local planning drafts use `planner draft`. An ambiguous `plan` namespace is not admitted.
 
 The inbound MCP adapter's executable/subcommand packaging is intentionally not fixed by this command table. Its first accepted slice may choose a dedicated binary or `ustc-agent mcp serve`; either choice must preserve the same client-core and privilege contract and cannot change the user CLI command semantics by implication.
 
@@ -148,6 +150,8 @@ A server domain denial keeps its typed stable code inside the result envelope an
 - fail with a typed prerequisite class when authentication/confirmation is unavailable;
 - keep stdout machine-clean when a machine format is selected;
 - avoid reading hidden operator environment/config by fallback.
+
+Interactive authentication is not frozen by this revision. The preferred next contract candidate is server-mediated browser pairing: the CLI obtains a short-lived one-time pairing identity, opens the system browser only in interactive mode, and exchanges successful server admission for a least-privilege client session reference. `--non-interactive` never opens a browser and requires a pre-admitted profile. No flow accepts or forwards a raw USTC password, CAS ticket or complete CAS session.
 
 Process termination or broken stdout means only that the observer stopped. It does not prove server cancellation. A cancellable accepted operation uses an explicit typed cancellation command and, after timeout, reconciliation by correlation/idempotency identity.
 

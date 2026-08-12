@@ -1318,6 +1318,568 @@ class ModuleRegistryContractTests(unittest.TestCase):
         )
 
 
+class M60B2RetrievalPolicyContractTests(unittest.TestCase):
+    """Pins the accepted R11 semantic packet for the two-layer M60/M90 transport architecture.
+
+    The immutable block between BEGIN/END markers must be exactly 33046 bytes with the bound
+    SHA-256. Stage must be M60_B2_CONTRACT_ACCEPTED, packet status ACCEPTED, with one current
+    R11 acceptance receipt and the historical R4 direction receipt preserved as
+    PROPOSED_NOT_ACCEPTED. The two-layer transport boundary must be projected.
+    """
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def replace_once(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, f"stale or ambiguous mutation target in {rel}")
+        updated = text.replace(old, new, 1)
+        self.assertNotEqual(updated, text)
+        path.write_text(updated, encoding="utf-8")
+
+    def check_packet(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_m60_b2_packet_digest(issues)
+        return issues
+
+    def assert_rejected(self, issues: list[str], marker: str) -> None:
+        self.assertTrue(any(marker in issue for issue in issues), issues)
+
+    def test_current_m60_b2_packet_passes(self) -> None:
+        self.assertEqual(self.check_packet(), [])
+
+    # --- frozen packet integrity ---
+
+    def test_missing_begin_marker_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_PROPOSAL_PATH,
+            checker.M60_B2_PROPOSAL_BEGIN,
+            "<!-- removed begin marker -->",
+        )
+        self.assert_rejected(self.check_packet(), "marker count drift")
+
+    def test_missing_end_marker_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_PROPOSAL_PATH,
+            checker.M60_B2_PROPOSAL_END,
+            "<!-- removed end marker -->",
+        )
+        self.assert_rejected(self.check_packet(), "marker count drift")
+
+    def test_duplicate_begin_marker_fails_closed(self) -> None:
+        path = self.root / checker.M60_B2_PROPOSAL_PATH
+        text = path.read_text(encoding="utf-8")
+        start = text.index(checker.M60_B2_PROPOSAL_BEGIN)
+        finish = text.index(checker.M60_B2_PROPOSAL_END)
+        block = text[start : finish + len(checker.M60_B2_PROPOSAL_END)]
+        path.write_text(text + "\n" + block + "\n", encoding="utf-8")
+        self.assert_rejected(self.check_packet(), "marker count drift")
+
+    def test_block_content_drift_changes_digest(self) -> None:
+        path = self.root / checker.M60_B2_PROPOSAL_PATH
+        self.replace_once(
+            checker.M60_B2_PROPOSAL_PATH,
+            "any push, PR, merge, tag, release, deployment or publication lacks current operation-specific or active-campaign authority.",
+            "any push, PR, merge, tag, release, deployment or publication is always authorized.",
+        )
+        self.assert_rejected(self.check_packet(), "digest drift")
+
+    def test_digest_metadata_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_PROPOSAL_PATH,
+            checker.M60_B2_REQUIRED_DIGEST_LINE,
+            "- `R4 replacement packet digest`: `sha256:" + "0" * 64 + "` over `1` bytes",
+        )
+        self.assert_rejected(self.check_packet(), "digest metadata must bind")
+
+    # --- replacement stage ---
+
+    def test_missing_replacement_stage_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_PROPOSAL_PATH,
+            checker.M60_B2_REQUIRED_STAGE_LINE,
+            "`M60_B2_ACCEPTED_WITH_AMENDMENT`",
+        )
+        issues = self.check_packet()
+        self.assert_rejected(issues, "R3 stage missing")
+
+    def test_replacement_stage_promoted_incorrectly_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_PROPOSAL_PATH,
+            checker.M60_B2_REQUIRED_STAGE_LINE,
+            "`M60_B2_IMPLEMENTATION_READY`",
+        )
+        self.assert_rejected(self.check_packet(), "R3 stage missing")
+
+    # --- packet status ---
+
+    def test_packet_status_false_promotion_fails_closed(self) -> None:
+        prop_path = self.root / checker.M60_B2_PROPOSAL_PATH
+        text = prop_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            checker.M60_B2_REQUIRED_STATUS_LINE,
+            "- `Packet status`: `IMPLEMENTATION_READY`",
+            1,
+        )
+        self.assertNotEqual(changed, text)
+        prop_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(self.check_packet(), "packet status missing")
+
+    # --- lifecycle precondition ---
+
+    def test_lifecycle_precondition_removed_fails_closed(self) -> None:
+        contract_path = self.root / checker.M60_B2_SOURCE_RETRIEVAL_PATH
+        text = contract_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            "Operational `Suspended`/`Revoked` lifecycle and monotone "
+            "`SourceAuthorityRevision` must be present before any live B2 retrieval adapter",
+            "Lifecycle is optional; retrieval may proceed without Suspended/Revoked support",
+            1,
+        )
+        self.assertNotEqual(changed, text)
+        contract_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "source-retrieval contract stop-condition section must carry the operational",
+        )
+
+    # --- two-layer transport boundary projection ---
+
+    def test_transport_boundary_removed_fails_closed(self) -> None:
+        contract_path = self.root / checker.M60_B2_SOURCE_RETRIEVAL_PATH
+        text = contract_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            "M90 never receives `EffectReadyRetrievalPlan`",
+            "M90 may receive EffectReadyRetrievalPlan",
+            1,
+        )
+        self.assertNotEqual(changed, text)
+        contract_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "source-retrieval contract §1.1 must carry exactly one line stating "
+            "M90 never receives EffectReadyRetrievalPlan and never returns BoundedFetch",
+        )
+
+    def test_source_transport_port_missing_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "pub trait SourceTransportPort: Send + Sync {",
+            "pub trait SourceFetchPort: Send + Sync {",
+        )
+        self.assert_rejected(
+            self.check_packet(),
+            "source-retrieval contract §9.3 must carry exactly one public one-call "
+            "SourceTransportPort trait signature",
+        )
+
+    def test_source_transport_request_public_constructor_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "No public constructor, Serde, `Default`, URL/header builder conversion, arbitrary headers or retry/proxy/cookie/auth knobs.",
+            "A public constructor may accept arbitrary headers and auth knobs.",
+        )
+        self.assert_rejected(
+            self.check_packet(),
+            "source-retrieval contract §9.1 must declare the exact authority-sentence",
+        )
+
+    def test_transport_request_response_bound_removed_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "`u32 maximum_response_bytes`",
+            "`u32 omitted_response_bound`",
+        )
+        self.assert_rejected(
+            self.check_packet(),
+            "authoritative RetrievalTransportRequest owned-field sequence drifted",
+        )
+
+    def test_transport_request_deadline_accessor_removed_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "pub fn RetrievalTransportRequest::maximum_elapsed_seconds(&self) -> u32",
+            "pub fn RetrievalTransportRequest::omitted_deadline(&self) -> u32",
+        )
+        self.assert_rejected(
+            self.check_packet(),
+            "exact RetrievalTransportRequest accessor surface drifted",
+        )
+
+    def test_transport_request_accessor_duplicated_fails_closed(self) -> None:
+        path = self.root / checker.M60_B2_SOURCE_RETRIEVAL_PATH
+        text = path.read_text(encoding="utf-8")
+        signature = "pub fn RetrievalTransportRequest::maximum_response_bytes(&self) -> u32"
+        self.assertEqual(text.count(signature), 1)
+        path.write_text(text.replace(signature, signature + "\n" + signature, 1), encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "exact RetrievalTransportRequest accessor surface drifted",
+        )
+
+    def test_transport_request_decoy_prose_cannot_mask_authority_drift(self) -> None:
+        path = self.root / checker.M60_B2_SOURCE_RETRIEVAL_PATH
+        text = path.read_text(encoding="utf-8")
+        field = "`u32 maximum_response_bytes`"
+        accessor = "pub fn RetrievalTransportRequest::maximum_elapsed_seconds(&self) -> u32"
+        self.assertEqual(text.count(field), 1)
+        self.assertEqual(text.count(accessor), 1)
+        text = text.replace(field, "`u32 omitted_response_bound`", 1)
+        text = text.replace(
+            accessor,
+            "pub fn RetrievalTransportRequest::omitted_deadline(&self) -> u32",
+            1,
+        )
+        text = text.replace(
+            "There are no additional accessors or conversions.",
+            "There are no additional accessors or conversions.\n\n"
+            "Terminology-only decoys: " + field + " and `" + accessor + "`.",
+            1,
+        )
+        path.write_text(text, encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "authoritative RetrievalTransportRequest owned-field sequence drifted",
+        )
+
+    def test_transport_request_extra_owned_field_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "`u32 maximum_elapsed_seconds`, `SourceRetrievalProtocolVersion`",
+            "`u32 maximum_elapsed_seconds`, `u32 retry_count`, "
+            "`SourceRetrievalProtocolVersion`",
+        )
+        self.assert_rejected(
+            self.check_packet(),
+            "authoritative RetrievalTransportRequest owned-field sequence drifted",
+        )
+
+    def test_transport_request_duplicate_authority_sentence_fails_closed(self) -> None:
+        path = self.root / checker.M60_B2_SOURCE_RETRIEVAL_PATH
+        text = path.read_text(encoding="utf-8")
+        prefix = (
+            "`RetrievalTransportRequest` is a non-authority, private-field, owned struct "
+            "containing exactly the adapter inputs needed for deterministic transport. It owns "
+            "all values ("
+        )
+        self.assertEqual(text.count(prefix), 1)
+        start = text.index(prefix)
+        finish = text.index(") and carries no lifetime parameter.", start)
+        sentence = text[start : finish + len(") and carries no lifetime parameter.")]
+        duplicate = sentence.replace(
+            "`u32 maximum_elapsed_seconds`, `SourceRetrievalProtocolVersion`",
+            "`u32 maximum_elapsed_seconds`, `u32 retry_count`, "
+            "`SourceRetrievalProtocolVersion`",
+            1,
+        )
+        insertion = (
+            "There are no additional accessors or conversions.\n\n" + duplicate
+        )
+        self.assertEqual(text.count("There are no additional accessors or conversions."), 1)
+        path.write_text(
+            text.replace(
+                "There are no additional accessors or conversions.",
+                insertion,
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assert_rejected(
+            self.check_packet(),
+            "must carry exactly one authoritative RetrievalTransportRequest "
+            "owned-field sentence, found 2",
+        )
+
+    def test_transport_request_extra_accessor_fails_closed(self) -> None:
+        signature = "pub fn RetrievalTransportRequest::maximum_elapsed_seconds(&self) -> u32"
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            signature,
+            signature + "\npub fn RetrievalTransportRequest::retry_count(&self) -> u32",
+        )
+        self.assert_rejected(
+            self.check_packet(),
+            "exact RetrievalTransportRequest accessor surface drifted",
+        )
+
+    def test_transport_success_domain_authority_constructor_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "No observation constructor returns or embeds `RetrievalPolicyError`, `BoundedFetch`, receipt, phase carrier or authority witness.",
+            "An observation constructor may return `BoundedFetch` and an authority witness.",
+        )
+        self.assert_rejected(
+            self.check_packet(),
+            "source-retrieval contract §9.2 must declare the exact authority-sentence",
+        )
+
+    def test_transport_request_cloneability_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "It is `Debug + Eq`, not `Clone`/`Copy`",
+            "It is `Clone + Debug + Eq`",
+        )
+        self.assert_rejected(self.check_packet(), "must declare not Clone")
+
+    def test_transport_success_consuming_projection_removal_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "pub fn RetrievalTransportSuccess::into_parts(self) -> RetrievalTransportSuccessParts",
+            "pub fn RetrievalTransportSuccess::parts(&self) -> &RetrievalTransportSuccessParts",
+        )
+        self.assert_rejected(self.check_packet(), "must retain a consuming success projection")
+
+    def test_transport_success_exact_parts_type_removal_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "pub fn RetrievalTransportSuccess::into_parts(self) -> RetrievalTransportSuccessParts",
+            "pub fn RetrievalTransportSuccess::into_parts(self) -> (Vec<u8>, Vec<u8>)",
+        )
+        self.assert_rejected(self.check_packet(), "§9.2 exact transport success API drifted")
+
+    def test_transport_success_constructor_trait_row_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "| `RetrievalTransportSuccess` | no | no | no | no | yes (shape-only) | yes | no |",
+            "| `RetrievalTransportSuccess` | no | no | no | no | no (private-field) | yes | no |",
+        )
+        self.assert_rejected(self.check_packet(), "§11.2 trait projection drifted")
+
+    def test_dns_transport_observation_cannot_return_policy_error(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            ") -> Result<DnsTransportObservation, SourceTransportError>",
+            ") -> Result<DnsTransportObservation, RetrievalPolicyError>",
+        )
+        self.assert_rejected(self.check_packet(), "§7.3 raw DNS/M60 policy split drifted")
+
+    def test_public_transport_port_domain_error_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            ") -> Pin<Box<dyn Future<Output = Result<RetrievalTransportSuccess, SourceTransportError>> + Send + 'a>>;",
+            ") -> Pin<Box<dyn Future<Output = Result<RetrievalTransportSuccess, SourceFetchFailure>> + Send + 'a>>;",
+        )
+        self.assert_rejected(self.check_packet(), "must use the transport-only")
+
+    def test_source_fetch_failure_public_inventory_fails_closed(self) -> None:
+        path = self.root / checker.M60_B2_SOURCE_RETRIEVAL_PATH
+        text = path.read_text(encoding="utf-8")
+        private_row = "| `SourceFetchFailure` | §11 |"
+        private_heading = "Crate-private/internal values (no public constructor, no Serde, no Clone unless specified):"
+        self.assertEqual(text.count(private_row), 1)
+        text = text.replace(private_row + "\n", "", 1)
+        text = text.replace(private_heading, private_row + "\n\n" + private_heading, 1)
+        path.write_text(text, encoding="utf-8")
+        self.assert_rejected(self.check_packet(), "must keep SourceFetchFailure out of public inventory")
+
+    def test_carrier_trait_projection_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_SOURCE_RETRIEVAL_PATH,
+            "| `RetrievalReplayIdentity` | no | no | no | no | no (owner-private) | yes | no |",
+            "| `RetrievalReplayIdentity` | yes | no | no | no | no (owner-private) | yes | no |",
+        )
+        self.assert_rejected(self.check_packet(), "§11.2 trait projection drifted")
+
+    # --- module boundaries projection ---
+
+    def test_module_boundaries_retains_old_fetch_fails(self) -> None:
+        boundaries_path = self.root / "docs/contracts/module-boundaries.md"
+        text = boundaries_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            "B-M60-M90-SOURCE-TRANSPORT",
+            "B-M60-M90-SOURCE-FETCH",
+            1,
+        )
+        boundaries_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "module-boundaries must project the exact B-M60-M90-SOURCE-TRANSPORT",
+        )
+
+    def test_module_boundaries_domain_error_fails_closed(self) -> None:
+        boundaries_path = self.root / "docs/contracts/module-boundaries.md"
+        text = boundaries_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            "returns only `RetrievalTransportSuccess` or transport-only `SourceTransportError`",
+            "returns `RetrievalTransportSuccess` or domain `SourceFetchFailure`",
+            1,
+        )
+        self.assertNotEqual(changed, text)
+        boundaries_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "module-boundaries must project the exact B-M60-M90-SOURCE-TRANSPORT",
+        )
+
+    def test_module_boundaries_m90_clock_fails_closed(self) -> None:
+        boundaries_path = self.root / "docs/contracts/module-boundaries.md"
+        text = boundaries_path.read_text(encoding="utf-8")
+        injected = "| `B-M60-M90-RETRIEVAL-CLOCK` | `M60` | `M90` | clock | accepted contract |\n"
+        boundaries_path.write_text(text + injected, encoding="utf-8")
+        self.assert_rejected(self.check_packet(), "must keep RetrievalClockPort M60-internal")
+
+    def test_blueprint_false_authority_promotion_fails_closed(self) -> None:
+        blueprint_path = self.root / "docs/plan/modules/70-campus-trust-source-pipeline.md"
+        text = blueprint_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            "operational Suspended/Revoked accepted as contract authority in source-import/v1, not implemented;",
+            "operational Suspended/Revoked accepted as authority in source-import/v1;",
+            1,
+        )
+        self.assertNotEqual(changed, text)
+        blueprint_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(self.check_packet(), "M60 blueprint must not promote")
+
+    def test_blueprint_regression_to_proposed_fails_closed(self) -> None:
+        blueprint_path = self.root / "docs/plan/modules/70-campus-trust-source-pipeline.md"
+        text = blueprint_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            "operational Suspended/Revoked accepted as contract authority in source-import/v1, not implemented;",
+            "operational Suspended/Revoked proposed as authority in source-import/v1, not accepted;",
+            1,
+        )
+        self.assertNotEqual(changed, text)
+        blueprint_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(self.check_packet(), "M60 blueprint must not regress to proposed-only")
+
+    # --- R11 acceptance receipt and historical R4 receipt ---
+
+    def test_r11_acceptance_receipt_missing_fails_closed(self) -> None:
+        prop_path = self.root / checker.M60_B2_PROPOSAL_PATH
+        text = prop_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            "### M60-B2 R11 exact semantic acceptance receipt (CURRENT)",
+            "### M60-B2 R11 exact semantic acceptance receipt (REMOVED)",
+            1,
+        )
+        self.assertNotEqual(changed, text)
+        prop_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "must have exactly one R11 exact semantic acceptance receipt",
+        )
+
+    def test_r11_acceptance_receipt_duplicated_fails_closed(self) -> None:
+        prop_path = self.root / checker.M60_B2_PROPOSAL_PATH
+        text = prop_path.read_text(encoding="utf-8")
+        header = "### M60-B2 R11 exact semantic acceptance receipt (CURRENT)"
+        self.assertEqual(text.count(header), 1)
+        prop_path.write_text(text + "\n" + header + "\n- duplicate receipt\n", encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "must have exactly one R11 exact semantic acceptance receipt",
+        )
+
+    def test_historical_r4_receipt_removed_fails_closed(self) -> None:
+        prop_path = self.root / checker.M60_B2_PROPOSAL_PATH
+        text = prop_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            "### M60-B2 R4 replacement direction receipt (HISTORICAL — SUPERSEDED BY R11 ACCEPTANCE)",
+            "### M60-B2 R4 replacement direction receipt (REMOVED)",
+            1,
+        )
+        self.assertNotEqual(changed, text)
+        prop_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "must preserve exactly one historical R4 replacement direction receipt",
+        )
+
+    def test_historical_r4_receipt_status_promoted_fails_closed(self) -> None:
+        prop_path = self.root / checker.M60_B2_PROPOSAL_PATH
+        text = prop_path.read_text(encoding="utf-8")
+        self.assertIn("- `Receipt status`: `PROPOSED_NOT_ACCEPTED`", text)
+        changed = text.replace(
+            "- `Receipt status`: `PROPOSED_NOT_ACCEPTED`",
+            "- `Receipt status`: `ACCEPTED`",
+            1,
+        )
+        self.assertNotEqual(changed, text)
+        prop_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "historical R4 replacement direction receipt must preserve",
+        )
+
+    # --- acceptance matrix ---
+
+    def test_src010_false_promotion_fails_closed(self) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        header = lines[0].split("\t")
+        status_index = header.index("status")
+        modified: list[str] = [lines[0]]
+        for line in lines[1:]:
+            cells = line.split("\t")
+            if cells[0] == "SRC-010":
+                cells[status_index] = "implemented"
+            modified.append("\t".join(cells))
+        path.write_text("\n".join(modified) + "\n", encoding="utf-8")
+        self.assert_rejected(self.check_packet(), "SRC-010 must remain planned")
+
+    def test_src014_in_active_matrix_fails_closed(self) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text
+            + "SRC-014\tsource\tsuspended/revoked source blocks fetch\tfuture integration test\trelease\tplanned\tsecurity\n",
+            encoding="utf-8",
+        )
+        self.assert_rejected(self.check_packet(), "SRC-014 must remain catalog-only")
+
+    def test_lf_crlf_byte_mutation_fails(self) -> None:
+        path = self.root / checker.M60_B2_PROPOSAL_PATH
+        raw = path.read_bytes()
+        begin = checker.M60_B2_PROPOSAL_BEGIN.encode("utf-8") + b"\n"
+        end = checker.M60_B2_PROPOSAL_END.encode("utf-8")
+        start = raw.index(begin) + len(begin)
+        finish = raw.index(end)
+        before = raw[:start]
+        block = raw[start:finish]
+        after = raw[finish:]
+        mutated = block.replace(b"\n", b"\r\n")
+        self.assertNotEqual(mutated, block, "CRLF mutation did not change block")
+        path.write_bytes(before + mutated + after)
+        self.assert_rejected(self.check_packet(), "byte count drift")
+
+    # --- coverage matrix projection ---
+
+    def test_coverage_matrix_missing_transport_boundary_fails(self) -> None:
+        coverage_path = self.root / "docs/coverage-matrix.md"
+        text = coverage_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            "B-M60-M90-SOURCE-TRANSPORT",
+            "B-M60-M90-SOURCE-FETCH",
+            1,
+        )
+        coverage_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(
+            self.check_packet(),
+            "coverage-matrix M60 row must project B-M60-M90-SOURCE-TRANSPORT",
+        )
+
+    def test_coverage_matrix_m90_clock_fails_closed(self) -> None:
+        coverage_path = self.root / "docs/coverage-matrix.md"
+        text = coverage_path.read_text(encoding="utf-8")
+        changed = text.replace(
+            "`B-M60-M90-SOURCE-TRANSPORT`",
+            "`B-M60-M90-RETRIEVAL-CLOCK`, `B-M60-M90-SOURCE-TRANSPORT`",
+            1,
+        )
+        self.assertNotEqual(changed, text)
+        coverage_path.write_text(changed, encoding="utf-8")
+        self.assert_rejected(self.check_packet(), "must not project an M60-M90 retrieval-clock boundary")
+
+
 class S0ArchitectureReviewContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -5883,56 +6445,105 @@ class PlatformAuthorityImplementationTests(unittest.TestCase):
         self.assert_rejected("MARKET-003 must remain a planned acceptance row")
 
 
-class RepositoryCheckerRegistrationTests(unittest.TestCase):
-    """Pin the exact call list of `main()`.
 
-    Each `check_*` function that guards itself does so by asserting that `main()` still
-    calls it — which is vacuous, because a guard inside a function that is no longer
-    called cannot run. Deleting one line from `main()` therefore silently disables a whole
-    check and every self-guard inside it. That residue is closed here rather than per
-    check: this test runs from the always-required `unittest discover` CI step, outside the
-    checker it inspects, and fails on an added, removed or reordered call.
 
-    The cost is one mirrored line when a check is registered. That is the same cost every
-    other frozen surface in this repository already carries.
-    """
+class ExternalAgentAccessContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
 
-    EXPECTED_MAIN_CALLS = (
-        "check_key_files_present_and_nonempty(issues)",
-        "check_campaign_authorization(issues)",
-        "check_docs_topology(issues)",
-        "check_design_packets(issues)",
-        "check_no_retired_docs_references(issues)",
-        "check_markdown_links(issues)",
-        "check_no_obvious_secrets(issues)",
-        "check_market(issues)",
-        "check_course_fixture(issues)",
-        "check_invocation_fixtures(issues)",
-        "check_agent_plugin_dependency_direction(issues)",
-        "check_acceptance_matrix(issues)",
-        "check_acceptance_catalog(issues)",
-        "check_rust_doctest_gate(issues)",
-        "check_platform_identity_grammar_authority(issues)",
-        "check_platform_authority_implementation(issues)",
-        "check_platform_identity_implementation(issues)",
-        "check_platform_session_contract(issues)",
-        "check_platform_session_implementation(issues)",
-        "check_p1_source_revision_contract(issues)",
-        "check_p1_source_registry_implementation(issues)",
-        "check_module_registry(issues)",
-        "check_s0_architecture_review(issues)",
-    )
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
 
-    def test_main_invokes_exactly_the_registered_checks(self) -> None:
-        source = CHECKER_PATH.read_text(encoding="utf-8")
-        body = source.split("\ndef main() -> int:", 1)
-        self.assertEqual(len(body), 2, "checker has no main() definition")
-        actual = tuple(
-            line.strip()
-            for line in body[1].splitlines()
-            if line.startswith("    check_") and line.strip().endswith("(issues)")
+    def check_contract(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_external_agent_access_contract(issues)
+        return issues
+
+    def replace_once(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, f"stale or ambiguous mutation target in {rel}")
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def test_current_external_agent_access_contract_passes(self) -> None:
+        self.assertEqual(self.check_contract(), [])
+
+    def test_operation_registry_row_removal_fails_closed(self) -> None:
+        path = self.root / "docs/contracts/interfaces.md"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        path.write_text(
+            "\n".join(line for line in lines if not line.startswith("| `market.package.list` |"))
+            + "\n",
+            encoding="utf-8",
         )
-        self.assertEqual(actual, self.EXPECTED_MAIN_CALLS)
+        self.assertTrue(
+            any("external-Agent application-operation registry drift" in issue for issue in self.check_contract())
+        )
+
+    def test_ambiguous_plan_alias_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/contracts/interfaces.md",
+            "`program.list`",
+            "`plan.list`",
+        )
+        issues = self.check_contract()
+        self.assertTrue(any("ambiguous external-Agent operation alias" in issue for issue in issues), issues)
+
+    def test_private_operation_cannot_enter_initial_mcp_projection(self) -> None:
+        self.replace_once(
+            "docs/contracts/interfaces.md",
+            "| `profile.requirement_status` | M72 | `tenant-private-read` | read | CLI, HTTP, later inbound MCP |",
+            "| `profile.requirement_status` | M72 | `tenant-private-read` | read | CLI, HTTP, inbound MCP |",
+        )
+        issues = self.check_contract()
+        self.assertTrue(any("external-Agent application-operation registry drift" in issue for issue in issues), issues)
+
+    def test_external_write_exclusion_removal_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/contracts/permissions.md",
+            "automatic enrollment, registration, payment, form submission or any other external campus-system mutation;",
+            "automatic enrollment may be enabled by a client;",
+        )
+        issues = self.check_contract()
+        self.assertTrue(any("external-Agent semantic projection" in issue for issue in issues), issues)
+
+    def test_windows_required_target_promotion_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/contracts/client-shell.md",
+            "not part of the current required-target gate",
+            "part of the current required-target gate",
+        )
+        issues = self.check_contract()
+        self.assertTrue(any("external-Agent semantic projection" in issue for issue in issues), issues)
+
+    def test_client_009_windows_binary_requirement_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/acceptance/matrix.tsv",
+            "this active row covers the required initial host matrix and does not require a Windows binary or imply Windows GUI support",
+            "a Windows binary proves the same CLI contract without implying Windows GUI support",
+        )
+        issues = self.check_contract()
+        self.assertTrue(any("external-Agent acceptance assertion drift" in issue for issue in issues), issues)
+
+    def test_client_010_implemented_claim_fails_closed(self) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if line.startswith("CLIENT-010\t"):
+                fields = line.split("\t")
+                fields[5] = "implemented"
+                lines[index] = "\t".join(fields)
+                break
+        else:
+            self.fail("missing CLIENT-010 row")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        issues = self.check_contract()
+        self.assertTrue(any("external-Agent acceptance posture drift" in issue for issue in issues), issues)
 
 
 class PlatformSessionContractTests(unittest.TestCase):
@@ -6643,6 +7254,53 @@ class PlatformSessionImplementationTests(unittest.TestCase):
         )
 
 
+class RepositoryCheckerRegistrationTests(unittest.TestCase):
+    """All check_* functions invoked from main() must match EXPECTED_MAIN_CALLS."""
+
+    EXPECTED_MAIN_CALLS = (
+        "check_key_files_present_and_nonempty(issues)",
+        "check_campaign_authorization(issues)",
+        "check_docs_topology(issues)",
+        "check_design_packets(issues)",
+        "check_no_retired_docs_references(issues)",
+        "check_markdown_links(issues)",
+        "check_no_obvious_secrets(issues)",
+        "check_market(issues)",
+        "check_course_fixture(issues)",
+        "check_invocation_fixtures(issues)",
+        "check_agent_plugin_dependency_direction(issues)",
+        "check_acceptance_matrix(issues)",
+        "check_acceptance_catalog(issues)",
+        "check_rust_doctest_gate(issues)",
+        "check_platform_identity_grammar_authority(issues)",
+        "check_platform_authority_implementation(issues)",
+        "check_platform_identity_implementation(issues)",
+        "check_platform_session_contract(issues)",
+        "check_platform_session_implementation(issues)",
+        "check_p1_source_revision_contract(issues)",
+        "check_p1_source_registry_implementation(issues)",
+        "check_m60_b2_packet_digest(issues)",
+        "check_external_agent_access_contract(issues)",
+        "check_module_registry(issues)",
+        "check_s0_architecture_review(issues)",
+    )
+
+    def test_main_invokes_exactly_the_registered_checks(self) -> None:
+        source = CHECKER_PATH.read_text(encoding="utf-8")
+        main = source.split("\ndef main() -> int:", 1)
+        self.assertEqual(len(main), 2, "main() declaration missing or duplicated")
+        # Mirror the live checker's EXPECTED_MAIN_CALLS constant, not the literal above.
+        live_calls = getattr(checker, "EXPECTED_MAIN_CALLS")
+        self.assertEqual(live_calls, self.EXPECTED_MAIN_CALLS,
+                         "EXPECTED_MAIN_CALLS in checker must match test literal")
+        actual = tuple(
+            line.strip()
+            for line in main[1].splitlines()
+            if line.strip().startswith("check_") and line.strip().endswith("(issues)")
+        )
+        self.assertEqual(actual, live_calls, "main() call order drifting from EXPECTED_MAIN_CALLS")
+
+
 class SourceRegistryContractTests(unittest.TestCase):
     """P1-1 source-registry implementation carrier; exact contract/readiness + Rust gate."""
 
@@ -6674,7 +7332,7 @@ class SourceRegistryContractTests(unittest.TestCase):
             int, getattr(checker, "P1_SOURCE_REVISION_PACKET_BYTES")
         )
         self.original_contract_sha = cast(
-            str, getattr(checker, "P1_SOURCE_IMPORT_CONTRACT_SHA256")
+            str, getattr(checker, "P1_SOURCE_IMPORT_V0_SECTION_SHA256")
         )
         setattr(checker, "ROOT", self.root)
 
@@ -6682,7 +7340,7 @@ class SourceRegistryContractTests(unittest.TestCase):
         setattr(checker, "ROOT", self.original_root)
         setattr(checker, "P1_SOURCE_REVISION_PACKET_SHA256", self.original_packet_sha)
         setattr(checker, "P1_SOURCE_REVISION_PACKET_BYTES", self.original_packet_bytes)
-        setattr(checker, "P1_SOURCE_IMPORT_CONTRACT_SHA256", self.original_contract_sha)
+        setattr(checker, "P1_SOURCE_IMPORT_V0_SECTION_SHA256", self.original_contract_sha)
         self.temporary_directory.cleanup()
 
     def path(self, rel: str) -> Path:
@@ -6730,8 +7388,16 @@ class SourceRegistryContractTests(unittest.TestCase):
         setattr(checker, "P1_SOURCE_REVISION_PACKET_BYTES", len(packet))
 
     def rebind_contract_digest(self) -> None:
-        digest = hashlib.sha256(self.path(checker.P1_SOURCE_IMPORT_CONTRACT).read_bytes()).hexdigest()
-        setattr(checker, "P1_SOURCE_IMPORT_CONTRACT_SHA256", digest)
+        text = self.path(checker.P1_SOURCE_IMPORT_CONTRACT).read_text(encoding="utf-8")
+        heading = checker.P1_SOURCE_IMPORT_V0_SECTION_HEADING
+        v0_start = text.find(heading)
+        if v0_start != -1:
+            v0_end = text.find("\n## 16.", v0_start)
+            if v0_end == -1:
+                v0_end = len(text)
+            section_bytes = text[v0_start:v0_end].encode("utf-8")
+            digest = hashlib.sha256(section_bytes).hexdigest()
+            setattr(checker, "P1_SOURCE_IMPORT_V0_SECTION_SHA256", digest)
 
     def assert_rejected(self, expected: str) -> None:
         issues = self.check_p1()
@@ -6863,7 +7529,7 @@ class SourceRegistryContractTests(unittest.TestCase):
             "- `Proposed 2025 SourceId`: `ustc-teach-calendar-fall-2025`\n- `Review state`: `Approved`",
         )
         self.rebind_contract_digest()
-        self.assert_rejected("P1 concrete source candidate approval posture drifted")
+        self.assert_rejected("P1 concrete source candidate must not contain 'Approved'")
 
     def test_duplicate_url_alias_fails_after_contract_digest_rebound(self) -> None:
         self.rewrite(
@@ -6877,11 +7543,37 @@ class SourceRegistryContractTests(unittest.TestCase):
     def test_model_inference_source_authority_fails_after_contract_digest_rebound(self) -> None:
         self.rewrite(
             checker.P1_SOURCE_IMPORT_CONTRACT,
-            "`ModelInference` is rejected by `SourceDefinition::proposed`: an explanation class cannot become a source definition or approval candidate.",
-            "`ModelInference` is accepted by `SourceDefinition::proposed` as a source definition and approval candidate.",
+            "`ModelInference` is rejected by `SourceDefinition::proposed`.",
+            "`ModelInference` is accepted by `SourceDefinition::proposed`.",
         )
         self.rebind_contract_digest()
         self.assert_rejected("P1 source-import truth projection missing/duplicated")
+
+    def test_source_definition_constructor_must_remain_in_owner_section(self) -> None:
+        contract = self.path(checker.P1_SOURCE_IMPORT_CONTRACT)
+        text = contract.read_text(encoding="utf-8")
+        signature = (
+            "SourceDefinitionBody::new(\n"
+            "    owner: SourceOwner,\n"
+            "    url: SourceUrl,\n"
+            "    authority: SourceAuthority,\n"
+            "    retrieval_policy: SourceRetrievalPolicy,\n"
+            ") -> Result<Self, SourceValueError>"
+        )
+        self.assertEqual(text.count(signature), 1)
+        changed = text.replace(
+            signature,
+            signature.replace(
+                "    retrieval_policy: SourceRetrievalPolicy,\n",
+                "    retrieval_policy: SourceRetrievalPolicy,\n    initial_status: SourceStatus,\n",
+            ),
+            1,
+        )
+        insertion = "\n\nHistorical stale signature (non-authoritative):\n\n```text\n" + signature + "\n```\n"
+        changed = changed.replace("\n## 15. `source-import/v0`", insertion + "\n## 15. `source-import/v0`", 1)
+        contract.write_text(changed, encoding="utf-8")
+        self.rebind_contract_digest()
+        self.assert_rejected("P1 source-import §4.1 constructor authority drifted")
 
     def test_raw_source_fixture_fails_closed(self) -> None:
         fixture = self.root / "market/fixtures/calendar-2025-fall.body"
@@ -6915,13 +7607,21 @@ class SourceRegistryContractTests(unittest.TestCase):
         self.assert_rejected("P1-1 GO receipt missing/duplicated")
 
     def test_contract_acceptance_reversion_fails_after_contract_digest_rebound(self) -> None:
+        # Mutation changes the §15 section's byte count, so the byte-count gate fires
+        # before the digest gate. Both assertions capture primary evidence.
         self.rewrite(
             checker.P1_SOURCE_IMPORT_CONTRACT,
-            "- `Status`: Accepted for bounded `M60-B1 source-registry`, implemented as a review candidate; later M60 slices remain planned",
-            "- `Status`: P1-0 candidate; exact contract review pending",
+            "- `Status`: accepted for bounded `M60-B1 source-registry`, implemented as a P1-1 review candidate",
+            "- `Status`: P1-0 candidate; explicit review pending",
         )
         self.rebind_contract_digest()
-        self.assert_rejected("P1 source-import truth projection missing/duplicated")
+        issues = self.check_p1()
+        self.assertTrue(
+            any("P1 source-import historical v0 section §15 byte count drift" in issue
+                or "P1 source-import historical v0 section §15 digest drift" in issue
+                for issue in issues),
+            issues,
+        )
 
     def test_remote_shipping_authority_expansion_fails_closed(self) -> None:
         self.rewrite(
@@ -6949,6 +7649,17 @@ class SourceRegistryContractTests(unittest.TestCase):
             if line.strip() == "check_p1_source_revision_contract(issues)"
         ]
         self.assertEqual(calls, ["    check_p1_source_revision_contract(issues)"])
+
+    def test_m60_b2_packet_digest_is_bound_in_main(self) -> None:
+        source = self.path("scripts/check_repo_contracts.py").read_text(encoding="utf-8")
+        main = source.split("\ndef main() -> int:", 1)
+        self.assertEqual(len(main), 2)
+        calls = [
+            line
+            for line in main[1].splitlines()
+            if line.strip() == "check_m60_b2_packet_digest(issues)"
+        ]
+        self.assertEqual(calls, ["    check_m60_b2_packet_digest(issues)"])
 
 
 if __name__ == "__main__":

@@ -50,8 +50,9 @@ The current repository call topology is:
 ```text
 1. Interaction shell
    M80 typed client core with peer Dioxus Web/PWA + Android,
-   ustc-agent user/automation CLI and inbound MCP adapter;
-   later iOS/desktop. ustc-agentctl remains operator-only.
+   ustc-agent user/automation CLI and public-read-first inbound MCP adapter;
+   Windows is admitted later but not a current required gate; iOS/other desktop
+   targets remain later candidates. ustc-agentctl remains operator-only.
         ↓
 2. Application interface
    M10 ingress in ustc-agentd: server functions / HTTP / typed streams / commands

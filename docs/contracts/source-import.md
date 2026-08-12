@@ -2,25 +2,29 @@
 
 ## Metadata
 
-- `Status`: Accepted for bounded `M60-B1 source-registry`, implemented as a review candidate; later M60 slices remain planned
-- `Version`: `source-import/v0`
-- `Last Review`: `2026-08-08`
+- `Status`: Accepted contract as `source-import/v1` under the R11 M60-B2 two-layer transport architecture; supersedes the accepted V10 `DEC-M60-B2-ACCEPTANCE`; `source-import/v0` retained as explicitly historical (see §15)
+- `Version`: `source-import/v1`
+- `Last Review`: `2026-08-12`
+- `Predecessor`: [`source-import/v0`](#15-source-importv0-historical-evidence-retained) — accepted for bounded `M60-B1 source-registry` (P1-1), remains the authority for the existing `crates/platform-core/src/source_registry.rs` B1 implementation
+- `Accepted Per`: `ACCEPT_EXACT_M60_B2_R11_PACKET` — Develata accepted the exact `33046`-byte semantic packet (`sha256:34cd911e6120646a0e2e410de9987efd167e519f43e5bf64a43c96d9c3654f1e`) on 2026-08-13; prior V10 `DEC-M60-B2-ACCEPTANCE` is explicitly superseded historical evidence
 - `Owning Blueprint`: [`M60 Campus Trust and Source Pipeline`](../plan/modules/70-campus-trust-source-pipeline.md)
-- `Depends On`: [`module-boundaries.md`](module-boundaries.md) and the existing crate-root `SourceAuthority` order
-- `Acceptance`: `SRC-001` is `implemented` as a bounded `M60-B1 source-registry` review candidate bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted
-- `Primary Code`: `crates/platform-core/src/source_registry.rs` for bounded B1 (P1-1 review candidate)
+- `Depends On`: [`module-boundaries.md`](module-boundaries.md), [`source-retrieval.md`](source-retrieval.md), and the existing crate-root `SourceAuthority` order
+- `Acceptance`: `SRC-001` is `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted; `SRC-014` remains catalog-only/non-admitted
+- `Primary Code`: `crates/platform-core/src/source_registry.rs` for bounded B1 (P1-1 review candidate, still under `source-import/v0`); no v1 Rust implementation exists
 
 ## 1. Scope and authority
 
-`source-import/v0` owns the typed boundary between a reviewed source catalog and later retrieval, parsing, revision and baseline adapters. It defines:
+`source-import/v1` replaces the bounded B1 review-only state (`Proposed`/`Approved`) with one complete operational `SourceStatus` and adds the retrieval-policy inputs required by `source-retrieval/v0`. It owns the typed boundary between a reviewed source catalog and later retrieval, parsing, revision and baseline adapters. It defines:
 
 - stable source identity, owner, authority class and exact canonical URL;
-- proposed versus approved review state;
-- retrieval-budget metadata whose limits later adapters must enforce;
+- one operational `SourceStatus`: `Proposed | Approved | Suspended | Revoked`;
+- one non-zero monotone `SourceAuthorityRevision` checked by compare-and-swap on every retrievability-affecting transition;
+- retrieval-policy metadata with six fields whose limits later adapters must enforce;
+- `RetrievalSubject` — a sealed snapshot of an approved source available only from current `Approved` state;
 - immutable revision identity and provenance requirements for later M60 slices;
 - fail-closed baseline advancement and publication boundaries.
 
-It does **not** fetch a URL, resolve DNS, follow a redirect, read a clock, parse HTML/PDF, persist raw bytes, normalize records, compute a semantic diff, advance a baseline or publish a product event. Those effects belong to M60-B2 through M60-B8 and their ports/adapters.
+It does **not** fetch a URL, resolve DNS, follow a redirect, read a clock, parse HTML/PDF, persist raw bytes, normalize records, compute a semantic diff, advance a baseline or publish a product event. Those effects belong to M60-B3 through M60-B8 and their ports/adapters. `source-retrieval/v0` owns DNS, redirect, response framing and transport-policy decisions.
 
 A syntactically valid source definition or review receipt proves shape only. It does not prove that the URL is safe now, that permission exists, that an operator actually reviewed evidence or that retrieval may occur. An application boundary may admit an approved definition only after it authenticates and authorizes the reviewer and binds real evidence. Model-proposed URLs always enter `Proposed`; no model/tool call can construct immediate fetch authority.
 
@@ -29,10 +33,10 @@ A syntactically valid source definition or review receipt proves shape only. It 
 The complete M60 order is:
 
 ```text
-Proposed SourceDefinition
+Proposed SourceDefinition (authority_revision=1)
 → operator review evidence
-→ Approved SourceDefinition
-→ safe retrieval under exact policy
+→ Approved SourceDefinition (revision+1)
+→ safe retrieval under exact policy (source-retrieval/v0)
 → immutable RawSnapshot
 → deterministic parser/normalizer
 → immutable SourceRevision
@@ -42,19 +46,39 @@ Proposed SourceDefinition
 → typed publication candidate
 ```
 
+Source status transitions, all with `expected_authority_revision` CAS:
+
+```text
+propose(full definition)                          -> Proposed(authority_revision=1)
+Proposed  + approve(full receipt)                 -> Approved(revision+1)
+Proposed  + revise(full replacement, evidence)    -> Proposed(revision+1)
+Proposed  + revoke(evidence)                      -> Revoked(revision+1, prior_approval=None)
+Approved  + revise(full replacement, evidence)    -> Proposed(revision+1)
+Approved  + suspend(evidence)                     -> Suspended(revision+1)
+Approved  + revoke(evidence)                      -> Revoked(revision+1, prior_approval=Some)
+Suspended + revise(full replacement, evidence)    -> Proposed(revision+1)
+Suspended + reinstate(full new receipt)           -> Approved(revision+1)
+Suspended + revoke(evidence)                      -> Revoked(revision+1, prior_approval=Some)
+Revoked                                           -> terminal
+```
+
 Normative consequences:
 
 1. an unapproved definition is not retrievable;
-2. redirect targets are new URL decisions, never implicit approval;
-3. retrieval failure creates no snapshot or revision;
-4. parse/normalize failure creates no accepted revision;
-5. diff/publication failure does not advance the accepted baseline;
-6. every baseline update is compare-and-swap over the expected prior accepted revision;
-7. the source domain never asks a model to repair or reinterpret source bytes.
+2. `Suspended` blocks new retrieval while preserving historical evidence; `Revoked` is terminal;
+3. `retrieval_subject` is available only from current `Approved` state;
+4. `revise` preserves `SourceId`, replaces owner/URL/authority/policy as one atomic body, and always returns to `Proposed`;
+5. reinstate requires complete new review receipt, not a boolean resume;
+6. redirect targets are new URL decisions, never implicit approval;
+7. retrieval failure creates no snapshot or revision;
+8. parse/normalize failure creates no accepted revision;
+9. diff/publication failure does not advance the accepted baseline;
+10. every baseline update is compare-and-swap over the expected prior accepted revision;
+11. the source domain never asks a model to repair or reinterpret source bytes.
 
-## 3. M60-B1 stable identity values
+## 3. Stable identity values
 
-P1-1 introduces five nominal string values in `crates/platform-core/src/source_registry.rs`:
+Five nominal string values exist in `crates/platform-core/src/source_registry.rs` as the current B1 v0 implementation:
 
 ```text
 SourceId
@@ -64,11 +88,19 @@ SourceReviewerId
 SourceReviewEvidenceId
 ```
 
-Each is a named-field struct with a private backing string. It has one checked `parse`, exact `as_str`, exact `Display`, `TryFrom<String>`, `TryFrom<&str>`, `FromStr`, validating Serde decode and exact Serde string encode. It derives `Debug`, `Clone`, `PartialEq`, `Eq`, `PartialOrd`, `Ord` and `Hash`. It has no `Default`, mutable backing access, unchecked constructor, cross-kind conversion, normalization or semantic segment accessor.
+Each is a named-field struct with a private backing string. It has one checked constructor, exact `as_str`, exact `Display`, `TryFrom<String>`, `TryFrom<&str>`, `FromStr`, validating Serde decode and exact Serde string encode. It derives `Debug`, `Clone`, `PartialEq`, `Eq`, `PartialOrd`, `Ord` and `Hash`. It has no `Default`, mutable backing access, unchecked constructor, cross-kind conversion, normalization or semantic segment accessor.
 
-### 3.1 `SourceId`
+`SourceStatusEvidenceId` is an accepted future v1 nominal identifier using the same grammar/bound as `SourceId`. No v1 Rust implementation exists. When implemented it will have checked `new(String) -> Result<SourceStatusEvidenceId, SourceValueError>`, `as_str(&self) -> &str`, `into_inner(self) -> String`; `Clone + Debug + Eq + Ord + Hash`; no `Default`, Serde, `Display`, `TryFrom`, `FromStr` or unchecked constructor. It represents an opaque reference to transition evidence retained by an owning operator/governance surface. It is never interpreted as a credential, does not contain the evidence and is not self-proving authorization.
 
-`SourceId` uses this exact ASCII grammar:
+`SourceMediaType` is the media-type value with checked `parse(&str) -> Result<SourceMediaType, SourceValueError>`, no `Display`, `TryFrom`, `FromStr` or Serde. It is a private-field struct implementing `Clone + Debug + Eq`. Grammar: lowercase ASCII `type/subtype`, each side `1..=64`, RFC token bytes only, no whitespace, parameter, wildcard or structured fallback; total `3..=129` bytes.
+
+### 3.1 `SourceAuthorityRevision`
+
+`SourceAuthorityRevision(u64)` is non-zero (initial value `1`). It is the single current-authority generation for a stable `SourceId`. Every mutation that can affect retrievability — `propose`, `approve`, `suspend`, `reinstate`, `revoke`, `revise` — increments it with checked arithmetic (u64 overflow is `RevisionExhausted`). There is no peer definition/status revision and no reset while the `SourceId` exists. `Copy + Clone + Debug + Eq + Ord + Hash`; private field, `get()` accessor; no `Default`, Serde or unchecked constructor.
+
+### 3.2 `SourceId`
+
+Uses this exact ASCII grammar:
 
 ```regex
 ^[a-z0-9](?:[-a-z0-9._:]{0,126}[a-z0-9])?$
@@ -79,32 +111,17 @@ Each is a named-field struct with a private backing string. It has one checked `
 - case folding, trimming and delimiter rewriting are forbidden;
 - prefixes and delimiters carry no authority meaning.
 
-### 3.2 `SourceOwner`
+### 3.3 `SourceOwner`, `SourceReviewerId`, `SourceReviewEvidenceId`
 
-`SourceOwner` is an exact human/governance owner label. It accepts `1..=128` UTF-8 bytes, rejects leading/trailing whitespace and every control character, and preserves accepted text exactly. It is never interpreted as an account, role or permission.
-
-### 3.3 `SourceReviewerId` and `SourceReviewEvidenceId`
-
-`SourceReviewerId` and `SourceReviewEvidenceId` each use the same byte grammar and bound as `SourceId`, but all three are nominally distinct. A reviewer ID names the authenticated reviewer identity supplied by an application boundary; an evidence ID is an opaque reference to evidence retained by an owning operator/governance surface. Neither string proves reviewer authorization, contains the evidence or carries a credential.
+Same semantics as `source-import/v0` §§3.2–3.3.
 
 ### 3.4 `SourceUrl`
 
-`SourceUrl` is intentionally narrower than a general URL library. P1-1 admits exactly one canonical public-HTTPS shape:
+Same exact constrained public-HTTPS grammar as `source-import/v0` §3.4.
 
-- encoded length is `1..=2048` ASCII bytes;
-- scheme is exactly lowercase `https://`;
-- userinfo, password, explicit port, query and fragment are forbidden;
-- the host is lowercase DNS text with at least two labels;
-- each label is `1..=63` ASCII bytes, begins and ends alphanumeric and has only interior alphanumeric or `-`;
-- IP literals, `localhost`, empty labels and a trailing dot are forbidden;
-- the path begins with `/`, contains no empty, `.` or `..` segment and is otherwise limited to ASCII alphanumeric plus `-._~` and uppercase percent triplets;
-- no decoding, Unicode/IDNA normalization, slash folding, dot-segment removal or percent-case rewriting occurs.
+## 4. Source definition v1
 
-This constrained value is an exact reviewed endpoint identity, not permission to fetch arbitrary URLs. M60-B2 still owns DNS/IP, redirect, content-type, timeout, size and transport enforcement.
-
-## 4. M60-B1 source definition
-
-The exact public B1 values are:
+The exact public v1 values are:
 
 ```text
 SourceId
@@ -112,39 +129,79 @@ SourceOwner
 SourceUrl
 SourceReviewerId
 SourceReviewEvidenceId
+SourceStatusEvidenceId
+SourceAuthorityRevision
+SourceMediaType
+SourceRetrievalProtocolVersion
 SourceRetrievalPolicy
 SourceReviewReceipt
-SourceReviewState
+SourceStatus
+SourceStatusKind
+SourceTransitionCommand
+SourceDefinitionBody
 SourceDefinition
-SourceRegistry
+RetrievalSubject
 SourceValueErrorKind
 SourceValueError
 SourceRegistryError
+SourceRegistry
 ```
 
 `SourceDefinition` contains exactly:
 
 ```text
-source_id:        SourceId
-owner:            SourceOwner
-url:              SourceUrl
-authority:        SourceAuthority
-retrieval_policy: SourceRetrievalPolicy
-review_state:     SourceReviewState
+source_id:          SourceId
+owner:              SourceOwner
+url:                SourceUrl
+authority:          SourceAuthority
+retrieval_policy:   SourceRetrievalPolicy
+authority_revision: SourceAuthorityRevision
+status:             SourceStatus
 ```
 
-`SourceOwner` is a human/governance owner label, not an account identity; its exact validation is in §3.2.
+`SourceStatus` is one operational state:
 
-`SourceRetrievalPolicy` contains exactly:
+```text
+Proposed {
+    revision_evidence: Option<SourceStatusEvidenceId>
+}
+| Approved {
+    receipt: SourceReviewReceipt
+}
+| Suspended {
+    approval: SourceReviewReceipt,
+    evidence: SourceStatusEvidenceId
+}
+| Revoked {
+    prior_approval: Option<SourceReviewReceipt>,
+    evidence: SourceStatusEvidenceId
+}
+```
+
+`SourceStatusKind` is the evidence-free closed enum `Proposed | Approved | Suspended | Revoked`. `SourceTransitionCommand` is exactly `Revise | Approve | Suspend | Reinstate | Revoke`.
+
+`SourceRetrievalPolicy` has exactly six fields (expanded from v0's two):
 
 ```text
 minimum_interval_seconds: u32
 maximum_response_bytes:   u32
+maximum_elapsed_seconds:  u32
+expected_media_type:      SourceMediaType
+protocol_version:         SourceRetrievalProtocolVersion
+public_ip_policy_version: PublicIpPolicyVersion
 ```
 
-Both are non-zero. `minimum_interval_seconds <= 604800`; `maximum_response_bytes <= 1048576`. These are operator ceilings consumed by M60-B2, not evidence that an adapter enforced them.
+Bounds and grammar:
+- `minimum_interval_seconds`: `1..=604800`;
+- `maximum_response_bytes`: `1..=1048576`;
+- `maximum_elapsed_seconds`: `1..=60`;
+- `SourceMediaType`: lowercase ASCII `type/subtype`, each side `1..=64`, RFC token bytes only, no whitespace, parameter, wildcard or structured fallback; total `3..=129` bytes;
+- `SourceRetrievalProtocolVersion`: exactly one closed enum variant (`V0StrictHttpsIpv4Http11_20260809`);
+- `PublicIpPolicyVersion`: exactly one closed enum variant (`V0Ipv4Only20260809`).
 
-`SourceReviewReceipt` contains one reviewer identity and exactly four evidence references:
+These fields are operator ceilings consumed by `source-retrieval/v0`, not evidence that an adapter enforced them. `revise` is the only way to change any of these for a stable `SourceId`; it atomically increments `SourceAuthorityRevision`, replaces the full body and returns status to `Proposed`.
+
+`SourceReviewReceipt` retains the v0 shape:
 
 ```text
 reviewer:        SourceReviewerId
@@ -154,27 +211,21 @@ rate:            SourceReviewEvidenceId
 parser_fixture:  SourceReviewEvidenceId
 ```
 
-The receipt has no boolean shortcuts and no optional field. A structurally complete receipt can still be false if a caller forged the references; reviewer authentication/authorization is an application-boundary obligation.
+There is no boolean shortcut and no optional field.
 
-`SourceReviewState` is the bounded B1 review-admission state only. It is not the blueprint's complete operational `SourceStatus`: `Suspended` and `Revoked`, with their evidence-bearing transitions, must be accepted before any live M60-B2 retrieval adapter may consume an approved definition. B1 exposes no retrieval, so this deferral cannot leave a fetch path active.
-
-`SourceReviewState` is exactly:
+### 4.1 Constructors and traits
 
 ```text
-Proposed
-Approved { receipt: SourceReviewReceipt }
-```
+SourceStatusEvidenceId::new(String) -> Result<SourceStatusEvidenceId, SourceValueError>
+SourceMediaType::parse(&str) -> Result<SourceMediaType, SourceValueError>
 
-Every new definition starts as `Proposed`. Approval is an explicit registry transition that consumes a complete receipt. There is no constructor for an already-approved definition and no implicit approval based on host suffix, owner text, authority rank or fixture presence.
-
-### 4.1 Exact B1 constructors and traits
-
-The only public constructors outside the three string values' `parse` families are:
-
-```text
 SourceRetrievalPolicy::new(
     minimum_interval_seconds: u32,
     maximum_response_bytes: u32,
+    maximum_elapsed_seconds: u32,
+    expected_media_type: SourceMediaType,
+    protocol_version: SourceRetrievalProtocolVersion,
+    public_ip_policy_version: PublicIpPolicyVersion,
 ) -> Result<Self, SourceValueError>
 
 SourceReviewReceipt::new(
@@ -184,6 +235,13 @@ SourceReviewReceipt::new(
     rate: SourceReviewEvidenceId,
     parser_fixture: SourceReviewEvidenceId,
 ) -> Self
+
+SourceDefinitionBody::new(
+    owner: SourceOwner,
+    url: SourceUrl,
+    authority: SourceAuthority,
+    retrieval_policy: SourceRetrievalPolicy,
+) -> Result<Self, SourceValueError>
 
 SourceDefinition::proposed(
     source_id: SourceId,
@@ -196,95 +254,102 @@ SourceDefinition::proposed(
 SourceRegistry::new() -> Self
 ```
 
-`SourceDefinition::proposed` is the only definition constructor. It is fallible only because `SourceAuthority::ModelInference` is an explanation class, not a source, and must be rejected as `NonSourceAuthority`; every other field has already passed its owning validator. `SourceReviewReceipt::new` is total because reviewer/evidence references have already passed their nominal validators. No constructor takes `SourceReviewState`; no `approved`, `from_parts`, builder, `TryFrom` or Serde path may bypass the registry approval transition.
+`SourceDefinition::proposed` is the only definition constructor. It is fallible only because `SourceAuthority::ModelInference` is rejected as `NonSourceAuthority` and `SourceDefinitionBody::new` validates the retrieval policy. `SourceReviewReceipt::new` is total. No constructor takes `SourceStatus`; no `approved`, `from_parts`, builder, `TryFrom` or Serde path may bypass the registry approval transition.
 
-The complete aggregate/error trait surface is:
+Read-only accessors:
+- `SourceRetrievalPolicy::{minimum_interval_seconds, maximum_response_bytes, maximum_elapsed_seconds} -> u32`
+- `SourceRetrievalPolicy::expected_media_type -> &SourceMediaType`
+- `SourceRetrievalPolicy::{protocol_version, public_ip_policy_version} -> copied enum`
+- `SourceDefinitionBody::{owner, url, retrieval_policy} -> reference`, `authority -> SourceAuthority`
+- `SourceDefinition::{source_id, owner, url, retrieval_policy} -> reference`, `{authority, authority_revision} -> copied value`, `{status, prior_approval} -> reference`
+- `SourceStatus::kind -> SourceStatusKind`
+- `RetrievalSubject::{source_id, source_url, source_retrieval_policy} -> reference`, `source_authority_revision -> SourceAuthorityRevision`
 
-| Type | Traits |
-|---|---|
-| `SourceRetrievalPolicy` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq` |
-| `SourceReviewReceipt` | `Debug`, `Clone`, `PartialEq`, `Eq` |
-| `SourceReviewState` | `Debug`, `Clone`, `PartialEq`, `Eq` |
-| `SourceDefinition` | `Debug`, `Clone`, `PartialEq`, `Eq` |
-| `SourceRegistry` | `Debug`, `Clone`, `PartialEq`, `Eq` |
-| `SourceValueErrorKind` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq` |
-| `SourceValueError` | `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Display`, `Error` |
-| `SourceRegistryError` | `Debug`, `Clone`, `PartialEq`, `Eq`, `Display`, `Error` |
+Traits: `SourceMediaType`, `SourceRetrievalPolicy`, `SourceDefinitionBody`, `SourceDefinition`, `SourceStatus`, review/status evidence and `RetrievalSubject` implement `Clone + Debug + Eq`. `SourceStatus` is a closed public enum; no caller-built status can be injected. `SourceRegistry` drops `Clone` from v0; it is one mutable aggregate/index owner. No aggregate, state, receipt, definition, registry or error implements Serde.
 
-No aggregate, state, receipt, definition, registry or registry error implements Serde in B1. In particular, no field-wise decode can instantiate `Approved` outside `SourceRegistry::approve`. The five nominal strings alone have the validating string Serde paths stated in §3.
+## 5. Registry behavior v1
 
-Every public B1 struct except `SourceRegistry` exposes exactly one read-only accessor per field, named exactly as the field. `SourceDefinition::owner()` returns `&SourceOwner`; nominal/owned values return shared references; `Copy` scalars/enums return by value. `SourceRegistry` exposes only §5's operations.
-
-## 5. M60-B1 registry behavior
-
-`SourceRegistry` is a pure in-memory `BTreeMap<SourceId, SourceDefinition>` with no `Default` and one `new()` constructor. It owns these operations only:
+`SourceRegistry` operations:
 
 ```text
-propose(definition)                   -> Result<(), SourceRegistryError>
-approve(source_id, review_receipt)    -> Result<(), SourceRegistryError>
-get(source_id)                        -> Option<&SourceDefinition>
-approved(source_id)                   -> Result<&SourceDefinition, SourceRegistryError>
-len()                                 -> usize
-is_empty()                            -> bool
+new() -> SourceRegistry
+len(&self) -> usize
+is_empty(&self) -> bool
+get(&self, id: &SourceId) -> Option<&SourceDefinition>
+propose(&mut self, definition: SourceDefinition) -> Result<(), SourceRegistryError>
+revise(&mut self, id: &SourceId, expected: SourceAuthorityRevision, replacement: SourceDefinitionBody, evidence: SourceStatusEvidenceId) -> Result<&SourceDefinition, SourceRegistryError>
+approve(&mut self, id: &SourceId, expected: SourceAuthorityRevision, receipt: SourceReviewReceipt) -> Result<&SourceDefinition, SourceRegistryError>
+suspend(&mut self, id: &SourceId, expected: SourceAuthorityRevision, evidence: SourceStatusEvidenceId) -> Result<&SourceDefinition, SourceRegistryError>
+reinstate(&mut self, id: &SourceId, expected: SourceAuthorityRevision, receipt: SourceReviewReceipt) -> Result<&SourceDefinition, SourceRegistryError>
+revoke(&mut self, id: &SourceId, expected: SourceAuthorityRevision, evidence: SourceStatusEvidenceId) -> Result<&SourceDefinition, SourceRegistryError>
+retrieval_subject(&self, id: &SourceId) -> Result<RetrievalSubject, SourceRegistryError>
+approved(&self, id: &SourceId) -> Result<&SourceDefinition, SourceRegistryError>
 ```
 
 Required behavior:
-
 - duplicate `SourceId` or duplicate canonical `SourceUrl` is rejected without replacing the first definition;
-- approval of a missing ID is rejected;
-- approval of an already approved ID is rejected and preserves the first receipt;
-- `approved` rejects both missing and proposed entries;
-- failed operations leave the whole registry byte-for-byte/structurally unchanged;
-- iteration, deletion, URL lookup, authority fallback and mutable entry access are not public B1 APIs;
+- every mutation requires an exact `expected_authority_revision` CAS; stale revision rejects as `StaleAuthorityRevision`;
+- `propose` precedence: `DuplicateSource` then `DuplicateUrl`;
+- revision overflow on any mutation is `RevisionExhausted`;
+- illegal transition is `IllegalTransition { status, command }`;
+- `retrieval_subject` returns a sealed owned `RetrievalSubject` only for current `Approved` state; rejects missing, proposed, suspended and revoked as `SourceNotRetrievable`;
+- `approved` rejects both missing and proposed/suspended/revoked entries;
+- failed operations leave the registry structurally unchanged;
+- iteration, deletion, URL lookup, authority fallback and mutable entry access are not public APIs;
 - no operation performs I/O, reads time, computes a digest or infers review from source text.
 
-`SourceRegistryError` is exactly:
+`SourceRegistryError`:
 
 ```text
 DuplicateSource { source_id: SourceId }
 DuplicateUrl { url: SourceUrl }
 SourceNotFound { source_id: SourceId }
-SourceNotApproved { source_id: SourceId }
+SourceNotRetrievable { source_id: SourceId, status: SourceStatusKind }
 SourceAlreadyApproved { source_id: SourceId }
+StaleAuthorityRevision { expected: SourceAuthorityRevision, actual: SourceAuthorityRevision }
+IllegalTransition { status: SourceStatusKind, command: SourceTransitionCommand }
+RevisionExhausted { source_id: SourceId }
 ```
 
-The ID may be rendered because source IDs are public catalog references, not secrets. Rejected owner/URL/evidence input is never retained or echoed by `SourceValueError`.
+## 6. RetrivalSubject and authority gating
 
-## 6. B1 construction and public-surface closure
-
-Every public B1 struct is a named-field struct with private fields. Every constructible struct has one checked or total constructor named by this contract; `SourceRegistry` alone has `new()`. Public enums have exactly the variants listed here. There is no public alias, `pub use`, public constant, extra public module, `Default`, `Deref`, mutable accessor, public field, unchecked constructor or framework/database/network trait.
-
-All fields have one read-only accessor named exactly as the field. Copy scalars/enums return by value; owned values return shared references. `SourceRegistry` exposes only the six operations in §5.
-
-The B1 implementation may import the existing crate-root `SourceAuthority` without modifying, re-exporting or implementing a trait for it. The source module neither duplicates nor changes the current authority order. `ModelInference` is rejected by `SourceDefinition::proposed`: an explanation class cannot become a source definition or approval candidate.
-
-## 7. B1 deterministic value errors
-
-`SourceValueErrorKind` is exactly:
+`RetrievalSubject` is a sealed owned snapshot available only from current `Approved` state. It binds:
 
 ```text
-Empty
-TooLong { max_bytes: usize }
-InvalidStart
-InvalidCharacter { byte_index: usize }
-InvalidEnd
-InvalidScheme
-InvalidHost
-InvalidPath
-ZeroMinimumInterval
-MinimumIntervalTooLarge { max_seconds: u32 }
-ZeroMaximumResponseBytes
-MaximumResponseBytesTooLarge { max_bytes: u32 }
-OwnerBoundaryWhitespace
-OwnerControlCharacter { byte_index: usize }
-NonSourceAuthority
+source_id
+source_url
+source_authority_revision
+source_retrieval_policy // includes public_ip_policy_version and protocol_version
 ```
+
+Fields are private, accessors are read-only, no Serde, no public unchecked constructor, no authority-bearing conversion from `SourceDefinition`. A subject is a policy input to `source-retrieval/v0`, not final effect authority. M60-B3 must later re-check the same source ID + authority revision atomically with idempotency before any network effect. Every carrier (`RetrievalPlanCandidate`, `AdmittedRetrievalPlan`, phase carriers, attempt receipt, `BoundedFetch`) carries the same authority revision; mismatch rejects without network I/O.
+
+## 7. Construction and public-surface closure
+
+Every public v1 struct is a named-field struct with private fields. Every constructible struct has one checked or total constructor named by this contract; `SourceRegistry` alone has `new()`. Public enums have exactly the variants listed here. There is no public alias, `pub use`, public constant, extra public module, `Default`, `Deref`, mutable accessor, public field, unchecked constructor or framework/database/network trait.
+
+All fields have one read-only accessor named exactly as the field. Copy scalars/enums return by value; owned values return shared references. `SourceRegistry` exposes only the operations in §5.
+
+The v1 implementation may import the existing crate-root `SourceAuthority` without modifying, re-exporting or implementing a trait for it. The source module neither duplicates nor changes the current authority order. `ModelInference` is rejected by `SourceDefinition::proposed`.
+
+## 8. Deterministic value errors v1
+
+`SourceValueErrorKind` retains every `source-import/v0` variant and adds:
+
+```text
+ZeroMaximumElapsedSeconds
+MaximumElapsedSecondsTooLarge { max_seconds: u32 }
+InvalidMediaType
+InvalidOverrideWindow
+```
+
+The existing `Empty`, `TooLong`, `InvalidStart`, `InvalidCharacter`, `InvalidEnd`, `InvalidScheme`, `InvalidHost`, `InvalidPath`, `ZeroMinimumInterval`, `MinimumIntervalTooLarge`, `ZeroMaximumResponseBytes`, `MaximumResponseBytesTooLarge`, `OwnerBoundaryWhitespace`, `OwnerControlCharacter` and `NonSourceAuthority` variants remain authoritative.
 
 `SourceValueError` carries only a static Rust value-kind name and one `SourceValueErrorKind`. It implements `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Display` and `Error`; its accessors are `value_kind()` and `kind()`. It does not retain or display rejected text, host, path, owner fragment or offending byte.
 
-Each parser has deterministic precedence: empty; length; then the value-specific left-to-right grammar. Policy validation checks minimum interval before maximum response size. `SourceDefinition::proposed` receives already validated values and then rejects `SourceAuthority::ModelInference` as `NonSourceAuthority`; it has no other failure.
+Constructor precedence is nominal input grammar first; policy fields in declaration order; then `NonSourceAuthority`.
 
-## 8. Later source-revision contract
+## 9. Later source-revision contract
 
 M60-B3 through B5 later introduce immutable evidence with these distinct identities:
 
@@ -315,27 +380,26 @@ Raw and normalized digests are separate nominal lowercase `sha256:` values. A re
 
 A revision is accepted only after raw evidence, deterministic parse/normalize output and provenance are durably committed. Re-processing identical raw bytes with a new parser creates a new normalized identity/revision; it does not rewrite history.
 
-## 9. Retrieval and SSRF boundary
+## 10. Retrieval and SSRF boundary
 
-Only M60-B2 may turn an approved definition into a retrieval request. Its later contract must independently enforce:
+M60-B2 through `source-retrieval/v0` independently enforces:
 
-- exact approved scheme/host/port/path;
-- no URL supplied by model or untrusted content;
+- exact approved scheme/host/port/path (no URL supplied by model or untrusted content);
 - DNS resolution and public-address policy at connection time;
 - every redirect as a fresh allowlist decision;
 - response content type, byte limit and timeout;
 - minimum interval and explicit operator override evidence;
 - no credential/cookie forwarding outside an exact approved adapter contract.
 
-B1 policy values are inputs to these checks, not substitutes for them. `SRC-010` remains `planned` after B1.
+B1/v1 policy values are inputs to these checks, not substitutes for them. `SRC-010` remains `planned` after B1 and through B2 contract acceptance; pure policy/fake evidence is supporting evidence, not full SSRF acceptance.
 
-## 10. Baseline and publication boundary
+## 11. Baseline and publication boundary
 
 An accepted baseline is a `(source_id, source_revision_id)` pair plus an expected baseline revision. Advancement is atomic and occurs only after the candidate revision, normalized facts, semantic diff and evidence are all durable. Any failure preserves the old baseline. Replay rebuilds the same accepted pair without network access.
 
 Publication consumes a typed candidate with old/new accepted revision references. It never receives arbitrary source text or a bare model claim. M70 ChangeRadar owns semantic-change interpretation and feed policy; M60 owns evidence identity and baseline truth.
 
-## 11. Concrete source candidate: proposed only
+## 12. Concrete source candidate: proposed only
 
 P1-0 records one reviewed **candidate family**, not an approved registry row:
 
@@ -345,61 +409,55 @@ P1-0 records one reviewed **candidate family**, not an approved registry row:
 - `Owner`: 中国科学技术大学教务处 / `www.teach.ustc.edu.cn`
 - `2025 URL`: `https://www.teach.ustc.edu.cn/calendar/19081.html`
 - `2026 URL`: `https://www.teach.ustc.edu.cn/calendar/20135.html`
-- `Discovery index`: `https://www.teach.ustc.edu.cn/category/calendar`
-- `Robots`: `https://www.teach.ustc.edu.cn/robots.txt`
-- `Candidate minimum interval`: `21600` seconds
-- `Candidate maximum response`: `131072` bytes
-- `Candidate content kind`: public HTML
-- `Retention posture`: internal evidence; product output emits normalized facts and source links, not wholesale republished HTML
 
-Observed 2026-08-08 reconnaissance:
+This candidate family stays `Proposed`. No concrete USTC source is approved. The family label is research/product metadata, not a registry ID; each exact URL would require its own stable SourceId. Approval requires a separate operator review receipt per definition and is not inferred from this document.
 
-- both calendar pages returned HTTP `200` and `Content-Type: text/html; charset=UTF-8`;
-- no authentication or cookie was required;
-- `robots.txt` did not disallow `/calendar/` or `/category/calendar`;
-- no `ETag` or `Last-Modified` validator was observed;
-- public accessibility and robots posture do **not** establish a copyright/republication license;
-- the page pair is suitable for parser-fixture review, but raw HTML remains local evidence and is not committed to Git.
+## 13. P1-1 implementation slice (historical)
 
-This candidate family stays `Proposed` throughout P1-0 and P1-1. The family label is research/product metadata, not a B1 registry ID; each exact URL would require its own stable SourceId, as listed above. Approval requires a separate operator review receipt per definition and is not inferred from this document.
+P1-1 implemented bounded `M60-B1 source-registry` as a review candidate under `source-import/v0`:
 
-## 12. P1-1 implementation slice
+- added `crates/platform-core/src/source_registry.rs`;
+- added `pub mod source_registry;` in `crates/platform-core/src/lib.rs`;
+- added `crates/platform-core/tests/source_registry.rs`;
+- promoted `SRC-001` to `implemented` bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`;
+- kept `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row unchanged.
 
-After independent GO on the exact P1-0 packet, P1-1 implements only M60-B1 as a review candidate:
+This implementation under `source-import/v0` remains the authoritative B1 evidence. It has not been updated to v1 and there is no v1 Rust code. Migration from v0 to v1 is compile-time only because no production durable source rows exist.
 
-- add `crates/platform-core/src/source_registry.rs`;
-- add one `pub mod source_registry;` declaration in `crates/platform-core/src/lib.rs`;
-- add `crates/platform-core/tests/source_registry.rs`;
-- update this contract, M60 blueprint, execution roadmap, P1 proposal, acceptance projections and exact checker/test carriers;
-- promote only `SRC-001` if its exact registered binding passes;
-- keep `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row unchanged;
-- add no dependency, adapter, network call, persistence, clock, parser or concrete approved source.
+## 14. Acceptance projection
 
-The P1-1 review candidate is present in the working tree; its review, local commit and push remain pending. The required positive/negative evidence covers every grammar edge, no-echo errors, duplicate rejection, missing/proposed/already-approved states, first-receipt preservation, failed-transition atomicity, exact API closure and zero I/O/dependency widening.
+The bounded B1 evidence — stable identity, owner, exact canonical URL, retrieval-policy value, proposed/approved review state and pure registry transitions — is implemented under `source-import/v0` and proven by `cargo test --locked -p ustc-campus-agent-core --test source_registry`.
 
-## 13. Acceptance projection
-
-P1-0 changes no acceptance status.
-
-P1-1 promotes only `SRC-001` from `planned` to `implemented` as a bounded `M60-B1 source-registry` review candidate. The bounded B1 evidence — stable identity, owner, exact canonical URL, retrieval-policy value, proposed/approved review state and pure registry transitions — is implemented in `crates/platform-core/src/source_registry.rs` and proven by `cargo test --locked -p ustc-campus-agent-core --test source_registry`. `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row remain unchanged. `M60` overall and `M60-B2` through `M60-B8` remain planned, so the implemented `SRC-001` does not establish a reviewed source/revision/baseline or any live retrieval path.
-
-The full P1-1 gate chain that the implemented `SRC-001` review candidate must still clear on one exact revision before review close is:
+The accepted `source-import/v1` contract projection (R11, `ACCEPT_EXACT_M60_B2_R11_PACKET`) changes no acceptance-row or implementation status:
 
 ```text
-python3 scripts/check_repo_contracts.py --ci
-python3 -m unittest scripts.tests.test_check_repo_contracts.SourceRegistryContractTests
-cargo test --locked -p ustc-campus-agent-core --test source_registry
-cargo fmt --all -- --check
-cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo test --locked --workspace --all-targets
-cargo test --locked --workspace --doc
-git diff --check
+SRC-001 implemented (unchanged bounded B1 evidence; still under v0 implementation)
+SRC-010 planned
+SRC-011 planned
+SRC-012 planned
+SRC-014 catalog-only / non-admitted
+M60 planned (B2 contract accepted; no implementation)
 ```
 
-`SRC-001` then means bounded B1 stable identity/owner/policy/review-state evidence only. It does not prove live permission, safe retrieval, raw snapshot, parser, source revision, semantic diff, baseline, publication or product readiness.
+`SRC-010` does not become `pass` merely from contract acceptance. `SRC-014` (`suspended/revoked source blocks new fetch`) remains catalog-only/non-admitted per the existing `platform-baseline.md` long-horizon catalog; the lifecycle precondition and the capability (planned, not running) are both honest.
 
-## 14. Change rule
+## 15. `source-import/v0` — historical evidence retained
 
-Changing the public B1 value set, grammar/bounds, review-state semantics, registry transition rules, error taxonomy or URL posture changes `source-import/v0` and requires owning-contract, checker, mutation-test, acceptance and downstream review on the same revision.
+`source-import/v0` is explicitly historical evidence retained for the P1-1 B1 implementation record. It was:
+
+- `Status`: accepted for bounded `M60-B1 source-registry`, implemented as a P1-1 review candidate;
+- `Last Review`: `2026-08-08`;
+- defined `SourceReviewState` as `Proposed | Approved { receipt: SourceReviewReceipt }`;
+- defined `SourceRetrievalPolicy` with two fields (`minimum_interval_seconds`, `maximum_response_bytes`);
+- defined `SourceRegistry` with six operations (`propose`, `approve`, `get`, `approved`, `len`, `is_empty`);
+- defined `SourceRegistryError` with five variants (`DuplicateSource`, `DuplicateUrl`, `SourceNotFound`, `SourceNotApproved`, `SourceAlreadyApproved`).
+
+`source-import/v1` replaces `SourceReviewState` with operational `SourceStatus` (adding `Suspended` and `Revoked`), adds `SourceAuthorityRevision` to every definition and mutation, expands `SourceRetrievalPolicy` from two to six fields, adds `revise`/`suspend`/`reinstate`/`revoke` registry operations, adds `retrieval_subject` and `RetrievalSubject`, adds `SourceStatusEvidenceId`, and replaces `SourceNotApproved` with `SourceNotRetrievable` plus `StaleAuthorityRevision`, `IllegalTransition` and `RevisionExhausted`.
+
+Because v1 removes/renames `SourceReviewState` and changes `SourceDefinition`/`SourceRetrievalPolicy` shape, the change is versioned rather than described as a compatible amendment. No compatibility alias, dual state authority or implicit migration exists. The P1-1 B1 code in `crates/platform-core/src/source_registry.rs` remains the correct v0 implementation; a future v1 implementation is a separate packet.
+
+## 16. Change rule
+
+Changing the public v1 value set, grammar/bounds, status semantics, registry transition rules, error taxonomy or URL posture changes `source-import/v1` and requires owning-contract, checker, mutation-test, acceptance and downstream review on the same revision.
 
 Adding one source row under the unchanged contract is registry data, but it still requires an operator review receipt and source-specific permission/rate/parser-fixture evidence. Changing the authority order remains owned by the crate-root/platform plan, not by an incidental source-registry edit.

@@ -1,8 +1,8 @@
 # Headless client and external Agent integration
 
-- `Status`: Planned user journey; architecture and acceptance bindings accepted, no user CLI, inbound MCP adapter or M10 client API implemented
+- `Status`: Planned phased user journey; architecture, public-read-first scope and acceptance bindings accepted; no user CLI, inbound MCP adapter or M10 client API implemented
 - `Owning plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
-- `Contracts`: [`client-shell/v2`](../contracts/client-shell.md), [`cli/v2`](../contracts/cli.md), [`interfaces.md`](../contracts/interfaces.md)
+- `Contracts`: [`client-shell/v2.1`](../contracts/client-shell.md), [`cli/v2.1`](../contracts/cli.md), [`application-interface-registry/v2`](../contracts/interfaces.md), [`permissions/v2`](../contracts/permissions.md)
 - `Decision`: [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
 - `Acceptance`: `CLIENT-007`, `CLIENT-008`, `CLIENT-009`, `CLIENT-010`
 
@@ -46,7 +46,9 @@ external Agent connects to reviewed inbound MCP surface
 → untrusted content is returned as bounded data, not instruction authority
 ```
 
-The MCP adapter does not expose `ustc-agentctl`, arbitrary HTTP, direct Plugin execution, operator credentials or a second Agent/model loop.
+The initial inbound MCP surface is reviewed Streamable HTTP and exposes only an exact public-read operation/schema allowlist. It begins with `market.package.list`; campus queries arrive after their owning source/product contracts, and private reads/drafts require a later explicit delegated-profile slice. The MCP adapter does not expose `ustc-agentctl`, arbitrary HTTP, direct Plugin execution, operator credentials or a second Agent/model loop.
+
+CLI, MCP and Dioxus preserve equal permission/result/error/provenance/audit semantics where they expose the same application operation. They do not need identical registries: login and target-local maintenance are not MCP business tools.
 
 ## User-visible states
 
@@ -75,6 +77,8 @@ Human CLI output may explain recovery. Machine output retains a stable versioned
 
 No surface inherits another surface's credential profile or command registry by fallback.
 
+The paired Skill is documentation only: it may explain operation choice, typed inputs/results and stop/confirmation rules, but it contains no credential and cannot grant or widen authority.
+
 ## Failure and recovery copy
 
 - Incompatible client: “The server requires a newer client protocol; no operation was submitted.”
@@ -94,6 +98,23 @@ No surface inherits another surface's credential profile or command registry by 
 - granting external Agents operator/admin capability;
 - treating Market package metadata as campus source truth;
 - claiming source/product data is available before its owning module is implemented.
+- automatic enrollment, registration, payment or external campus-system submission;
+- arbitrary shell, URL, filesystem, database, container or third-party MCP access.
+
+## Delivery sequence
+
+```text
+M10 operation/schema/permission registry
+→ M10 client-protocol + M80 client-core against fake M10
+→ server.info / capability.list protocol proof
+→ ustc-agent + market.package.list real read path
+→ inbound MCP public-read market.package.list
+→ affairs.search / affairs.get after M60/M71 authority exists
+→ delegated private reads and tenant-local planner drafts
+→ later admitted Windows GUI after a separate promotion gate
+```
+
+This is the M10/M80 client-access lane order. It does not replace the product implementation order of ChangeRadar foundation → Affairs Navigator → ChangeRadar feed → Opportunity Graph integration.
 
 ## Verification
 

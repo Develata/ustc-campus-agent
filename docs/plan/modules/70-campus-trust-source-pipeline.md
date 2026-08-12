@@ -3,13 +3,13 @@
 ## Metadata
 
 - `Module ID`: `M60`
-- `Status`: Accepted blueprint; `M60` overall remains planned, but bounded `M60-B1 source-registry` is implemented as a P1-1 review candidate
+- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` is implemented under `source-import/v0` (P1-1); operational `Suspended`/`Revoked` lifecycle precondition applies before any live B2 retrieval adapter; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
 - `Implementation State`: `planned`
-- `Version`: `m60-campus-trust/v0`
-- `Last Review`: `2026-08-08`
+- `Version`: `m60-campus-trust/v0.3`
+- `Last Review`: `2026-08-12`
 - `Owning Plan`: [`../05-campus-trust-kernel.md`](../05-campus-trust-kernel.md)
-- `Current Contract`: accepted [`source-import/v0`](../../contracts/source-import.md) under the exact P1-0 GO receipt in [`P1 source/revision readiness`](../../tasks/p1-source-revision-readiness-proposal.md)
-- `Primary code area`: `crates/platform-core/src/source_registry.rs` for bounded `M60-B1` (P1-1 review candidate); `M60-B2` through `M60-B8` remain future; current fixture semantics in `crates/course-planning/`
+- `Current Contract`: accepted [`source-import/v1`](../../contracts/source-import.md) and [`source-retrieval/v0`](../../contracts/source-retrieval.md) under R11 (`ACCEPT_EXACT_M60_B2_R11_PACKET`); bounded B1 implementation remains under [`source-import/v0`](../../contracts/source-import.md#15-source-importv0--historical-evidence-retained) (P1-1 review candidate)
+- `Primary code area`: `crates/platform-core/src/source_registry.rs` for bounded `M60-B1` (P1-1 review candidate under `source-import/v0`); `M60-B2` through `M60-B8` remain future; no v1 Rust implementation exists; current fixture semantics in `crates/course-planning/`
 
 ## 1. Purpose
 
@@ -31,8 +31,11 @@
 ```text
 SourceDefinition / SourcePolicy
 SourceStatus: Proposed | Approved | Suspended | Revoked
-  (bounded P1-1 B1 freezes Proposed/Approved review admission only; operational
-   Suspended/Revoked must land before any live B2 retrieval adapter)
+  (P1-1 B1 under source-import/v0 freezes Proposed/Approved review admission only;
+   operational Suspended/Revoked accepted as contract authority in source-import/v1, not implemented;
+   must be implemented before any live B2 retrieval adapter)
+SourceAuthorityRevision (non-zero monotone; CAS on every mutation)
+RetrievalSubject / RetrievalPlanCandidate / RetrievalPolicy
 RetrievalLease / Observation
 RawSnapshot / NormalizedSnapshot
 SourceRevision: Observed | Parsed | Accepted | Archived | Rejected
@@ -165,8 +168,8 @@ Network/body bounds precede parsing. Raw data streams to bounded immutable stora
 
 ## 13. Small-module decomposition
 
-1. `source-registry` — source identity, owner, policy and lifecycle.
-2. `retrieval-policy` — URL/DNS/IP/redirect/content/rate limits.
+1. `source-registry` — source identity, owner, policy and lifecycle (v0 implemented as P1-1; v1 contract accepted under R11, not implemented).
+2. `retrieval-policy` — URL/DNS/IP/redirect/content/rate limits and response algebra (v0 contract accepted under R11; no implementation).
 3. `source-lease` — concurrency and deterministic work identity.
 4. `raw-snapshot` — immutable bounded evidence.
 5. `normalization` — deterministic normalized bytes/digest.
@@ -177,6 +180,8 @@ Network/body bounds precede parsing. Raw data streams to bounded immutable stora
 10. `publication-gate` — typed candidate/evidence/admin disposition.
 11. `source-ports` — fetch/store/repository/queue/clock fakes.
 
+The accepted `source-import/v1` and `source-retrieval/v0` contracts (R11 two-layer edition) define current contract authority for modules 1–2. The lifecycle precondition (operational `Suspended`/`Revoked`) must be satisfied by module 1 before module 2 can be implemented. No implementation exists for v1 or retrieval-policy; retained implementation remains forbidden until a separately admitted implementation packet.
+
 ## 14. Exit gate
 
-`M60` is standalone-ready when a reviewed historical fixture replays deterministically and every fetch/snapshot/parse/evidence/concurrency failure leaves the accepted baseline unchanged. It is accepted when one real approved public source feeds a first-party product candidate with complete provenance and no arbitrary URL path.
+`M60` is standalone-ready when a reviewed historical fixture replays deterministically and every fetch/snapshot/parse/evidence/concurrency failure leaves the accepted baseline unchanged. The lifecycle prerequisite (operational `Suspended`/`Revoked` with monotone `SourceAuthorityRevision`) must precede any live retrieval adapter. It is accepted when one real approved public source feeds a first-party product candidate with complete provenance and no arbitrary URL path.

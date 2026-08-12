@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current delivery and task-splitting order
-- `Version`: `module-roadmap/v2.4`
-- `Last Review`: `2026-07-31`
+- `Version`: `module-roadmap/v2.5`
+- `Last Review`: `2026-08-12`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module map`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
@@ -104,7 +104,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 | `M40` Tool Gateway/Execution | `partial-evidence` | protocol/fake proof | durable intent/executor/receipt composition | unassigned | `AGENT-018/019`, `MARKET-007` |
 | `M50` Model Provider | `planned` | planned | typed profiles + one provider adapter | unassigned | provider conformance + real bounded turn |
 | `M51` MCP Binding/Executor | `planned` | planned | one reviewed read-only remote binding | unassigned | MCP lifecycle/security/executor proof |
-| `M60` Campus Trust/Source | `planned` | planned | one reviewed source/revision/baseline | unassigned | `SRC-*` current-scope rows |
+| `M60` Campus Trust/Source | `planned` | `source-import/v1` and `source-retrieval/v0` accepted contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); bounded B1 under `source-import/v0` (P1-1); no v1 or B2 implementation; lifecycle precondition applies; superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only | one reviewed source/revision/baseline | unassigned | `SRC-*` current-scope rows |
 | `M70` ChangeRadar | `design-only` | design only | one semantic change + feed | unassigned | `RADAR-*` current-scope rows |
 | `M71` Affairs Navigator | `design-only` | design only | one reviewed procedure board | unassigned | `PROC-*` current-scope rows |
 | `M72` Opportunity Graph | `bounded-spike` | planner spike | honest source/profile/Market integration | unassigned | `COURSE-*` current-scope rows |
@@ -242,12 +242,14 @@ Arbitrary central `stdio` command execution is outside this lane.
 
 ## 12. M60 lane — Campus Trust and Source Pipeline
 
+**Status**: accepted-contract `source-import/v1` and `source-retrieval/v0` (R11 two-layer M60/M90 transport architecture; `ACCEPT_EXACT_M60_B2_R11_PACKET`); M60 overall remains `planned`; no v1 Rust implementation; operational `Suspended`/`Revoked` lifecycle and `SourceAuthorityRevision` precondition enforced; no approved concrete USTC source; superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only. Bounded `M60-B1 source-registry` implemented under `source-import/v0` (P1-1).
+
 **Prerequisite**: one concrete public source receives owner, URL/retrieval, permission/rate and parser-fixture review.
 
 `P1-0` now carries the accepted, construction-ready `source-import/v0` contract and a concrete `ustc-teach-calendar-fall` review candidate under [`p1-source-revision-readiness-proposal.md`](p1-source-revision-readiness-proposal.md). The source remains `Proposed`; raw HTML remains outside Git; no acceptance row or module state is promoted by P1-0. Exact-candidate review is `GO`, so the bounded local P1-1 B1 implementation lane is admitted. This is not part of the older W1 campaign grant. Develata's later operation-specific instructions authorize the feature-branch push, PR, Actions CI/run and workflow dispatch; merge, tag, release, source approval and retrieval remain unauthorized.
 
 - `M60-B1 source-registry`: stable identity, owner, policy and status; exact P1-1 boundary is `source-import/v0` §§3–7 and the P1 proposal packet.
-- `M60-B2 retrieval-policy`: safe exact host/path, redirects, content/time/size/rate.
+- `M60-B2 retrieval-policy`: safe exact host/path, redirects, content/time/size/rate. Contract accepted (`source-import/v1` + `source-retrieval/v0`, R11 exact packet); no implementation; lifecycle precondition applies.
 - `M60-B3 lease-snapshot`: deterministic lease and immutable raw evidence.
 - `M60-B4 normalize-parser`: deterministic peers with exact identity/fixtures.
 - `M60-B5 source-revision`: observed/published/effective time, digests and provenance.
@@ -257,7 +259,7 @@ Arbitrary central `stdio` command execution is outside this lane.
 
 This lane precedes real product source integration, but each product can develop against exact M60 fixtures.
 
-`P1-1` has implemented bounded `M60-B1 source-registry`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` are present, `SRC-001` is promoted to `implemented` bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`, and the dedicated checker/test carriers are extended. `M60` overall and `M60-B2` through `M60-B8` remain `planned`; `SRC-010`, `SRC-011` and `SRC-012` remain `planned`. The `ustc-teach-calendar-fall` candidate remains `Proposed`. Implementation commit `9616c3f074dd0a006794c4be76b66698a337a9ac` is independently reviewed, pushed and open as PR `#38`; its first exact-head PR CI run `31285180718` is green. Any marker-external status-only follow-up requires replacement exact-head PR CI before merge eligibility. Merge, tag, release, source approval and retrieval remain unauthorized.
+`P1-1` has implemented bounded `M60-B1 source-registry` under `source-import/v0`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` are present, `SRC-001` is promoted to `implemented` bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`, and the dedicated checker/test carriers are extended. `source-import/v1` and `source-retrieval/v0` are accepted contract authority under R11; no v1 Rust implementation exists. `M60` overall and `M60-B3` through `M60-B8` remain `planned`; `SRC-010`, `SRC-011` and `SRC-012` remain `planned`. The `ustc-teach-calendar-fall` candidate remains `Proposed`. The superseded V10 packet digest (`sha256:ba36425adc164ca9b3ec75addd4be2e4b299b5f8a8cfb75cf6a710679acd32ab`) is mechanically checked as historical evidence. Operational `Suspended`/`Revoked` lifecycle, source approval, network retrieval, and publication remain unauthorized.
 
 ## 13. First-party product lanes
 
@@ -303,14 +305,14 @@ The three packages keep independent versions, enable/disable and acceptance even
 
 ## 14. M80 lane — Client Core and Interaction Shells
 
-`CLIENT-007` through `CLIENT-010` now provide active planned future bindings for headless client slicing. They do not prove implementation. `M10-B1` must first freeze the exact M10-owned `client-protocol` carrier; `M80-B1` consumes that exact carrier and its fake-M10 implements the same contract rather than inventing a client-owned protocol. `M80-B1`–`M80-B5` may become retained only under exact batch contracts and independent evidence against fake then real M10. Dioxus initialization remains disposable/non-mergeable until exact active `WEB-*` and deployment bindings admit the retained Web/Android scaffold.
+`CLIENT-007` through `CLIENT-010` now provide active planned future bindings for headless client slicing. They do not prove implementation. `M10-B1` first freezes the exact M10-owned operation/schema registry and `client-protocol` carrier; `M80-B1` consumes that exact carrier and its fake-M10 implements the same contract rather than inventing a client-owned protocol. `M80-B1`–`M80-B5` may become retained only under exact batch contracts and independent evidence against fake then real M10. Dioxus initialization remains disposable/non-mergeable until exact active `WEB-*` and deployment bindings admit the retained Web/Android scaffold. This M10/M80 lane runs alongside—and does not reorder—the first-party product lane in §13.
 
-- `M80-B0 architecture-contract`: accepted typed peer-client amendment; no code or implementation-status promotion.
-- `M80-B1 client-contract-adoption`: consume the M10-owned `client-protocol` carrier without redefining its wire schema; map validated shell intent into conforming request instances; freeze fake-M10 fixtures and unknown-version behavior.
+- `M80-B0 architecture-contract`: accepted typed peer-client and phased external-Agent amendment; Windows admitted later but not required; no code or implementation-status promotion.
+- `M80-B1 client-contract-adoption`: consume the M10-owned operation/schema registry and `client-protocol` carrier without redefining wire or permission semantics; map validated shell intent into conforming request instances; freeze fake-M10 fixtures, per-adapter allowlists, schema-widening stale-grant behavior and unknown-version behavior.
 - `M80-B2 client-core`: create the M80-owned core over `client-protocol` with endpoint/profile validation, auth port, query/command transport, correlation/idempotency, typed failure, cursor reconnect, cancellation and timeout reconciliation; M10 and outer-framework/backend implementations are forbidden dependencies.
 - `M80-B3 peer-conformance`: adapter-independent fake-M10 normal/denial/conflict/reconnect/cancel/version-skew fixtures plus dependency/command/credential confinement.
-- `M80-B4 ustc-agent-read-client`: create the ordinary-user binary and one real read-only server/capability/product path with stable JSON/NDJSON, stderr and exit-class behavior; no operator command.
-- `M80-B5 inbound-mcp-read-adapter`: one reviewed selected read-only tool/resource through client-core and M10 with delegated profile, bounds and no domain/operator/M51 reach-through; exact package/process placement freezes here.
+- `M80-B4 ustc-agent-read-client`: create the cross-platform ordinary-user binary; prove `server.info`/`capability.list`, then one real `market.package.list` path with stable JSON/NDJSON, stderr and exit-class behavior; no operator command. Windows CLI is this same artifact family, not a parallel client authority.
+- `M80-B5 inbound-mcp-read-adapter`: expose only public-read `market.package.list` through reviewed Streamable HTTP, client-core and M10 with exact schema digest, delegated caller/profile binding, bounds and no domain/operator/M51 reach-through; exact package/process placement freezes here. Campus and private operations are later slices after owning contracts.
 - `M80-B6 dioxus-initialization`: revalidate and exact-pin Dioxus/DX; minimal server/Web/Android target features and toolchain smoke; no product/domain code.
 - `M80-B7 dioxus-fullstack-contract`: generated query/command calls and typed event mapping over the same client semantics.
 - `M80-B8 app-state`: deterministic thin presentation reducer including `UpgradeRequired`.
@@ -321,9 +323,9 @@ The three packages keep independent versions, enable/disable and acceptance even
 - `M80-B13 android`: emulator plus real-device HTTPS/session/lifecycle/reconnect/Custom Tab/package proof.
 - `M80-B14 version-skew`: supported older Android/CLI/MCP protocol plus typed unsupported-version rejection.
 - `M80-B15 ios`: later peer target adapter/signing/device proof.
-- `M80-B16 desktop`: optional later peer target adapter and packaging/sidecar decision proof.
+- `M80-B16 windows-desktop`: admitted later peer proposal; implementation begins only after a separate promotion amendment and active installer/signing/update, secure-session/login-callback, sleep/resume/proxy/reconnect and real-host evidence. Optional sidecar remains separately admitted; Windows is not in the current required-target gate.
 
-Every truth-affecting calculation/mutation is re-evaluated by backend modules. Client-core and outer adapters only validate local shape, transport typed intent and reduce/render/serialize server projections. No peer shell spawns or parses another peer executable as its production path. `ustc-agentctl` remains outside M80, and inbound MCP remains opposite in direction from M51 outbound MCP execution.
+Every truth-affecting calculation/mutation is re-evaluated by backend modules. Client-core and outer adapters only validate local shape, transport typed intent and reduce/render/serialize server projections. No peer shell spawns or parses another peer executable as its production path. `ustc-agentctl` remains outside M80, and inbound MCP remains opposite in direction from M51 outbound MCP execution. Automatic enrollment, registration, payment and other external-campus writes remain outside MVP; tenant-local drafts do not authorize external submission.
 
 ## 15. M90 lane — Infrastructure and Operations
 

@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- `Status`: Accepted target architecture; no client-core, user CLI, inbound MCP adapter or Dioxus client implemented
-- `Version`: `client-shell/v2`
-- `Last Review`: `2026-07-31`
+- `Status`: Accepted target architecture and phased external-Agent access boundary; no client-core, user CLI, inbound MCP adapter, Windows package or Dioxus client implemented
+- `Version`: `client-shell/v2.1`
+- `Last Review`: `2026-08-12`
 - `Owning Plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
 - `Counterpart Plans`: [`M10 Application Ingress Host`](../plan/modules/20-application-api-host.md), [`platform authority`](../plan/03-platform-authority.md)
 - `Decisions`: [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md), [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
@@ -42,7 +42,7 @@ Required product targets remain:
 - a native Linux Fullstack server deployed through Docker Compose;
 - Android.
 
-Web is proven first. Android is a mandatory peer target after the shared ingress/event/recovery path is executable. iOS and desktop are later.
+Web is proven first. Android is a mandatory peer target after the shared ingress/event/recovery path is executable. Windows is an explicitly admitted later desktop peer target, not a current required release gate; other desktop targets and iOS remain later candidates.
 
 Dioxus owns routes, accessible components, forms, presentation reduction, Web SSR/CSR/hydration and target adapters. It may use generated Dioxus server-function calls when they preserve this contract's M00/M10 admission and result semantics.
 
@@ -207,11 +207,13 @@ Dioxus component/router/signal/WebView types terminate in the Dioxus outer adapt
 
 Secrets MUST NOT be accepted in argv, printed in output or inherited from `ustc-agentctl` operator configuration. Human and machine renderers consume the same typed result; neither reparses the other's output.
 
-The exact command tree is owned by [`cli.md`](cli.md) and enters implementation only with active planned acceptance rows and future bindings.
+The exact command tree is owned by [`cli.md`](cli.md), while application-operation identities and per-adapter allowlists are owned by [`interfaces.md`](interfaces.md). CLI commands, MCP tools and graphical actions that project the same operation preserve its typed result, permission, provenance, audit and failure semantics, but the adapters need not expose identical registries. Authentication and target-local maintenance are not MCP business tools. Implementation enters only with active planned acceptance rows and future bindings.
 
 ## 8. Inbound MCP contract
 
-The inbound MCP adapter MAY expose only explicitly registered selected tools/resources whose underlying M10 operation is admitted for the delegated profile. It MUST:
+The inbound MCP adapter is a server surface consumed by an external personal Agent acting as MCP client. Its initial remote profile uses reviewed MCP Streamable HTTP. Local stdio/relay is later and requires a separately accepted deployment/session contract.
+
+The adapter MAY expose only explicitly registered selected tools/resources whose underlying M10 operation and exact schema digest are admitted for the delegated profile. It MUST:
 
 - advertise bounded names, descriptions, schemas and result sizes;
 - bind every request to external caller/session plus delegated tenant/user/profile context;
@@ -222,6 +224,8 @@ The inbound MCP adapter MAY expose only explicitly registered selected tools/res
 - keep operator/admin commands absent;
 - reach no domain module, repository, ToolGateway executor or M51 session directly.
 
+The first retained MCP slice exposes only a reviewed `public-read` projection, initially `market.package.list`. Campus operations enter only after their owning product/source contracts exist; private read/draft operations require a later explicit delegated-profile slice. Schema, permission, result-data or effect widening stales prior grants and removes the changed operation from discovery until re-approval.
+
 The adapter is not a second Agent loop. External Agents may call deterministic resources/tools or an explicitly admitted central Agent operation; the adapter itself does not own planning, model invocation or run completion.
 
 ## 9. Authentication and credentials
@@ -230,7 +234,7 @@ Each peer uses a target-appropriate `ClientAuthPort`:
 
 - Web: browser-appropriate session handling;
 - Android: secure token/session storage through `SecureSessionPort`;
-- `ustc-agent`: a least-privilege user auth profile/reference outside argv and machine output;
+- `ustc-agent`: a least-privilege user auth profile/reference outside argv and machine output; the preferred later contract candidate is server-mediated browser pairing with one-time bounded exchange, never direct CAS-password/ticket handling;
 - inbound MCP: an explicitly delegated user/service profile scoped to selected tools/resources.
 
 No adapter receives raw operator credentials, provider secrets, Plugin credentials, raw USTC passwords or CAS sessions. Authentication failure reaches no application operation.
@@ -254,7 +258,7 @@ Framework-neutral client-core cannot directly invoke filesystem, WebView JavaScr
 
 Public client configuration contains only validated server HTTPS origin, supported protocol/schema versions, client build/target identity, non-secret capability facts, bounded transport defaults and presentation/serialization defaults. `ustc-agent` and inbound MCP add only profile references, never raw credentials or operator config.
 
-The Docker Compose profile owns the server process, dependencies, readiness, persistent volumes, migration/backup/restore and reverse-proxy/TLS wiring. It does not own Android, CLI or MCP artifacts. Dioxus Fullstack does not provide database/cache/session/mailer implementations; these remain explicit M90/Axum infrastructure choices.
+The Docker Compose profile owns the server process, dependencies, readiness, persistent volumes, migration/backup/restore and reverse-proxy/TLS wiring. It does not own Android, CLI, MCP or Windows artifacts. Dioxus Fullstack does not provide database/cache/session/mailer implementations; these remain explicit M90/Axum infrastructure choices.
 
 ## 11. Lifecycle and concurrency
 
@@ -295,7 +299,7 @@ Start with modules until actual boundaries justify crates/artifacts. The accepte
 future crates/client-protocol/   # M10-owned versioned wire DTO/error/event/compatibility carrier
 future crates/client-core/       # M80-owned client behavior and fakes
 future apps/ustc-agent/          # user/automation CLI
-future apps/ustc-client/         # Dioxus Web/Android source
+future apps/ustc-client/         # Dioxus Web/Android source; later admitted Windows target
 future inbound MCP adapter       # exact package/process placement chosen by first slice
 apps/ustc-agentctl/              # existing separate operator/developer CLI
 apps/ustc-agentd/                # M10 server composition and ingress
@@ -303,7 +307,7 @@ apps/ustc-agentd/                # M10 server composition and ingress
 
 The three real peer consumers justify a client-core crate when its first retained slice lands. Do not create empty crates/binaries before exact accepted batch contracts and active planned acceptance bindings exist.
 
-One workspace does not mean one artifact. Server, Web assets, Android package, CLI binary and any MCP process/entrypoint have independent packaging, version and release evidence.
+One workspace does not mean one artifact. Server, Web assets, Android package, CLI binary, any MCP process/entrypoint and a later Windows package have independent packaging, version and release evidence.
 
 ## 14. Dependency confinement
 
@@ -345,7 +349,20 @@ Shared source protects only artifacts built from the same revision. It does not 
 
 Web may deploy atomically with the server, but still exercises equivalent semantic fixtures.
 
-## 16. Conformance and acceptance
+## 16.1 Windows later-target admission
+
+Windows is an admitted future M80 peer target so the architecture need not be reopened merely to begin a bounded desktop proposal. It is intentionally not part of the current required-target gate. Promotion to a required delivery target needs a separate accepted amendment plus active acceptance rows covering:
+
+- signed installer and update/rollback identity;
+- secure session storage and browser login callback/pairing;
+- sleep/resume, proxy and reconnect behavior;
+- crash recovery and local cache non-authority;
+- explicit desktop-only demand such as tray, notification or long-lived run observation;
+- protocol compatibility and remote-server read-back on real Windows hosts.
+
+Until promotion, `ustc-agent.exe` is the supported low-cost Windows automation shape once the cross-platform CLI is implemented. Framework support or successful compilation alone does not claim a Windows GUI release.
+
+## 17. Conformance and acceptance
 
 The framework-neutral conformance suite runs every peer adapter against equivalent fake-M10 cases:
 
@@ -364,7 +381,7 @@ The framework-neutral conformance suite runs every peer adapter against equivale
 
 These rows remain `planned` until executable bindings pass. Existing long-horizon Dioxus `CLIENT-001` through `CLIENT-006`, `WEB-*` and deployment cases remain non-active until projected into the active matrix.
 
-## 17. Current status
+## 18. Current status
 
 Accepted now:
 
@@ -374,6 +391,7 @@ Accepted now:
 - M10 remains the admitted application boundary and backend authority remains unchanged;
 - inbound MCP and M51 outbound MCP are directionally separate;
 - required Web/PWA, Docker Compose server and Android targets remain unchanged.
+- Windows is admitted as a later desktop peer target but is not a current required release gate.
 
 Implemented now: none of the client core, user CLI, inbound MCP adapter, Dioxus application, public ingress, typed stream, auth/session service, Web journey or Android package.
 

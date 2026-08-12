@@ -4,8 +4,8 @@
 
 - `Layer`: Authority architecture
 - `Status`: Accepted architecture; R0 Agent transition kernel implemented, finite harness and authority plane largely planned
-- `Version`: `0.8.0`
-- `Last Review`: `2026-07-31`
+- `Version`: `0.8.1`
+- `Last Review`: `2026-08-12`
 - `Authority Owns`: authority partition, canonical state ownership, client/execution-plane boundary
 - `Authority Defers To`: product positioning for scope and contracts for exact external shapes
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/04-bounded-agent-harness.md`, `docs/features/05-headless-client-and-agent-integration.md`
@@ -22,7 +22,7 @@ Long-term shape:
 
 ```text
 M80 peer clients
-├── Dioxus Web/PWA first, then mandatory Android; later iOS/desktop
+├── Dioxus Web/PWA first, then mandatory Android; later admitted Windows, then iOS/other desktop candidates
 ├── ustc-agent user/automation CLI
 └── inbound MCP selected tools/resources
     │ M80 framework-neutral typed client core
@@ -47,7 +47,7 @@ USTC Campus Agent authority plane
     └── replaceable execution/provider adapters
 ```
 
-Clients render/serialize state and submit typed intent through [`client-shell/v2`](../contracts/client-shell.md). Execution planes perform bounded work. Neither owns product authority. M10 owns the versioned client wire schema; M80 owns client behavior over it, and M10 never depends on M80 core. Dioxus, CLI and MCP framework types terminate in their outer adapters. Dioxus/Axum transport types terminate in M10 ingress adapters. No peer client shells out to another, and `ustc-agentctl` operator authority remains separate.
+Clients render/serialize state and submit typed intent through [`client-shell/v2.1`](../contracts/client-shell.md). Execution planes perform bounded work. Neither owns product authority. M10 owns the versioned operation/client wire schema; M80 owns client behavior over it, and M10 never depends on M80 core. Dioxus, CLI and MCP framework types terminate in their outer adapters. Dioxus/Axum transport types terminate in M10 ingress adapters. No peer client shells out to another, and `ustc-agentctl` operator authority remains separate.
 
 ## 2. Authority partition
 
@@ -139,9 +139,9 @@ The required Docker Compose profile runs the native Fullstack server, durable de
 
 ### 4.1 Multi-client interaction boundary
 
-M80 starts with one framework-neutral typed client core over the M10-owned `client-protocol` carrier and three peer outer adapters. `ustc-agent` provides ordinary-user/noninteractive automation; inbound MCP exposes selected least-privilege tools/resources to external Agents; Dioxus provides target-neutral routes/components/view-model reduction with narrow `web` and `android` adapters. Web/PWA is the first graphical proof surface. Android is the mandatory next graphical target and reuses the same semantic ingress/event/recovery contract. iOS and desktop are later peers.
+M80 starts with one framework-neutral typed client core over the M10-owned `client-protocol` carrier and three peer outer adapters. `ustc-agent` provides ordinary-user/noninteractive automation; inbound MCP exposes selected least-privilege tools/resources to external Agents; Dioxus provides target-neutral routes/components/view-model reduction with narrow `web` and `android` adapters. Web/PWA is the first graphical proof surface. Android is the mandatory next graphical target and reuses the same semantic ingress/event/recovery contract. Windows is an admitted later peer, but it is not a current required release target; promotion requires separate packaging/session/update/real-host acceptance. iOS and other desktop targets remain later candidates.
 
-Dioxus server functions and explicit HTTP/SSE routes are valid peer M10 ingress adapters. They may call admitted application command/query ports, but cannot access concrete databases/repositories, Plugin executors, provider SDKs, Agent checkpoints, journals, filesystem/process APIs or platform secret stores directly. The user CLI and inbound MCP call M10 through M80 client-core and M10-owned protocol values; M10 never depends on client-core, and neither client may reach `ustc-agentctl`, domain internals or M51 outbound sessions. Unsupported capability remains explicit instead of silently changing execution location. Independently deployed Android, CLI and MCP clients carry build/protocol identity and receive typed compatibility or upgrade outcomes before unsafe dispatch.
+Dioxus server functions and explicit HTTP/SSE routes are valid peer M10 ingress adapters. They may call admitted application command/query ports, but cannot access concrete databases/repositories, Plugin executors, provider SDKs, Agent checkpoints, journals, filesystem/process APIs or platform secret stores directly. The user CLI and inbound MCP call M10 through M80 client-core and M10-owned protocol values; M10 never depends on client-core, and neither client may reach `ustc-agentctl`, domain internals or M51 outbound sessions. All outer registries project the M10-owned operation/schema registry; where adapters share an operation, they preserve permission/result/error/provenance/audit semantics, but their allowlists need not be identical. The first inbound-MCP profile is public-read Streamable HTTP. Unsupported capability remains explicit instead of silently changing execution location. Independently deployed Android, CLI and MCP clients carry build/protocol identity and receive typed compatibility or upgrade outcomes before unsafe dispatch.
 
 ## 5. Current executable state
 
@@ -163,7 +163,7 @@ Not yet implemented:
 - source ingestion and publication state;
 - production database/evidence store;
 - framework-neutral client-core, `ustc-agent` user/automation CLI and inbound MCP adapter;
-- Dioxus Fullstack Web journey, Docker Compose server profile and mandatory Android target; later iOS/desktop peers.
+- Dioxus Fullstack Web journey, Docker Compose server profile and mandatory Android target; later admitted Windows peer, with iOS/other desktop candidates later.
 
 These planned systems MUST NOT be described as operational merely because their contracts exist.
 
