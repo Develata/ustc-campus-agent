@@ -1,10 +1,11 @@
 # ADR-0010: Share a typed client core across peer Dioxus, CLI and inbound MCP adapters
 
-- `Status`: Accepted
+- `Status`: Accepted; amended for phased public-read inbound MCP, one application-operation registry and a later admitted Windows peer
 - `Date`: `2026-07-31`
+- `Last Amendment`: `2026-08-12`
 - `Decision owner`: Develata
 - `Depends on`: [`ADR-0009`](0009-dioxus-multi-client-shell.md)
-- `Owning contract`: [`client-shell/v2`](../contracts/client-shell.md)
+- `Owning contract`: [`client-shell/v2.1`](../contracts/client-shell.md)
 
 ## Context
 
@@ -50,6 +51,9 @@ Rules:
 9. M51 remains the opposite protocol direction: platform-to-external-MCP binding/execution.
 10. Central server application/domain modules retain every truth-affecting calculation, mutation, authorization and durable transition.
 11. Exact MCP package/process placement is chosen by the first accepted implementation slice without changing these boundaries.
+12. CLI/MCP/Dioxus registries are allowlisted projections of one M10 application-operation/schema registry; shared operations preserve permission/result/error/provenance/audit semantics, while adapter-specific login or maintenance need not be mirrored.
+13. The first inbound-MCP slice is public-read Streamable HTTP and exposes only `market.package.list`; campus/private operations enter later under their owning contracts.
+14. Windows is an admitted later M80 presentation peer but not a current required release target; `ustc-agent.exe` is the lower-cost Windows automation path once the CLI exists.
 
 M80 remains the existing client-side large module, renamed in authority prose to **Client Core and Interaction Shells**. No M81 is added: the common client behavior and its outer interaction adapters are one cohesive responsibility, while M10 continues to own server ingress.
 

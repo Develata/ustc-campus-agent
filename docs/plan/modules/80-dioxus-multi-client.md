@@ -3,12 +3,12 @@
 ## Metadata
 
 - `Module ID`: `M80`
-- `Status`: Accepted blueprint amended for typed peer clients; no client-core, user CLI, inbound MCP adapter or Dioxus application implemented
+- `Status`: Accepted blueprint amended for phased external-Agent access and an admitted later Windows peer; no client-core, user CLI, inbound MCP adapter, Windows package or Dioxus application implemented
 - `Implementation State`: `planned`
-- `Version`: `m80-client-shells/v2`
-- `Last Review`: `2026-07-31`
+- `Version`: `m80-client-shells/v2.1`
+- `Last Review`: `2026-08-12`
 - `Decisions`: [`ADR-0009`](../../adr/0009-dioxus-multi-client-shell.md), [`ADR-0010`](../../adr/0010-typed-client-peer-adapters.md)
-- `Owning Contract`: [`client-shell/v2`](../../contracts/client-shell.md)
+- `Owning Contract`: [`client-shell/v2.1`](../../contracts/client-shell.md)
 - `Primary code areas`: future `crates/client-core/`, `apps/ustc-agent/`, `apps/ustc-client/`, and one inbound MCP adapter surface finalized by its first accepted slice
 
 ## 1. Purpose
@@ -21,7 +21,7 @@ M80 owns the framework-neutral client behavior shared by three peer interaction 
 
 It owns client-side protocol use, compatibility reaction, authentication adapters, command/query transport, event subscription/reconnect, correlation/idempotency propagation, safe projection reduction and outer-shell conformance. The peer shells reuse this typed client core; they do not invoke one another as subprocesses.
 
-Web is the first graphical proof surface. Android remains a required peer target. The headless CLI and one least-privilege inbound MCP read path are also required initial client surfaces. iOS and desktop remain later scope.
+Web is the first graphical proof surface. Android remains a required peer target. The headless CLI and one least-privilege inbound MCP read path are also required initial client surfaces. Windows is an explicitly admitted later desktop peer target but not a current required release gate; iOS and other desktop targets remain later candidates.
 
 M80 displays or serializes server-owned state and submits typed intent through M10. It performs no canonical product calculation or mutation.
 
@@ -131,7 +131,7 @@ Framework-specific values terminate in their outer adapters. The common core exp
 |---|---|---|---|
 | Dioxus Web/Android | graphical presentation and intent capture | generated admitted server-function calls and typed events, or an equivalent versioned M10 transport | no process/CLI bridge; presentation state only |
 | `ustc-agent` | end-user and noninteractive automation client | explicit versioned M10 HTTP/JSON plus SSE/typed streams | machine mode is data-only stdout with stable schema/exit semantics |
-| inbound MCP adapter | expose selected platform tools/resources to external Agents | client-core calls to admitted M10 API | least privilege; no operator surface; no direct domain/M51 reach-through |
+| inbound MCP adapter | expose selected platform tools/resources to external Agents | reviewed MCP Streamable HTTP mapped through client-core to admitted M10 API | public-read first; exact operation/schema allowlist; no operator surface or direct domain/M51 reach-through |
 
 All three adapters consume the same semantic fake-M10 conformance suite. Transport-specific encoding may differ, but equivalent accepted input must reduce to equivalent typed client state and preserve the same denial/compatibility outcome.
 
@@ -174,7 +174,7 @@ client/shell bootstrap
 → reconnect/reconcile/refresh/re-auth/upgrade when required
 ```
 
-CLI noninteractive mode performs the same lifecycle and emits one versioned result envelope or an NDJSON event sequence. The inbound MCP adapter maps selected tool/resource requests into the same client operations and returns bounded, instruction-isolated results.
+CLI noninteractive mode performs the same lifecycle and emits one versioned result envelope or an NDJSON event sequence. The inbound MCP adapter maps selected tool/resource requests into the same client operations and returns bounded, instruction-isolated results. Adapter registries are allowlisted projections of the M10-owned application-operation registry: semantic equivalence is required only where two adapters expose the same operation; login and target-local maintenance are not MCP business tools.
 
 Transport disconnect, CLI termination and MCP session closure are not server-task cancellation or terminal completion.
 
@@ -201,6 +201,8 @@ Each adapter owns a separate secret/session projection:
 - Android uses `SecureSessionPort` and a non-loopback validated production origin;
 - `ustc-agent` uses a least-privilege user auth profile/ref and never places a secret in argv or machine output;
 - inbound MCP uses an explicitly delegated user/service profile and cannot inherit operator credentials.
+
+The preferred future CLI authentication contract candidate is server-mediated browser pairing with a one-time bounded exchange; no CLI or personal Agent receives a raw USTC password, CAS ticket or complete CAS session.
 
 Model/provider/Plugin/source secrets never enter client config, logs or output envelopes.
 
@@ -231,6 +233,7 @@ Dioxus separately budgets initial Web payload, SSR/hydration, Android startup/me
 - framework-neutral client-core contract and fake-M10 conformance fixtures;
 - one read-only `ustc-agent` health/capability/product query with stable JSON output and typed failures;
 - one reviewed read-only inbound MCP tool/resource projection through the same client core;
+- exact application-operation and schema-digest projection from M10, with grant invalidation on data/permission/effect widening;
 - exact-pinned Dioxus/DX after source revalidation;
 - cohesive Dioxus Web/PWA and Android source over the common client semantics;
 - one Market/run/product query-command-event journey;
@@ -242,8 +245,9 @@ Dioxus separately budgets initial Web payload, SSR/hydration, Android startup/me
 **Later**
 
 - richer CLI command families and MCP resources/tools over already admitted application operations;
+- delegated tenant-private reads and tenant-local drafts after explicit consent/ownership acceptance;
 - iOS package after macOS/Xcode/signing/device evidence;
-- desktop package and optional local sidecar only after a real desktop requirement;
+- Windows Dioxus package only after a separate promotion amendment and installer/signing/update, secure-session, login-callback, sleep/resume/proxy/reconnect and real-host evidence; optional local sidecar remains separately admitted;
 - opt-in notifications and local archive;
 - richer public/product views over unchanged application ports.
 
@@ -254,6 +258,8 @@ Dioxus separately budgets initial Web payload, SSR/hydration, Android startup/me
 - offline peer authority or local database truth;
 - direct Plugin/provider/M51 execution;
 - generic Agent-to-Agent federation implied by the MCP adapter;
+- automatic enrollment, registration, payment or external campus transaction submission;
+- arbitrary shell, URL, filesystem, database, container or third-party MCP capability;
 - target support claimed only from compilation.
 
 ## 15. Small-module decomposition
@@ -262,14 +268,14 @@ Dioxus separately budgets initial Web payload, SSR/hydration, Android startup/me
 2. `client-core` — compatibility, auth-port, command/query, correlation/idempotency, typed failure and event-reconnect behavior.
 3. `client-conformance` — fake-M10 normal, denial, stale, reconnect, cancellation, timeout-reconciliation and version-skew fixtures.
 4. `user-cli-shell` — `ustc-agent` command tree, human/machine rendering and stable exit/output semantics.
-5. `inbound-mcp-shell` — selected least-privilege tool/resource discovery and invocation over client-core.
+5. `inbound-mcp-shell` — selected least-privilege tool/resource discovery and invocation over client-core; first slice is public-read `market.package.list` using the M10 operation/schema registry.
 6. `dioxus-fullstack-contract` — generated call facade and target feature confinement.
 7. `app-state` — deterministic presentation reducer.
 8. `routes` and `design-system` — accessible navigation, display and forms.
 9. `market-ui`, `agent-ui` and product UI modules — typed projection and intent only.
 10. `platform-web` — SSR/CSR/PWA/session behavior.
 11. `platform-android` — endpoint/session/lifecycle/Custom Tab/package behavior.
-12. later `platform-ios` and `platform-desktop` peers.
+12. later `platform-windows` admitted peer and later-candidate `platform-ios`/other desktop peers; Windows promotion to required scope is a separate acceptance amendment.
 
 ## 16. Exit gate
 
@@ -279,4 +285,4 @@ The user CLI is integration-ready only when a real M10 read-only path proves ver
 
 Dioxus Web/PWA is accepted only after browser smoke proves page delivery, one real query/command/event journey, accessibility and console/network cleanliness. Android is accepted only after emulator and real-device launch, validated HTTPS origin, secure session, the same semantic journey, lifecycle/reconnect and Custom Tab evidence.
 
-The module is accepted only when all required initial peer surfaces pass their bound active acceptance rows, equivalent server fixtures produce equivalent semantic state, no shell spawns another as its production path, and replacing one outer adapter leaves the other adapters and backend domain/runtime/Plugin crates unchanged.
+The module is accepted only when all required initial peer surfaces pass their bound active acceptance rows, equivalent server fixtures produce equivalent semantic state, no shell spawns another as its production path, and replacing one outer adapter leaves the other adapters and backend domain/runtime/Plugin crates unchanged. Windows is excluded from this current module acceptance gate until explicitly promoted.

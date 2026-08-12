@@ -286,10 +286,46 @@ KEY_FILES = [
     "docs/contracts/platform-session.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",
+    "docs/contracts/source-retrieval.md",
     "market/review-policy/first-party.md",
     "market/fixtures/course-planning/README.md",
     "market/fixtures/course-planning/minimal-v0.json",
 ]
+
+EXTERNAL_AGENT_OPERATION_ROWS = {
+    "server.info": ("M10", "public-read", "read", "CLI, HTTP", "planned first protocol slice"),
+    "capability.list": ("M10", "public-read", "read", "CLI, HTTP", "planned first protocol slice"),
+    "market.package.list": ("M20", "public-read", "read", "CLI, HTTP, inbound MCP", "planned first vertical slice"),
+    "market.package.get": ("M20", "public-read", "read", "CLI, HTTP", "planned"),
+    "affairs.search": ("M71", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
+    "affairs.get": ("M71", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
+    "change.list": ("M70", "public-read", "read", "CLI, HTTP", "planned after owning product contract"),
+    "change.get": ("M70", "public-read", "read", "CLI, HTTP", "planned after owning product contract"),
+    "program.list": ("M72", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
+    "program.get": ("M72", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
+    "course.search": ("M72", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
+    "course.get": ("M72", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
+    "offering.list": ("M72", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
+    "course.review_linkout": ("M72", "public-linkout", "link-out", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
+    "source.provenance": ("M60", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning source/product contract"),
+    "profile.requirement_status": ("M72", "tenant-private-read", "read", "CLI, HTTP, later inbound MCP", "later private-data slice"),
+    "planner.draft.list": ("M72", "tenant-private-read", "read", "CLI, HTTP", "later private-data slice"),
+    "planner.draft.get": ("M72", "tenant-private-read", "read", "CLI, HTTP", "later private-data slice"),
+    "planner.draft.delete": ("M72", "tenant-private-write", "tenant-local mutation", "CLI, HTTP", "later private-draft slice"),
+    "planner.generate": ("M72", "tenant-private-write", "tenant-local draft mutation", "CLI, HTTP, later inbound MCP", "later private-draft slice"),
+    "planner.explain": ("M72", "tenant-private-read", "read", "CLI, HTTP, later inbound MCP", "later private-data slice"),
+}
+
+EXTERNAL_AGENT_CONTRACT_FILES = (
+    "docs/contracts/interfaces.md",
+    "docs/contracts/permissions.md",
+    "docs/contracts/client-shell.md",
+    "docs/contracts/cli.md",
+    "docs/features/05-headless-client-and-agent-integration.md",
+    "docs/plan/modules/20-application-api-host.md",
+    "docs/plan/modules/80-dioxus-multi-client.md",
+    "docs/tasks/01-execution-roadmap.md",
+)
 
 
 def fail(msg: str, issues: list[str]) -> None:
@@ -9151,9 +9187,12 @@ P1_SOURCE_REVISION_PACKET_SHA256 = (
     "11529705aca4e19ae52bde8ec5a69571c2c3cc6d1157057ac77dd69f78aa65f9"
 )
 P1_SOURCE_REVISION_PACKET_BYTES = 8479
-P1_SOURCE_IMPORT_CONTRACT_SHA256 = (
-    "cfe8cc648c704557e3abcbcf06c09dab045aa3adfc5e2e417f770cb0ce24c65d"
+P1_SOURCE_IMPORT_V0_SECTION_HEADING = "## 15. `source-import/v0` — historical evidence retained"
+P1_SOURCE_IMPORT_V0_SECTION_BYTES = 1689
+P1_SOURCE_IMPORT_V0_SECTION_SHA256 = (
+    "3253b1fbdef9f09b973b85332a1d8ea2d662d46a50d0308ef24902d21ab3276c"
 )
+P1_SOURCE_IMPORT_V1_METADATA_LINE = "- `Status`: Proposed as `source-import/v1` under R3 M60-B2 two-layer transport architecture"
 P1_SOURCE_REVISION_SOURCE_COMMIT = "2f4de29032560ff3e13d9994b33a3aff14243f44"
 P1_SOURCE_REVISION_SOURCE_TREE = "53e266c47fdb07d50a734faa24bb11ac4bc5527d"
 P1_0_ALLOWED_PATHS = (
@@ -9198,6 +9237,631 @@ def _p1_exact_fenced_paths(packet: str, heading: str) -> tuple[str, ...] | None:
     return tuple(line for line in body.splitlines() if line)
 
 
+M60_B2_PROPOSAL_PATH = "docs/tasks/m60-b2-retrieval-policy-readiness-proposal.md"
+M60_B2_PROPOSAL_BEGIN = "<!-- M60_B2_RETRIEVAL_POLICY_PROPOSAL:BEGIN -->"
+M60_B2_PROPOSAL_END = "<!-- M60_B2_RETRIEVAL_POLICY_PROPOSAL:END -->"
+# Superseded V10 packet digest — checked as historical evidence only
+M60_B2_SUPERSEDED_PACKET_SHA256 = "ba36425adc164ca9b3ec75addd4be2e4b299b5f8a8cfb75cf6a710679acd32ab"
+M60_B2_REPLACEMENT_PACKET_BYTES = 33046
+M60_B2_REPLACEMENT_PACKET_SHA256 = "34cd911e6120646a0e2e410de9987efd167e519f43e5bf64a43c96d9c3654f1e"
+M60_B2_SOURCE_RETRIEVAL_PATH = "docs/contracts/source-retrieval.md"
+M60_B2_SOURCE_IMPORT_PATH = "docs/contracts/source-import.md"
+M60_B2_REPLACEMENT_STAGE = "`M60_B2_CONTRACT_ACCEPTED`"
+M60_B2_PACKET_STATUS = "`ACCEPTED`"
+M60_B2_REQUIRED_STAGE_LINE = "- `Stage`: `M60_B2_CONTRACT_ACCEPTED`"
+M60_B2_REQUIRED_STATUS_LINE = "- `Packet status`: `ACCEPTED`"
+M60_B2_REQUIRED_DIGEST_LINE = (
+    "- `R4 replacement packet digest`: "
+    f"`sha256:{M60_B2_REPLACEMENT_PACKET_SHA256}` over "
+    f"`{M60_B2_REPLACEMENT_PACKET_BYTES}` bytes beginning immediately after the `BEGIN` "
+    "marker newline and ending immediately before the `END` marker token, including the "
+    "final packet newline"
+)
+M60_B2_PROJECTED_PATHS = (
+    M60_B2_PROPOSAL_PATH,
+    "docs/contracts/source-import.md",
+    "docs/contracts/source-retrieval.md",
+    "docs/contracts/module-boundaries.md",
+    "docs/plan/05-campus-trust-kernel.md",
+    "docs/plan/modules/00-module-map.md",
+    "docs/plan/modules/70-campus-trust-source-pipeline.md",
+    "docs/tasks/01-execution-roadmap.md",
+    "docs/coverage-matrix.md",
+)
+
+
+def check_m60_b2_packet_digest(issues: list[str]) -> None:
+    path = ROOT / M60_B2_PROPOSAL_PATH
+    if not path.is_file():
+        fail(f"M60-B2 proposal carrier missing: {M60_B2_PROPOSAL_PATH}", issues)
+        return
+    raw_bytes = path.read_bytes()
+    begin_bytes = M60_B2_PROPOSAL_BEGIN.encode("utf-8")
+    end_bytes = M60_B2_PROPOSAL_END.encode("utf-8")
+    begin_lf = (M60_B2_PROPOSAL_BEGIN + "\n").encode("utf-8")
+
+    begin_count = raw_bytes.count(begin_bytes)
+    end_count = raw_bytes.count(end_bytes)
+    if begin_count != 1 or end_count != 1:
+        fail(
+            "M60-B2 R4 replacement packet marker count drift: "
+            f"begin={begin_count} end={end_count}",
+            issues,
+        )
+        return
+    if raw_bytes.count(begin_lf) != 1:
+        fail(
+            "M60-B2 R3 replacement packet BEGIN marker must be followed by exactly one LF",
+            issues,
+        )
+        return
+    start = raw_bytes.index(begin_lf) + len(begin_lf)
+    finish = raw_bytes.index(end_bytes)
+    if finish <= start:
+        fail("M60-B2 R4 replacement packet marker order drift", issues)
+        return
+    block = raw_bytes[start:finish]
+    block_len = len(block)
+    if block_len == 0:
+        fail("M60-B2 R4 replacement packet is empty", issues)
+        return
+    if block_len == 77276:
+        fail(
+            "M60-B2 R4 replacement packet byte count equals the superseded V10 packet "
+            "(77276 bytes); the replacement must differ",
+            issues,
+        )
+    actual_sha256 = hashlib.sha256(block).hexdigest()
+    if actual_sha256 == M60_B2_SUPERSEDED_PACKET_SHA256:
+        fail(
+            "M60-B2 R4 replacement packet digest equals the superseded V10 digest; "
+            "the replacement must differ",
+            issues,
+        )
+
+    if block_len != M60_B2_REPLACEMENT_PACKET_BYTES:
+        fail(
+            "M60-B2 R4 replacement packet byte count drift: "
+            f"expected={M60_B2_REPLACEMENT_PACKET_BYTES} "
+            f"actual={block_len}",
+            issues,
+        )
+    if actual_sha256 != M60_B2_REPLACEMENT_PACKET_SHA256:
+        fail(
+            "M60-B2 R4 replacement packet digest drift: "
+            f"expected={M60_B2_REPLACEMENT_PACKET_SHA256} "
+            f"actual={actual_sha256}",
+            issues,
+        )
+
+    text = raw_bytes.decode("utf-8")
+
+    stage_section = _extract_markdown_section(text, "## Mutable state")
+    if stage_section is None:
+        fail("M60-B2 proposal missing '## Mutable state' section", issues)
+    else:
+        if M60_B2_REQUIRED_STAGE_LINE not in stage_section:
+            fail(
+                f"M60-B2 R3 stage missing from '## Mutable state' section: "
+                f"expected {M60_B2_REQUIRED_STAGE_LINE}",
+                issues,
+            )
+        if stage_section.count(M60_B2_REQUIRED_STAGE_LINE) != 1:
+            fail(
+                f"M60-B2 R4 stage must appear exactly once in '## Mutable state', "
+                f"found {stage_section.count(M60_B2_REQUIRED_STAGE_LINE)}",
+                issues,
+            )
+        if M60_B2_REQUIRED_STATUS_LINE not in stage_section:
+            fail(
+                f"M60-B2 R4 packet status missing from '## Mutable state' section: "
+                f"expected {M60_B2_REQUIRED_STATUS_LINE}",
+                issues,
+            )
+        if stage_section.count(M60_B2_REQUIRED_STATUS_LINE) != 1:
+            fail(
+                f"M60-B2 R4 packet status must appear exactly once in '## Mutable state', "
+                f"found {stage_section.count(M60_B2_REQUIRED_STATUS_LINE)}",
+                issues,
+            )
+        if stage_section.count("- `Stage`: ") != 1:
+            fail(
+                "M60-B2 '## Mutable state' must have exactly one Stage line "
+                f"(found {stage_section.count('- `Stage`: ')})",
+                issues,
+            )
+        if stage_section.count("- `Packet status`: ") != 1:
+            fail(
+                "M60-B2 '## Mutable state' must have exactly one Packet status line "
+                f"(found {stage_section.count('- `Packet status`: ')})",
+                issues,
+            )
+        if stage_section.count(M60_B2_REQUIRED_DIGEST_LINE) != 1:
+            fail(
+                "M60-B2 R4 replacement packet digest metadata must bind the exact "
+                "payload byte count and SHA-256",
+                issues,
+            )
+        if stage_section.count("- `R4 replacement packet digest`: ") != 1:
+            fail(
+                "M60-B2 '## Mutable state' must have exactly one R4 replacement packet "
+                "digest line",
+                issues,
+            )
+
+    for old_stage in (
+        "`M60_B2_ACCEPTED_WITH_AMENDMENT`",
+    ):
+        if '- `Stage`: ' + old_stage in text:
+            subscript = text.find('- `Stage`: ' + old_stage)
+            before = max(0, subscript - 200)
+            if "SUPERSEDED" not in text[before : subscript + 200] and "HISTORICAL" not in text[before : subscript + 200]:
+                fail(
+                    f"M60-B2 superseded stage {old_stage} appears without SUPERSEDED/HISTORICAL marker",
+                    issues,
+                )
+
+    # R11 exact semantic acceptance receipt (CURRENT) — exactly one, ACCEPTED, with the
+    # exact acceptance decision.  Fails closed on missing or duplicated acceptance receipt.
+    r11_receipt_header = "### M60-B2 R11 exact semantic acceptance receipt (CURRENT)"
+    r11_receipt_count = text.count(r11_receipt_header)
+    if r11_receipt_count != 1:
+        fail(
+            "M60-B2 proposal must have exactly one R11 exact semantic acceptance receipt "
+            f"(CURRENT) section, found {r11_receipt_count}",
+            issues,
+        )
+    else:
+        r11_receipt = _extract_markdown_section(text, r11_receipt_header)
+        if r11_receipt is None or "- `Receipt status`: `ACCEPTED`" not in r11_receipt:
+            fail(
+                "M60-B2 R11 exact semantic acceptance receipt missing "
+                "- `Receipt status`: `ACCEPTED`",
+                issues,
+            )
+        if "`ACCEPT_EXACT_M60_B2_R11_PACKET`" not in r11_receipt:
+            fail(
+                "M60-B2 R11 exact semantic acceptance receipt missing "
+                "decision `ACCEPT_EXACT_M60_B2_R11_PACKET`",
+                issues,
+            )
+
+    # Historical R4 replacement direction receipt — preserved as explicitly historical
+    # with PROPOSED_NOT_ACCEPTED.  The immutable block and this historical receipt are the
+    # only legitimate remaining PROPOSED_NOT_ACCEPTED carriers.
+    r4_historical_header = (
+        "### M60-B2 R4 replacement direction receipt (HISTORICAL — SUPERSEDED BY R11 ACCEPTANCE)"
+    )
+    r4_historical_count = text.count(r4_historical_header)
+    if r4_historical_count != 1:
+        fail(
+            "M60-B2 proposal must preserve exactly one historical R4 replacement direction "
+            f"receipt (HISTORICAL — SUPERSEDED BY R11 ACCEPTANCE) section, found {r4_historical_count}",
+            issues,
+        )
+    else:
+        r4_receipt = _extract_markdown_section(text, r4_historical_header)
+        if r4_receipt is None or "- `Receipt status`: `PROPOSED_NOT_ACCEPTED`" not in r4_receipt:
+            fail(
+                "M60-B2 historical R4 replacement direction receipt must preserve "
+                "- `Receipt status`: `PROPOSED_NOT_ACCEPTED`",
+                issues,
+            )
+
+    retrieval_path = ROOT / M60_B2_SOURCE_RETRIEVAL_PATH
+    if not retrieval_path.is_file():
+        fail(f"M60-B2 source-retrieval contract missing: {M60_B2_SOURCE_RETRIEVAL_PATH}", issues)
+    elif not retrieval_path.read_bytes().strip():
+        fail(f"M60-B2 source-retrieval contract empty: {M60_B2_SOURCE_RETRIEVAL_PATH}", issues)
+
+    import_path = ROOT / M60_B2_SOURCE_IMPORT_PATH
+    if not import_path.is_file():
+        fail(f"M60-B2 source-import contract missing: {M60_B2_SOURCE_IMPORT_PATH}", issues)
+    elif not import_path.read_bytes().strip():
+        fail(f"M60-B2 source-import contract empty: {M60_B2_SOURCE_IMPORT_PATH}", issues)
+
+    _check_source_retrieval_contract_metadata(issues)
+    _check_source_retrieval_lifecycle_precondition(issues)
+    _check_source_retrieval_transport_boundary_projection(issues)
+    _check_source_import_owner_projection(issues)
+
+    matrix_path = ROOT / "docs/acceptance/matrix.tsv"
+    if not matrix_path.is_file():
+        fail("M60-B2 acceptance matrix carrier missing", issues)
+        return
+    matrix_lines = matrix_path.read_text(encoding="utf-8").splitlines()
+    if not matrix_lines:
+        fail("M60-B2 acceptance matrix empty", issues)
+        return
+    header = matrix_lines[0].split("\t")
+    try:
+        case_index = header.index("case_id")
+        status_index = header.index("status")
+    except ValueError as ex:
+        fail(f"M60-B2 acceptance matrix header missing column: {ex}", issues)
+        return
+    src010_rows = []
+    for line in matrix_lines[1:]:
+        fields = line.split("\t")
+        if len(fields) != len(header):
+            continue
+        if fields[case_index] == "SRC-010":
+            src010_rows.append(fields)
+    if len(src010_rows) != 1:
+        fail(
+            f"M60-B2: expected exactly one SRC-010 row, found {len(src010_rows)}", issues,
+        )
+    elif src010_rows[0][status_index] != "planned":
+        fail("M60-B2: SRC-010 must remain planned in acceptance matrix", issues)
+
+    for line in matrix_lines[1:]:
+        fields = line.split("\t")
+        if len(fields) != len(header):
+            continue
+        if fields[case_index] == "SRC-014":
+            fail("M60-B2: SRC-014 must remain catalog-only (not in active matrix)", issues)
+            break
+
+    _check_m60_roadmap_section_status(issues)
+    _check_module_boundaries_transport_projection(issues)
+    _check_coverage_matrix_m60_projection(issues)
+    _check_m60_blueprint_status_projection(issues)
+
+
+def _check_source_retrieval_transport_boundary_projection(issues: list[str]) -> None:
+    retrieval_path = ROOT / M60_B2_SOURCE_RETRIEVAL_PATH
+    retrieval_text = retrieval_path.read_text(encoding="utf-8")
+
+    # Section-scoped boundary projection: exactly one line in §1.1 must state
+    # M90 never receives EffectReadyRetrievalPlan and never returns BoundedFetch.
+    boundary_section = _extract_markdown_section(
+        retrieval_text, "### 1.1 Two-layer M60/M90 transport boundary"
+    )
+    if boundary_section is None:
+        fail(
+            "source-retrieval contract missing "
+            "'### 1.1 Two-layer M60/M90 transport boundary' section",
+            issues,
+        )
+    else:
+        m90_never_line = (
+            "- M90 never receives `EffectReadyRetrievalPlan` and never returns "
+            "or constructs `BoundedFetch`, a domain receipt, "
+            "or an authority-bearing carrier."
+        )
+        if boundary_section.count(m90_never_line) != 1:
+            fail(
+                "source-retrieval contract §1.1 must carry exactly one line stating "
+                "M90 never receives EffectReadyRetrievalPlan and never returns BoundedFetch",
+                issues,
+            )
+
+    # Section-scoped one-call port signature in §9.3.
+    port_section = _extract_markdown_section(
+        retrieval_text, "### 9.3 SourceTransportPort (M90 public port)"
+    )
+    if port_section is None:
+        fail(
+            "source-retrieval contract missing '### 9.3 SourceTransportPort (M90 public port)'",
+            issues,
+        )
+    else:
+        port_sig = "pub trait SourceTransportPort: Send + Sync {"
+        if port_section.count(port_sig) != 1:
+            fail(
+                "source-retrieval contract §9.3 must carry exactly one public one-call "
+                "SourceTransportPort trait signature",
+                issues,
+            )
+        if "fn transport" not in port_section:
+            fail(
+                "source-retrieval contract §9.3 must define the transport method",
+                issues,
+            )
+        if "Result<RetrievalTransportSuccess, SourceTransportError>" not in port_section:
+            fail(
+                "source-retrieval contract §9.3 must use the transport-only "
+                "RetrievalTransportSuccess / SourceTransportError error split",
+                issues,
+            )
+        if "Result<RetrievalTransportSuccess, SourceFetchFailure>" in port_section:
+            fail(
+                "source-retrieval contract §9.3 must not expose domain SourceFetchFailure "
+                "through the public M90 transport port",
+                issues,
+            )
+
+    # Section-scoped request ownership / no lifetime / no public constructor in §9.1.
+    request_section = _extract_markdown_section(
+        retrieval_text, "### 9.1 RetrievalTransportRequest"
+    )
+    if request_section is None:
+        fail(
+            "source-retrieval contract missing '### 9.1 RetrievalTransportRequest'",
+            issues,
+        )
+    else:
+        owned_prefix = (
+            "`RetrievalTransportRequest` is a non-authority, private-field, owned struct "
+            "containing exactly the adapter inputs needed for deterministic transport. It owns "
+            "all values ("
+        )
+        owned_suffix = ") and carries no lifetime parameter."
+        owned_start = request_section.find(owned_prefix)
+        owned_sentence_count = request_section.count(owned_prefix)
+        owned_end = request_section.find(owned_suffix, owned_start + len(owned_prefix))
+        if owned_sentence_count != 1 or owned_start == -1 or owned_end == -1:
+            owned_tokens: tuple[str, ...] = ()
+            fail(
+                "source-retrieval contract §9.1 must carry exactly one authoritative "
+                "RetrievalTransportRequest owned-field sentence, found "
+                f"{owned_sentence_count}",
+                issues,
+            )
+        else:
+            owned_body = request_section[owned_start + len(owned_prefix) : owned_end]
+            owned_tokens = tuple(token.strip() for token in owned_body.split(","))
+        request_owned_values = (
+            "`RetrievalAttemptId`",
+            "`SourceId`",
+            "`SourceAuthorityRevision`",
+            "`RetrievalDnsName`",
+            "`SerializedRetrievalRequest`",
+            "`SourceMediaType`",
+            "`u32 maximum_response_bytes`",
+            "`u32 maximum_elapsed_seconds`",
+            "`SourceRetrievalProtocolVersion`",
+            "`PublicIpPolicyVersion`",
+        )
+        if owned_tokens != request_owned_values:
+            fail(
+                "source-retrieval contract §9.1 authoritative RetrievalTransportRequest "
+                f"owned-field sequence drifted: expected={request_owned_values!r} "
+                f"actual={owned_tokens!r}",
+                issues,
+            )
+        accessor_label = "The exact read-only accessor surface is:\n\n"
+        accessor_label_start = request_section.find(accessor_label)
+        if accessor_label_start == -1:
+            accessor_body = ""
+            fail(
+                "source-retrieval contract §9.1 must carry the exact accessor-surface label",
+                issues,
+            )
+        else:
+            fence_start = request_section.find(
+                "```rust\n", accessor_label_start + len(accessor_label)
+            )
+            fence_end = request_section.find("\n```", fence_start + len("```rust\n"))
+            if fence_start == -1 or fence_end == -1:
+                accessor_body = ""
+                fail(
+                    "source-retrieval contract §9.1 must carry one Rust accessor fence "
+                    "immediately after the exact accessor-surface label",
+                    issues,
+                )
+            else:
+                accessor_body = request_section[
+                    fence_start + len("```rust\n") : fence_end
+                ]
+        request_accessors = (
+            "pub fn RetrievalTransportRequest::attempt_id(&self) -> &RetrievalAttemptId",
+            "pub fn RetrievalTransportRequest::source_id(&self) -> &SourceId",
+            "pub fn RetrievalTransportRequest::authority_revision(&self) -> SourceAuthorityRevision",
+            "pub fn RetrievalTransportRequest::canonical_host(&self) -> &RetrievalDnsName",
+            "pub fn RetrievalTransportRequest::serialized_request(&self) -> &SerializedRetrievalRequest",
+            "pub fn RetrievalTransportRequest::expected_media_type(&self) -> &SourceMediaType",
+            "pub fn RetrievalTransportRequest::maximum_response_bytes(&self) -> u32",
+            "pub fn RetrievalTransportRequest::maximum_elapsed_seconds(&self) -> u32",
+            "pub fn RetrievalTransportRequest::protocol_version(&self) -> &SourceRetrievalProtocolVersion",
+            "pub fn RetrievalTransportRequest::public_ip_policy_version(&self) -> &PublicIpPolicyVersion",
+        )
+        actual_accessors = tuple(line for line in accessor_body.splitlines() if line)
+        if actual_accessors != request_accessors:
+            fail(
+                "source-retrieval contract §9.1 exact RetrievalTransportRequest accessor "
+                f"surface drifted: expected={request_accessors!r} actual={actual_accessors!r}",
+                issues,
+            )
+        if "no lifetime parameter" not in request_section:
+            fail(
+                "source-retrieval contract §9.1 must declare no lifetime parameter",
+                issues,
+            )
+        if "No public constructor, Serde, `Default`, URL/header builder conversion, arbitrary headers or retry/proxy/cookie/auth knobs." not in request_section:
+            fail(
+                "source-retrieval contract §9.1 must declare the exact authority-sentence: "
+                "No public constructor, Serde, Default, URL/header builder conversion, "
+                "arbitrary headers or retry/proxy/cookie/auth knobs.",
+                issues,
+            )
+        if "not `Clone`" not in request_section:
+            fail(
+                "source-retrieval contract §9.1 must declare not Clone",
+                issues,
+            )
+        if "`Clone + Debug + Eq`" in request_section or "cloneable non-authority" in request_section:
+            fail(
+                "source-retrieval contract §9.1 must keep RetrievalTransportRequest move-only",
+                issues,
+            )
+
+    # Section-scoped raw observation + consuming projection in §9.2.
+    success_section = _extract_markdown_section(
+        retrieval_text, "### 9.2 RetrievalTransportSuccess"
+    )
+    if success_section is None:
+        fail(
+            "source-retrieval contract missing '### 9.2 RetrievalTransportSuccess'",
+            issues,
+        )
+    else:
+        if "into_parts" not in success_section:
+            fail(
+                "source-retrieval contract §9.2 must declare consuming into_parts",
+                issues,
+            )
+        if "No observation constructor returns or embeds `RetrievalPolicyError`, `BoundedFetch`, receipt, phase carrier or authority witness." not in success_section:
+            fail(
+                "source-retrieval contract §9.2 must declare the exact authority-sentence: "
+                "No observation constructor returns or embeds RetrievalPolicyError, "
+                "BoundedFetch, receipt, phase carrier or authority witness.",
+                issues,
+            )
+        if "into_parts(self)" not in success_section:
+            fail(
+                "source-retrieval contract §9.2 must retain a consuming success projection",
+                issues,
+            )
+        success_tokens = (
+            "pub fn RetrievalTransportSuccess::new(\n    response_head_bytes: Vec<u8>,\n    body_bytes: Vec<u8>,\n    wire_bytes_after_headers: u64,\n    peer_socket_addr: std::net::SocketAddr,\n    dns_transport_observation: DnsTransportObservation,\n    framing: RetrievalBodyFraming,\n    elapsed_milliseconds: u64,\n) -> Result<RetrievalTransportSuccess, SourceTransportError>",
+            "pub struct RetrievalTransportSuccessParts {\n    pub response_head_bytes: Vec<u8>,\n    pub body_bytes: Vec<u8>,\n    pub wire_bytes_after_headers: u64,\n    pub peer_socket_addr: std::net::SocketAddr,\n    pub dns_transport_observation: DnsTransportObservation,\n    pub framing: RetrievalBodyFraming,\n    pub elapsed_milliseconds: u64,\n}",
+            "pub fn RetrievalTransportSuccess::into_parts(self) -> RetrievalTransportSuccessParts",
+            "pub fn RetrievalTransportSuccess::dns_transport_observation(&self) -> &DnsTransportObservation",
+            "The constructor may return only `SourceTransportError::ObservationShapeRejected`",
+        )
+        for token in success_tokens:
+            if success_section.count(token) != 1:
+                fail(f"source-retrieval contract §9.2 exact transport success API drifted: {token}", issues)
+
+    dns_section = _extract_markdown_section(
+        retrieval_text, "### 7.3 DNS resolution and peer binding"
+    )
+    if dns_section is None:
+        fail("source-retrieval contract missing '### 7.3 DNS resolution and peer binding'", issues)
+    else:
+        dns_tokens = (
+            "pub fn DnsTransportObservation::new(\n    queried_host: String,\n    cname_chain: Vec<String>,\n    complete_addresses: Vec<std::net::Ipv4Addr>,\n) -> Result<DnsTransportObservation, SourceTransportError>",
+            "It does not apply the v0 public-IP table, sort/deduplicate addresses, reject alias loops, select a peer or return `RetrievalPolicyError`.",
+            "M60 independently reruns the policy over every successful raw observation",
+        )
+        for token in dns_tokens:
+            if dns_section.count(token) != 1:
+                fail(f"source-retrieval contract §7.3 raw DNS/M60 policy split drifted: {token}", issues)
+
+    trait_section = _extract_markdown_section(
+        retrieval_text, "### 11.2 Carrier linearity rules"
+    )
+    inventory_section = _extract_markdown_section(
+        retrieval_text, "### 11.5 Complete named Rust inventory"
+    )
+    required_trait_rows = (
+        "| `RetrievalReplayIdentity` | no | no | no | no | no (owner-private) | yes | no |",
+        "| `RetrievalAttemptReceipt` | no | no | no | no | no (owner-private) | yes | no |",
+        "| `RetrievalPlanCandidate` | yes | no | no | no | only `derive_candidate` | yes | no |",
+        "| `BodyObservation` | no | no | no | no | yes (checked) | yes | no |",
+        "| `DnsTransportObservation` | no | no | no | no | yes (shape-only) | yes | no |",
+        "| `DnsResolutionObservation` | no | no | no | no | no (owner-private) | yes | no |",
+        "| `RetrievalTransportSuccess` | no | no | no | no | yes (shape-only) | yes | no |",
+        "| `RetrievalTransportSuccessParts` | no | no | no | no | only `RetrievalTransportSuccess::into_parts` | yes | no |",
+    )
+    if trait_section is None:
+        fail("source-retrieval contract missing '### 11.2 Carrier linearity rules'", issues)
+    else:
+        for row in required_trait_rows:
+            if trait_section.count(row) != 1:
+                fail(f"source-retrieval contract §11.2 trait projection drifted: {row}", issues)
+    if inventory_section is None:
+        fail("source-retrieval contract missing '### 11.5 Complete named Rust inventory'", issues)
+    else:
+        public_heading = "Public non-authority values (directly or through checked pure construction):"
+        private_heading = "Crate-private/internal values (no public constructor, no Serde, no Clone unless specified):"
+        if inventory_section.count(public_heading) != 1 or inventory_section.count(private_heading) != 1:
+            fail("source-retrieval contract §11.5 inventory headings drifted", issues)
+        else:
+            public_inventory, private_inventory = inventory_section.split(private_heading, 1)
+            if "| `SourceFetchFailure` | §11 |" in public_inventory:
+                fail("source-retrieval contract §11.5 must keep SourceFetchFailure out of public inventory", issues)
+            if private_inventory.count("| `SourceFetchFailure` | §11 |") != 1:
+                fail("source-retrieval contract §11.5 must classify SourceFetchFailure crate-private exactly once", issues)
+
+
+def _check_source_import_owner_projection(issues: list[str]) -> None:
+    import_path = ROOT / M60_B2_SOURCE_IMPORT_PATH
+    import_text = import_path.read_text(encoding="utf-8")
+    if "ACCEPT_EXACT_M60_B2_R11_PACKET" not in import_text:
+        fail(
+            "source-import contract Metadata must record the R11 acceptance decision "
+            "`ACCEPT_EXACT_M60_B2_R11_PACKET`",
+            issues,
+        )
+    if "SourceStatusEvidenceId::new(String) -> Result<SourceStatusEvidenceId, SourceValueError>" not in import_text:
+        fail(
+            "source-import contract must project exact SourceStatusEvidenceId::new constructor "
+            "returning Result<SourceStatusEvidenceId, SourceValueError>",
+            issues,
+        )
+    if "SourceMediaType::parse(&str) -> Result<SourceMediaType, SourceValueError>" not in import_text:
+        fail(
+            "source-import contract must project exact SourceMediaType::parse constructor",
+            issues,
+        )
+
+
+def _check_module_boundaries_transport_projection(issues: list[str]) -> None:
+    boundaries_path = ROOT / "docs/contracts/module-boundaries.md"
+    boundaries_text = boundaries_path.read_text(encoding="utf-8")
+    exact_row = "| `B-M60-M90-SOURCE-TRANSPORT` | `M60` | `M90` | M60 produces owned move-only `RetrievalTransportRequest` from `EffectReadyRetrievalPlan`; M90 implements `SourceTransportPort::transport`, performs DNS/TLS/HTTP/framing/body I/O under M60-provided bounds, returns only `RetrievalTransportSuccess` or transport-only `SourceTransportError`; M90 never receives `EffectReadyRetrievalPlan`, never names domain `SourceFetchFailure`, and never returns `BoundedFetch` | accepted contract; implementation planned |"
+    if boundaries_text.count(exact_row) != 1:
+        fail(
+            "module-boundaries must project the exact B-M60-M90-SOURCE-TRANSPORT "
+            "move-only/transport-error/non-authority row",
+            issues,
+        )
+    if "B-M60-M90-SOURCE-FETCH" in boundaries_text:
+        fail(
+            "module-boundaries must not retain the superseded B-M60-M90-SOURCE-FETCH boundary",
+            issues,
+        )
+    if "B-M60-M90-RETRIEVAL-CLOCK" in boundaries_text:
+        fail(
+            "module-boundaries must keep RetrievalClockPort M60-internal, not register an M90 clock boundary",
+            issues,
+        )
+
+
+def _check_coverage_matrix_m60_projection(issues: list[str]) -> None:
+    coverage_path = ROOT / "docs/coverage-matrix.md"
+    coverage_text = coverage_path.read_text(encoding="utf-8")
+    if "B-M60-M90-SOURCE-TRANSPORT" not in coverage_text:
+        fail(
+            "coverage-matrix M60 row must project B-M60-M90-SOURCE-TRANSPORT",
+            issues,
+        )
+    if "B-M60-M90-SOURCE-FETCH" in coverage_text:
+        fail(
+            "coverage-matrix must not retain the superseded B-M60-M90-SOURCE-FETCH",
+            issues,
+        )
+    if "B-M60-M90-RETRIEVAL-CLOCK" in coverage_text:
+        fail(
+            "coverage-matrix must not project an M60-M90 retrieval-clock boundary",
+            issues,
+        )
+
+
+def _check_m60_blueprint_status_projection(issues: list[str]) -> None:
+    blueprint_path = ROOT / "docs/plan/modules/70-campus-trust-source-pipeline.md"
+    blueprint_text = blueprint_path.read_text(encoding="utf-8")
+    required = (
+        "operational Suspended/Revoked accepted as contract authority in source-import/v1, not implemented;",
+        "The accepted `source-import/v1` and `source-retrieval/v0` contracts (R11 two-layer edition) define current contract authority for modules 1–2. The lifecycle precondition (operational `Suspended`/`Revoked`) must be satisfied by module 1 before module 2 can be implemented. No implementation exists for v1 or retrieval-policy; retained implementation remains forbidden until a separately admitted implementation packet.",
+    )
+    for token in required:
+        if blueprint_text.count(token) != 1:
+            fail(f"M60 blueprint accepted-contract authority projection drifted: {token}", issues)
+    if "operational Suspended/Revoked accepted as authority in source-import/v1;" in blueprint_text:
+        fail(
+            "M60 blueprint must not promote source-import/v1 lifecycle beyond accepted-contract authority",
+            issues,
+        )
+    if "operational Suspended/Revoked proposed as authority in source-import/v1, not accepted;" in blueprint_text:
+        fail(
+            "M60 blueprint must not regress to proposed-only lifecycle authority after R11 acceptance",
+            issues,
+        )
+
+
 def check_p1_source_revision_contract(issues: list[str]) -> None:
     proposal_path = ROOT / P1_SOURCE_REVISION_PROPOSAL
     contract_path = ROOT / P1_SOURCE_IMPORT_CONTRACT
@@ -9226,13 +9890,74 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
             issues,
         )
 
-    contract_sha = hashlib.sha256(contract_bytes).hexdigest()
-    if contract_sha != P1_SOURCE_IMPORT_CONTRACT_SHA256:
+    contract = contract_bytes.decode("utf-8")
+
+    # Preserve the exact historical v0 section 15 frozen digest — not the full
+    # evolving v1 file.  The section heading and terminator are uniquely named;
+    # controller-computed authoritative values are inputs, not derived from actual.
+    v0_section_start = contract.find(P1_SOURCE_IMPORT_V0_SECTION_HEADING)
+    if v0_section_start == -1:
         fail(
-            "P1 source-import contract drift: "
-            f"expected {P1_SOURCE_IMPORT_CONTRACT_SHA256} actual={contract_sha}",
+            "source-import contract missing historical v0 section "
+            f"{P1_SOURCE_IMPORT_V0_SECTION_HEADING!r}",
             issues,
         )
+    else:
+        v0_section_end = contract.find("\n## 16.", v0_section_start)
+        if v0_section_end == -1:
+            fail(
+                "source-import contract missing v0 section terminator '## 16.'",
+                issues,
+            )
+        else:
+            v0_section_bytes = contract[v0_section_start:v0_section_end].encode("utf-8")
+            if len(v0_section_bytes) != P1_SOURCE_IMPORT_V0_SECTION_BYTES:
+                fail(
+                    "P1 source-import historical v0 section §15 byte count drift: "
+                    f"expected={P1_SOURCE_IMPORT_V0_SECTION_BYTES} "
+                    f"actual={len(v0_section_bytes)}",
+                    issues,
+                )
+            v0_section_sha256 = hashlib.sha256(v0_section_bytes).hexdigest()
+            if v0_section_sha256 != P1_SOURCE_IMPORT_V0_SECTION_SHA256:
+                fail(
+                    "P1 source-import historical v0 section §15 digest drift: "
+                    f"expected={P1_SOURCE_IMPORT_V0_SECTION_SHA256} "
+                    f"actual={v0_section_sha256}",
+                    issues,
+                )
+
+    # Validate current v1 Metadata separately — exact lines, each exactly once.
+    metadata = _extract_markdown_section(contract, "## Metadata")
+    if metadata is None:
+        fail("source-import contract missing '## Metadata' section", issues)
+    else:
+        required_metadata_lines = (
+            "- `Status`: Accepted contract as `source-import/v1` under the R11 M60-B2 two-layer transport architecture; supersedes the accepted V10 `DEC-M60-B2-ACCEPTANCE`; `source-import/v0` retained as explicitly historical (see §15)",
+            "- `Version`: `source-import/v1`",
+            "- `Last Review`: `2026-08-12`",
+            "- `Predecessor`: [`source-import/v0`](#15-source-importv0-historical-evidence-retained) — accepted for bounded `M60-B1 source-registry` (P1-1), remains the authority for the existing `crates/platform-core/src/source_registry.rs` B1 implementation",
+            "- `Accepted Per`: `ACCEPT_EXACT_M60_B2_R11_PACKET` — Develata accepted the exact `33046`-byte semantic packet (`sha256:34cd911e6120646a0e2e410de9987efd167e519f43e5bf64a43c96d9c3654f1e`) on 2026-08-13; prior V10 `DEC-M60-B2-ACCEPTANCE` is explicitly superseded historical evidence",
+            "- `Owning Blueprint`: [`M60 Campus Trust and Source Pipeline`](../plan/modules/70-campus-trust-source-pipeline.md)",
+            "- `Depends On`: [`module-boundaries.md`](module-boundaries.md), [`source-retrieval.md`](source-retrieval.md), and the existing crate-root `SourceAuthority` order",
+            "- `Acceptance`: `SRC-001` is `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted; `SRC-014` remains catalog-only/non-admitted",
+            "- `Primary Code`: `crates/platform-core/src/source_registry.rs` for bounded B1 (P1-1 review candidate, still under `source-import/v0`); no v1 Rust implementation exists",
+        )
+        for line in required_metadata_lines:
+            if metadata.count(line) != 1:
+                fail(f"P1 source-import v1 Metadata line missing/duplicated: {line!r}", issues)
+        if metadata.count("- `Status`:") != 1:
+            fail("P1 source-import '## Metadata' must have exactly one Status line", issues)
+        if metadata.count("- `Version`:") != 1:
+            fail("P1 source-import '## Metadata' must have exactly one Version line", issues)
+        if metadata.count("- `Predecessor`:") != 1:
+            fail("P1 source-import '## Metadata' must have exactly one Predecessor line", issues)
+        if metadata.count("- `Accepted Per`:") != 1:
+            fail("P1 source-import '## Metadata' must have exactly one Accepted Per line", issues)
+        if metadata.count("- `Acceptance`:") != 1:
+            fail("P1 source-import '## Metadata' must have exactly one Acceptance line", issues)
+        if metadata.count("- `Primary Code`:") != 1:
+            fail("P1 source-import '## Metadata' must have exactly one Primary Code line", issues)
 
     proposal = proposal_bytes.decode("utf-8")
     packet_text = packet.decode("utf-8")
@@ -9326,42 +10051,60 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
         if p1_1_receipt.count(token) != 1:
             fail(f"P1-1 GO receipt missing/duplicated: {token}", issues)
 
-    contract = contract_bytes.decode("utf-8")
     blueprint = (ROOT / "docs/plan/modules/70-campus-trust-source-pipeline.md").read_text(
         encoding="utf-8"
     )
     contract_tokens = (
-        "- `Status`: Accepted for bounded `M60-B1 source-registry`, implemented as a review candidate; later M60 slices remain planned",
-        "- `Version`: `source-import/v0`",
-        "- `Current Contract`: accepted [`source-import/v0`]",
+        "- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` is implemented under `source-import/v0` (P1-1); operational `Suspended`/`Revoked` lifecycle precondition applies before any live B2 retrieval adapter; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only",
         "- `Implementation State`: `planned`",
-        "`SourceReviewState` is exactly:",
-        "`SourceReviewState` is the bounded B1 review-admission state only.",
-        "`Suspended` and `Revoked`, with their evidence-bearing transitions, must be accepted before any live M60-B2 retrieval adapter",
-        "P1-1 introduces five nominal string values",
-        "owner:            SourceOwner",
-        "reviewer:        SourceReviewerId",
-        "Every new definition starts as `Proposed`.",
-        "SourceDefinition::proposed(",
-        "No constructor takes `SourceReviewState`",
-        "`ModelInference` is rejected by `SourceDefinition::proposed`",
-        "OwnerControlCharacter { byte_index: usize }\nNonSourceAuthority\n```",
-        "No aggregate, state, receipt, definition, registry or registry error implements Serde in B1.",
-        "This candidate family stays `Proposed` throughout P1-0 and P1-1.",
-        "duplicate `SourceId` or duplicate canonical `SourceUrl` is rejected",
+        "- `Version`: `m60-campus-trust/v0.3`",
+        "- `Current Contract`: accepted [`source-import/v1`](../../contracts/source-import.md) and [`source-retrieval/v0`](../../contracts/source-retrieval.md) under R11 (`ACCEPT_EXACT_M60_B2_R11_PACKET`); bounded B1 implementation remains under [`source-import/v0`](../../contracts/source-import.md#15-source-importv0--historical-evidence-retained) (P1-1 review candidate)",
+        "SourceStatus: Proposed | Approved | Suspended | Revoked",
+        "operational Suspended/Revoked accepted as contract authority in source-import/v1, not implemented;",
+        "The accepted `source-import/v1` and `source-retrieval/v0` contracts (R11 two-layer edition) define current contract authority for modules 1–2. The lifecycle precondition (operational `Suspended`/`Revoked`) must be satisfied by module 1 before module 2 can be implemented. No implementation exists for v1 or retrieval-policy; retained implementation remains forbidden until a separately admitted implementation packet.",
+        "SourceAuthorityRevision (non-zero monotone; CAS on every mutation)",
+        "Proposed  + approve(full receipt)                 -> Approved(revision+1)",
+        "Proposed  + revoke(evidence)                      -> Revoked(revision+1, prior_approval=None)",
+        "`SourceRetrievalPolicy` has exactly six fields (expanded from v0's two):",
+        "No constructor takes `SourceStatus`; no `approved`, `from_parts`, builder, `TryFrom` or Serde path may bypass the registry approval transition.",
+        "`ModelInference` is rejected by `SourceDefinition::proposed`.",
+        "This candidate family stays `Proposed`. No concrete USTC source is approved.",
+        "duplicate `SourceId` or duplicate canonical `SourceUrl` is rejected without replacing the first definition;",
         "DuplicateUrl { url: SourceUrl }",
-        "P1-0 changes no acceptance status.",
-        "promote only `SRC-001` if its exact registered binding passes",
-        "keep `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row unchanged",
-        "add no dependency, adapter, network call, persistence, clock, parser or concrete approved source",
+        "P1-0 records one reviewed **candidate family**, not an approved registry row:",
+        "`SRC-001` is `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`",
+        "retrieval-policy metadata with six fields whose limits later adapters must enforce",
+        "SourceDefinitionBody::new(\n    owner: SourceOwner,\n    url: SourceUrl,\n    authority: SourceAuthority,\n    retrieval_policy: SourceRetrievalPolicy,\n) -> Result<Self, SourceValueError>",
+        "SourceRetrievalPolicy::new(\n    minimum_interval_seconds: u32,\n    maximum_response_bytes: u32,\n    maximum_elapsed_seconds: u32,\n    expected_media_type: SourceMediaType,\n    protocol_version: SourceRetrievalProtocolVersion,\n    public_ip_policy_version: PublicIpPolicyVersion,\n) -> Result<Self, SourceValueError>",
+        "P1-1 implemented bounded `M60-B1 source-registry` as a review candidate under `source-import/v0`",
+        "added `crates/platform-core/src/source_registry.rs`;",
+        "promoted `SRC-001` to `implemented` bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`;",
+        "kept `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row unchanged.",
+        "It does **not** fetch a URL, resolve DNS, follow a redirect, read a clock, parse HTML/PDF, persist raw bytes, normalize records, compute a semantic diff, advance a baseline or publish a product event.",
     )
     combined = contract + "\n" + blueprint
     for token in contract_tokens:
         if combined.count(token) != 1:
             fail(f"P1 source-import truth projection missing/duplicated: {token}", issues)
 
-    candidate_start = contract.find("## 11. Concrete source candidate: proposed only")
-    candidate_end = contract.find("## 12. P1-1 implementation slice", max(candidate_start, 0))
+    constructor_section = _extract_markdown_section(contract, "### 4.1 Constructors and traits")
+    if constructor_section is None:
+        fail("P1 source-import missing '### 4.1 Constructors and traits'", issues)
+    else:
+        required_constructor_tokens = (
+            "SourceDefinitionBody::new(\n    owner: SourceOwner,\n    url: SourceUrl,\n    authority: SourceAuthority,\n    retrieval_policy: SourceRetrievalPolicy,\n) -> Result<Self, SourceValueError>",
+            "SourceRetrievalPolicy::new(\n    minimum_interval_seconds: u32,\n    maximum_response_bytes: u32,\n    maximum_elapsed_seconds: u32,\n    expected_media_type: SourceMediaType,\n    protocol_version: SourceRetrievalProtocolVersion,\n    public_ip_policy_version: PublicIpPolicyVersion,\n) -> Result<Self, SourceValueError>",
+            "No constructor takes `SourceStatus`; no `approved`, `from_parts`, builder, `TryFrom` or Serde path may bypass the registry approval transition.",
+        )
+        for token in required_constructor_tokens:
+            if constructor_section.count(token) != 1:
+                fail(
+                    f"P1 source-import §4.1 constructor authority drifted: {token}",
+                    issues,
+                )
+
+    candidate_start = contract.find("## 12. Concrete source candidate: proposed only")
+    candidate_end = contract.find("## 13. P1-1 implementation slice", max(candidate_start, 0))
     if candidate_start == -1 or candidate_end == -1:
         fail("P1 concrete source candidate section missing", issues)
     else:
@@ -9370,17 +10113,27 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
             "- `Proposed source family label` (not a B1 `SourceId`): `ustc-teach-calendar-fall`",
             "- `Proposed 2025 SourceId`: `ustc-teach-calendar-fall-2025`",
             "- `Proposed 2026 SourceId`: `ustc-teach-calendar-fall-2026`",
+            "- `Owner`: 中国科学技术大学教务处 / `www.teach.ustc.edu.cn`",
             "- `2025 URL`: `https://www.teach.ustc.edu.cn/calendar/19081.html`",
             "- `2026 URL`: `https://www.teach.ustc.edu.cn/calendar/20135.html`",
-            "- `Candidate minimum interval`: `21600` seconds",
-            "- `Candidate maximum response`: `131072` bytes",
-            "This candidate family stays `Proposed` throughout P1-0 and P1-1.",
+            "This candidate family stays `Proposed`. No concrete USTC source is approved.",
         )
         for token in required_candidate_lines:
             if candidate.count(token) != 1:
                 fail(f"P1 concrete source candidate carrier drifted: {token}", issues)
-        if candidate.count("Approved") != 0 or candidate.count("approved") != 1:
-            fail("P1 concrete source candidate approval posture drifted", issues)
+        # Reject false approval using exact lines/structure, not accidental word counts.
+        if candidate.count("Approved") != 0:
+            fail(
+                "P1 concrete source candidate must not contain 'Approved' — "
+                "the candidate family is Proposed, not approved",
+                issues,
+            )
+        if "This candidate family stays `Proposed`. No concrete USTC source is approved." not in candidate:
+            fail(
+                "P1 concrete source candidate must carry the exact Proposed-only sentence: "
+                "'This candidate family stays `Proposed`. No concrete USTC source is approved.'",
+                issues,
+            )
 
     matrix_path = ROOT / "docs/acceptance/matrix.tsv"
     if not matrix_path.is_file():
@@ -9443,8 +10196,6 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
     leaked = sorted(forbidden_fixture_names & tracked_like)
     if leaked:
         fail(f"P1 raw source evidence must remain outside repository: {leaked}", issues)
-
-
 P1_SOURCE_REGISTRY_SOURCE = "crates/platform-core/src/source_registry.rs"
 P1_SOURCE_REGISTRY_TEST = "crates/platform-core/tests/source_registry.rs"
 P1_SOURCE_REGISTRY_LIB = "crates/platform-core/src/lib.rs"
@@ -9696,6 +10447,304 @@ def check_p1_source_registry_implementation(issues: list[str]) -> None:
         fail("P1-1 source-registry acceptance test must reference SRC-001", issues)
 
 
+def _extract_markdown_section(text: str, heading: str) -> str | None:
+    start = text.find(heading + "\n")
+    if start == -1:
+        return None
+    content_start = start + len(heading) + 1
+    heading_level = len(heading.split()[0])
+    end = len(text)
+    for match in re.finditer(r"^(#+)\s", text[content_start:], flags=re.MULTILINE):
+        if len(match.group(1)) <= heading_level:
+            end = content_start + match.start()
+            break
+    return text[content_start:end]
+
+
+def _check_source_retrieval_contract_metadata(issues: list[str]) -> None:
+    retrieval_path = ROOT / M60_B2_SOURCE_RETRIEVAL_PATH
+    retrieval_text = retrieval_path.read_text(encoding="utf-8")
+    metadata = _extract_markdown_section(retrieval_text, "## Metadata")
+    if metadata is None:
+        fail(
+            "source-retrieval contract missing '## Metadata' section",
+            issues,
+        )
+        return
+    if metadata.count("- `Status`:") != 1:
+        fail(
+            "source-retrieval contract '## Metadata' must have exactly one Status line",
+            issues,
+        )
+    if metadata.count("- `Version`:") != 1:
+        fail(
+            "source-retrieval contract '## Metadata' must have exactly one Version line",
+            issues,
+        )
+    if "ACCEPT_EXACT_M60_B2_R11_PACKET" not in metadata:
+        fail(
+            "source-retrieval contract '## Metadata' Status line must record the R11 "
+            "acceptance decision `ACCEPT_EXACT_M60_B2_R11_PACKET` under the R11 two-layer "
+            "transport architecture",
+            issues,
+        )
+    if "- `Version`: `source-retrieval/v0`" not in metadata:
+        fail(
+            "source-retrieval contract '## Metadata' Version line does not record "
+            "source-retrieval/v0",
+            issues,
+        )
+
+
+def _check_source_retrieval_lifecycle_precondition(issues: list[str]) -> None:
+    retrieval_path = ROOT / M60_B2_SOURCE_RETRIEVAL_PATH
+    retrieval_text = retrieval_path.read_text(encoding="utf-8")
+    stop_section = _extract_markdown_section(
+        retrieval_text, "## 12. Non-claims and stop conditions"
+    )
+    if stop_section is None:
+        fail(
+            "source-retrieval contract missing "
+            "'## 12. Non-claims and stop conditions' section",
+            issues,
+        )
+        return
+    if (
+        "Operational `Suspended`/`Revoked` lifecycle and monotone "
+        "`SourceAuthorityRevision` must be present before any live B2 retrieval adapter"
+    ) not in stop_section:
+        fail(
+            "source-retrieval contract stop-condition section must carry the operational "
+            "Suspended/Revoked lifecycle and SourceAuthorityRevision precondition",
+            issues,
+        )
+
+
+def _check_m60_roadmap_section_status(issues: list[str]) -> None:
+    roadmap_path = ROOT / "docs/tasks/01-execution-roadmap.md"
+    if not roadmap_path.is_file():
+        fail("M60-B2 roadmap carrier missing", issues)
+        return
+    roadmap_text = roadmap_path.read_text(encoding="utf-8")
+    section = _extract_markdown_section(
+        roadmap_text, "## 12. M60 lane — Campus Trust and Source Pipeline"
+    )
+    if section is None:
+        fail(
+            "roadmap missing '## 12. M60 lane — Campus Trust and Source Pipeline' section",
+            issues,
+        )
+        return
+    if section.count("**Status**:") != 1:
+        fail(
+            "M60 owning roadmap section must have exactly one **Status** line",
+            issues,
+        )
+    if "R11 two-layer M60/M90 transport architecture" not in section:
+        fail(
+            "M60 owning roadmap section Status must reference the R11 two-layer "
+            "M60/M90 transport architecture",
+            issues,
+        )
+    if "PROPOSED_NOT_ACCEPTED" in roadmap_text and "R4 replacement direction receipt" not in roadmap_text:
+        conditions = (
+            "PROPOSED_NOT_ACCEPTED",
+        )
+        proposal_path = ROOT / M60_B2_PROPOSAL_PATH
+        if proposal_path.is_file():
+            proposal = proposal_path.read_text(encoding="utf-8")
+            for condition in conditions:
+                if condition not in proposal:
+                    fail(
+                        f"M60-B2 proposal must record R3 replacement package status "
+                        f"{condition!r}",
+                        issues,
+                    )
+
+
+def check_external_agent_access_contract(issues: list[str]) -> None:
+    """Bind the accepted M10/M80 external-Agent amendment to its owning carriers."""
+
+    rows = parse_markdown_table(
+        "docs/contracts/interfaces.md",
+        [
+            "Operation ID",
+            "Owner",
+            "Permission class",
+            "Effect class",
+            "Initial projections",
+            "Status",
+        ],
+        "external-Agent application-operation registry",
+        issues,
+    )
+    actual_operations: dict[str, tuple[str, ...]] = {}
+    for line_no, cells in rows:
+        operation_id = markdown_code_value(cells[0])
+        if operation_id is None:
+            fail(
+                f"external-Agent operation row {line_no} has an invalid operation ID",
+                issues,
+            )
+            continue
+        if operation_id in actual_operations:
+            fail(f"duplicate external-Agent operation ID: {operation_id}", issues)
+            continue
+        actual_operations[operation_id] = tuple(
+            markdown_code_value(cell) or cell for cell in cells[1:]
+        )
+    if actual_operations != EXTERNAL_AGENT_OPERATION_ROWS:
+        fail(
+            "external-Agent application-operation registry drift: "
+            f"missing={sorted(set(EXTERNAL_AGENT_OPERATION_ROWS) - set(actual_operations))} "
+            f"unexpected={sorted(set(actual_operations) - set(EXTERNAL_AGENT_OPERATION_ROWS))} "
+            f"changed={sorted(operation_id for operation_id in set(actual_operations) & set(EXTERNAL_AGENT_OPERATION_ROWS) if actual_operations[operation_id] != EXTERNAL_AGENT_OPERATION_ROWS[operation_id])}",
+            issues,
+        )
+
+    permission_rows = parse_markdown_table(
+        "docs/contracts/permissions.md",
+        ["Class", "Data/effect boundary", "Initial client posture"],
+        "external-Agent permission classes",
+        issues,
+    )
+    expected_permission_classes = {
+        "public-read",
+        "public-linkout",
+        "tenant-private-read",
+        "tenant-private-write",
+    }
+    actual_permission_classes = {
+        value
+        for _, cells in permission_rows
+        if (value := markdown_code_value(cells[0])) is not None
+    }
+    if actual_permission_classes != expected_permission_classes:
+        fail(
+            "external-Agent permission class set drift: "
+            f"expected={sorted(expected_permission_classes)} "
+            f"actual={sorted(actual_permission_classes)}",
+            issues,
+        )
+
+    texts = {
+        rel: (ROOT / rel).read_text(encoding="utf-8")
+        for rel in EXTERNAL_AGENT_CONTRACT_FILES
+        if (ROOT / rel).is_file()
+    }
+    missing_carriers = sorted(set(EXTERNAL_AGENT_CONTRACT_FILES) - set(texts))
+    if missing_carriers:
+        fail(f"external-Agent contract carrier missing: {missing_carriers}", issues)
+        return
+
+    joined = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "docs").rglob("*.md")
+        if path.is_file()
+    )
+    for forbidden in ("`plan.list`", "`plan.get`", "`review.linkout`"):
+        if forbidden in joined:
+            fail(f"ambiguous external-Agent operation alias is forbidden: {forbidden}", issues)
+
+    required_fragments = {
+        "docs/contracts/interfaces.md": (
+            "The first retained protocol proof is `server.info` plus `capability.list`; the first shared CLI/inbound-MCP vertical slice is `market.package.list`.",
+            "The first remote profile uses reviewed MCP Streamable HTTP.",
+            "`planner.generate` creates only a tenant-local draft. It does not enroll, register, pay or submit a transaction to any external campus system.",
+        ),
+        "docs/contracts/permissions.md": (
+            "Skill text describes when and how to call reviewed CLI/MCP operations",
+            "raw USTC passwords;",
+            "automatic enrollment, registration, payment, form submission or any other external campus-system mutation;",
+        ),
+        "docs/contracts/client-shell.md": (
+            "The first retained MCP slice exposes only a reviewed `public-read` projection, initially `market.package.list`.",
+            "Windows is an admitted future M80 peer target",
+            "not part of the current required-target gate",
+        ),
+        "docs/contracts/cli.md": (
+            "These commands project `server.info`, `capability.list` and `market.package.list`",
+            "server-mediated browser pairing",
+        ),
+        "docs/features/05-headless-client-and-agent-integration.md": (
+            "This is the M10/M80 client-access lane order. It does not replace the product implementation order",
+        ),
+        "docs/plan/modules/80-dioxus-multi-client.md": (
+            "Windows is an explicitly admitted later desktop peer target but not a current required release gate",
+            "automatic enrollment, registration, payment or external campus transaction submission;",
+        ),
+        "docs/tasks/01-execution-roadmap.md": (
+            "This M10/M80 lane runs alongside—and does not reorder—the first-party product lane",
+            "Windows is not in the current required-target gate.",
+        ),
+    }
+    for rel, fragments in required_fragments.items():
+        text = texts[rel]
+        for fragment in fragments:
+            if text.count(fragment) != 1:
+                fail(
+                    f"external-Agent semantic projection missing/duplicated in {rel}: {fragment!r}",
+                    issues,
+                )
+
+    matrix_rows = {
+        line.split("\t", 1)[0]: line.split("\t")
+        for line in (ROOT / "docs/acceptance/matrix.tsv").read_text(encoding="utf-8").splitlines()[1:]
+        if line.strip()
+    }
+    matrix_requirements = {
+        "CLIENT-007": ("one operation registry",),
+        "CLIENT-009": (
+            "required initial host matrix",
+            "does not require a Windows binary",
+            "or imply Windows GUI support",
+        ),
+        "CLIENT-010": ("Streamable HTTP", "begin public-read", "applicable current grant state", "invalidate widened schema grants"),
+    }
+    for case_id, fragments in matrix_requirements.items():
+        row = matrix_rows.get(case_id)
+        if row is None:
+            fail(f"external-Agent acceptance row missing: {case_id}", issues)
+            continue
+        if len(row) != 7 or row[5] != "planned":
+            fail(f"external-Agent acceptance posture drift for {case_id}", issues)
+            continue
+        for fragment in fragments:
+            if fragment not in row[2]:
+                fail(
+                    f"external-Agent acceptance assertion drift for {case_id}: missing {fragment!r}",
+                    issues,
+                )
+
+EXPECTED_MAIN_CALLS = (
+    "check_key_files_present_and_nonempty(issues)",
+    "check_campaign_authorization(issues)",
+    "check_docs_topology(issues)",
+    "check_design_packets(issues)",
+    "check_no_retired_docs_references(issues)",
+    "check_markdown_links(issues)",
+    "check_no_obvious_secrets(issues)",
+    "check_market(issues)",
+    "check_course_fixture(issues)",
+    "check_invocation_fixtures(issues)",
+    "check_agent_plugin_dependency_direction(issues)",
+    "check_acceptance_matrix(issues)",
+    "check_acceptance_catalog(issues)",
+    "check_rust_doctest_gate(issues)",
+    "check_platform_identity_grammar_authority(issues)",
+    "check_platform_authority_implementation(issues)",
+    "check_platform_identity_implementation(issues)",
+    "check_platform_session_contract(issues)",
+    "check_platform_session_implementation(issues)",
+    "check_p1_source_revision_contract(issues)",
+    "check_p1_source_registry_implementation(issues)",
+    "check_m60_b2_packet_digest(issues)",
+    "check_external_agent_access_contract(issues)",
+    "check_module_registry(issues)",
+    "check_s0_architecture_review(issues)",
+)
+
+
 def main() -> int:
     issues: list[str] = []
     check_key_files_present_and_nonempty(issues)
@@ -9719,6 +10768,8 @@ def main() -> int:
     check_platform_session_implementation(issues)
     check_p1_source_revision_contract(issues)
     check_p1_source_registry_implementation(issues)
+    check_m60_b2_packet_digest(issues)
+    check_external_agent_access_contract(issues)
     check_module_registry(issues)
     check_s0_architecture_review(issues)
     if issues:

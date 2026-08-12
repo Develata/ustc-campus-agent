@@ -1,13 +1,13 @@
 # ADR-0009: Use Dioxus Fullstack for the long-lived Web and Android application
 
-- `Status`: Accepted; amended for mandatory Android and first-party Fullstack ingress; complemented by [`ADR-0010`](0010-typed-client-peer-adapters.md)
+- `Status`: Accepted; amended for mandatory Android, first-party Fullstack ingress and a later admitted Windows peer; complemented by [`ADR-0010`](0010-typed-client-peer-adapters.md)
 - `Date`: `2026-07-24`
-- `Last Amendment`: `2026-07-31`
+- `Last Amendment`: `2026-08-12`
 - `Depends on`: [`ADR-0004`](0004-runtime-reference-strategy.md), [`ADR-0007`](0007-finite-agent-harness.md), [`ADR-0008`](0008-agent-plugin-tool-boundary.md)
 
 ## Context
 
-USTC Campus Agent is intended to remain a useful school-level Agent platform after the competition, not a disposable submission. It must support a Web/PWA client, a server deployment managed through Docker Compose, and an Android client. iOS is later scope; desktop may be added later when a real native-desktop need exists.
+USTC Campus Agent is intended to remain a useful school-level Agent platform after the competition, not a disposable submission. It must support a Web/PWA client, a server deployment managed through Docker Compose, and an Android client. Windows is admitted as a later desktop peer but is not a current required release gate; iOS and other desktop targets remain later candidates.
 
 Maintaining independent Rust backend and TypeScript/JavaScript frontend stacks would duplicate language/toolchain upkeep, request/response types, error mapping, event reduction and Web/Android presentation logic. Dioxus provides one Rust component model across Web, Desktop and Mobile, while Dioxus Fullstack provides Axum-compatible typed server functions, SSR/hydration, routing, assets, forms, SSE, streams and WebSockets.
 
@@ -15,14 +15,14 @@ The official `0.7` documentation describes Web as the best-supported target and 
 
 ## Decision
 
-Adopt the Dioxus portion of [`client-shell/v2`](../contracts/client-shell.md):
+Adopt the Dioxus portion of [`client-shell/v2.1`](../contracts/client-shell.md):
 
 ```text
 shared Dioxus Fullstack application and presentation model
         ├── Web: SSR/CSR + hydration + PWA
         ├── Android: packaged Dioxus/WebView client
-        ├── iOS: later peer target
-        └── desktop: optional later peer target
+        ├── Windows: admitted later peer target, not a current required gate
+        └── iOS/other desktop: later candidates
                  │
                  │ versioned Dioxus server functions / HTTP / typed events
                  ▼
@@ -46,9 +46,9 @@ One source/workspace produces separate artifacts:
 - a native Linux server build hosted by the Docker Compose profile;
 - Web assets/WASM plus optional SSR/hydration served by that server;
 - an Android package that points to the deployed HTTPS server;
-- later iOS/desktop packages when their target gates enter scope.
+- a later Windows package only after its promotion gate; iOS/other desktop packages when separately admitted.
 
-Web is the first proof surface because it validates authentication, typed ingress, event reduction and recovery fastest. Android is a mandatory product target and follows immediately after the shared Web contract is executable; it is not an optional later idea. iOS and desktop remain later scope.
+Web is the first proof surface because it validates authentication, typed ingress, event reduction and recovery fastest. Android is a mandatory product target and follows immediately after the shared Web contract is executable; it is not an optional later idea. Windows remains later and non-required until installer/signing/update, secure-session/login-callback, sleep/resume/proxy/reconnect and real-host acceptance are active. iOS and other desktop targets remain later candidates.
 
 Independently deployed Android clients create server/client version skew even when source types are shared. Server-function routes, DTOs, errors and events therefore carry explicit compatibility policy, stable versions and unknown-variant behavior. A server upgrade MUST either remain compatible with supported installed Android versions or return a typed minimum-version/upgrade outcome before unsafe dispatch.
 
