@@ -4,8 +4,8 @@
 
 - `Layer`: `Acceptance / Coverage / Evidence`
 - `Status`: **Planning baseline; only `matrix.tsv` is the active competition gate registry**
-- `Version`: `0.6.0`
-- `Last Review`: `2026-07-26`
+- `Version`: `0.7.0`
+- `Last Review`: `2026-08-15`
 - `Authority Owns`: stable long-horizon case IDs, planned assertions and evidence-binding classes
 - `Authority Defers To`: `docs/plan/`, `docs/contracts/` and `docs/acceptance/matrix.tsv` for current scope/status
 
@@ -306,6 +306,7 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `WEB-006` | admin/review/runtime diagnostics are absent from visitor/user surface | browser-automation | release |
 | `WEB-007` | keyboard/focus/error/recovery paths satisfy accessibility contract | browser-automation | release |
 | `WEB-008` | browser evidence records screenshot/console/network/viewport/locale | rust-cli-smoke | release |
+| `WEB-009` | thin first-party Web adapter renders one reviewed procedure result with evidence freshness conflict and uncertainty over one public application query without requiring Agent Market artifact switching Android CLI or inbound MCP | browser-automation | demo |
 | `I18N-001` | en-US/zh-CN locale key and placeholder parity | rust-cli-smoke | PR |
 | `I18N-002` | no user-facing hardcoded strings outside approved fixtures | rust-cli-smoke | PR |
 | `I18N-003` | Market metadata contains required locales and fallback is deterministic | rust-integration | integration |
@@ -349,6 +350,7 @@ Current projection: only `SRC-001` is implemented, and only as a bounded `M60-B1
 | `PROC-007` | Git canonical, PostgreSQL projection and object evidence rebuild without authority inversion | rust-integration | release |
 | `PROC-008` | exact/structured retrieval precedes targeted refresh; bounded RAG cannot override reviewed current procedure | rust-integration | demo |
 | `PROC-009` | archive preserves procedure/source history; hard delete is narrow, audited and policy-bound | rust-integration | release |
+| `PROC-010` | procedure artifact bitemporal provenance distinguishes real-world validity (valid_at) from system knowledge/review time (known_at/as_of) | rust-integration | demo |
 
 ### Campus Graph — `GRAPH-*`
 

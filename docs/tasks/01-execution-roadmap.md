@@ -290,6 +290,8 @@ M70 ChangeRadar source/revision/diff foundation
 - `M71-B5 exact-structured-search`;
 - `M71-B6 M60/M10/M80 integration`.
 
+The first Affairs Navigator product slice follows the competition delivery posture (§18): administrator-imported reviewed snapshot → one typed procedure with bitemporal provenance (`valid_at` / `known_at` / `as_of`) → one application query → one thin Web result with evidence/freshness/conflict/uncertainty. The `ustc-teach-calendar-fall` candidate family is the foundation for the reviewed snapshot path; this does not approve a concrete source, authorize network retrieval, or commit raw HTML. `PROC-010` is a planned active acceptance row and `WEB-009` is a planned catalog case for this slice.
+
 ### M72 — Opportunity Graph
 
 - `M72-B0 planner-spike-audit`;

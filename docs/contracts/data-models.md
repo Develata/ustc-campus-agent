@@ -39,6 +39,16 @@ official_catalog_snapshot
 > model_inference
 ```
 
+### Bitemporal provenance
+
+Every material fact in the output provenance carries bitemporal fields:
+
+- `valid_at`: real-world validity time, projected from the source's effective term/date range.
+- `known_at`: system knowledge time, projected from the source's retrieval/import time.
+- `as_of`: review/acceptance time, distinct from `known_at`.
+
+These are fact-level projections of the source-revision-level fields defined in [`docs/plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md) §3.1.
+
 Requirements must come from a non-stale `reviewed_official_source` or `official_catalog_snapshot`. Course facts may use an iCourse mirror fallback, but the highest-authority fact set is resolved before lower-authority conflicts are considered. Equal-highest-authority conflicting facts are excluded rather than guessed; result provenance records whether a fact had no known conflict, equivalent sources, or an authority-resolved conflict.
 
 All v0 input objects reject unknown JSON fields, and every course must explicitly provide both `prerequisites` and `slots` arrays (empty arrays are valid). This is fail-closed by design: a misspelled or omitted hard-constraint field must not silently erase a prerequisite or meeting conflict.

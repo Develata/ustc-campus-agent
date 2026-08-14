@@ -4,8 +4,8 @@
 
 - `Layer`: First-party product contracts
 - `Status`: Identities/manifests accepted; product journeys mostly planned
-- `Version`: `0.3.0`
-- `Last Review`: `2026-07-25`
+- `Version`: `0.4.0`
+- `Last Review`: `2026-08-15`
 - `Authority Owns`: first-party product split, shared semantics, independent lifecycles and implementation order
 - `Authority Defers To`: Campus Trust Kernel for shared authority and typed contracts/manifests for exact fields
 - `Counterpart Features`: `docs/features/01-ustc-affairs-navigator.md`, `docs/features/02-ustc-change-radar.md`, `docs/features/03-campus-opportunity-graph.md`
@@ -106,6 +106,24 @@ A formatting hook MAY normalize presentation only. It cannot fill missing semant
 ### 2.4 Supersession
 
 Only direct typed edges are stored: `Full | Partial | Clarification | Duplicate`. Full replacement requires equal-or-higher authority, preserved audience/scope, explicit field coverage, no unexplained effective-time gap and replayable evidence. Archive is a state transition, not silent deletion.
+
+### 2.5 First product slice
+
+The first Affairs Navigator product slice follows the competition delivery posture ([`02-product-positioning.md`](02-product-positioning.md) §8):
+
+```text
+administrator-imported reviewed snapshot (or later one exact approved public source)
+→ SourceRevision / evidence with bitemporal provenance (valid_at / known_at / as_of)
+→ one typed ProcedureDraft validated against board policy
+→ administrator review and publish
+→ one application query (exact stable ID or structured search)
+→ one thin Web result with conditions, steps, effective/deadline time, entry point,
+  source revision/evidence, freshness, conflicts and uncertainty
+```
+
+The `ustc-teach-calendar-fall` candidate family is the foundation for the administrator-imported reviewed snapshot path. This decision does not itself approve a concrete source, authorize network retrieval, or commit raw HTML. If the calendar evidence cannot ground one honest procedure, it remains source/revision fixture groundwork and the narrowest separately reviewed Affairs procedure snapshot is selected before claiming the product acceptance.
+
+The thin Web surface renders typed server-owned state and captures intent only. It does not require Agent, Market artifact switching, Android, CLI or inbound MCP.
 
 ## 3. USTC ChangeRadar
 

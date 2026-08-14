@@ -59,3 +59,4 @@ CLIENT-010	headless-client	inbound MCP Streamable HTTP discovery and invocation 
 RUNTIME-001	runtime	stream and non-stream runs converge to same final state	future integration test	release	planned	backend
 RUNTIME-002	runtime	restart or resume does not duplicate receipts or side effects	future integration test	release	planned	backend
 PUBLIC-001	public	public visibility requires license history scan fixture scrub source permission non-official disclaimer and verified delivery surface	manual checklist	public	planned	release
+PROC-010	procedure	procedure artifact bitemporal provenance distinguishes real-world validity valid_at from system knowledge review time known_at as_of	future integration test	core-demo	planned	backend
