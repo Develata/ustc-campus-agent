@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current delivery and task-splitting order
-- `Version`: `module-roadmap/v2.5`
-- `Last Review`: `2026-08-12`
+- `Version`: `module-roadmap/v2.6`
+- `Last Review`: `2026-08-15`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module map`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
@@ -385,3 +385,25 @@ Security/privacy/source permission/license, adversarial failure, clean Docker Co
 - iOS/desktop completion before required Web/PWA + Android Fullstack proof;
 - physical Market repository split before independent release need;
 - public repository/download claims before release/public-readiness gates.
+
+## 18. Competition delivery posture projection
+
+This section projects the competition delivery posture from [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md) §8 onto the current module lanes. It does not override owning plans, contracts or acceptance rows; it records the current honest per-lane posture.
+
+| Module lane | Thin Slice | Validated Next | Deferred | Activation Trigger |
+|---|---|---|---|---|
+| `M00` Platform Control/Identity | identity-types + session-domain (implemented) | request-context + ports-and-fakes | full actor/policy admission composition | `M10` integration (`B5`) |
+| `M10` Application Ingress Host | one server-function + HTTP/SSE route | dispatch-and-errors + event-stream | full client-contract + version-skew | first Web adapter binding |
+| `M20` Market/Package | typed catalog + resolver evidence | durable installation/grant adapters | artifact switching + update/rollback | first production installation |
+| `M30` Agent Harness/Runtime | node kernel (implemented) | finite harness/graph against fakes | scheduler-supervisor + real provider | first bounded Agent path (`A2`) |
+| `M40` Tool Gateway/Execution | protocol/fake proof | durable intent/executor/receipt | full recovery composition | first real executor path (`A2`) |
+| `M50` Model Provider | — | typed profiles + one provider adapter | multi-provider peers | first bounded model turn |
+| `M51` MCP Binding/Executor | — | one reviewed read-only binding | outbound MCP productization | first external MCP tool |
+| `M60` Campus Trust/Source | source-registry (`B1` implemented) | one reviewed source/revision | `B3`–`B8` pipeline | first approved concrete source |
+| `M70` ChangeRadar | — | board-policy + semantic-diff | feed + RSS/Atom | `M60` source approval |
+| `M71` Affairs Navigator | — | tree-and-stable-ids + board-policy | review-publish-render + search | `M60` source + `M10` query |
+| `M72` Opportunity Graph | planner spike (bounded) | opportunity-types + profile-consent | course-pack + evidence-explanation | `M60` source + `M20` install |
+| `M80` Client Core/Shells | narrow first-party Web adapter (admitted) | client-contract-adoption + client-core | full Dioxus Web/Android + CLI + MCP | `M10` operation registry freeze |
+| `M90` Infrastructure | CI + contract checker | typed-config + operational-store | Docker Compose restore + migration | first deployable slice |
+
+A dash (`—`) means the lane has no current Thin Slice; it enters through its Validated Next. The narrow first-party Web adapter is admitted over one public application query once `M10` binds one server function and `M71` or `M70` produces one typed artifact. The Web shell renders typed server-owned state and captures intent only.
