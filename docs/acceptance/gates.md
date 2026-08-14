@@ -36,3 +36,42 @@ Public visibility and Pages/download publication additionally require `public-re
 - `planned`, skipped, unavailable and not-run are non-pass.
 - A manual binding needs an identified reviewer and evidence artifact before it can pass.
 - Evidence from a stale pre-fix worktree does not certify the final staged/committed state.
+
+## Fingerprint moratorium
+
+New source lexical/body fingerprint guards are under moratorium. Existing guards stay until an authority-native replacement has:
+
+1. a named replacement owner/evidence mechanism;
+2. equivalent or stronger mutation tests;
+3. proof that current accepted coverage does not decrease;
+4. a reviewed deletion.
+
+Prefer typed schema, Cargo/rustc metadata, compiler evidence, public behavior tests, database constraints and exact acceptance output over lexical body matching.
+
+## Risk-tiered gates
+
+| Tier | Scope | Gate |
+|---|---|---|
+| 1 — fast schema/registry/link/status projection | docs-only, schema/registry/link/status checks | `python3 scripts/check_repo_contracts.py` + `git diff --check` |
+| 2 — Rust behavior/dependency | Rust source, `Cargo.toml`, dependency changes | tier 1 + `cargo fmt --all -- --check` + `cargo clippy --locked --workspace --all-targets -- -D warnings` + `cargo test --locked --workspace --all-targets` + `cargo test --locked --workspace --doc` |
+| 3 — authority/security mutation | authority/security invariants, grant blocks, permission semantics, lifecycle state machines | tier 2 + mutation tests (`python3 -m unittest discover -s scripts/tests`) + contract cross-check + independent review |
+| 4 — release/full evidence | release, public visibility, deployment | tier 3 + all release-bound rows + artifact/build/restore/read-back evidence |
+
+## Docs-only fast path
+
+Non-authority docs (guides, overview, ADRs, design packets, README prose) use the docs-only fast path: `python3 scripts/check_repo_contracts.py` and `git diff --check`. Authority-bearing plans, contracts, acceptance rows, task grants and campaign blocks invoke the required stronger gate tier. A docs-only change to an authority-bearing file still invokes the stronger gate; the fast path is for files that do not own authority.
+
+## State authority separation
+
+Do not create one global state file. Preserve separate authority by fact type:
+
+| Fact type | Owner |
+|---|---|
+| large-module implementation state | structured module registry / current owning table (`docs/plan/modules/00-module-map.md`) |
+| acceptance status | `docs/acceptance/matrix.tsv` |
+| active delivery lane | roadmap / taskbook (`docs/tasks/01-execution-roadmap.md`) |
+| README / issues | generated or checked projections |
+
+## Replacement-before-deletion ledger
+
+A small replacement-before-deletion ledger may be added under the narrowest existing governance owner. A guard is not deleted until its replacement is reviewed and proven equivalent-or-stronger. Do not hash whole mutable CI workflows or campaign blocks as a permanent substitute for semantic validation when a narrower authority-native carrier can be designed.
