@@ -341,7 +341,7 @@ Responsibilities:
 
 - order M30 journal commands and M40 staged execution ports across one run phase;
 - own outbox/effect identity so a crash between M40 execution and M30 receipt does not produce a duplicate or lost external effect;
-- reconcile uncertain receipts: a receipt that does not prove a completed external effect is treated as not-completed, never silently advanced;
+- reconcile uncertain receipts: a receipt that does not prove a completed external effect remains `uncertain`, never silently advanced and never treated as safe-to-retry or not-completed; reconciliation by stable effect identity/idempotency key and executor status/receipt lookup is required, and only a proven non-execution outcome permits retry;
 - enforce the §5 effect ordering across composition: resolve identity, validate, authorize, persist intent, execute, persist receipt, advance run.
 
 Constraints:

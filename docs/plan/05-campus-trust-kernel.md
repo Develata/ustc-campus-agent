@@ -80,13 +80,15 @@ The system MUST distinguish publication time, observation time and effective int
 
 ### 3.1 Bitemporal provenance fields
 
-Every material fact carries bitemporal provenance that distinguishes three temporal dimensions:
+Every material fact carries bitemporal provenance. Two of the three names are fact-level projections; the third is a query/answer-level cutoff, not a fact-level field:
 
-- `valid_at`: real-world validity time — when the fact is true in the real world. Projected from the source revision's effective interval (`effective_from`/`effective_to`) or `published_at` when no separate effective interval is declared.
-- `known_at`: system knowledge time — when the system first observed or retrieved the fact. Projected from the source revision's `observed_at`.
-- `as_of`: review/acceptance time — when the fact was reviewed and accepted into the current baseline. This is a distinct field from `known_at`; a fact may be observed but not yet reviewed.
+- `valid_at`: real-world validity time — when the fact is true in the real world. Projected from the source revision's effective interval (`effective_from`/`effective_to`) or `published_at` when no separate effective interval is declared. A fact may have a validity interval, not only a point; `valid_at` carries that interval when the source provides one.
+- `known_at`: system knowledge time — when the system first observed or retrieved the fact. Projected from the source revision's `observed_at`. This is the fact-level "when did we learn this" field.
+- `as_of`: **query/answer cutoff** — the point in time used to select which known facts are eligible to answer a given query. It is NOT a fact-level field, NOT review/acceptance time, and NOT a fourth fact timestamp. Each answer carries the `as_of` cutoff under which it was produced; a fact with `known_at ≤ as_of` is eligible (subject to authority/freshness/conflict policy), and a fact with `known_at > as_of` is excluded as not-yet-known at the cutoff.
 
-These names are the canonical fact-level vocabulary. The source-revision-level fields (`published_at`, `observed_at`, `effective_at`) remain the raw authority; `valid_at`/`known_at`/`as_of` are the fact-level projection. A fact's `valid_at` may precede its `known_at`, and its `as_of` must not precede its `known_at`. Missing `valid_at` remains `None`; the system never copies `known_at` or `as_of` into `valid_at` merely to avoid nullability.
+Separate from these three, the planned Affairs Navigator evidence context ([`docs/plan/06-first-party-plugins.md`](../plan/06-first-party-plugins.md) §2.6) carries review/verification metadata at the evidence/procedure level — `observed_at`, `reviewed_at`, `last_verified_at` — that record when a source revision was observed, reviewed and last re-verified. These are not fact-level projections of the bitemporal vocabulary above and must not be collapsed into `as_of`.
+
+These names are the canonical vocabulary. The source-revision-level fields (`published_at`, `observed_at`, `effective_at`) remain the raw authority; `valid_at`/`known_at` are the fact-level projection and `as_of` is the query/answer-level cutoff. A fact's `valid_at` may precede its `known_at`. Missing `valid_at` remains `None`; the system never copies `known_at` into `valid_at` merely to avoid nullability. `as_of` is selected by the query path (default: wall-clock now, or an explicit cutoff passed by the caller/application) and is never synthesized from a fact's own timestamps.
 
 Do not introduce a universal `ReviewedFactEnvelope<T>`. Shared `EvidenceContext` is introduced only if the typed product contract needs it now.
 

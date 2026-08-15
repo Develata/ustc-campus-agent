@@ -43,13 +43,13 @@ official_catalog_snapshot
 
 ### Bitemporal provenance
 
-Every material fact in the output provenance carries bitemporal fields:
+The v0 Rust `FactProvenance` (`crates/course-planning/src/lib.rs`) carries, per material output fact:
 
-- `valid_at`: real-world validity time, projected from the source's effective term/date range.
-- `known_at`: system knowledge time, projected from the source's retrieval/import time.
-- `as_of`: review/acceptance time, distinct from `known_at`.
+- `retrieved_at`: retrieval/import timestamp projected from the source revision's `observed_at`.
+- `effective_time`: optional term/date range in which the fact applies, projected from the source revision's effective interval.
+- `conflict_status`: how competing source records were handled.
 
-These are fact-level projections of the source-revision-level fields defined in [`docs/plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md) §3.1.
+The full canonical fact-level bitemporal vocabulary defined in [`docs/plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md) §3.1 — `valid_at`, `known_at`, `as_of`, plus the planned Affairs Navigator evidence-context fields (`observed_at`, `reviewed_at`, `last_verified_at`) — is **not yet projected onto v0 `FactProvenance`**. v0 uses `retrieved_at`/`effective_time` as a bounded, source-revision-derived subset of that vocabulary; it does not carry `as_of` (a query/answer-level cutoff, not a fact-level field; canonical definition in [`docs/plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md) §3.1) and does not carry review/verification timestamps. Inflating v0 `FactProvenance` to claim those fields would be a contract lie; the full evidence context is owned by the Affairs Navigator plan/contract ([`docs/plan/06-first-party-plugins.md`](../plan/06-first-party-plugins.md) §2.6) and lands with its first product slice.
 
 Requirements must come from a non-stale `reviewed_official_source` or `official_catalog_snapshot`. Course facts may use an iCourse mirror fallback, but the highest-authority fact set is resolved before lower-authority conflicts are considered. Equal-highest-authority conflicting facts are excluded rather than guessed; result provenance records whether a fact had no known conflict, equivalent sources, or an authority-resolved conflict.
 

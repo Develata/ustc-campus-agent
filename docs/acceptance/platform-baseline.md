@@ -350,7 +350,8 @@ Current projection: only `SRC-001` is implemented, and only as a bounded `M60-B1
 | `PROC-007` | Git canonical, PostgreSQL projection and object evidence rebuild without authority inversion | rust-integration | release |
 | `PROC-008` | exact/structured retrieval precedes targeted refresh; bounded RAG cannot override reviewed current procedure | rust-integration | demo |
 | `PROC-009` | archive preserves procedure/source history; hard delete is narrow, audited and policy-bound | rust-integration | release |
-| `PROC-010` | procedure artifact bitemporal provenance distinguishes real-world validity (valid_at) from system knowledge/review time (known_at/as_of) | rust-integration | demo |
+| `PROC-010` | procedure artifact evidence distinguishes real-world validity (valid_at) from system knowledge time (known_at) from review/verification metadata (reviewed_at, last_verified_at), and binds `as_of` as a query-answer cutoff (not a fact-level field) | rust-integration | demo |
+| `PROC-011` | first Affairs Navigator product slice binds administrator-imported reviewed snapshot → typed `ProcedureDraft` validated against board policy → administrator review and publish → one application query (exact stable ID or structured search) → thin Web result with conditions, steps, effective/deadline time, entry point, source revision/evidence, freshness, conflicts and uncertainty; explicitly does NOT close Agent runtime, Market artifact switching, Android, CLI, inbound MCP, SSE streaming or full client-protocol version-skew coverage (those remain separate acceptance rows) | rust-integration | demo |
 
 ### Campus Graph — `GRAPH-*`
 

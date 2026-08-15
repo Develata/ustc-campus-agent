@@ -113,7 +113,7 @@ M20 projection/recheck
 The composition interleaving above is owned by an application-level `RunExecutionCoordinator`, defined in [`plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md) §14. It lives in `ustc-agentd` or a declared application module, not inside `M30`, `M40` or `M20`.
 
 - It MAY issue `M30` journal commands and `M40` staged execution ports.
-- It owns outbox/effect identity and uncertain-receipt reconciliation across the prepare → execute → receipt sequence above.
+- It owns outbox/effect identity and uncertain-receipt reconciliation across the prepare → execute → receipt sequence above. An uncertain receipt (timeout/crash before confirmation) remains `uncertain`; it is never silently advanced and never treated as safe-to-retry or not-completed. Reconciliation by stable effect identity/idempotency key and executor status/receipt lookup is required; only a proven non-execution outcome permits retry.
 - It MUST NOT mutate `M30` run/graph/context state, `M40` route/gateway state, or `M20` installation/grant state directly.
 - It MUST NOT create a direct implementation dependency cycle (`M30 → M40 → M20 → M30` is forbidden); it composes their public ports.
 - A production `RunExecutionCoordinator` lands only when `M30`/`M40` production integration is admitted; its acceptance evidence binds to the composition root, not to either module's standalone gate.
