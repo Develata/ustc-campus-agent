@@ -10764,9 +10764,11 @@ EXPECTED_MAIN_CALLS = (
 # Scanned paths: each function's body names the ROOT-relative paths it reads.
 #
 # To legitimately change a registered function's body, update its digest here
-# in the same reviewed slice.  To replace a function with an authority-native
-# mechanism, add a replacement entry to SOURCE_SENSITIVE_GUARD_REPLACEMENTS
-# (owner, mechanism, evidence) and set the function's status to "replaced".
+# in the same reviewed slice.  Only status "active" is admitted in this
+# campaign; any other status fails closed.  Replacement transitions (removing
+# a function from the moratorium in favor of an authority-native mechanism)
+# require a future separately reviewed mechanism with owner/mechanism/evidence
+# validation; no replacement path is implemented here.
 
 CHECKER_SOURCE_REL = "scripts/check_repo_contracts.py"
 
@@ -10821,8 +10823,6 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "parse_markdown_table": {"digest": "8a76fe3b1a30cbc620fce319e66105b37ef7520b2d9e56f17f45f815c40ccdaf", "status": "active"},
 }
 
-SOURCE_SENSITIVE_GUARD_REPLACEMENTS: dict[str, dict[str, str]] = {}
-
 SOURCE_SENSITIVE_SELF_FUNCTION = "check_source_sensitive_guard_registry"
 
 
@@ -10852,10 +10852,11 @@ def check_source_sensitive_guard_registry(issues: list[str]) -> None:
 
     Enforces docs/acceptance/gates.md §Fingerprint moratorium: every top-level
     checker function that reads source bytes/text must be explicitly registered
-    in SOURCE_SENSITIVE_GUARD_REGISTRY with its normalized-AST SHA-256, and
-    every active registered function's current body must match its pinned
-    digest.  This prevents silently adding a lexical fingerprint guard inside
-    an existing checker function (the false-green mutation from R1).
+    in SOURCE_SENSITIVE_GUARD_REGISTRY with status ``active`` and a
+    normalized-AST SHA-256 digest that matches its current body.  Only
+    ``active`` is admitted; any other status fails closed.  Replacement
+    transitions require a future separately reviewed mechanism with
+    owner/mechanism/evidence validation; no replacement path is implemented.
     """
     checker_path = ROOT / CHECKER_SOURCE_REL
     if not checker_path.is_file():
@@ -10871,7 +10872,7 @@ def check_source_sensitive_guard_registry(issues: list[str]) -> None:
         )
         return
 
-    # Every classified function must be registered with a matching digest,
+    # Every classified function must be registered, active, and digest-exact,
     # except the self-function (it reads the checker's own source to verify
     # the registry; pinning its digest would create a bootstrap paradox).
     classified.pop(SOURCE_SENSITIVE_SELF_FUNCTION, None)
@@ -10881,17 +10882,17 @@ def check_source_sensitive_guard_registry(issues: list[str]) -> None:
             fail(
                 f"source-sensitive guard registry: unregistered source-sensitive "
                 f"function {name!r} (add it to SOURCE_SENSITIVE_GUARD_REGISTRY "
-                f"with its current digest)",
+                f"with status 'active' and its current digest)",
                 issues,
             )
             continue
-        if entry["status"] == "replaced":
-            if name not in SOURCE_SENSITIVE_GUARD_REPLACEMENTS:
-                fail(
-                    f"source-sensitive guard registry: {name!r} marked replaced "
-                    f"but has no replacement entry",
-                    issues,
-                )
+        if entry["status"] != "active":
+            fail(
+                f"source-sensitive guard registry: {name!r} has status "
+                f"{entry['status']!r}; only 'active' is admitted (replacement "
+                f"transitions require a future separately reviewed mechanism)",
+                issues,
+            )
             continue
         if entry["digest"] != digest:
             fail(
@@ -10901,15 +10902,22 @@ def check_source_sensitive_guard_registry(issues: list[str]) -> None:
                 issues,
             )
 
-    # Every active registered function must still be classified.
+    # Every registered function must be active and still classified (still
+    # read source).  A non-active status or a function that lost its carrier
+    # without a reviewed replacement is a silent weakening.
     for name, entry in SOURCE_SENSITIVE_GUARD_REGISTRY.items():
-        if entry["status"] == "replaced":
+        if entry["status"] != "active":
+            fail(
+                f"source-sensitive guard registry: registered function {name!r} "
+                f"has status {entry['status']!r}; only 'active' is admitted",
+                issues,
+            )
             continue
         if name not in classified:
             fail(
-                f"source-sensitive guard registry: registered function {name!r} "
-                f"is no longer source-sensitive (reviewed removal required: set "
-                f"status to 'replaced' with a replacement entry)",
+                f"source-sensitive guard registry: registered active function "
+                f"{name!r} is no longer source-sensitive (reviewed removal "
+                f"requires a future separately reviewed replacement mechanism)",
                 issues,
             )
 

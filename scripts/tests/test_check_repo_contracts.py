@@ -7767,6 +7767,19 @@ class SourceSensitiveGuardRegistryTests(unittest.TestCase):
             f"expected removed-carrier rejection for load_json, got {issues}",
         )
 
+    def test_replaced_status_fails_closed(self) -> None:
+        target = "load_json"
+        original_status = checker.SOURCE_SENSITIVE_GUARD_REGISTRY[target]["status"]
+        try:
+            checker.SOURCE_SENSITIVE_GUARD_REGISTRY[target]["status"] = "replaced"
+            issues = self.run_governance()
+            self.assertTrue(
+                any(target in i and "replaced" in i and "only 'active' is admitted" in i for i in issues),
+                f"expected replaced-status rejection for {target}, got {issues}",
+            )
+        finally:
+            checker.SOURCE_SENSITIVE_GUARD_REGISTRY[target]["status"] = original_status
+
 
 if __name__ == "__main__":
     unittest.main()
