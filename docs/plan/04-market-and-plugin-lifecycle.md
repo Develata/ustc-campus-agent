@@ -4,8 +4,8 @@
 
 - `Layer`: Product authority
 - `Status`: Schema/identity baseline, typed package/catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` transaction-current authority assembly, bounded `M20-B6` update/rollback domain plus semantic fake and pure resolver evidence implemented; durable runtime lifecycle, artifact switching and production composition planned
-- `Version`: `0.5.0`
-- `Last Review`: `2026-08-02`
+- `Version`: `0.6.0`
+- `Last Review`: `2026-08-15`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
 - `Authority Defers To`: Market JSON schema/registries and package/permission contracts for exact fields
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
@@ -186,3 +186,17 @@ Verification:
 - `python3 scripts/check_repo_contracts.py`
 - `scripts/tests/test_check_repo_contracts.py`
 - `MARKET-*`, `AGENT-002`, `FP-006`, `FP-015`, `FP-007`
+
+## 10. Package identity and version declaration authority
+
+Reviewed package manifests under `market/` are the single identity/version declaration authority for first-party and admitted packages. Rust catalog loading (`crates/platform-core/src/market.rs`) is a typed projection over those manifests, not a peer truth.
+
+Norms:
+
+1. Package id, version, publisher, review tier, components, capability IDs and source/data policy originate in the reviewed manifest. The Rust projection validates and pins them; it does not author them.
+2. A manifest change is the authoritative edit. A Rust-only change that should have been a manifest change is a projection drift bug, not a silent authority transfer.
+3. The catalog digest is computed over the reviewed manifest bytes; the Rust projection pins that digest but does not redefine the canonical content.
+4. Two hand-maintained peer truths (manifest plus a parallel Rust identity table) are forbidden for the same package identity fields. The Rust side derives from the manifest under schema; it does not carry independent values for the same field.
+5. Non-first-party packages admitted into the catalog follow the same rule: their reviewed manifest is the declaration authority, and the Rust projection validates it.
+
+This section owns the policy. The exact manifest schema, digest rule and projection contract live in [`docs/contracts/plugin-package.md`](../contracts/plugin-package.md) and `market/schemas/plugin-package.schema.json`.
