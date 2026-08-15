@@ -372,11 +372,12 @@ normalized_sha256
 parser_identity
 observed_at
 published_at: Option<_>
-effective_at: Option<_>
+effective_from: Option<_>
+effective_to: Option<_>
 provenance
 ```
 
-Raw and normalized digests are separate nominal lowercase `sha256:` values. A revision ID never substitutes for either digest. `observed_at` is adapter-observed retrieval time; `published_at` is source-asserted publication time; `effective_at` is typed semantic time. Missing source assertions remain `None`; the system never copies `observed_at` into another field merely to avoid nullability.
+Raw and normalized digests are separate nominal lowercase `sha256:` values. A revision ID never substitutes for either digest. `observed_at` is adapter-observed retrieval time; `published_at` is source-asserted publication time; `effective_from`/`effective_to` are the optional typed bounds of the source-asserted semantic validity interval. Missing source assertions or interval bounds remain `None`; the system never copies `observed_at` into another field merely to avoid nullability.
 
 A revision is accepted only after raw evidence, deterministic parse/normalize output and provenance are durably committed. Re-processing identical raw bytes with a new parser creates a new normalized identity/revision; it does not rewrite history.
 
