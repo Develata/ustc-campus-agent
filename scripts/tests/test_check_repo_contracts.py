@@ -7283,6 +7283,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_external_agent_access_contract(issues)",
         "check_module_registry(issues)",
         "check_s0_architecture_review(issues)",
+        "check_source_sensitive_guard_registry(issues)",
     )
 
     def test_main_invokes_exactly_the_registered_checks(self) -> None:
@@ -7660,6 +7661,111 @@ class SourceRegistryContractTests(unittest.TestCase):
             if line.strip() == "check_m60_b2_packet_digest(issues)"
         ]
         self.assertEqual(calls, ["    check_m60_b2_packet_digest(issues)"])
+
+
+class SourceSensitiveGuardRegistryTests(unittest.TestCase):
+    """R1: fingerprint moratorium enforcement via fail-closed AST governance."""
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        (self.root / "scripts").mkdir(parents=True)
+        self.checker_path = self.root / "scripts" / "check_repo_contracts.py"
+        shutil.copy2(CHECKER_PATH, self.checker_path)
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def run_governance(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_source_sensitive_guard_registry(issues)
+        return issues
+
+    def rewrite_checker(self, source: str) -> None:
+        self.checker_path.write_text(source, encoding="utf-8")
+
+    def test_pristine_checker_passes(self) -> None:
+        self.assertEqual(self.run_governance(), [])
+
+    def test_exact_source_authority_guard_mutation_fails_closed(self) -> None:
+        source = self.checker_path.read_text(encoding="utf-8")
+        marker = (
+            '    identity_test = identity_test_path.read_text(encoding="utf-8")\n'
+            '    stripped = strip_rust_comments_and_literals(source)\n'
+        )
+        self.assertEqual(source.count(marker), 1)
+        mutation = (
+            '    identity_test = identity_test_path.read_text(encoding="utf-8")\n'
+            '    stripped = strip_rust_comments_and_literals(source)\n'
+            '    if "pub enum SourceAuthority {" not in lib:\n'
+            '        fail("R1 mutation probe", issues)\n'
+        )
+        self.rewrite_checker(source.replace(marker, mutation, 1))
+        issues = self.run_governance()
+        self.assertTrue(
+            any("check_p1_source_registry_implementation" in i and "digest mismatch" in i for i in issues),
+            f"expected digest mismatch for check_p1_source_registry_implementation, got {issues}",
+        )
+
+    def test_comment_only_change_passes(self) -> None:
+        source = self.checker_path.read_text(encoding="utf-8")
+        marker = (
+            '    identity_test = identity_test_path.read_text(encoding="utf-8")\n'
+            '    stripped = strip_rust_comments_and_literals(source)\n'
+        )
+        self.assertEqual(source.count(marker), 1)
+        with_comment = (
+            '    identity_test = identity_test_path.read_text(encoding="utf-8")\n'
+            '    # R1 comment-only probe: must not change AST digest\n'
+            '    stripped = strip_rust_comments_and_literals(source)\n'
+        )
+        self.rewrite_checker(source.replace(marker, with_comment, 1))
+        self.assertEqual(self.run_governance(), [])
+
+    def test_unregistered_new_source_sensitive_function_fails_closed(self) -> None:
+        source = self.checker_path.read_text(encoding="utf-8")
+        injection = (
+            '\n\ndef _r1_probe_unregistered(issues: list[str]) -> None:\n'
+            '    path = __import__("pathlib").Path("x")\n'
+            '    path.read_text(encoding="utf-8")\n'
+        )
+        self.rewrite_checker(source + injection)
+        issues = self.run_governance()
+        self.assertTrue(
+            any("_r1_probe_unregistered" in i and "unregistered" in i for i in issues),
+            f"expected unregistered function rejection, got {issues}",
+        )
+
+    def test_registered_function_no_longer_source_sensitive_fails_closed(self) -> None:
+        source = self.checker_path.read_text(encoding="utf-8")
+        old_body = (
+            'def load_json(rel: str, issues: list[str]) -> object | None:\n'
+            '    path = ROOT / rel\n'
+            '    try:\n'
+            '        return json.loads(path.read_text(encoding="utf-8"))\n'
+            '    except Exception as exc:  # noqa: BLE001 - checker should report exact file\n'
+            '        fail(f"invalid json {rel}: {exc}", issues)\n'
+            '        return None\n'
+        )
+        new_body = (
+            'def load_json(rel: str, issues: list[str]) -> object | None:\n'
+            '    path = ROOT / rel\n'
+            '    try:\n'
+            '        return json.loads("{}")\n'
+            '    except Exception as exc:  # noqa: BLE001 - checker should report exact file\n'
+            '        fail(f"invalid json {rel}: {exc}", issues)\n'
+            '        return None\n'
+        )
+        self.assertIn(old_body, source)
+        self.rewrite_checker(source.replace(old_body, new_body, 1))
+        issues = self.run_governance()
+        self.assertTrue(
+            any("load_json" in i and "no longer source-sensitive" in i for i in issues),
+            f"expected removed-carrier rejection for load_json, got {issues}",
+        )
 
 
 if __name__ == "__main__":

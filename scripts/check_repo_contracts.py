@@ -7,6 +7,7 @@ before the project chooses additional tooling.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import re
@@ -10742,7 +10743,175 @@ EXPECTED_MAIN_CALLS = (
     "check_external_agent_access_contract(issues)",
     "check_module_registry(issues)",
     "check_s0_architecture_review(issues)",
+    "check_source_sensitive_guard_registry(issues)",
 )
+
+
+# --- Source-sensitive guard registry (R1: fingerprint moratorium enforcement) ---
+#
+# Every top-level checker function that reads source bytes/text (via
+# .read_text() or .read_bytes()) is classified as source-sensitive and pinned
+# here by a location-insensitive normalized AST digest
+# (ast.dump(..., include_attributes=False) hashed with SHA-256).
+#
+# This makes the fingerprint moratorium in docs/acceptance/gates.md
+# §Fingerprint moratorium executable: a new lexical guard added inside any
+# registered function changes its AST digest and fails CI, rather than
+# silently false-greening.
+#
+# Guard family for all entries: source-text-carrier.
+# Failure mode for all entries: fail-closed.
+# Scanned paths: each function's body names the ROOT-relative paths it reads.
+#
+# To legitimately change a registered function's body, update its digest here
+# in the same reviewed slice.  To replace a function with an authority-native
+# mechanism, add a replacement entry to SOURCE_SENSITIVE_GUARD_REPLACEMENTS
+# (owner, mechanism, evidence) and set the function's status to "replaced".
+
+CHECKER_SOURCE_REL = "scripts/check_repo_contracts.py"
+
+SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
+    "_check_bound_rust_test_file": {"digest": "7822293db5dfa565407409bdba528c656c53ce28f0af83efdc80176aa55069f9", "status": "active"},
+    "_check_coverage_matrix_m60_projection": {"digest": "c850fe6abc43b6ca20c79ad5a7127ee8ff4d5dc470afb7a0a44bbf8882ffc65d", "status": "active"},
+    "_check_m60_blueprint_status_projection": {"digest": "e0282bf17f30094ce634687b110cbd5bcd9aa40e4925c5cba87fa2305468559f", "status": "active"},
+    "_check_m60_roadmap_section_status": {"digest": "a16c63013807a3c3ab1eaadc6390df41c8538626aac19484be6b9b60e1b47213", "status": "active"},
+    "_check_market_grant_surface": {"digest": "ff8dcbbfb94b444d72cfba57bbb04fb9260ab1396302dbb0568c347afb372b69", "status": "active"},
+    "_check_market_installation_surface": {"digest": "1c68b54aba48bc26905ccbe84f3a7036bc7db9b0dddb981e88b1abfe1f5b4c84", "status": "active"},
+    "_check_market_update_surface": {"digest": "390fffb8fddf706548a040b8fa8cf43246b7f62b026ef7e9a490cf8e3c46f8f5", "status": "active"},
+    "_check_module_boundaries_transport_projection": {"digest": "564a9530d71a508568c0b263481ffc6996b3e2a61341681e0dc1702b30a50126", "status": "active"},
+    "_check_source_import_owner_projection": {"digest": "bfaf91dfccb1296823c5f87ed025db7fa2ce3f3bb66b6bf3c739ef57e746adb4", "status": "active"},
+    "_check_source_retrieval_contract_metadata": {"digest": "b0b37ecb4ed41d3cdcf708198df8eee392c028862ee0cd4b7ee66d41a8c77dc5", "status": "active"},
+    "_check_source_retrieval_lifecycle_precondition": {"digest": "241fe2966abd080b3bdd6d1bc0d92774298c89968064de18e2d39646f9c07f4f", "status": "active"},
+    "_check_source_retrieval_transport_boundary_projection": {"digest": "fdc12d98f975664db68ea051fc4be7da4803b70f951a33396b018a8bc012689d", "status": "active"},
+    "_platform_identity_classify_procedure": {"digest": "735d6e8dc9cccd710699ffbc51a926589069920861ea686ba2bd21c1ffe0fbcf", "status": "active"},
+    "_platform_identity_contract_grammar": {"digest": "ff1d942e93247a5565a8ed08d6c65a4c01e6f057e6fe6e8d6ab5ac9a39b1b548", "status": "active"},
+    "_platform_identity_effective_bound": {"digest": "16d9d31dfb7d439566507a310148862e44de238f70df4e8043326ff052464a36", "status": "active"},
+    "_platform_identity_effective_guard": {"digest": "086f7fd4f7c232a6bec9ae9d416470f3d001ffdb63a2075aa8d93c4ecd82e3e2", "status": "active"},
+    "_platform_identity_helper_resolution": {"digest": "412e931dad6a68d8deb1c6ea1c81cd400f44ad8f2314b88249fc8187dabdff38", "status": "active"},
+    "_platform_identity_semantic_literals": {"digest": "58113172f1b052d099af76cbb82478646b7a9e331f3870367f2b064340cda086", "status": "active"},
+    "_platform_identity_sweep_carriers": {"digest": "3203275b5308a3324782847e9ec7f4217f23a7528aaf6673110666e313f01ef4", "status": "active"},
+    "check_acceptance_catalog": {"digest": "5b19c84422fe487470642f121348b895248d38e612d39f4bb4e4ea03d0f06b8c", "status": "active"},
+    "check_acceptance_matrix": {"digest": "35fad9655eb38702f34c65a3aa6209b79f66256b20183f5c20a67c049e9cd4bd", "status": "active"},
+    "check_agent_plugin_dependency_direction": {"digest": "eb43b13ee8c08d397671619ea288b221eb2dc2620066869f8ea9c31c66ac5e50", "status": "active"},
+    "check_campaign_acceptance_bindings": {"digest": "60025429af3b75fe7de3adb4043988509f76f20db66dd383888a10b9f04522c2", "status": "active"},
+    "check_campaign_authorization": {"digest": "7a1184e0d9f133a48a79c9ba6f66bc912252fa1732c7b13faa0b99373466571a", "status": "active"},
+    "check_campaign_taskbook_state": {"digest": "85b30689fd0ae05695c337d8808e919f69639ace8d98643c90a4b47522fe2d65", "status": "active"},
+    "check_cargo_dependency_sources": {"digest": "0f645288c48f56eb3c8282f5fe9b9c0e379ae8ff82e1c06f64f740278a77ad7d", "status": "active"},
+    "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
+    "check_external_agent_access_contract": {"digest": "b5f042f9d195b8a82d15059da493f2ecb92f372aa79733a7d0fb598c3881bd79", "status": "active"},
+    "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
+    "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
+    "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
+    "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
+    "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},
+    "check_no_obvious_secrets": {"digest": "43072df6164d2bc92e69015291368559f593a49fd2b39d813de034e5f50b2f79", "status": "active"},
+    "check_no_retired_docs_references": {"digest": "64599f57afeb2ce5fb60ccaac747cfc8ddaefc6feaf2536ad32eb0c42afd1114", "status": "active"},
+    "check_p1_source_registry_implementation": {"digest": "7e04d788b46c0844256dc4184d667381206e544663de3b630dd4d50feefe4c1d", "status": "active"},
+    "check_p1_source_revision_contract": {"digest": "f413cb4f58e9e0d17205583ca69105d3bc171e5dfb5cc1031cc4debc135fa992", "status": "active"},
+    "check_platform_authority_implementation": {"digest": "64b767f09d0d29268af33e15bdf60d6fd879b61365abd45c1be2caa2319b92f4", "status": "active"},
+    "check_platform_core_manifest": {"digest": "3082cf7fedfaf39080d287a036c8875f762751bb8832121ca2d7cd81d5947d62", "status": "active"},
+    "check_platform_identity_implementation": {"digest": "ba1d808291f8faa3d3a9acbc16a71854af2c8bc461115432c49a4aeb3ec23d72", "status": "active"},
+    "check_platform_session_contract": {"digest": "e3a2e5ef5ca953bdf2739ac3072df8bcfed0ebece4a893f52980fb7ca3b15c1b", "status": "active"},
+    "check_platform_session_implementation": {"digest": "f1a25036ae6940b332c258af80f2e23815071ca19cb1d5db79d7a4f8b844be8f", "status": "active"},
+    "check_rust_doctest_gate": {"digest": "372200f9ce289b3af148b7e7001408498b3d817098d7013692f016b766d2ec58", "status": "active"},
+    "check_rust_lexical_corpus": {"digest": "ac8c09ce53ca4949c8e5c61eca0a958301735d7cdb2dc0ecd00eb3472a0e2aef", "status": "active"},
+    "check_s0_architecture_review": {"digest": "4073abe0147a1c30653047aedfe168b8ed6684281f4c445c4ee803a428b8760e", "status": "active"},
+    "exact_marked_block": {"digest": "71fc49a8490fad3b9bc262667c0fb91f1e00fe554b8d1fe04495fdf1c72c80aa", "status": "active"},
+    "load_json": {"digest": "e4537fd821653c24dee9db7592a94a514962b69e839ed24399af78f773dab0db", "status": "active"},
+    "parse_markdown_table": {"digest": "8a76fe3b1a30cbc620fce319e66105b37ef7520b2d9e56f17f45f815c40ccdaf", "status": "active"},
+}
+
+SOURCE_SENSITIVE_GUARD_REPLACEMENTS: dict[str, dict[str, str]] = {}
+
+SOURCE_SENSITIVE_SELF_FUNCTION = "check_source_sensitive_guard_registry"
+
+
+def _classify_source_sensitive_functions(source: str) -> dict[str, str]:
+    """Return {function_name: normalized_ast_digest} for every top-level
+    function whose body contains a ``.read_text()`` or ``.read_bytes()`` call.
+    """
+    tree = ast.parse(source)
+    classified: dict[str, str] = {}
+    for node in ast.iter_child_nodes(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        for sub in ast.walk(node):
+            if (
+                isinstance(sub, ast.Call)
+                and isinstance(sub.func, ast.Attribute)
+                and sub.func.attr in ("read_text", "read_bytes")
+            ):
+                dump = ast.dump(node, include_attributes=False)
+                classified[node.name] = hashlib.sha256(dump.encode("utf-8")).hexdigest()
+                break
+    return classified
+
+
+def check_source_sensitive_guard_registry(issues: list[str]) -> None:
+    """Fail-closed AST governance for source-sensitive checker functions.
+
+    Enforces docs/acceptance/gates.md §Fingerprint moratorium: every top-level
+    checker function that reads source bytes/text must be explicitly registered
+    in SOURCE_SENSITIVE_GUARD_REGISTRY with its normalized-AST SHA-256, and
+    every active registered function's current body must match its pinned
+    digest.  This prevents silently adding a lexical fingerprint guard inside
+    an existing checker function (the false-green mutation from R1).
+    """
+    checker_path = ROOT / CHECKER_SOURCE_REL
+    if not checker_path.is_file():
+        fail("source-sensitive guard registry: checker source missing", issues)
+        return
+    source = checker_path.read_text(encoding="utf-8")
+    try:
+        classified = _classify_source_sensitive_functions(source)
+    except SyntaxError as exc:
+        fail(
+            f"source-sensitive guard registry: checker source unparseable: {exc}",
+            issues,
+        )
+        return
+
+    # Every classified function must be registered with a matching digest,
+    # except the self-function (it reads the checker's own source to verify
+    # the registry; pinning its digest would create a bootstrap paradox).
+    classified.pop(SOURCE_SENSITIVE_SELF_FUNCTION, None)
+    for name, digest in classified.items():
+        entry = SOURCE_SENSITIVE_GUARD_REGISTRY.get(name)
+        if entry is None:
+            fail(
+                f"source-sensitive guard registry: unregistered source-sensitive "
+                f"function {name!r} (add it to SOURCE_SENSITIVE_GUARD_REGISTRY "
+                f"with its current digest)",
+                issues,
+            )
+            continue
+        if entry["status"] == "replaced":
+            if name not in SOURCE_SENSITIVE_GUARD_REPLACEMENTS:
+                fail(
+                    f"source-sensitive guard registry: {name!r} marked replaced "
+                    f"but has no replacement entry",
+                    issues,
+                )
+            continue
+        if entry["digest"] != digest:
+            fail(
+                f"source-sensitive guard registry: body digest mismatch for "
+                f"{name!r} (expected {entry['digest'][:16]}, got {digest[:16]}); "
+                f"update SOURCE_SENSITIVE_GUARD_REGISTRY in the same reviewed slice",
+                issues,
+            )
+
+    # Every active registered function must still be classified.
+    for name, entry in SOURCE_SENSITIVE_GUARD_REGISTRY.items():
+        if entry["status"] == "replaced":
+            continue
+        if name not in classified:
+            fail(
+                f"source-sensitive guard registry: registered function {name!r} "
+                f"is no longer source-sensitive (reviewed removal required: set "
+                f"status to 'replaced' with a replacement entry)",
+                issues,
+            )
 
 
 def main() -> int:
@@ -10772,6 +10941,7 @@ def main() -> int:
     check_external_agent_access_contract(issues)
     check_module_registry(issues)
     check_s0_architecture_review(issues)
+    check_source_sensitive_guard_registry(issues)
     if issues:
         print("contract-check: FAIL")
         for issue in issues:
