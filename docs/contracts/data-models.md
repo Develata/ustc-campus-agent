@@ -29,7 +29,7 @@ The v0 planner is deterministic and fixture-driven. It performs no model calls, 
 - stale flag;
 - provenance note.
 
-Authority order remains:
+Authority order is a **course-planning-local total order**, not the generic platform-wide source authority ordering. The generic `M60` source authority (see [`docs/plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md) §3.2) carries no product-specific variants such as `icourse_mirror` or `official_catalog_snapshot` and defines only a partial comparison (`Higher | Lower | Equivalent | Incomparable`). Course Planning admits this local total order behind its own policy/type:
 
 ```text
 official_catalog_snapshot
@@ -38,6 +38,8 @@ official_catalog_snapshot
 > community_signal
 > model_inference
 ```
+
+`model_inference` is the lowest tier and is rejected as a source authority for requirements and course facts; it is retained in the ordering only so a model-proposed candidate can be explicitly classified and denied, never selected.
 
 ### Bitemporal provenance
 

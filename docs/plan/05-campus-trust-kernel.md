@@ -4,9 +4,9 @@
 
 - `Layer`: Shared campus authority
 - `Status`: Contract accepted under R11 M60-B2 two-layer transport architecture; `source-import/v1` and `source-retrieval/v0` are current contract authority per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); bounded `M60-B1 source-registry` remains implemented under `source-import/v0` (P1-1); operational `Suspended`/`Revoked` lifecycle precondition applies before any live B2 retrieval adapter; concrete source approval, retained B2 implementation and network retrieval remain unauthorized; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
-- `Version`: `0.4.0`
+- `Version`: `0.5.0`
 - `Last Review`: `2026-08-15`
-- `Authority Owns`: source identity, immutable revision, authority order, temporal/conflict/provenance state, baseline advancement and publication gates
+- `Authority Owns`: source identity, immutable revision, authority comparison policy, temporal/conflict/provenance state, baseline advancement and publication gates
 - `Authority Defers To`: source-import/data-model contracts for exact shapes and package sourcePolicy for requested scope
 - `Counterpart Features`: all documents under `docs/features/`
 - `Counterpart Contracts`: `docs/contracts/source-import.md`, `docs/contracts/source-retrieval.md`, `docs/contracts/data-models.md`
@@ -89,6 +89,24 @@ Every material fact carries bitemporal provenance that distinguishes three tempo
 These names are the canonical fact-level vocabulary. The source-revision-level fields (`published_at`, `observed_at`, `effective_at`) remain the raw authority; `valid_at`/`known_at`/`as_of` are the fact-level projection. A fact's `valid_at` may precede its `known_at`, and its `as_of` must not precede its `known_at`. Missing `valid_at` remains `None`; the system never copies `known_at` or `as_of` into `valid_at` merely to avoid nullability.
 
 Do not introduce a universal `ReviewedFactEnvelope<T>`. Shared `EvidenceContext` is introduced only if the typed product contract needs it now.
+
+### 3.2 Authority comparison policy
+
+The generic `M60` source authority defines a **partial comparison**, not a total order. Comparing two authorities yields one of:
+
+```text
+Higher | Lower | Equivalent | Incomparable
+```
+
+Norms:
+
+1. Generic `M60` source authority carries no product-specific variants such as `icourse_mirror` or `official_catalog_snapshot`. Those belong to product modules behind their own policy/type.
+2. `Incomparable` material facts create conflict or `cannot_verify`; the system never selects by a numeric total order or by arbitrary variant precedence.
+3. `ModelInference` is rejected as a source authority at the registry admission boundary (see §2 and the `M60` blueprint); it never enters the comparison algebra.
+4. A product module MAY define its own local total order over a product-specific authority type when its domain genuinely has one (for example, Course Planning's `official_catalog_snapshot > reviewed_official_source > icourse_mirror > community_signal` ordering). That local order is a product policy projection, not the generic `M60` authority contract.
+5. The generic comparison and a product-local total order do not contradict: the product-local order is a refinement that holds inside the product's bounded type; the generic `M60` authority remains incomparable across product-specific variants it does not name.
+
+This section owns the policy. The exact generic comparison type and its laws live in `docs/contracts/source-import.md` and the `M60` blueprint; the Course Planning local order lives in [`docs/contracts/data-models.md`](../contracts/data-models.md).
 
 ## 4. Retrieval and baseline state machine
 
