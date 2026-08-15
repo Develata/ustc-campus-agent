@@ -22,14 +22,14 @@ The v0 planner is deterministic and fixture-driven. It performs no model calls, 
 `SourceDescriptor` carries:
 
 - stable source id;
-- `SourceAuthority`;
+- `CoursePlanningAuthority`;
 - source-local revision;
 - RFC 3339 retrieval/import time, validated fail-closed;
 - effective term/date range when available;
 - stale flag;
 - provenance note.
 
-Authority order remains:
+Authority order is a **course-planning-local total order**, not the generic platform-wide source authority ordering. The generic `M60` source authority (see [`docs/plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md) §3.2) carries no product-specific variants such as `icourse_mirror` or `official_catalog_snapshot` and defines only a partial comparison (`Higher | Lower | Equivalent | Incomparable`). Course Planning admits this local total order behind its own policy/type:
 
 ```text
 official_catalog_snapshot
@@ -38,6 +38,18 @@ official_catalog_snapshot
 > community_signal
 > model_inference
 ```
+
+`model_inference` is the lowest tier and is rejected as a source authority for requirements and course facts; it is retained in the ordering only so a model-proposed candidate can be explicitly classified and denied, never selected.
+
+### Bitemporal provenance
+
+The v0 Rust `FactProvenance` (`crates/course-planning/src/lib.rs`) carries, per material output fact:
+
+- `retrieved_at`: RFC 3339 retrieval/import timestamp supplied by the fixture producer, syntax-validated by v0 and copied into output provenance. v0 does not bind it to a canonical `SourceRevision.observed_at`.
+- `effective_time`: optional term/date-range metadata supplied by the fixture producer and copied into output provenance. v0 does not parse or validate it as the canonical source revision's `effective_from`/`effective_to` interval.
+- `conflict_status`: how competing source records were handled.
+
+The full canonical fact-level bitemporal vocabulary defined in [`docs/plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md) §3.1 — `valid_at`, `known_at`, `as_of`, plus the planned Affairs Navigator evidence-context fields (`observed_at`, `reviewed_at`, `last_verified_at`) — is **not yet projected onto v0 `FactProvenance`**. v0 merely preserves the fixture-supplied `retrieved_at`/`effective_time` metadata described above; it does not prove a typed canonical `SourceRevision` projection, does not carry `as_of` (a query/answer-level cutoff, not a fact-level field; canonical definition in [`docs/plan/05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md) §3.1), and does not carry review/verification timestamps. Inflating v0 `FactProvenance` to claim those fields would be a contract lie; the full evidence context is owned by the Affairs Navigator plan/contract ([`docs/plan/06-first-party-plugins.md`](../plan/06-first-party-plugins.md) §2.6) and lands with its first product slice.
 
 Requirements must come from a non-stale `reviewed_official_source` or `official_catalog_snapshot`. Course facts may use an iCourse mirror fallback, but the highest-authority fact set is resolved before lower-authority conflicts are considered. Equal-highest-authority conflicting facts are excluded rather than guessed; result provenance records whether a fact had no known conflict, equivalent sources, or an authority-resolved conflict.
 

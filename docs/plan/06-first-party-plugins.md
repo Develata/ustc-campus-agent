@@ -4,8 +4,8 @@
 
 - `Layer`: First-party product contracts
 - `Status`: Identities/manifests accepted; product journeys mostly planned
-- `Version`: `0.3.0`
-- `Last Review`: `2026-07-25`
+- `Version`: `0.4.0`
+- `Last Review`: `2026-08-15`
 - `Authority Owns`: first-party product split, shared semantics, independent lifecycles and implementation order
 - `Authority Defers To`: Campus Trust Kernel for shared authority and typed contracts/manifests for exact fields
 - `Counterpart Features`: `docs/features/01-ustc-affairs-navigator.md`, `docs/features/02-ustc-change-radar.md`, `docs/features/03-campus-opportunity-graph.md`
@@ -106,6 +106,40 @@ A formatting hook MAY normalize presentation only. It cannot fill missing semant
 ### 2.4 Supersession
 
 Only direct typed edges are stored: `Full | Partial | Clarification | Duplicate`. Full replacement requires equal-or-higher authority, preserved audience/scope, explicit field coverage, no unexplained effective-time gap and replayable evidence. Archive is a state transition, not silent deletion.
+
+### 2.5 First product slice
+
+The first Affairs Navigator product slice follows the competition delivery posture ([`02-product-positioning.md`](02-product-positioning.md) §8):
+
+```text
+administrator-imported reviewed snapshot (or later one exact approved public source)
+→ SourceRevision / evidence with bitemporal provenance (valid_at / known_at) and
+  review/verification metadata (reviewed_at / last_verified_at); query binds as_of cutoff
+  (see §2.6 and plan/05 §3.1)
+→ one typed ProcedureDraft validated against board policy
+→ administrator review and publish
+→ one application query (exact stable ID or structured search)
+→ one thin Web result with conditions, steps, effective/deadline time, entry point,
+  source revision/evidence, freshness, conflicts and uncertainty
+```
+
+The `ustc-teach-calendar-fall` candidate family is the foundation for the administrator-imported reviewed snapshot path. This decision does not itself approve a concrete source, authorize network retrieval, or commit raw HTML. If the calendar evidence cannot ground one honest procedure, it remains source/revision fixture groundwork and the narrowest separately reviewed Affairs procedure snapshot is selected before claiming the product acceptance.
+
+The thin Web surface renders typed server-owned state and captures intent only. It does not require Agent, Market artifact switching, Android, CLI or inbound MCP.
+
+### 2.6 Evidence context (planned)
+
+The first product slice's thin Web result carries an evidence context that distinguishes the bitemporal fact vocabulary ([`05-campus-trust-kernel.md`](05-campus-trust-kernel.md) §3.1) from review/verification metadata. The planned Affairs Navigator evidence context fields are:
+
+- `valid_interval`: real-world validity interval or point for the procedure's underlying facts, projected from source effective intervals (fact-level `valid_at`).
+- `observed_at`: when the source revision was first observed/retrieved by the system (source-revision evidence only; it does not supply fact-level `known_at`).
+- `known_at`/recorded-at: the earliest durable materialization/recording time for this exact procedure fact revision and parser output. Reprocessing retained source bytes later mints a later `known_at` for newly extracted facts rather than backdating them to `observed_at`.
+- `reviewed_at`: when an administrator reviewed and accepted this source revision into the baseline (evidence/procedure level, not fact-level; not `as_of`).
+- `last_verified_at`: when the evidence was last re-verified against its source (evidence/procedure level).
+- source revision refs: immutable `SourceRevision` references backing the procedure.
+- conflict/uncertainty: whether the fact had no known conflict, equivalent sources, an authority-resolved conflict, or unresolved uncertainty.
+
+The query/answer `as_of` cutoff ([`05-campus-trust-kernel.md`](05-campus-trust-kernel.md) §3.1) is bound at query time, not stored per-evidence: the same procedure's evidence may be re-queried under different `as_of` cutoffs. The v0 Course Planning `FactProvenance` does not carry these fields; they land with the Affairs Navigator first product slice.
 
 ## 3. USTC ChangeRadar
 

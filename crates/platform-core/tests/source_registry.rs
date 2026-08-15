@@ -638,9 +638,7 @@ fn proposed_rejects_model_inference() {
 fn proposed_accepts_non_model_inference_authorities() {
     for authority in [
         SourceAuthority::CommunitySignal,
-        SourceAuthority::ICourseMirror,
         SourceAuthority::ReviewedOfficialSource,
-        SourceAuthority::OfficialCatalogSnapshot,
     ] {
         let fields = fixture_definition_fields();
         let Ok(definition) = SourceDefinition::proposed(

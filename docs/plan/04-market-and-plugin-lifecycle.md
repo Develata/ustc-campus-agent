@@ -4,8 +4,8 @@
 
 - `Layer`: Product authority
 - `Status`: Schema/identity baseline, typed package/catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` transaction-current authority assembly, bounded `M20-B6` update/rollback domain plus semantic fake and pure resolver evidence implemented; durable runtime lifecycle, artifact switching and production composition planned
-- `Version`: `0.5.0`
-- `Last Review`: `2026-08-02`
+- `Version`: `0.6.0`
+- `Last Review`: `2026-08-15`
 - `Authority Owns`: catalog boundary, package ontology, install/enable/grant/invoke/update lifecycle
 - `Authority Defers To`: Market JSON schema/registries and package/permission contracts for exact fields
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
@@ -186,3 +186,34 @@ Verification:
 - `python3 scripts/check_repo_contracts.py`
 - `scripts/tests/test_check_repo_contracts.py`
 - `MARKET-*`, `AGENT-002`, `FP-006`, `FP-015`, `FP-007`
+
+## 10. Package identity and version declaration authority
+
+### Target authority
+
+Reviewed package manifests under `market/` are the intended single identity/version declaration authority for first-party and admitted packages. The target state is that Rust catalog loading (`crates/platform-core/src/market.rs`) is a typed projection derived from those manifests under schema, not a peer truth.
+
+### Current migration debt
+
+At the current implementation state, `crates/platform-core/src/lib.rs` still hand-maintains three first-party package identities and versions (`AFFAIRS_NAVIGATOR_IDENTITY`, `CHANGE_RADAR_IDENTITY`, `OPPORTUNITY_GRAPH_IDENTITY`) as Rust constants. These constants are **temporary parity-checked mirrors**, not a derived projection. Their values are kept consistent with the reviewed manifests by review, not by a build-time generator or schema-validated loader. Two hand-maintained peer truths (manifest plus a parallel Rust identity table) currently coexist; this is acknowledged migration debt, not compliant state.
+
+### Activation gate
+
+Before the first package version bump or release of any first-party or admitted package, the Rust side MUST move from parity-checked constants to a manifest-derived, schema-validated projection. The activation/acceptance gate is:
+
+1. a manifest schema (`market/schemas/plugin-package.schema.json`) and a digest rule over reviewed manifest bytes;
+2. a Rust loader that derives package id, version, publisher, review tier, components, capability IDs and source/data policy from the reviewed manifest under that schema;
+3. removal of the hand-maintained identity constants for any package covered by the loader;
+4. an acceptance row proving the loader rejects a manifest/Rust drift mutation.
+
+Until that gate passes, the constants remain honest temporary mirrors and must not be presented as the declaration authority.
+
+### Norms (target and transition)
+
+1. Package id, version, publisher, review tier, components, capability IDs and source/data policy originate in the reviewed manifest. The Rust projection (once admitted) validates and pins them; it does not author them.
+2. A manifest change is the authoritative edit. A Rust-only change that should have been a manifest change is a projection drift bug, not a silent authority transfer.
+3. The catalog digest is computed over the reviewed manifest bytes; the Rust projection (once admitted) pins that digest but does not redefine the canonical content.
+4. The target state forbids two hand-maintained peer truths for the same package identity fields. The current constants are an explicit, time-bounded exception tracked as migration debt, not a compliant peer truth.
+5. Non-first-party packages admitted into the catalog follow the same rule: their reviewed manifest is the declaration authority, and the Rust projection (once admitted) validates it.
+
+This section owns the policy and the migration-debt status. The exact manifest schema, digest rule and projection contract live in [`docs/contracts/plugin-package.md`](../contracts/plugin-package.md) and `market/schemas/plugin-package.schema.json`.

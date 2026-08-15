@@ -4,8 +4,8 @@
 
 - `Layer`: Product foundation
 - `Status`: Accepted
-- `Version`: `0.3.0`
-- `Last Review`: `2026-07-31`
+- `Version`: `0.4.0`
+- `Last Review`: `2026-08-15`
 - `Authority Owns`: product scope, formal first-party identities, non-goals and naming
 - `Authority Defers To`: chapters 03–08 for engineering mechanisms and typed contracts for exact fields
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/01-ustc-affairs-navigator.md`, `docs/features/02-ustc-change-radar.md`, `docs/features/03-campus-opportunity-graph.md`, `docs/features/05-headless-client-and-agent-integration.md`
@@ -76,3 +76,41 @@ The word `Campus` intentionally constrains the product to campus information, op
 - Rust/catalog identity match: `FP-015`.
 - Independent disable/re-enable: `FP-007` (planned).
 - Current task order: `docs/tasks/01-execution-roadmap.md`.
+
+## 8. Competition delivery posture
+
+### 8.1 Delivery path
+
+The competition demo follows a narrow vertical slice, not a horizontal platform rollout:
+
+```text
+administrator-reviewed immutable snapshot or exact approved public source
+→ SourceRevision / evidence
+→ one typed product artifact
+→ one application query
+→ one thin Web result with evidence / freshness / conflict / uncertainty
+```
+
+The first graphical product result does not wait for full M10/M80/Android/CLI/MCP/SSE/version-skew/Compose closure. A narrow first-party Web adapter over one public application query is admitted: the Web shell renders typed server-owned state and captures intent only. It performs no canonical product calculation or mutation.
+
+First-party product packs may be statically linked or declarative during the competition slice.
+
+### 8.2 Deferred behind activation triggers
+
+| Deferred item | Activation trigger |
+|---|---|
+| Full Market storefront / runtime coupling | second independently reviewed package or first third-party plugin admission |
+| Durable artifact switching / update / rollback | first production installation or first package version bump |
+| Arbitrary hosted executable Plugins | separate security review after the first static-link product proof |
+| Generic Harness / TaskGraph expansion | second product whose workflow cannot reuse the finite `HarnessRun` |
+| Broad client-core extraction | second non-Web adapter (CLI or MCP) reaching the same application query |
+| Inbound MCP productization | first external Agent consumer with an admitted operation allowlist |
+| Full client / version-skew matrix | first supported-version bump after an accepted release |
+
+### 8.3 Rule-of-two
+
+Rule-of-two applies only to generic/reusable abstractions: a second independently motivated consumer is required before extracting a shared abstraction. It does not defer authority/security invariants — source revision/provenance, authorization recheck, intent/receipt, idempotency, conflict/uncertainty or irreversible-effect boundaries — merely because only one consumer exists.
+
+### 8.4 Course Planning status
+
+Course Planning remains a synthetic UI/interaction prototype. It is labelled synthetic and cannot substitute for the first real Affairs product slice.

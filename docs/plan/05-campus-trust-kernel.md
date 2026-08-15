@@ -4,9 +4,9 @@
 
 - `Layer`: Shared campus authority
 - `Status`: Contract accepted under R11 M60-B2 two-layer transport architecture; `source-import/v1` and `source-retrieval/v0` are current contract authority per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); bounded `M60-B1 source-registry` remains implemented under `source-import/v0` (P1-1); operational `Suspended`/`Revoked` lifecycle precondition applies before any live B2 retrieval adapter; concrete source approval, retained B2 implementation and network retrieval remain unauthorized; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
-- `Version`: `0.3.0`
-- `Last Review`: `2026-08-12`
-- `Authority Owns`: source identity, immutable revision, authority order, temporal/conflict/provenance state, baseline advancement and publication gates
+- `Version`: `0.5.0`
+- `Last Review`: `2026-08-15`
+- `Authority Owns`: source identity, immutable revision, authority comparison policy, temporal/conflict/provenance state, baseline advancement and publication gates
 - `Authority Defers To`: source-import/data-model contracts for exact shapes and package sourcePolicy for requested scope
 - `Counterpart Features`: all documents under `docs/features/`
 - `Counterpart Contracts`: `docs/contracts/source-import.md`, `docs/contracts/source-retrieval.md`, `docs/contracts/data-models.md`
@@ -77,6 +77,38 @@ status: Observed | Parsed | Accepted | Archived | Rejected
 ```
 
 The system MUST distinguish publication time, observation time and effective interval. One URL can have many immutable revisions; URL is a lookup key, not revision identity.
+
+### 3.1 Bitemporal provenance fields
+
+Every material fact carries bitemporal provenance. Two of the three names are fact-level projections; the third is a query/answer-level cutoff, not a fact-level field:
+
+- `valid_at`: real-world validity time — when the fact is true in the real world. Projected only from an explicit source-revision effective interval (`effective_from`/`effective_to`) or from a separately reviewed product-specific derivation that records its rule and evidence. `published_at` is publication evidence, not a validity fallback. A fact may have a validity interval, not only a point; absent an explicit or reviewed derivation, `valid_at` remains unknown.
+- `known_at`: system knowledge time — the earliest durable materialization/recording time for that exact fact revision and parser output. It is minted when deterministic parsing/materialization first commits the fact, not copied from the source revision's `observed_at`. Reprocessing retained bytes later therefore cannot backdate newly extracted facts to the earlier retrieval time.
+- `as_of`: **query/answer cutoff** — the point in time used to select which known facts are eligible to answer a given query. It is NOT a fact-level field, NOT review/acceptance time, and NOT a fourth fact timestamp. Each answer carries the `as_of` cutoff under which it was produced; a fact with `known_at ≤ as_of` is eligible (subject to authority/freshness/conflict policy), and a fact with `known_at > as_of` is excluded as not-yet-known at the cutoff.
+
+Separate from these three, the planned Affairs Navigator evidence context ([`docs/plan/06-first-party-plugins.md`](../plan/06-first-party-plugins.md) §2.6) carries review/verification metadata at the evidence/procedure level — `observed_at`, `reviewed_at`, `last_verified_at` — that record when a source revision was observed, reviewed and last re-verified. These are not fact-level projections of the bitemporal vocabulary above and must not be collapsed into `as_of`.
+
+These names are the canonical vocabulary. The source-revision-level fields (`published_at`, `observed_at`, `effective_from`, `effective_to`) remain raw evidence; `valid_at`/`known_at` are fact-level projections with their own derivation/materialization authority, and `as_of` is the query/answer-level cutoff. A fact's `valid_at` may precede its `known_at`. Missing `valid_at` remains `None`; the system never substitutes `published_at` or copies `known_at` merely to avoid nullability. `as_of` is selected by the query path (default: wall-clock now, or an explicit cutoff passed by the caller/application) and is never synthesized from a fact's own timestamps.
+
+Do not introduce a universal `ReviewedFactEnvelope<T>`. Shared `EvidenceContext` is introduced only if the typed product contract needs it now.
+
+### 3.2 Authority comparison policy
+
+The generic `M60` source authority defines a **partial comparison**, not a total order. Comparing two authorities yields one of:
+
+```text
+Higher | Lower | Equivalent | Incomparable
+```
+
+Norms:
+
+1. Generic `M60` source authority carries no product-specific variants such as `icourse_mirror` or `official_catalog_snapshot`. Those belong to product modules behind their own policy/type.
+2. `Incomparable` material facts create conflict or `cannot_verify`; the system never selects by a numeric total order or by arbitrary variant precedence.
+3. `ModelInference` is rejected as a source authority at the registry admission boundary (see §2 and the `M60` blueprint); it never enters the comparison algebra.
+4. A product module MAY define its own local total order over a product-specific authority type when its domain genuinely has one (for example, Course Planning's `official_catalog_snapshot > reviewed_official_source > icourse_mirror > community_signal` ordering). That local order is a product policy projection, not the generic `M60` authority contract.
+5. The generic comparison and a product-local total order do not contradict: the product-local order is a refinement that holds inside the product's bounded type; the generic `M60` authority remains incomparable across product-specific variants it does not name.
+
+This section owns the policy. The exact generic comparison type and its laws live in `docs/contracts/source-import.md` and the `M60` blueprint; the Course Planning local order lives in [`docs/contracts/data-models.md`](../contracts/data-models.md).
 
 ## 4. Retrieval and baseline state machine
 
