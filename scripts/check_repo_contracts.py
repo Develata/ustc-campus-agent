@@ -9939,7 +9939,7 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
             "- `Predecessor`: [`source-import/v0`](#15-source-importv0-historical-evidence-retained) — accepted for bounded `M60-B1 source-registry` (P1-1), remains the authority for the existing `crates/platform-core/src/source_registry.rs` B1 implementation",
             "- `Accepted Per`: `ACCEPT_EXACT_M60_B2_R11_PACKET` — Develata accepted the exact `33046`-byte semantic packet (`sha256:34cd911e6120646a0e2e410de9987efd167e519f43e5bf64a43c96d9c3654f1e`) on 2026-08-13; prior V10 `DEC-M60-B2-ACCEPTANCE` is explicitly superseded historical evidence",
             "- `Owning Blueprint`: [`M60 Campus Trust and Source Pipeline`](../plan/modules/70-campus-trust-source-pipeline.md)",
-            "- `Depends On`: [`module-boundaries.md`](module-boundaries.md), [`source-retrieval.md`](source-retrieval.md), and the existing crate-root `SourceAuthority` order",
+            "- `Depends On`: [`module-boundaries.md`](module-boundaries.md), [`source-retrieval.md`](source-retrieval.md), and the existing crate-root `SourceAuthority` comparison policy",
             "- `Acceptance`: `SRC-001` is `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted; `SRC-014` remains catalog-only/non-admitted",
             "- `Primary Code`: `crates/platform-core/src/source_registry.rs` for bounded B1 (P1-1 review candidate, still under `source-import/v0`); no v1 Rust implementation exists",
         )

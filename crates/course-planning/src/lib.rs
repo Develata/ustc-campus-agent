@@ -12,7 +12,26 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
-use ustc_campus_agent_core::SourceAuthority;
+
+/// Course Planning local source authority total order.
+///
+/// This is a **product-local** total order, not the generic `M60` source
+/// authority. The generic `SourceAuthority` (in `platform-core`) defines no
+/// semantic ordering; Course Planning refines it into this five-level total
+/// order behind its own type. See `docs/contracts/data-models.md` and
+/// `docs/plan/05-campus-trust-kernel.md` §3.2.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum CoursePlanningAuthority {
+    ModelInference,
+    CommunitySignal,
+    #[serde(rename = "icourse_mirror")]
+    ICourseMirror,
+    ReviewedOfficialSource,
+    OfficialCatalogSnapshot,
+}
 
 /// Current fixture contract implemented by this crate.
 pub const FIXTURE_SCHEMA_VERSION: &str = "course-planning/v0";
@@ -45,7 +64,7 @@ pub struct SourceDescriptor {
     /// Stable source id referenced by fixture objects.
     pub id: String,
     /// Authority used for deterministic conflict resolution.
-    pub authority: SourceAuthority,
+    pub authority: CoursePlanningAuthority,
     /// Source-local revision or snapshot hash label.
     pub revision: String,
     /// RFC 3339 retrieval/import timestamp supplied by the fixture producer.
@@ -231,7 +250,7 @@ pub struct FactProvenance {
     /// Source-local revision.
     pub revision: String,
     /// Source authority.
-    pub authority: SourceAuthority,
+    pub authority: CoursePlanningAuthority,
     /// Retrieval/import timestamp from the fixture.
     pub retrieved_at: String,
     /// Term/date range in which the fact applies, when available.
@@ -362,8 +381,8 @@ pub fn validate_fixture(fixture: &CoursePlanningFixture) -> Result<(), PlanningE
         }
         match sources.get(requirement.source_id.as_str()) {
             Some(source)
-                if source.authority >= SourceAuthority::ReviewedOfficialSource && !source.stale => {
-            }
+                if source.authority >= CoursePlanningAuthority::ReviewedOfficialSource
+                    && !source.stale => {}
             Some(source) if source.stale => problems.push(format!(
                 "requirement {} uses stale source {}",
                 requirement.id, requirement.source_id
@@ -387,7 +406,7 @@ pub fn validate_fixture(fixture: &CoursePlanningFixture) -> Result<(), PlanningE
             problems.push(format!("course {} has zero credits", course.code));
         }
         match sources.get(course.source_id.as_str()) {
-            Some(source) if source.authority > SourceAuthority::CommunitySignal => {}
+            Some(source) if source.authority > CoursePlanningAuthority::CommunitySignal => {}
             Some(_) => problems.push(format!(
                 "course {} uses non-authoritative source {}",
                 course.code, course.source_id
@@ -451,7 +470,8 @@ pub fn validate_fixture(fixture: &CoursePlanningFixture) -> Result<(), PlanningE
             Some(source)
                 if matches!(
                     source.authority,
-                    SourceAuthority::CommunitySignal | SourceAuthority::ICourseMirror
+                    CoursePlanningAuthority::CommunitySignal
+                        | CoursePlanningAuthority::ICourseMirror
                 ) => {}
             Some(_) => problems.push(format!(
                 "community signal for {} uses non-community source {}",
@@ -1003,6 +1023,15 @@ mod tests {
 
     const FIXTURE: &str = include_str!("../../../market/fixtures/course-planning/minimal-v0.json");
 
+    #[test]
+    fn local_course_authority_preserves_total_order() {
+        use CoursePlanningAuthority::*;
+        assert!(OfficialCatalogSnapshot > ReviewedOfficialSource);
+        assert!(ReviewedOfficialSource > ICourseMirror);
+        assert!(ICourseMirror > CommunitySignal);
+        assert!(CommunitySignal > ModelInference);
+    }
+
     fn fixture() -> CoursePlanningFixture {
         let decoded = serde_json::from_str(FIXTURE);
         let Ok(fixture) = decoded else {
@@ -1218,7 +1247,7 @@ mod tests {
         let mut stale = fixture();
         stale.sources.push(SourceDescriptor {
             id: "stale-department-synthetic".to_owned(),
-            authority: SourceAuthority::ReviewedOfficialSource,
+            authority: CoursePlanningAuthority::ReviewedOfficialSource,
             revision: "synthetic-stale-v0".to_owned(),
             retrieved_at: "2026-07-22T00:00:00Z".to_owned(),
             effective_time: Some("2026-fall".to_owned()),

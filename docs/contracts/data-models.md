@@ -22,7 +22,7 @@ The v0 planner is deterministic and fixture-driven. It performs no model calls, 
 `SourceDescriptor` carries:
 
 - stable source id;
-- `SourceAuthority`;
+- `CoursePlanningAuthority`;
 - source-local revision;
 - RFC 3339 retrieval/import time, validated fail-closed;
 - effective term/date range when available;

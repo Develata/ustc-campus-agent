@@ -25,30 +25,50 @@ pub const OPPORTUNITY_GRAPH_PLUGIN_ID: &str = "ustc.opportunity-graph";
 /// Bounded offline spike currently implemented inside Opportunity Graph.
 pub const COURSE_PLANNING_SLICE: &str = "course-planning";
 
-/// Source authority order for Course Planning facts.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
+/// Generic source authority class for the `M60` source pipeline.
+///
+/// This enum carries **no product-specific ontology** (no `ICourseMirror`,
+/// `OfficialCatalogSnapshot`, etc.) and defines **no semantic total order**.
+/// Distinct authority classes are `Incomparable`; a product module may refine
+/// them into a local total order behind its own policy/type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceAuthority {
     /// Model-only inference. It may explain but cannot establish material facts.
-    ModelInference = 0,
-    /// Community subjective signal such as iCourse review aggregates.
-    CommunitySignal = 1,
-    /// Public secondary mirrors such as iCourse program pages.
-    #[serde(rename = "icourse_mirror")]
-    ICourseMirror = 2,
-    /// Reviewed official USTC/department notice outside the catalog.
-    ReviewedOfficialSource = 3,
-    /// Approved snapshot or future official API from the USTC catalog service.
-    OfficialCatalogSnapshot = 4,
+    /// Rejected at `SourceDefinition::proposed` admission.
+    ModelInference,
+    /// Community subjective signal (generic class; product modules name concrete sources).
+    CommunitySignal,
+    /// Reviewed official source outside a product-specific catalog (generic class).
+    ReviewedOfficialSource,
+}
+
+/// Policy-scoped comparison result for generic source authority.
+///
+/// The generic `M60` source-registry never ranks distinct authority classes.
+/// `Higher`/`Lower` are reserved for product-local policy refinements; the
+/// generic `SourceAuthority::compare` returns only `Equivalent` or `Incomparable`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthorityComparison {
+    Higher,
+    Lower,
+    Equivalent,
+    Incomparable,
 }
 
 impl SourceAuthority {
-    /// Returns true when `self` may override `other` during conflict resolution.
+    /// Compare two generic authority classes under policy-scoped comparison.
+    ///
+    /// Identical values are `Equivalent`; distinct classes are `Incomparable`.
+    /// `Incomparable` material facts create conflict or `cannot_verify`; they are
+    /// never selected by a numeric total order.
     #[must_use]
-    pub const fn outranks(self, other: Self) -> bool {
-        (self as u8) > (other as u8)
+    pub const fn compare(self, other: Self) -> AuthorityComparison {
+        if self as u8 == other as u8 {
+            AuthorityComparison::Equivalent
+        } else {
+            AuthorityComparison::Incomparable
+        }
     }
 }
 
@@ -94,14 +114,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn official_catalog_outranks_community_sources() {
-        assert!(
-            SourceAuthority::OfficialCatalogSnapshot.outranks(SourceAuthority::CommunitySignal)
+    fn generic_authority_comparison_is_partial_not_total() {
+        assert_eq!(
+            SourceAuthority::ReviewedOfficialSource
+                .compare(SourceAuthority::ReviewedOfficialSource),
+            AuthorityComparison::Equivalent
         );
-        assert!(SourceAuthority::ICourseMirror.outranks(SourceAuthority::ModelInference));
-        assert!(
-            !SourceAuthority::CommunitySignal.outranks(SourceAuthority::ReviewedOfficialSource)
+        assert_eq!(
+            SourceAuthority::CommunitySignal.compare(SourceAuthority::CommunitySignal),
+            AuthorityComparison::Equivalent
         );
+        assert_eq!(
+            SourceAuthority::ModelInference.compare(SourceAuthority::ModelInference),
+            AuthorityComparison::Equivalent
+        );
+        assert_eq!(
+            SourceAuthority::ReviewedOfficialSource.compare(SourceAuthority::CommunitySignal),
+            AuthorityComparison::Incomparable
+        );
+        assert_eq!(
+            SourceAuthority::CommunitySignal.compare(SourceAuthority::ReviewedOfficialSource),
+            AuthorityComparison::Incomparable
+        );
+        assert_eq!(
+            SourceAuthority::ModelInference.compare(SourceAuthority::CommunitySignal),
+            AuthorityComparison::Incomparable
+        );
+        assert!(AuthorityComparison::Incomparable != AuthorityComparison::Equivalent);
     }
 
     #[test]
