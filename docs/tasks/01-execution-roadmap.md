@@ -290,7 +290,7 @@ M70 ChangeRadar source/revision/diff foundation
 - `M71-B5 exact-structured-search`;
 - `M71-B6 M60/M10/M80 integration`.
 
-The first Affairs Navigator product slice follows the competition delivery posture (§18): administrator-imported reviewed snapshot → one typed procedure with bitemporal provenance (`valid_at` / `known_at`) plus review/verification metadata (`reviewed_at` / `last_verified_at`), with `as_of` bound as a query/answer cutoff ([`05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md) §3.1) → one application query → one thin Web result with evidence/freshness/conflict/uncertainty. The `ustc-teach-calendar-fall` candidate family is the foundation for the reviewed snapshot path; this does not approve a concrete source, authorize network retrieval, or commit raw HTML. `PROC-010` is a planned active acceptance row and `WEB-009` is a planned catalog case for this slice.
+The first Affairs Navigator product slice follows the competition delivery posture (§18): administrator-imported reviewed snapshot → one typed procedure with bitemporal provenance (`valid_at` / `known_at`) plus review/verification metadata (`reviewed_at` / `last_verified_at`), with `as_of` bound as a query/answer cutoff ([`05-campus-trust-kernel.md`](../plan/05-campus-trust-kernel.md) §3.1) → one application query → one thin Web result with evidence/freshness/conflict/uncertainty. The `ustc-teach-calendar-fall` candidate family is the foundation for the reviewed snapshot path; this does not approve a concrete source, authorize network retrieval, or commit raw HTML. `PROC-010` (temporal/evidence semantics) and `PROC-011` (end-to-end first product result) are planned active acceptance rows for this slice; `WEB-009` remains a planned catalog case (catalog-only, not in `matrix.tsv`).
 
 ### M72 — Opportunity Graph
 
@@ -395,7 +395,7 @@ This section projects the competition delivery posture from [`../plan/02-product
 | Module lane | Thin Slice | Validated Next | Deferred | Activation Trigger |
 |---|---|---|---|---|
 | `M00` Platform Control/Identity | identity-types + session-domain (implemented) | request-context + ports-and-fakes | full actor/policy admission composition | `M10` integration (`B5`) |
-| `M10` Application Ingress Host | one server-function + HTTP/SSE route (planned/admitted architecture; skeleton-only at present, no active acceptance binding yet) | dispatch-and-errors + event-stream | full client-contract + version-skew | first Web adapter binding |
+| `M10` Application Ingress Host | one server-function + HTTP/SSE route (planned/admitted architecture; skeleton-only at present; active `PROC-011` acceptance row exists but remains `planned`/non-pass) | dispatch-and-errors + event-stream | full client-contract + version-skew | first Web adapter binding |
 | `M20` Market/Package | typed catalog + capability registry + bounded in-memory installation/grant/update domains + bounded transaction-current authority assembly + pure resolver evidence (implemented as bounded fake/domain evidence; durable production adapters deferred) | durable installation/grant adapters | artifact switching + update/rollback composition | first production installation |
 | `M30` Agent Harness/Runtime | node kernel (implemented) | finite harness/graph against fakes | scheduler-supervisor + real provider | first bounded Agent path (`A2`) |
 | `M40` Tool Gateway/Execution | protocol/fake proof | durable intent/executor/receipt | full recovery composition | first real executor path (`A2`) |
@@ -405,7 +405,7 @@ This section projects the competition delivery posture from [`../plan/02-product
 | `M70` ChangeRadar | — | board-policy + semantic-diff | feed + RSS/Atom | `M60` source approval |
 | `M71` Affairs Navigator | — | tree-and-stable-ids + board-policy | review-publish-render + search | `M60` source + `M10` query |
 | `M72` Opportunity Graph | planner spike (bounded) | opportunity-types + profile-consent | course-pack + evidence-explanation | `M60` source + `M20` install |
-| `M80` Client Core/Shells | narrow first-party Web adapter (planned/admitted architecture; no client-core or peer adapter implementation yet, no active acceptance binding yet) | client-contract-adoption + client-core | full Dioxus Web/Android + CLI + MCP | `M10` operation registry freeze |
+| `M80` Client Core/Shells | narrow first-party Web adapter (planned/admitted architecture; no client-core or peer adapter implementation yet; active `PROC-011` acceptance row exists but remains `planned`/non-pass) | client-contract-adoption + client-core | full Dioxus Web/Android + CLI + MCP | `M10` operation registry freeze |
 | `M90` Infrastructure | CI + contract checker | typed-config + operational-store | Docker Compose restore + migration | first deployable slice |
 
 A dash (`—`) means the lane has no current Thin Slice; it enters through its Validated Next. The narrow first-party Web adapter is admitted over one public application query once `M10` binds one server function and `M71` or `M70` produces one typed artifact. The Web shell renders typed server-owned state and captures intent only.
