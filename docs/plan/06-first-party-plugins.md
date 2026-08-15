@@ -132,8 +132,8 @@ The thin Web surface renders typed server-owned state and captures intent only. 
 The first product slice's thin Web result carries an evidence context that distinguishes the bitemporal fact vocabulary ([`05-campus-trust-kernel.md`](05-campus-trust-kernel.md) §3.1) from review/verification metadata. The planned Affairs Navigator evidence context fields are:
 
 - `valid_interval`: real-world validity interval or point for the procedure's underlying facts, projected from source effective intervals (fact-level `valid_at`).
-- `observed_at`: when the source revision was first observed/retrieved by the system (source-revision level; feeds fact-level `known_at`).
-- `known_at`/recorded-at: when the system first recorded this fact (fact-level projection of `observed_at`).
+- `observed_at`: when the source revision was first observed/retrieved by the system (source-revision evidence only; it does not supply fact-level `known_at`).
+- `known_at`/recorded-at: the earliest durable materialization/recording time for this exact procedure fact revision and parser output. Reprocessing retained source bytes later mints a later `known_at` for newly extracted facts rather than backdating them to `observed_at`.
 - `reviewed_at`: when an administrator reviewed and accepted this source revision into the baseline (evidence/procedure level, not fact-level; not `as_of`).
 - `last_verified_at`: when the evidence was last re-verified against its source (evidence/procedure level).
 - source revision refs: immutable `SourceRevision` references backing the procedure.

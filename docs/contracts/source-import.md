@@ -379,7 +379,7 @@ provenance
 
 Raw and normalized digests are separate nominal lowercase `sha256:` values. A revision ID never substitutes for either digest. `observed_at` is adapter-observed retrieval time; `published_at` is source-asserted publication time; `effective_from`/`effective_to` are the optional typed bounds of the source-asserted semantic validity interval. Missing source assertions or interval bounds remain `None`; the system never copies `observed_at` into another field merely to avoid nullability.
 
-A revision is accepted only after raw evidence, deterministic parse/normalize output and provenance are durably committed. Re-processing identical raw bytes with a new parser creates a new normalized identity/revision; it does not rewrite history.
+A revision is accepted only after raw evidence, deterministic parse/normalize output and provenance are durably committed. Re-processing identical raw bytes with a new parser creates a new normalized identity/revision; it does not rewrite history. `observed_at` remains source-revision evidence and never supplies a downstream fact's `known_at`; each product owns the earliest durable materialization time for its exact fact revision/parser output.
 
 ## 10. Retrieval and SSRF boundary
 
