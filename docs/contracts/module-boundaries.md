@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current contract
-- `Version`: `module-boundaries/v2`
-- `Last Review`: `2026-07-31`
+- `Version`: `module-boundaries/v3`
+- `Last Review`: `2026-08-15`
 - `Owning Plan`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
 - `Task Policy`: [`../tasks/00-module-work-policy.md`](../tasks/00-module-work-policy.md)
 
@@ -107,6 +107,16 @@ M20 projection/recheck
 ```
 
 `M30` and `M40` both depend on the shared protocol, not on each other's implementation. Composition depends on their public interfaces and performs the interleaving. `M40` may call public `M20` authority interfaces but MUST NOT call `M30` or mutate its journal.
+
+### 4.1 RunExecutionCoordinator
+
+The composition interleaving above is owned by an application-level `RunExecutionCoordinator`, defined in [`plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md) §14. It lives in `ustc-agentd` or a declared application module, not inside `M30`, `M40` or `M20`.
+
+- It MAY issue `M30` journal commands and `M40` staged execution ports.
+- It owns outbox/effect identity and uncertain-receipt reconciliation across the prepare → execute → receipt sequence above.
+- It MUST NOT mutate `M30` run/graph/context state, `M40` route/gateway state, or `M20` installation/grant state directly.
+- It MUST NOT create a direct implementation dependency cycle (`M30 → M40 → M20 → M30` is forbidden); it composes their public ports.
+- A production `RunExecutionCoordinator` lands only when `M30`/`M40` production integration is admitted; its acceptance evidence binds to the composition root, not to either module's standalone gate.
 
 ## 5. Domain–infrastructure boundary
 

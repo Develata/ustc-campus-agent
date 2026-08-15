@@ -4,9 +4,9 @@
 
 - `Layer`: Runtime architecture
 - `Status`: R0 platform-owned transition kernel implemented; finite harness, orchestration, persistence and production adapters planned
-- `Version`: `0.7.0`
-- `Last Review`: `2026-07-25`
-- `Authority Owns`: finite HarnessRun/TaskGraph, Plugin-neutral node AgentRun state, context budget, versioned Agent tool protocol, tool-effect ordering and framework/provider adapter boundary
+- `Version`: `0.8.0`
+- `Last Review`: `2026-08-15`
+- `Authority Owns`: finite HarnessRun/TaskGraph, Plugin-neutral node AgentRun state, context budget, versioned Agent tool protocol, tool-effect ordering, framework/provider adapter boundary, selective production persistence policy and the application-level RunExecutionCoordinator contract
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
 - `Counterpart Features`: `docs/features/04-bounded-agent-harness.md`; current Market and product features
 - `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
@@ -308,3 +308,47 @@ Active planned proof:
 - `RUNTIME-002`: restart/resume without duplicate receipts/effects.
 
 The retained long-horizon catalog in `docs/acceptance/platform-baseline.md` preserves `AI-*`, `MCP-*`, `RUN-*` and `AGENT-*` cases for activation when those features enter current scope.
+
+## 13. Selective production persistence
+
+Production persistence is selected per aggregate by its authority and failure semantics, not by a single global mechanism. Each owning module declares its own port contract; the choice below is normative for M30/M40/M60 and peers once production adapters land.
+
+| Aggregate | Production persistence | Reconstruction guarantee |
+|---|---|---|
+| run/external effect | canonical event journal (M30) | deterministic replay of legal, evidenced transitions |
+| source revision / raw evidence | immutable revision + bounded artifact (M60) | byte-exact raw/normalized snapshot rebuild |
+| semantic change / publication | typed event + immutable artifact (M70/M71/M72) | projection rebuild from accepted revisions and receipts |
+| session | current row + revision/CAS + security audit | crash-safe resume without duplicate effects |
+| installation / grant | transactional current row + append-only audit/receipt (M20) | legal-state replay and revoke reconciliation |
+| settings / profile | current projection + revision (M00) | recoverable to last accepted revision |
+| search / cache | rebuildable projection | rebuild from canonical declarations and immutable evidence |
+
+Norms:
+
+1. A pure decide/evolve/replay test MUST NOT require a real event store. Domain aggregates keep their legal-transition invariants testable against fakes.
+2. An aggregate that already owns deterministic replay over a typed event journal MAY reuse that journal as its production reconstruction source; it is not forced to add a second store.
+3. An aggregate whose authority is an immutable artifact (M60 source revision) reconstructs from that artifact plus its accepted-baseline pointer, not from replaying the pipeline that produced it.
+4. A current-row aggregate (installation, grant, session, settings) keeps a transactional current state plus an append-only audit/receipt trail; legal-state replay validates the trail but production reads the current row.
+5. Search, cache and derived projections are never a reconstruction source for any other aggregate; they rebuild from the canonical owners above.
+
+This section owns the policy. The exact port shapes, repository contracts and journal schemas live in `docs/contracts/agent-runtime.md`, `docs/contracts/module-boundaries.md` §5 and each owning module's blueprint.
+
+## 14. RunExecutionCoordinator contract ownership
+
+Before M30/M40 production integration, an application-level `RunExecutionCoordinator` owns one bounded orchestration and recovery seam. It lives in the composition surface (`ustc-agentd` or a declared application module), not inside M30, M40 or M20 domain code.
+
+Responsibilities:
+
+- order M30 journal commands and M40 staged execution ports across one run phase;
+- own outbox/effect identity so a crash between M40 execution and M30 receipt does not produce a duplicate or lost external effect;
+- reconcile uncertain receipts: a receipt that does not prove a completed external effect is treated as not-completed, never silently advanced;
+- enforce the §5 effect ordering across composition: resolve identity, validate, authorize, persist intent, execute, persist receipt, advance run.
+
+Constraints:
+
+1. `RunExecutionCoordinator` MAY issue M30 journal commands and M40 staged execution ports. It MUST NOT mutate M30 run/graph/context state directly, M40 route/gateway state directly, or M20 installation/grant state directly.
+2. It MUST NOT create a direct implementation dependency cycle: M30 → M40 → M20 → M30 is forbidden. The coordinator composes their public ports; it is not a peer domain module.
+3. It MUST NOT weaken the §5 effect ordering, the §10 shared provider/tool safety rules, or any module's legal-transition ownership.
+4. It owns only the composition seam. Each module's standalone acceptance is independent of it.
+
+This is contract ownership, not an instruction to implement the full runtime now. A production `RunExecutionCoordinator` lands only when M30/M40 production integration is admitted, and its acceptance evidence is bound to the composition root, not to either module's standalone gate.
