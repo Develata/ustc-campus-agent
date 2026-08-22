@@ -37,6 +37,7 @@
 // Public modules
 // ---------------------------------------------------------------------------
 
+pub mod application_port;
 pub mod artifact;
 pub mod clock;
 pub mod evidence;
@@ -64,6 +65,7 @@ pub(crate) mod projection;
 // Re-exports of the primary public API surface
 // ---------------------------------------------------------------------------
 
+pub use application_port::M71AffairsGetPort;
 pub use artifact::{
     BoardPolicy, Contact, Deadline, DeadlineKind, EntryPoint, Prerequisite, ProcedureArtifact,
     ProcedurePublicationState, ProcedureStep,
