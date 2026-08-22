@@ -284,6 +284,7 @@ KEY_FILES = [
     "docs/contracts/module-boundaries.md",
     "docs/contracts/permissions.md",
     "docs/contracts/platform-identity.md",
+    "docs/contracts/platform-request-context.md",
     "docs/contracts/platform-session.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",
@@ -2837,6 +2838,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/market/grant.rs',
  'src/market/installation.rs',
  'src/market/update.rs',
+ 'src/request_context.rs',
  'src/session.rs',
  'src/source_registry.rs',
  'tests/invocation_resolution.rs',
@@ -2847,6 +2849,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'tests/market_package_catalog.rs',
  'tests/market_package_update.rs',
  'tests/platform_identity.rs',
+ 'tests/platform_request_context.rs',
  'tests/platform_session.rs',
  'tests/source_registry.rs',
  'tests/support/invocation_fixture.rs',
@@ -2881,13 +2884,14 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
 # introduce a module the scan never reads.
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'invocation.rs': (),
- 'lib.rs': ('identity', 'invocation', 'market', 'session', 'source_registry'),
+ 'lib.rs': ('identity', 'invocation', 'market', 'request_context', 'session', 'source_registry'),
  'market.rs': ('authority', 'capability', 'grant', 'installation', 'update'),
  'market/authority.rs': (),
  'market/capability.rs': (),
  'market/grant.rs': (),
  'market/installation.rs': (),
  'market/update.rs': (),
+ 'request_context.rs': (),
  'session.rs': (),
  'source_registry.rs': ()}
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
@@ -2925,6 +2929,7 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
  'lib.rs': ('pub mod identity;',
             'pub mod invocation;',
             'pub mod market;',
+            'pub mod request_context;',
             'pub mod session;',
             'pub mod source_registry;',
             '#[cfg(test)] mod tests',
@@ -7746,6 +7751,11 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
             )
         if re.search(r"\bcfg_attr\b", governed):
             fail(f"platform-core source must not carry cfg_attr: {label}", issues)
+        # request_context.rs is governed by check_platform_request_context. It remains in this
+        # complete package/module inventory, but its intentionally broad B3 algebra must not be
+        # admitted by weakening the frozen B1 identity-sibling surface.
+        if source_key == "request_context.rs":
+            continue
         # Total accounting over attributes, by NORMALIZED name: `#[r#derive(Default)]` is the
         # same attribute as `#[derive(Default)]` and no spelling blacklist can enumerate the
         # equivalents. An unadmitted attribute name is drift whatever it is called.
@@ -8190,6 +8200,10 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
                     f"{path.relative_to(ROOT).as_posix()}",
                     issues,
                 )
+        # The dedicated B3 checker owns request_context.rs. The duplicate-kind guard above still
+        # applies; the frozen B1 sibling impl/import allowlists below deliberately do not.
+        if path.name == "request_context.rs":
+            continue
         # The frozen surface belongs to the value kinds, not to one file: an implementation
         # written in a sibling module adds exactly the same externally reachable API. The
         # sibling `impl` surface is an allowlist, not a kind blacklist, because a blanket
@@ -10205,6 +10219,7 @@ P1_SOURCE_REGISTRY_IDENTITY_MODULE_EXPECTATION = """&[
                 "identity",
                 "invocation",
                 "market",
+                "request_context",
                 "session",
                 "source_registry",
             ] as &[&str],"""
@@ -10717,6 +10732,279 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
                     issues,
                 )
 
+REQUEST_CONTEXT_CONTRACT = "docs/contracts/platform-request-context.md"
+REQUEST_CONTEXT_SOURCE = "crates/platform-core/src/request_context.rs"
+REQUEST_CONTEXT_TEST_SOURCE = "crates/platform-core/tests/platform_request_context.rs"
+REQUEST_CONTEXT_TEST_COMMAND = (
+    "cargo test --locked -p ustc-campus-agent-core --test platform_request_context"
+)
+REQUEST_CONTEXT_TESTS = (
+    "request_context_forged_permission_tuple_rejected",
+    "request_context_session_a_snapshot_b_mismatch_rejected",
+    "request_context_caller_cannot_inject_stale_policy_fact",
+    "request_context_idempotency_first_attempt_reserves_command_id",
+    "request_context_idempotency_retry_returns_prior_disposition",
+    "request_context_idempotency_conflicting_envelope_rejected",
+    "request_context_idempotency_restart_reconciles_by_key",
+    "request_context_anonymous_public_read_checks_policy_and_capability",
+    "request_context_denied_admission_reaches_no_downstream_fake",
+    "request_context_private_constructor_compile_proof",
+    "request_context_serde_deserialize_absent_compile_proof",
+    "request_context_anonymous_on_private_class_denied_before_session",
+    "request_context_authenticated_on_public_read_still_checks_session",
+    "request_context_idempotency_no_key_at_most_once",
+    "request_context_timeout_reconciles_before_retry",
+    "request_context_descriptor_snapshot_no_live_lookup",
+    "request_context_descriptor_snapshot_operation_id_mismatch_rejected",
+    "request_context_descriptor_snapshot_absent_fail_closed",
+    "request_context_descriptor_snapshot_port_unavailable_class",
+    "request_context_descriptor_snapshot_immutable_across_registry_update",
+    "request_context_descriptor_snapshot_send_sync_arc_representable",
+    "request_context_descriptor_snapshot_carried_to_downstream",
+    "descriptor_snapshot_id_owner_m00_checked_constructor",
+    "descriptor_snapshot_id_no_m10_inherent_mint",
+    "descriptor_snapshot_id_m10_mint_authorality_invokes_m00_constructor",
+    "descriptor_snapshot_id_serde_owner_m00_validating",
+    "descriptor_snapshot_id_inner_private",
+    "rejection_class_14_unit_tags_no_payload",
+    "rejection_projection_covers_all_14_variants",
+    "rejection_class_from_projection_exhaustive_no_wildcard",
+    "rejection_projection_payload_preservation_policy_expired",
+    "rejection_projection_payload_preservation_session_id_mismatch",
+    "rejection_projection_payload_preservation_capability_actor_kind",
+    "rejection_projection_session_not_admitted_observed_at",
+    "rejection_carrier_private_fields_no_default_no_serde",
+    "rejection_carrier_public_accessors_only",
+    "rejection_cross_boundary_single_branch",
+    "rejection_projection_constructed_at_site_no_side_channel",
+    "rejection_m10_wire_table_total_14_rows",
+    "rejection_projection_malformed_command_option_echo",
+    "rejection_projection_infrastructure_port_retains_port_for_diagnosis",
+    "request_context_public_disposition_has_no_synthetic_identity",
+    "request_context_authenticated_disposition_exact_session_binding",
+    "request_context_disposition_actor_session_incoherence_rejected",
+    "request_context_disposition_admitted_operation_equals_enabled_check",
+    "request_context_disposition_descriptor_accessors_round_trip",
+    "request_context_prior_admitted_returns_complete_scalar_disposition_no_arc",
+    "request_context_prior_rejected_preserves_exact_projection_payload",
+    "request_context_inflight_never_becomes_admitted_or_rejected",
+    "request_context_finalize_response_loss_returns_already_same",
+    "request_context_stale_finalizer_cannot_commit_after_reclaim",
+    "request_context_idempotency_reopen_restores_admitted_and_rejected_entries",
+    "request_context_m10_v17_closed_match_delta_binding_fixture",
+    "request_context_persisted_public_disposition_round_trips_without_identity",
+    "request_context_persisted_authenticated_disposition_requires_exact_session_pair",
+    "request_context_persisted_rejection_all_fourteen_variants_round_trip",
+    "request_context_persisted_unknown_or_incoherent_fields_fail_closed",
+    "request_context_store_observation_requires_nonzero_fencing",
+    "request_context_store_projection_promotes_only_through_m00_checked_conversion",
+    "request_context_cross_crate_fake_constructs_port_data_not_authority_carriers",
+    "request_context_registration_preserves_platform_identity_six_kind_surface",
+    "request_context_persisted_leaf_serde_round_trips_checked_values",
+    "request_context_persisted_leaf_invalid_deserialize_rejected",
+    "request_context_schema_digest_persisted_lower_hex_exact",
+)
+REQUEST_CONTEXT_REQUIRED_PUBLIC_ITEMS = {
+    "ActorReference",
+    "AdmissionPorts",
+    "AdmissionRejectionClass",
+    "AdmissionRejectionProjection",
+    "AdmittedIdentities",
+    "AdmittedOperation",
+    "BuildRequestContextCommand",
+    "DescriptorSnapshotId",
+    "FinalAdmissionDisposition",
+    "FrozenPrerequisites",
+    "IdempotencyReservation",
+    "IdempotencyReservationToken",
+    "M00AdmittedActor",
+    "M00AdmittedDisposition",
+    "M00AdmissionResult",
+    "M00IncompleteReservation",
+    "OperationDescriptorProjection",
+    "PersistedAdmittedDispositionDto",
+    "PersistedAdmissionRejectionDto",
+    "PersistedPriorDispositionDto",
+    "PlatformRequestContext",
+    "RequestAdmissionCoordinator",
+    "RequestContextRejection",
+    "SchemaDigest",
+}
+REQUEST_CONTEXT_DOC_FRAGMENTS = {
+    "docs/contracts/platform-identity.md": ("platform-request-context/v0", "six"),
+    "docs/contracts/platform-session.md": ("platform-request-context/v0", "admits_at"),
+    "docs/contracts/module-boundaries.md": ("platform-request-context/v0", "M00"),
+    "docs/contracts/source-retrieval.md": ("platform-request-context/v0", "request-scoped"),
+    "docs/plan/modules/00-module-map.md": ("platform-request-context/v0", "AUTH-013"),
+    "docs/plan/modules/10-platform-control-identity.md": ("platform-request-context/v0", "M00-B3", "AUTH-013"),
+    "docs/coverage-matrix.md": ("platform-request-context.md", "active:AUTH-013"),
+    "docs/tasks/campaign-w1-m00-b3.md": ("platform-request-context/v0", "implemented", "B4"),
+    "docs/tasks/01-execution-roadmap.md": ("platform-request-context/v0", "M00-B3", "B4"),
+}
+
+
+def check_platform_request_context(issues: list[str]) -> None:
+    """Fail closed over the accepted bounded M00 request-context implementation."""
+    required = (
+        REQUEST_CONTEXT_CONTRACT,
+        REQUEST_CONTEXT_SOURCE,
+        REQUEST_CONTEXT_TEST_SOURCE,
+        "crates/platform-core/src/lib.rs",
+        "crates/platform-core/src/identity.rs",
+        "docs/acceptance/matrix.tsv",
+        "docs/acceptance/platform-baseline.md",
+        *REQUEST_CONTEXT_DOC_FRAGMENTS,
+    )
+    texts: dict[str, str] = {}
+    for rel in required:
+        path = ROOT / rel
+        if not path.is_file():
+            fail(f"platform request context required carrier missing: {rel}", issues)
+            continue
+        text = path.read_text(encoding="utf-8")
+        if not text.strip():
+            fail(f"platform request context required carrier empty: {rel}", issues)
+            continue
+        texts[rel] = text
+    if len(texts) != len(set(required)):
+        return
+
+    if REQUEST_CONTEXT_CONTRACT not in KEY_FILES:
+        fail(
+            f"platform request context contract unregistered: {REQUEST_CONTEXT_CONTRACT}",
+            issues,
+        )
+
+    contract = texts[REQUEST_CONTEXT_CONTRACT]
+    for fragment in (
+        "Contract ID: `platform-request-context/v0`",
+        "Status: **implemented bounded platform-core kernel**",
+        "exactly 64 named request-context tests",
+        REQUEST_CONTEXT_TEST_COMMAND,
+    ):
+        if contract.count(fragment) != 1:
+            fail(f"platform request context contract drift: missing/duplicate {fragment!r}", issues)
+
+    lib_code = strip_rust_comments_and_literals(texts["crates/platform-core/src/lib.rs"])
+    lib_items, unresolved_items = rust_item_declarations(lib_code)
+    if unresolved_items:
+        fail(f"platform request context lib item inventory unresolved: {unresolved_items}", issues)
+    if lib_items.count("pub mod request_context;") != 1:
+        fail("platform request context module declaration must appear exactly once", issues)
+
+    source = texts[REQUEST_CONTEXT_SOURCE]
+    source_code = strip_rust_comments_and_literals(source)
+    source_items, unresolved_source_items = rust_item_declarations(source_code)
+    if unresolved_source_items:
+        fail(
+            f"platform request context item inventory unresolved: {unresolved_source_items}",
+            issues,
+        )
+    expected_identity_import = (
+        "use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};"
+    )
+    if source_items.count(expected_identity_import) != 1:
+        fail("platform request context exact six-kind identity import drift", issues)
+    for carrier, pattern in PLATFORM_CORE_FORBIDDEN_SPLICE_PATTERNS:
+        if re.search(pattern, source_code):
+            fail(
+                f"platform request context must not splice external source: {carrier!r}",
+                issues,
+            )
+    if re.search(RUST_INNER_ATTRIBUTE_PATTERN, source_code) or re.search(
+        r"\bcfg_attr\b", source_code
+    ):
+        fail("platform request context carries a conditional/inner source attribute", issues)
+    for target in rust_impl_self_types(source_code):
+        if target.rsplit("::", 1)[-1] in PLATFORM_IDENTITY_KINDS:
+            fail(
+                f"platform request context implements frozen identity kind outside owner: {target}",
+                issues,
+            )
+    public_items = set(
+        re.findall(
+            r"\bpub\s+(?:struct|enum|trait)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            source_code,
+            flags=re.ASCII,
+        )
+    )
+    missing_items = sorted(REQUEST_CONTEXT_REQUIRED_PUBLIC_ITEMS - public_items)
+    if missing_items:
+        fail(f"platform request context public item inventory missing: {missing_items}", issues)
+    for forbidden in (
+        "RequestContextOutcome",
+        "RequestContextError",
+        "PriorDisposition",
+        "ActorKey",
+    ):
+        if re.search(rf"\bpub\s+(?:struct|enum|type)\s+{forbidden}\b", source_code):
+            fail(f"platform request context retired public carrier present: {forbidden}", issues)
+    if source.count("```compile_fail") < 4:
+        fail("platform request context authority doctest evidence collapsed", issues)
+    for forbidden_constructor in (
+        "impl PlatformRequestContext {\n    pub fn new",
+        "impl M00AdmittedDisposition {\n    pub fn new",
+        "impl RequestContextRejection {\n    pub fn new",
+        "impl AdmittedOperation {\n    pub fn new",
+    ):
+        if forbidden_constructor in source:
+            fail(
+                "platform request context exposes an authority-bearing public constructor",
+                issues,
+            )
+
+    test_code = strip_rust_comments_and_literals(texts[REQUEST_CONTEXT_TEST_SOURCE])
+    functions, unresolved_functions = rust_functions(test_code)
+    if unresolved_functions:
+        fail(
+            f"platform request context Rust test inventory unresolved: {unresolved_functions}",
+            issues,
+        )
+    actual_tests = tuple(
+        name
+        for name, _ in functions
+        if name.startswith(("request_context_", "descriptor_snapshot_id_", "rejection_"))
+    )
+    if actual_tests != REQUEST_CONTEXT_TESTS:
+        missing = sorted(set(REQUEST_CONTEXT_TESTS) - set(actual_tests))
+        extra = sorted(set(actual_tests) - set(REQUEST_CONTEXT_TESTS))
+        fail(
+            "platform request context exact 64-test inventory drift "
+            f"(count={len(actual_tests)} missing={missing} extra={extra})",
+            issues,
+        )
+
+    identity_code = strip_rust_comments_and_literals(texts["crates/platform-core/src/identity.rs"])
+    if identity_code.count("identity_value!") != 6 or re.search(
+        r"\bpub\s+struct\s+CausationId\b", identity_code
+    ):
+        fail("platform request context widened the six-kind platform identity owner", issues)
+
+    matrix_rows = {
+        columns[0]: columns
+        for line in texts["docs/acceptance/matrix.tsv"].splitlines()[1:]
+        if line.strip() and len(columns := line.split("\t")) == 7
+    }
+    row = matrix_rows.get("AUTH-013")
+    if row is None:
+        fail("platform request context acceptance row AUTH-013 missing", issues)
+    elif row[5] != "implemented" or REQUEST_CONTEXT_TEST_COMMAND not in row[3]:
+        fail("platform request context acceptance row AUTH-013 regressed", issues)
+
+    baseline = texts["docs/acceptance/platform-baseline.md"]
+    auth13 = [line for line in baseline.splitlines() if line.startswith("| `AUTH-013` |")]
+    if len(auth13) != 1 or "Public/Authenticated" not in auth13[0] or "64" not in auth13[0]:
+        fail("platform request context long-horizon AUTH-013 projection drift", issues)
+
+    for rel, fragments in REQUEST_CONTEXT_DOC_FRAGMENTS.items():
+        for fragment in fragments:
+            if fragment not in texts[rel]:
+                fail(
+                    f"platform request context projection missing in {rel}: {fragment!r}",
+                    issues,
+                )
+
+
 EXPECTED_MAIN_CALLS = (
     "check_key_files_present_and_nonempty(issues)",
     "check_campaign_authorization(issues)",
@@ -10737,6 +11025,7 @@ EXPECTED_MAIN_CALLS = (
     "check_platform_identity_implementation(issues)",
     "check_platform_session_contract(issues)",
     "check_platform_session_implementation(issues)",
+    "check_platform_request_context(issues)",
     "check_p1_source_revision_contract(issues)",
     "check_p1_source_registry_implementation(issues)",
     "check_m60_b2_packet_digest(issues)",
@@ -10812,7 +11101,8 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_p1_source_revision_contract": {"digest": "f413cb4f58e9e0d17205583ca69105d3bc171e5dfb5cc1031cc4debc135fa992", "status": "active"},
     "check_platform_authority_implementation": {"digest": "64b767f09d0d29268af33e15bdf60d6fd879b61365abd45c1be2caa2319b92f4", "status": "active"},
     "check_platform_core_manifest": {"digest": "3082cf7fedfaf39080d287a036c8875f762751bb8832121ca2d7cd81d5947d62", "status": "active"},
-    "check_platform_identity_implementation": {"digest": "ba1d808291f8faa3d3a9acbc16a71854af2c8bc461115432c49a4aeb3ec23d72", "status": "active"},
+    "check_platform_identity_implementation": {"digest": "b30158e2721bb04582b6dced31eb4328b493ba13d0f9153347388ad1ccd91c29", "status": "active"},
+    "check_platform_request_context": {"digest": "bfadbc26ce42b040412dab1e7d7ac4402c43eec31c6b85bd6fa62799b044ae83", "status": "active"},
     "check_platform_session_contract": {"digest": "e3a2e5ef5ca953bdf2739ac3072df8bcfed0ebece4a893f52980fb7ca3b15c1b", "status": "active"},
     "check_platform_session_implementation": {"digest": "f1a25036ae6940b332c258af80f2e23815071ca19cb1d5db79d7a4f8b844be8f", "status": "active"},
     "check_rust_doctest_gate": {"digest": "372200f9ce289b3af148b7e7001408498b3d817098d7013692f016b766d2ec58", "status": "active"},
@@ -10943,6 +11233,7 @@ def main() -> int:
     check_platform_identity_implementation(issues)
     check_platform_session_contract(issues)
     check_platform_session_implementation(issues)
+    check_platform_request_context(issues)
     check_p1_source_revision_contract(issues)
     check_p1_source_registry_implementation(issues)
     check_m60_b2_packet_digest(issues)

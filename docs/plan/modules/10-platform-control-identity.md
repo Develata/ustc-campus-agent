@@ -3,14 +3,14 @@
 ## Metadata
 
 - `Module ID`: `M00`
-- `Status`: Accepted blueprint; `M00-B1 identity-types` and `M00-B2 session-domain` implemented, remaining batches planned
+- `Status`: Accepted blueprint; `M00-B1 identity-types`, `M00-B2 session-domain` and bounded `M00-B3 request-context` implemented; production B4 adapters and B5 composition planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m00-platform-control/v1`
 - `Last Review`: `2026-07-29`
 - `Composition`: `apps/ustc-agentd`
-- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`; future cohesive modules under `crates/platform-core/`; adapter implementations under `M90`
-- `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md) for `M00-B1`; [`platform-session/v0`](../../contracts/platform-session.md) for `M00-B2`; [`module-boundaries.md`](../../contracts/module-boundaries.md) for later cross-module actor/context values
-- `Acceptance`: implemented `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015`, `AUTH-016`, `AUTH-017`, `AUTH-018`, `AUTH-019`, `AUTH-020`; catalog-only `AUTH-013` and later admission cases remain deferred
+- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`; `crates/platform-core/src/request_context.rs` for bounded `M00-B3`; adapter implementations under `M90`
+- `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md), [`platform-session/v0`](../../contracts/platform-session.md), [`platform-request-context/v0`](../../contracts/platform-request-context.md), and [`module-boundaries.md`](../../contracts/module-boundaries.md)
+- `Acceptance`: implemented `AUTH-011` through `AUTH-020`, including bounded request-context `AUTH-013`; production B4 adapter/vendor and B5 M10-composition evidence remain planned
 
 ## 1. Purpose
 
@@ -109,6 +109,10 @@ credential evidence admitted by an auth adapter
 ```
 
 Revoke blocks new request contexts immediately. It does not erase already committed receipts or rewrite historical events.
+
+### Bounded `M00-B3 request-context` evidence
+
+[`platform-request-context/v0`](../../contracts/platform-request-context.md) now owns the bounded platform-core admission kernel. It freezes the Public/Authenticated actor sum, immutable request-scoped descriptor projection, current policy/session/capability observations, fenced idempotency results, fourteen rejection classes, complete scalar dispositions, and validating persistence promotion. `AUTH-013` is implemented only for that exact 64-test kernel boundary. It does **not** claim a production B4 database/auth/policy adapter or the B5 M10 composition path; those remain planned.
 
 ## 7. Failure and recovery
 

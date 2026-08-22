@@ -26,7 +26,7 @@ This registry defines what may cross each large-module boundary. It does not pre
 
 | Boundary ID | Producer/owner | Consumer | Values/operation | Status |
 |---|---|---|---|---|
-| `B-M00-M10-ACTOR` | `M00` | `M10` | `AuthenticatedActor`, `PlatformRequestContext`, session denial | planned |
+| `B-M00-M10-ACTOR` | `M00` | `M10` | [`platform-request-context/v0`](platform-request-context.md): closed `M00AdmittedActor::{Public, Authenticated}`, sealed `PlatformRequestContext`, complete scalar `M00AdmittedDisposition`, typed rejection/incomplete outcome | M00 bounded producer implemented (`AUTH-013`); M10-v17 composition/wire runtime planned |
 | `B-M80-M10-CALL` | M80 produces request instances; M10 owns the versioned wire schema | `M10` | versioned client-core request from Dioxus, `ustc-agent` or inbound MCP; client build/target/protocol, admitted session projection, typed intent, precondition and correlation/idempotency identity | accepted contract; implementation planned |
 | `B-M10-M80-RESULT` | `M10` | `M80` | versioned response/error/projection plus compatibility or `UpgradeRequired` outcome reduced/rendered by the calling peer adapter | accepted contract; implementation planned |
 | `B-M10-M80-EVENT` | `M10` | `M80` | typed server event/stream value, monotone cursor and reconnect/resync outcome shared semantically across peer adapters | accepted contract; implementation planned |

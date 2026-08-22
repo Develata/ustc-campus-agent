@@ -1245,8 +1245,8 @@ class ModuleRegistryContractTests(unittest.TestCase):
         text = path.read_text(encoding="utf-8")
         path.write_text(
             text.replace(
-                "`long-horizon:AUTH-013`",
-                "`active:AUTH-013`",
+                "`long-horizon:AI-*`",
+                "`active:AI-*`",
                 1,
             ),
             encoding="utf-8",
@@ -1265,7 +1265,7 @@ class ModuleRegistryContractTests(unittest.TestCase):
         text = path.read_text(encoding="utf-8")
         path.write_text(
             text.replace(
-                "`long-horizon:AUTH-013`",
+                "`long-horizon:AI-*`",
                 "`long-horizon:MOBILE-*`",
                 1,
             ),
@@ -7277,6 +7277,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_platform_identity_implementation(issues)",
         "check_platform_session_contract(issues)",
         "check_platform_session_implementation(issues)",
+        "check_platform_request_context(issues)",
         "check_p1_source_revision_contract(issues)",
         "check_p1_source_registry_implementation(issues)",
         "check_m60_b2_packet_digest(issues)",
@@ -7779,6 +7780,102 @@ class SourceSensitiveGuardRegistryTests(unittest.TestCase):
             )
         finally:
             checker.SOURCE_SENSITIVE_GUARD_REGISTRY[target]["status"] = original_status
+
+
+class PlatformRequestContextContractTests(unittest.TestCase):
+    """Mutation-proves the dedicated bounded M00-B3 checker."""
+
+    CONTRACT_REL = "docs/contracts/platform-request-context.md"
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        shutil.copytree(
+            REPO_ROOT / "crates/platform-core",
+            self.root / "crates/platform-core",
+            ignore=shutil.ignore_patterns("target"),
+        )
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        self.original_key_files = list(checker.KEY_FILES)
+        setattr(checker, "ROOT", self.root)
+        self.assertEqual(self.check_request_context(), [])
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        checker.KEY_FILES[:] = self.original_key_files
+        self.temporary_directory.cleanup()
+
+    def check_request_context(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_platform_request_context(issues)
+        return issues
+
+    def test_request_context_contract_missing_fails_closed(self) -> None:
+        (self.root / self.CONTRACT_REL).unlink()
+        issues = self.check_request_context()
+        self.assertIn(
+            f"platform request context required carrier missing: {self.CONTRACT_REL}",
+            issues,
+        )
+
+    def test_request_context_contract_empty_fails_closed(self) -> None:
+        (self.root / self.CONTRACT_REL).write_text(" \n", encoding="utf-8")
+        issues = self.check_request_context()
+        self.assertIn(
+            f"platform request context required carrier empty: {self.CONTRACT_REL}",
+            issues,
+        )
+
+    def test_request_context_contract_unregistered_fails_closed(self) -> None:
+        checker.KEY_FILES.remove(self.CONTRACT_REL)
+        issues = self.check_request_context()
+        self.assertIn(
+            f"platform request context contract unregistered: {self.CONTRACT_REL}",
+            issues,
+        )
+
+    def test_request_context_module_source_registration_drift_fails_closed(self) -> None:
+        path = self.root / "crates/platform-core/src/lib.rs"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace("pub mod request_context;\n", "", 1), encoding="utf-8")
+        issues = self.check_request_context()
+        self.assertIn(
+            "platform request context module declaration must appear exactly once",
+            issues,
+        )
+
+    def test_request_context_identity_six_kind_drift_fails_closed(self) -> None:
+        path = self.root / "crates/platform-core/src/identity.rs"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\npub struct CausationId;\n")
+        issues = self.check_request_context()
+        self.assertIn(
+            "platform request context widened the six-kind platform identity owner",
+            issues,
+        )
+
+    def test_request_context_exact_test_inventory_drift_fails_closed(self) -> None:
+        path = self.root / "crates/platform-core/tests/platform_request_context.rs"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace(
+                "fn request_context_forged_permission_tuple_rejected(",
+                "fn request_context_forged_permission_tuple_rejected_mutated(",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues = self.check_request_context()
+        self.assertTrue(
+            any(
+                issue.startswith(
+                    "platform request context exact 64-test inventory drift"
+                )
+                for issue in issues
+            ),
+            issues,
+        )
 
 
 if __name__ == "__main__":
