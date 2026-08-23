@@ -97,6 +97,9 @@ impl M10WireErrorDto {
         if retryability != expected_retry || wire_code.as_str() != expected_code {
             return Err(WireErrorValidationError);
         }
+        if !echo_matches_class(class, &echo) {
+            return Err(WireErrorValidationError);
+        }
         Ok(Self {
             class,
             retryability,
@@ -135,6 +138,31 @@ fn expected_relation(class: WireErrorClassDto) -> (RetryabilityDto, &'static str
         CapabilityRevoked => (NotRetryable, "capability_revoked"),
         InfrastructurePortUnavailable => (Retryable, "infrastructure_port_unavailable"),
         MalformedCommand => (RetryableAfterChange, "malformed_command"),
+    }
+}
+
+fn echo_matches_class(class: WireErrorClassDto, echo: &EchoPayloadDto) -> bool {
+    use WireErrorClassDto::*;
+    match class {
+        IdempotencyStoreUnavailable | DescriptorSnapshotAbsent | InfrastructurePortUnavailable => {
+            matches!(echo, EchoPayloadDto::Operation { .. })
+        }
+        ConflictingEnvelope => matches!(echo, EchoPayloadDto::Envelope { .. }),
+        DescriptorSnapshotMismatch => matches!(echo, EchoPayloadDto::SnapshotMismatch { .. }),
+        PolicyDenied => matches!(echo, EchoPayloadDto::PolicyDenied { .. }),
+        PolicyExpired => matches!(echo, EchoPayloadDto::PolicyExpired { .. }),
+        SessionNotFound => matches!(echo, EchoPayloadDto::SessionId { .. }),
+        SessionIdMismatch => matches!(echo, EchoPayloadDto::SessionMismatch { .. }),
+        SessionNotAdmitted => matches!(echo, EchoPayloadDto::SessionNotAdmitted { .. }),
+        CapabilityMissing | CapabilityDisabled | CapabilityRevoked => {
+            matches!(echo, EchoPayloadDto::Capability { .. })
+        }
+        MalformedCommand => {
+            matches!(
+                echo,
+                EchoPayloadDto::None | EchoPayloadDto::Operation { .. }
+            )
+        }
     }
 }
 

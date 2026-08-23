@@ -76,6 +76,23 @@ use ustc_campus_agent_application_ingress::ClaimToken;
 ```"]
 const _NO_PUBLIC_CLAIM_TOKEN: () = ();
 
+/// `M10Service::store` is removed — downstream must not reach the FileRecordStore
+/// directly; only the service's typed response surfaces are public.
+#[cfg(doctest)]
+#[doc = "```compile_fail
+use ustc_campus_agent_application_ingress::M10Service;
+fn _probe<'a, P>(svc: &M10Service<'a>) { let _ = svc.store(); }
+```"]
+const _NO_PUBLIC_STORE_ACCESSOR: () = ();
+
+/// `FileRecordStore::get` is pub(crate) — not callable from downstream.
+#[cfg(doctest)]
+#[doc = "```compile_fail
+use ustc_campus_agent_application_ingress::FileRecordStore;
+fn _probe(store: &FileRecordStore) { let _ = store.get(\"x\"); }
+```"]
+const _NO_PUBLIC_GET: () = ();
+
 #[test]
 fn no_m60_port_trait_imported() {
     for src in &ALL_SOURCES {

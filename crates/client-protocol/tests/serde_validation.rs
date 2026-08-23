@@ -279,7 +279,9 @@ fn wire_error_try_new_rejects_wrong_retryability() {
         WireErrorClassDto::IdempotencyStoreUnavailable,
         RetryabilityDto::NotRetryable, // wrong — should be Retryable
         WireText::parse("idempotency_store_unavailable").unwrap(),
-        EchoPayloadDto::None,
+        EchoPayloadDto::Operation {
+            operation_id: WireText::parse("affairs.get").unwrap(),
+        },
     );
     assert!(result.is_err());
 }
@@ -290,7 +292,9 @@ fn wire_error_try_new_rejects_wrong_code() {
         WireErrorClassDto::IdempotencyStoreUnavailable,
         RetryabilityDto::Retryable,
         WireText::parse("wrong_code").unwrap(),
-        EchoPayloadDto::None,
+        EchoPayloadDto::Operation {
+            operation_id: WireText::parse("affairs.get").unwrap(),
+        },
     );
     assert!(result.is_err());
 }
@@ -329,6 +333,333 @@ fn wire_error_serde_rejects_unknown_field() {
     obj.insert("unknown".to_owned(), serde_json::Value::Null);
     let json_str = serde_json::to_string(&json).unwrap();
     assert!(serde_json::from_str::<M10WireErrorDto>(&json_str).is_err());
+}
+
+// B4: echo/class pairing — every class accepts its correct echo and rejects wrong echo variants.
+
+fn op_echo() -> EchoPayloadDto {
+    EchoPayloadDto::Operation {
+        operation_id: WireText::parse("affairs.get").unwrap(),
+    }
+}
+
+fn envelope_echo() -> EchoPayloadDto {
+    EchoPayloadDto::Envelope {
+        operation_id: WireText::parse("affairs.get").unwrap(),
+        idempotency_key: WireText::parse("idem:fixture").unwrap(),
+    }
+}
+
+fn snapshot_mismatch_echo() -> EchoPayloadDto {
+    EchoPayloadDto::SnapshotMismatch {
+        command_operation_id: WireText::parse("affairs.get").unwrap(),
+        snapshot_operation_id: WireText::parse("other.op").unwrap(),
+    }
+}
+
+fn policy_denied_echo() -> EchoPayloadDto {
+    EchoPayloadDto::PolicyDenied {
+        operation_id: WireText::parse("affairs.get").unwrap(),
+        permission_class: WireText::parse("public_read").unwrap(),
+    }
+}
+
+fn policy_expired_echo() -> EchoPayloadDto {
+    EchoPayloadDto::PolicyExpired {
+        operation_id: WireText::parse("affairs.get").unwrap(),
+        policy_snapshot_id: WireText::parse("policy:fixture").unwrap(),
+    }
+}
+
+fn session_id_echo() -> EchoPayloadDto {
+    EchoPayloadDto::SessionId {
+        requested_session_id: WireText::parse("session:fixture").unwrap(),
+    }
+}
+
+fn session_mismatch_echo() -> EchoPayloadDto {
+    EchoPayloadDto::SessionMismatch {
+        requested_session_id: WireText::parse("session:req").unwrap(),
+        loaded_session_id: WireText::parse("session:loaded").unwrap(),
+    }
+}
+
+fn session_not_admitted_echo() -> EchoPayloadDto {
+    EchoPayloadDto::SessionNotAdmitted {
+        requested_session_id: WireText::parse("session:fixture").unwrap(),
+        observed_at: UnixMillis::new(1_700_000_000_000),
+    }
+}
+
+fn capability_echo() -> EchoPayloadDto {
+    EchoPayloadDto::Capability {
+        operation_id: WireText::parse("affairs.get").unwrap(),
+        actor_kind: WireText::parse("public").unwrap(),
+    }
+}
+
+#[test]
+fn b4_every_class_accepts_correct_echo() {
+    let cases: [(WireErrorClassDto, RetryabilityDto, &str, EchoPayloadDto); 14] = [
+        (
+            WireErrorClassDto::IdempotencyStoreUnavailable,
+            RetryabilityDto::Retryable,
+            "idempotency_store_unavailable",
+            op_echo(),
+        ),
+        (
+            WireErrorClassDto::ConflictingEnvelope,
+            RetryabilityDto::RetryableAfterChange,
+            "conflicting_envelope",
+            envelope_echo(),
+        ),
+        (
+            WireErrorClassDto::DescriptorSnapshotAbsent,
+            RetryabilityDto::NotRetryable,
+            "descriptor_snapshot_absent",
+            op_echo(),
+        ),
+        (
+            WireErrorClassDto::DescriptorSnapshotMismatch,
+            RetryabilityDto::NotRetryable,
+            "descriptor_snapshot_mismatch",
+            snapshot_mismatch_echo(),
+        ),
+        (
+            WireErrorClassDto::PolicyDenied,
+            RetryabilityDto::NotRetryable,
+            "policy_denied",
+            policy_denied_echo(),
+        ),
+        (
+            WireErrorClassDto::PolicyExpired,
+            RetryabilityDto::RetryableAfterChange,
+            "policy_expired",
+            policy_expired_echo(),
+        ),
+        (
+            WireErrorClassDto::SessionNotFound,
+            RetryabilityDto::RetryableAfterChange,
+            "session_not_found",
+            session_id_echo(),
+        ),
+        (
+            WireErrorClassDto::SessionIdMismatch,
+            RetryabilityDto::NotRetryable,
+            "session_id_mismatch",
+            session_mismatch_echo(),
+        ),
+        (
+            WireErrorClassDto::SessionNotAdmitted,
+            RetryabilityDto::RetryableAfterChange,
+            "session_not_admitted",
+            session_not_admitted_echo(),
+        ),
+        (
+            WireErrorClassDto::CapabilityMissing,
+            RetryabilityDto::RetryableAfterChange,
+            "capability_missing",
+            capability_echo(),
+        ),
+        (
+            WireErrorClassDto::CapabilityDisabled,
+            RetryabilityDto::RetryableAfterChange,
+            "capability_disabled",
+            capability_echo(),
+        ),
+        (
+            WireErrorClassDto::CapabilityRevoked,
+            RetryabilityDto::NotRetryable,
+            "capability_revoked",
+            capability_echo(),
+        ),
+        (
+            WireErrorClassDto::InfrastructurePortUnavailable,
+            RetryabilityDto::Retryable,
+            "infrastructure_port_unavailable",
+            op_echo(),
+        ),
+        (
+            WireErrorClassDto::MalformedCommand,
+            RetryabilityDto::RetryableAfterChange,
+            "malformed_command",
+            EchoPayloadDto::None,
+        ),
+    ];
+    for (class, retryability, code, echo) in cases {
+        let result =
+            M10WireErrorDto::try_new(class, retryability, WireText::parse(code).unwrap(), echo);
+        assert!(
+            result.is_ok(),
+            "class {class:?} should accept its correct echo"
+        );
+    }
+}
+
+#[test]
+fn b4_malformed_command_accepts_operation_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::MalformedCommand,
+        RetryabilityDto::RetryableAfterChange,
+        WireText::parse("malformed_command").unwrap(),
+        op_echo(),
+    );
+    assert!(result.is_ok());
+}
+
+#[test]
+fn b4_policy_denied_rejects_none_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::PolicyDenied,
+        RetryabilityDto::NotRetryable,
+        WireText::parse("policy_denied").unwrap(),
+        EchoPayloadDto::None,
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_policy_denied_rejects_operation_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::PolicyDenied,
+        RetryabilityDto::NotRetryable,
+        WireText::parse("policy_denied").unwrap(),
+        op_echo(),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_idempotency_store_unavailable_rejects_none_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::IdempotencyStoreUnavailable,
+        RetryabilityDto::Retryable,
+        WireText::parse("idempotency_store_unavailable").unwrap(),
+        EchoPayloadDto::None,
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_conflicting_envelope_rejects_operation_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::ConflictingEnvelope,
+        RetryabilityDto::RetryableAfterChange,
+        WireText::parse("conflicting_envelope").unwrap(),
+        op_echo(),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_descriptor_snapshot_mismatch_rejects_envelope_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::DescriptorSnapshotMismatch,
+        RetryabilityDto::NotRetryable,
+        WireText::parse("descriptor_snapshot_mismatch").unwrap(),
+        envelope_echo(),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_session_not_found_rejects_capability_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::SessionNotFound,
+        RetryabilityDto::RetryableAfterChange,
+        WireText::parse("session_not_found").unwrap(),
+        capability_echo(),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_session_id_mismatch_rejects_session_id_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::SessionIdMismatch,
+        RetryabilityDto::NotRetryable,
+        WireText::parse("session_id_mismatch").unwrap(),
+        session_id_echo(),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_session_not_admitted_rejects_session_mismatch_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::SessionNotAdmitted,
+        RetryabilityDto::RetryableAfterChange,
+        WireText::parse("session_not_admitted").unwrap(),
+        session_mismatch_echo(),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_capability_missing_rejects_policy_denied_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::CapabilityMissing,
+        RetryabilityDto::RetryableAfterChange,
+        WireText::parse("capability_missing").unwrap(),
+        policy_denied_echo(),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_capability_revoked_rejects_none_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::CapabilityRevoked,
+        RetryabilityDto::NotRetryable,
+        WireText::parse("capability_revoked").unwrap(),
+        EchoPayloadDto::None,
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_infrastructure_port_unavailable_rejects_envelope_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::InfrastructurePortUnavailable,
+        RetryabilityDto::Retryable,
+        WireText::parse("infrastructure_port_unavailable").unwrap(),
+        envelope_echo(),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_malformed_command_rejects_envelope_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::MalformedCommand,
+        RetryabilityDto::RetryableAfterChange,
+        WireText::parse("malformed_command").unwrap(),
+        envelope_echo(),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_malformed_command_rejects_policy_denied_echo() {
+    let result = M10WireErrorDto::try_new(
+        WireErrorClassDto::MalformedCommand,
+        RetryabilityDto::RetryableAfterChange,
+        WireText::parse("malformed_command").unwrap(),
+        policy_denied_echo(),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b4_serde_rejects_policy_denied_with_none_echo() {
+    let json = r#"{"class":"policy_denied","retryability":"not_retryable","wire_code":"policy_denied","echo":{"kind":"none"}}"#;
+    assert!(serde_json::from_str::<M10WireErrorDto>(json).is_err());
+}
+
+#[test]
+fn b4_serde_rejects_idempotency_store_unavailable_with_none_echo() {
+    let json = r#"{"class":"idempotency_store_unavailable","retryability":"retryable","wire_code":"idempotency_store_unavailable","echo":{"kind":"none"}}"#;
+    assert!(serde_json::from_str::<M10WireErrorDto>(json).is_err());
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +716,112 @@ fn terminal_pairing_rejects_found_with_not_required_lineage() {
         )
         .is_err()
     );
+}
+
+// B5: closed M71 lineage reason algebra — Unverified reasons must be from the allowed set.
+
+#[test]
+fn b5_unverified_valid_reason_missing_revision_succeeds() {
+    let result = M71TerminalDto::try_new(
+        M71OutcomeDto::CannotVerify {
+            procedure_id: WireText::parse("proc:stale").unwrap(),
+            reason: CannotVerifyReasonDto::SourceRevisionUnverified,
+        },
+        M71LineageDto::Unverified {
+            materialization_receipt_id: WireText::parse("receipt:fixture").unwrap(),
+            reason: WireText::parse("missing_revision").unwrap(),
+        },
+    );
+    assert!(result.is_ok());
+}
+
+#[test]
+fn b5_unverified_valid_reason_digest_mismatch_succeeds() {
+    let result = M71TerminalDto::try_new(
+        M71OutcomeDto::CannotVerify {
+            procedure_id: WireText::parse("proc:stale").unwrap(),
+            reason: CannotVerifyReasonDto::SourceRevisionUnverified,
+        },
+        M71LineageDto::Unverified {
+            materialization_receipt_id: WireText::parse("receipt:fixture").unwrap(),
+            reason: WireText::parse("digest_mismatch").unwrap(),
+        },
+    );
+    assert!(result.is_ok());
+}
+
+#[test]
+fn b5_unverified_valid_reason_revoked_or_unaccepted_succeeds() {
+    let result = M71TerminalDto::try_new(
+        M71OutcomeDto::CannotVerify {
+            procedure_id: WireText::parse("proc:stale").unwrap(),
+            reason: CannotVerifyReasonDto::SourceRevisionUnverified,
+        },
+        M71LineageDto::Unverified {
+            materialization_receipt_id: WireText::parse("receipt:fixture").unwrap(),
+            reason: WireText::parse("revoked_or_unaccepted").unwrap(),
+        },
+    );
+    assert!(result.is_ok());
+}
+
+#[test]
+fn b5_unverified_valid_reason_effective_interval_missing_succeeds() {
+    let result = M71TerminalDto::try_new(
+        M71OutcomeDto::CannotVerify {
+            procedure_id: WireText::parse("proc:stale").unwrap(),
+            reason: CannotVerifyReasonDto::EffectiveIntervalMissing,
+        },
+        M71LineageDto::Unverified {
+            materialization_receipt_id: WireText::parse("receipt:fixture").unwrap(),
+            reason: WireText::parse("effective_interval_missing").unwrap(),
+        },
+    );
+    assert!(result.is_ok());
+}
+
+#[test]
+fn b5_unverified_arbitrary_reason_rejected() {
+    let result = M71TerminalDto::try_new(
+        M71OutcomeDto::CannotVerify {
+            procedure_id: WireText::parse("proc:stale").unwrap(),
+            reason: CannotVerifyReasonDto::SourceRevisionUnverified,
+        },
+        M71LineageDto::Unverified {
+            materialization_receipt_id: WireText::parse("receipt:fixture").unwrap(),
+            reason: WireText::parse("arbitrary_reason").unwrap(),
+        },
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn b5_unverified_wrong_reason_uppercase_rejected() {
+    assert!(
+        M71TerminalDto::try_new(
+            M71OutcomeDto::CannotVerify {
+                procedure_id: WireText::parse("proc:stale").unwrap(),
+                reason: CannotVerifyReasonDto::SourceRevisionUnverified,
+            },
+            M71LineageDto::Unverified {
+                materialization_receipt_id: WireText::parse("receipt:fixture").unwrap(),
+                reason: WireText::parse("Missing_Revision").unwrap(),
+            },
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn b5_serde_rejects_unverified_with_arbitrary_reason() {
+    let json = r#"{"outcome":{"kind":"cannot_verify","procedure_id":"proc:stale","reason":{"kind":"source_revision_unverified"}},"lineage":{"kind":"unverified","materialization_receipt_id":"receipt:fixture","reason":"totally_made_up_reason"}}"#;
+    assert!(serde_json::from_str::<M71TerminalDto>(json).is_err());
+}
+
+#[test]
+fn b5_serde_accepts_unverified_with_valid_reason() {
+    let json = r#"{"outcome":{"kind":"cannot_verify","procedure_id":"proc:stale","reason":{"kind":"source_revision_unverified"}},"lineage":{"kind":"unverified","materialization_receipt_id":"receipt:fixture","reason":"missing_revision"}}"#;
+    assert!(serde_json::from_str::<M71TerminalDto>(json).is_ok());
 }
 
 #[test]

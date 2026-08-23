@@ -26,6 +26,11 @@ impl WireText {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    #[must_use]
+    pub fn fallback() -> Self {
+        Self("m10_error".to_owned())
+    }
 }
 
 impl fmt::Debug for WireText {

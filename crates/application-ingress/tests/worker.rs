@@ -11,7 +11,7 @@ use affairs_navigator::{
 };
 use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service, RecordState};
 use ustc_campus_agent_client_protocol::{
-    ClientErrorDto, ClientResponseDto, M71OutcomeDto, WireErrorClassDto,
+    ClientErrorDto, ClientResponseDto, M71OutcomeDto, WireErrorClassDto, WireText,
 };
 use ustc_campus_agent_core::request_context::{
     AdmissionPortError, AdmissionPortKind, CapabilityDisposition, DescriptorSnapshotError,
@@ -26,7 +26,12 @@ use common::{
 
 fn make_service(m71: &dyn affairs_navigator::M71AffairsGetPort) -> M10Service<'_> {
     let store = FileRecordStore::open(temp_path()).unwrap();
-    M10Service::new(store, cap_issuer(), m71, "operator:fixture")
+    M10Service::new(
+        store,
+        cap_issuer(),
+        m71,
+        WireText::parse("operator:fixture").unwrap(),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -364,8 +369,8 @@ fn m60_infrastructure_failure_returns_infra_error_and_abandons() {
     }
 
     let record = service
-        .store()
-        .get("command:fixture")
+        .test_store()
+        .test_get("command:fixture")
         .unwrap()
         .expect("record should exist after abandon");
     assert!(
@@ -600,7 +605,11 @@ fn rejection_creates_no_store_record() {
     let _response = service.submit(&submit_request("proc:x"), &mut ports, 1_000_000);
 
     assert!(
-        service.store().get("command:fixture").unwrap().is_none(),
+        service
+            .test_store()
+            .test_get("command:fixture")
+            .unwrap()
+            .is_none(),
         "rejection must not create a store record"
     );
 }
@@ -643,6 +652,9 @@ fn m00_has_14_rejection_rows() {
 /// `procedure_id` that passes WireText but fails the M71 ID grammar (uppercase
 /// start byte is invalid for ProcedureId).
 fn submit_request_bad_procedure_id() -> ustc_campus_agent_client_protocol::SubmitAffairsGetDto {
+    let procedure_id = ustc_campus_agent_client_protocol::WireText::parse("INVALID").unwrap();
+    let payload_digest =
+        ustc_campus_agent_client_protocol::affairs_get_payload_digest(&procedure_id, None).unwrap();
     ustc_campus_agent_client_protocol::SubmitAffairsGetDto {
         request_id: ustc_campus_agent_client_protocol::WireText::parse("req:fixture").unwrap(),
         correlation_id: ustc_campus_agent_client_protocol::WireText::parse("corr:fixture").unwrap(),
@@ -656,11 +668,8 @@ fn submit_request_bad_procedure_id() -> ustc_campus_agent_client_protocol::Submi
             target: ustc_campus_agent_client_protocol::WireText::parse("linux").unwrap(),
             protocol: ustc_campus_agent_client_protocol::WireText::parse("m10:v2").unwrap(),
         },
-        payload_digest: ustc_campus_agent_client_protocol::WireText::parse(
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap(),
-        procedure_id: ustc_campus_agent_client_protocol::WireText::parse("INVALID").unwrap(),
+        payload_digest,
+        procedure_id,
         as_of: None,
     }
 }
@@ -682,8 +691,8 @@ fn r6_bad_procedure_id_returns_internal_error_and_abandons() {
     }
 
     let record = service
-        .store()
-        .get("command:fixture")
+        .test_store()
+        .test_get("command:fixture")
         .unwrap()
         .expect("record should exist after abandon");
     assert!(
@@ -696,6 +705,11 @@ fn r6_bad_procedure_id_returns_internal_error_and_abandons() {
 /// `as_of` value far exceeding `i64::MAX` nanoseconds, causing
 /// `OffsetDateTime::from_unix_timestamp_nanos` to fail.
 fn submit_request_bad_as_of() -> ustc_campus_agent_client_protocol::SubmitAffairsGetDto {
+    let procedure_id = ustc_campus_agent_client_protocol::WireText::parse("proc:fixture").unwrap();
+    let as_of = Some(ustc_campus_agent_client_protocol::UnixMillis::new(i64::MAX));
+    let payload_digest =
+        ustc_campus_agent_client_protocol::affairs_get_payload_digest(&procedure_id, as_of)
+            .unwrap();
     ustc_campus_agent_client_protocol::SubmitAffairsGetDto {
         request_id: ustc_campus_agent_client_protocol::WireText::parse("req:fixture").unwrap(),
         correlation_id: ustc_campus_agent_client_protocol::WireText::parse("corr:fixture").unwrap(),
@@ -709,12 +723,9 @@ fn submit_request_bad_as_of() -> ustc_campus_agent_client_protocol::SubmitAffair
             target: ustc_campus_agent_client_protocol::WireText::parse("linux").unwrap(),
             protocol: ustc_campus_agent_client_protocol::WireText::parse("m10:v2").unwrap(),
         },
-        payload_digest: ustc_campus_agent_client_protocol::WireText::parse(
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap(),
-        procedure_id: ustc_campus_agent_client_protocol::WireText::parse("proc:fixture").unwrap(),
-        as_of: Some(ustc_campus_agent_client_protocol::UnixMillis::new(i64::MAX)),
+        payload_digest,
+        procedure_id,
+        as_of,
     }
 }
 
@@ -735,8 +746,8 @@ fn r6_bad_as_of_returns_internal_error_and_abandons() {
     }
 
     let record = service
-        .store()
-        .get("command:fixture")
+        .test_store()
+        .test_get("command:fixture")
         .unwrap()
         .expect("record should exist after abandon");
     assert!(
@@ -769,8 +780,8 @@ fn r3_m71_infrastructure_failure_abandons_and_returns_retryable_error() {
     }
 
     let record = service
-        .store()
-        .get("command:fixture")
+        .test_store()
+        .test_get("command:fixture")
         .unwrap()
         .expect("record should exist after abandon");
     assert!(
@@ -778,6 +789,183 @@ fn r3_m71_infrastructure_failure_abandons_and_returns_retryable_error() {
         "record should be Pending after M71 failure abandon, got {:?}",
         record.state
     );
+}
+
+use ustc_campus_agent_client_protocol::{
+    EchoPayloadDto, RetryabilityDto, SubmitAffairsGetDto, UnixMillis, affairs_get_payload_digest,
+};
+
+fn b1_request_with_digest(
+    procedure_id: &str,
+    as_of: Option<UnixMillis>,
+    digest: WireText,
+) -> SubmitAffairsGetDto {
+    SubmitAffairsGetDto {
+        request_id: WireText::parse("req:fixture").unwrap(),
+        correlation_id: WireText::parse("corr:fixture").unwrap(),
+        causation_id: None,
+        idempotency_key: Some(WireText::parse("idem:fixture").unwrap()),
+        actor: ustc_campus_agent_client_protocol::ActorIntentDto::Public,
+        provenance: ustc_campus_agent_client_protocol::ClientProvenanceDto {
+            build: WireText::parse("build:fixture").unwrap(),
+            target: WireText::parse("linux").unwrap(),
+            protocol: WireText::parse("m10:v2").unwrap(),
+        },
+        payload_digest: digest,
+        procedure_id: WireText::parse(procedure_id).unwrap(),
+        as_of,
+    }
+}
+
+fn assert_malformed_command(response: ClientResponseDto) {
+    match response {
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } => {
+            assert_eq!(error.class, WireErrorClassDto::MalformedCommand);
+            assert_eq!(error.retryability, RetryabilityDto::RetryableAfterChange);
+            assert_eq!(error.wire_code.as_str(), "malformed_command");
+            match error.echo {
+                EchoPayloadDto::Operation { operation_id } => {
+                    assert_eq!(operation_id.as_str(), "affairs.get");
+                }
+                other => panic!("expected Operation echo, got {other:?}"),
+            }
+        }
+        _ => panic!("expected Admission/MalformedCommand, got {response:?}"),
+    }
+}
+
+#[test]
+fn b1_golden_payload_digest_is_accepted_and_reaches_m71() {
+    let m71 = FailingM71Port;
+    let service = make_service(&m71);
+
+    let procedure_id = WireText::parse("proc:fixture").unwrap();
+    let digest = affairs_get_payload_digest(&procedure_id, None).unwrap();
+    let request = b1_request_with_digest("proc:fixture", None, digest);
+
+    let mut ports = FakePorts::public_admitted();
+    let response = service.submit(&request, &mut ports, 1_000_000);
+
+    assert!(
+        matches!(
+            response,
+            ClientResponseDto::Error {
+                error: ClientErrorDto::Infrastructure { .. }
+            }
+        ),
+        "golden digest should pass B1 gate and reach M71 (FailingM71Port returns Infrastructure), got {response:?}"
+    );
+}
+
+#[test]
+fn b1_wrong_payload_digest_returns_malformed_command() {
+    let m71 = FailingM71Port;
+    let service = make_service(&m71);
+
+    let wrong_digest =
+        WireText::parse("0000000000000000000000000000000000000000000000000000000000000000")
+            .unwrap();
+    let request = b1_request_with_digest("proc:fixture", None, wrong_digest);
+
+    let mut ports = FakePorts::public_admitted();
+    let response = service.submit(&request, &mut ports, 1_000_000);
+
+    assert_malformed_command(response);
+}
+
+#[test]
+fn b1_procedure_id_mutation_breaks_digest_and_returns_malformed_command() {
+    let m71 = FailingM71Port;
+    let service = make_service(&m71);
+
+    let digest_for_a =
+        affairs_get_payload_digest(&WireText::parse("proc:a").unwrap(), None).unwrap();
+    let request = b1_request_with_digest("proc:b", None, digest_for_a);
+
+    let mut ports = FakePorts::public_admitted();
+    let response = service.submit(&request, &mut ports, 1_000_000);
+
+    assert_malformed_command(response);
+}
+
+#[test]
+fn b1_as_of_mutation_breaks_digest_and_returns_malformed_command() {
+    let m71 = FailingM71Port;
+    let service = make_service(&m71);
+
+    let digest_absent =
+        affairs_get_payload_digest(&WireText::parse("proc:fixture").unwrap(), None).unwrap();
+    let request = b1_request_with_digest(
+        "proc:fixture",
+        Some(UnixMillis::new(1_700_000_000_000)),
+        digest_absent,
+    );
+
+    let mut ports = FakePorts::public_admitted();
+    let response = service.submit(&request, &mut ports, 1_000_000);
+
+    assert_malformed_command(response);
+}
+
+#[test]
+fn b1_as_of_value_mutation_breaks_digest_and_returns_malformed_command() {
+    let m71 = FailingM71Port;
+    let service = make_service(&m71);
+
+    let digest_for_t1 = affairs_get_payload_digest(
+        &WireText::parse("proc:fixture").unwrap(),
+        Some(UnixMillis::new(1)),
+    )
+    .unwrap();
+    let request = b1_request_with_digest("proc:fixture", Some(UnixMillis::new(2)), digest_for_t1);
+
+    let mut ports = FakePorts::public_admitted();
+    let response = service.submit(&request, &mut ports, 1_000_000);
+
+    assert_malformed_command(response);
+}
+
+#[test]
+fn b1_wrong_digest_produces_zero_record_and_zero_m71_calls() {
+    let m71 = FailingM71Port;
+    let service = make_service(&m71);
+
+    let wrong_digest =
+        WireText::parse("1111111111111111111111111111111111111111111111111111111111111111")
+            .unwrap();
+    let request = b1_request_with_digest("proc:fixture", None, wrong_digest);
+
+    let mut ports = FakePorts::public_admitted();
+    let _ = service.submit(&request, &mut ports, 1_000_000);
+
+    let record_opt = service.test_store().test_get("command:fixture").unwrap();
+    assert!(
+        record_opt.is_none(),
+        "B1 mismatch must not produce any record, got {record_opt:?}"
+    );
+}
+
+#[test]
+fn b1_same_idempotency_key_with_different_payload_digest_rejected_before_m00() {
+    let m71 = FailingM71Port;
+    let service = make_service(&m71);
+
+    let real_digest =
+        affairs_get_payload_digest(&WireText::parse("proc:fixture").unwrap(), None).unwrap();
+    let wrong_digest =
+        affairs_get_payload_digest(&WireText::parse("proc:other").unwrap(), None).unwrap();
+
+    let mut ports = FakePorts::public_admitted();
+
+    let request_real = b1_request_with_digest("proc:fixture", None, real_digest);
+    let _ = service.submit(&request_real, &mut ports, 1_000_000);
+
+    let request_wrong = b1_request_with_digest("proc:fixture", None, wrong_digest);
+    let response = service.submit(&request_wrong, &mut ports, 1_000_000);
+
+    assert_malformed_command(response);
 }
 
 const SOURCE: &str = include_str!("../../platform-core/src/request_context.rs");

@@ -159,18 +159,7 @@ pub fn project_rejection(rejection: &RequestContextRejection) -> ClientErrorDto 
 }
 
 fn wire(value: &str) -> WireText {
-    match WireText::parse(value) {
-        Ok(text) => text,
-        Err(_) => match WireText::parse("m00_error") {
-            Ok(text) => text,
-            Err(_) => match WireText::parse("x") {
-                Ok(text) => text,
-                Err(_) => loop {
-                    std::hint::spin_loop();
-                },
-            },
-        },
-    }
+    WireText::parse(value).unwrap_or_else(|_| WireText::fallback())
 }
 
 fn operation_echo(value: &str) -> EchoPayloadDto {

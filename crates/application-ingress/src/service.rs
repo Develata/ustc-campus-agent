@@ -2,8 +2,9 @@ use affairs_navigator::{AffairsGetQuery, GetProcedureError, M71AffairsGetPort, P
 use time::OffsetDateTime;
 use ustc_campus_agent_client_protocol::{
     ActorIntentDto, AdmittedActorDto, AffairsGetPayloadDto, ClientErrorDto, ClientResponseDto,
-    DispatchCapsuleBodyV2, FrozenPrerequisitesDto, RedactionDto, SubmitAffairsGetDto, UnixMillis,
-    ViewerAuthorizationDto, WireText,
+    DispatchCapsuleBodyV2, EchoPayloadDto, FrozenPrerequisitesDto, M10WireErrorDto, RedactionDto,
+    RetryabilityDto, SubmitAffairsGetDto, UnixMillis, ViewerAuthorizationDto, WireErrorClassDto,
+    WireText, affairs_get_payload_digest,
 };
 use ustc_campus_agent_core::identity::{CorrelationId, RequestId, SessionId};
 use ustc_campus_agent_core::request_context::{
@@ -27,7 +28,7 @@ pub struct M10Service<'a> {
     store: FileRecordStore,
     capabilities: CapabilityIssuer,
     m71: &'a dyn M71AffairsGetPort,
-    operator_grant_id: String,
+    operator_grant_id: WireText,
 }
 
 impl<'a> M10Service<'a> {
@@ -35,13 +36,13 @@ impl<'a> M10Service<'a> {
         store: FileRecordStore,
         capabilities: CapabilityIssuer,
         m71: &'a dyn M71AffairsGetPort,
-        operator_grant_id: impl Into<String>,
+        operator_grant_id: WireText,
     ) -> Self {
         Self {
             store,
             capabilities,
             m71,
-            operator_grant_id: operator_grant_id.into(),
+            operator_grant_id,
         }
     }
 
@@ -51,6 +52,17 @@ impl<'a> M10Service<'a> {
         ports: &mut P,
         now_ms: i64,
     ) -> ClientResponseDto {
+        let expected_digest = match affairs_get_payload_digest(&request.procedure_id, request.as_of)
+        {
+            Ok(value) => value,
+            Err(_) => return malformed_command_error(),
+        };
+        if !constant_time_eq(
+            request.payload_digest.as_str().as_bytes(),
+            expected_digest.as_str().as_bytes(),
+        ) {
+            return malformed_command_error();
+        }
         let command = match build_command(request) {
             Ok(value) => value,
             Err(error) => return internal_error(error),
@@ -105,7 +117,7 @@ impl<'a> M10Service<'a> {
             }
             (_, ViewerAuthorizationDto::Operator { grant_id })
                 if constant_time_eq(
-                    self.operator_grant_id.as_bytes(),
+                    self.operator_grant_id.as_str().as_bytes(),
                     grant_id.as_str().as_bytes(),
                 ) =>
             {
@@ -121,13 +133,14 @@ impl<'a> M10Service<'a> {
     }
 
     #[must_use]
-    pub fn store(&self) -> &FileRecordStore {
-        &self.store
-    }
-
-    #[must_use]
     pub fn capabilities(&self) -> &CapabilityIssuer {
         &self.capabilities
+    }
+
+    #[cfg(feature = "test-helpers")]
+    #[must_use]
+    pub fn test_store(&self) -> &FileRecordStore {
+        &self.store
     }
 
     fn process_admitted(
@@ -412,18 +425,7 @@ fn reproduce_bearer(
 }
 
 fn wire(value: &str) -> WireText {
-    match WireText::parse(value) {
-        Ok(text) => text,
-        Err(_) => match WireText::parse("m10_error") {
-            Ok(text) => text,
-            Err(_) => match WireText::parse("x") {
-                Ok(text) => text,
-                Err(_) => loop {
-                    std::hint::spin_loop();
-                },
-            },
-        },
-    }
+    WireText::parse(value).unwrap_or_else(|_| WireText::fallback())
 }
 
 fn map_m71_error(error: GetProcedureError) -> ClientResponseDto {
@@ -453,5 +455,23 @@ fn internal_error(code: &str) -> ClientResponseDto {
         error: ClientErrorDto::InternalInvariant {
             wire_code: wire(code),
         },
+    }
+}
+
+fn malformed_command_error() -> ClientResponseDto {
+    let echo = EchoPayloadDto::Operation {
+        operation_id: wire("affairs.get"),
+    };
+    let error = match M10WireErrorDto::try_new(
+        WireErrorClassDto::MalformedCommand,
+        RetryabilityDto::RetryableAfterChange,
+        wire("malformed_command"),
+        echo,
+    ) {
+        Ok(value) => value,
+        Err(_) => return internal_error("m10_malformed_command_projection"),
+    };
+    ClientResponseDto::Error {
+        error: ClientErrorDto::Admission { error },
     }
 }

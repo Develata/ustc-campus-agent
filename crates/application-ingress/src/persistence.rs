@@ -429,9 +429,14 @@ impl FileRecordStore {
         })
     }
 
-    pub fn get(&self, command_id: &str) -> Result<Option<StoredRecord>, StoreError> {
+    pub(crate) fn get(&self, command_id: &str) -> Result<Option<StoredRecord>, StoreError> {
         let state = self.state.lock().map_err(|_| StoreError::Poisoned)?;
         Ok(state.records.get(command_id).cloned())
+    }
+
+    #[cfg(feature = "test-helpers")]
+    pub fn test_get(&self, command_id: &str) -> Result<Option<StoredRecord>, StoreError> {
+        self.get(command_id)
     }
 
     #[must_use]
@@ -445,7 +450,13 @@ impl FileRecordStore {
     ) -> Result<T, StoreError> {
         let mut state = self.state.lock().map_err(|_| StoreError::Poisoned)?;
         let before = state.clone();
-        let result = operation(&mut state)?;
+        let result = match operation(&mut state) {
+            Ok(value) => value,
+            Err(error) => {
+                *state = before;
+                return Err(error);
+            }
+        };
         if let Err(error) = persist(&self.path, &state) {
             *state = before;
             return Err(error);
@@ -1177,5 +1188,145 @@ mod tests {
                 "{name} did not expose an explicit redaction marker: {debug}"
             );
         }
+    }
+
+    // S1: transaction restores cloned pre-state both when the operation closure returns Err
+    // and when persistence fails. This test proves in-memory and on-disk bytes remain
+    // unchanged after a closure mutates state then returns Err.
+    #[test]
+    fn s1_transaction_rollback_on_operation_err_restores_state() {
+        let path = temp_path();
+        let store = FileRecordStore::open(path.clone()).expect("open");
+        let capsule = public_capsule("cmd:rollback");
+        store
+            .insert_admitted_once("cmd:rollback", capsule, public_policy())
+            .expect("insert");
+
+        let disk_before = std::fs::read(&path).expect("read disk before");
+        let memory_before = store
+            .get("cmd:rollback")
+            .expect("get before")
+            .expect("record exists");
+
+        let result = store.transaction(|state| {
+            state.records.insert(
+                "cmd:transient".to_owned(),
+                StoredRecord {
+                    capsule: public_capsule("cmd:transient"),
+                    capsule_digest: "0".repeat(64),
+                    read_policy: public_policy(),
+                    state: RecordState::Pending {
+                        version: 0,
+                        highest_fencing: 0,
+                    },
+                },
+            );
+            Err::<(), StoreError>(StoreError::Invariant)
+        });
+        assert!(result.is_err(), "transaction must propagate the error");
+
+        assert!(
+            store.get("cmd:transient").expect("get transient").is_none(),
+            "transient record must not exist in memory after rollback"
+        );
+        let memory_after = store
+            .get("cmd:rollback")
+            .expect("get after")
+            .expect("record exists");
+        assert_eq!(
+            memory_before, memory_after,
+            "in-memory record must be unchanged after rollback"
+        );
+
+        let disk_after = std::fs::read(&path).expect("read disk after");
+        assert_eq!(
+            disk_before, disk_after,
+            "disk bytes must be unchanged after rollback"
+        );
+    }
+
+    #[test]
+    fn s2_concurrent_claims_yield_one_claimed_one_busy() {
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        let store = Arc::new(FileRecordStore::open(temp_path()).expect("open"));
+        let capsule = public_capsule("cmd:s2-claim");
+        store
+            .insert_admitted_once("cmd:s2-claim", capsule, public_policy())
+            .expect("insert");
+
+        let barrier = Arc::new(Barrier::new(2));
+        let mut handles = Vec::new();
+        for _ in 0..2 {
+            let store = Arc::clone(&store);
+            let barrier = Arc::clone(&barrier);
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+                store
+                    .claim("cmd:s2-claim", 1_000_000, 30_000)
+                    .expect("claim")
+            }));
+        }
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|h| h.join().expect("thread"))
+            .collect();
+        let claimed = results
+            .iter()
+            .filter(|r| matches!(r, ClaimOutcome::Claimed(_)))
+            .count();
+        let busy = results
+            .iter()
+            .filter(|r| matches!(r, ClaimOutcome::Busy))
+            .count();
+        assert_eq!(claimed, 1, "exactly one Claimed");
+        assert_eq!(busy, 1, "exactly one Busy");
+    }
+
+    #[test]
+    fn s2_concurrent_completions_yield_one_completed_one_already_terminal() {
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        let store = Arc::new(FileRecordStore::open(temp_path()).expect("open"));
+        let capsule = public_capsule("cmd:s2-complete");
+        store
+            .insert_admitted_once("cmd:s2-complete", capsule, public_policy())
+            .expect("insert");
+        let token = match store
+            .claim("cmd:s2-complete", 1_000_000, 30_000)
+            .expect("claim")
+        {
+            ClaimOutcome::Claimed(token) => token,
+            _ => panic!("expected Claimed"),
+        };
+        let terminal = not_found_terminal();
+        let barrier = Arc::new(Barrier::new(2));
+        let mut handles = Vec::new();
+        for _ in 0..2 {
+            let store = Arc::clone(&store);
+            let barrier = Arc::clone(&barrier);
+            let token = token.clone();
+            let terminal = terminal.clone();
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+                store.complete(&token, terminal).expect("complete")
+            }));
+        }
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|h| h.join().expect("thread"))
+            .collect();
+        let completed = results
+            .iter()
+            .filter(|r| matches!(r, CompleteOutcome::Completed(_)))
+            .count();
+        let already_terminal = results
+            .iter()
+            .filter(|r| matches!(r, CompleteOutcome::AlreadyTerminal(_)))
+            .count();
+        assert_eq!(completed, 1, "exactly one Completed");
+        assert_eq!(already_terminal, 1, "exactly one AlreadyTerminal");
     }
 }

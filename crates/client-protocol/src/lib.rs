@@ -8,12 +8,14 @@
 
 pub mod affairs;
 pub mod capsule;
+pub mod digest;
 pub mod error;
 pub mod transport;
 pub mod value;
 
 pub use affairs::*;
 pub use capsule::*;
+pub use digest::*;
 pub use error::*;
 pub use transport::*;
 pub use value::*;

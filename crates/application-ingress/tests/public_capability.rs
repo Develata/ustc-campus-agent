@@ -249,7 +249,12 @@ fn lookup_with_public_capability_succeeds() {
     let m60 = M60FixtureAdapter::new("verifier:fixture", 1).unwrap();
     let clock = FixedClock::new(t(200));
     let m71 = M71FixturePort::new(&repo, &m60, &clock);
-    let service = M10Service::new(store, cap_issuer, &m71, "operator:fixture");
+    let service = M10Service::new(
+        store,
+        cap_issuer,
+        &m71,
+        ustc_campus_agent_client_protocol::WireText::parse("operator:fixture").unwrap(),
+    );
 
     let mut ports = FakePorts::public_admitted();
     let request = submit_request("proc:missing");
@@ -292,7 +297,12 @@ fn lookup_with_wrong_capability_returns_unavailable() {
     let m60 = M60FixtureAdapter::new("verifier:fixture", 1).unwrap();
     let clock = FixedClock::new(t(200));
     let m71 = M71FixturePort::new(&repo, &m60, &clock);
-    let service = M10Service::new(store, cap_issuer, &m71, "operator:fixture");
+    let service = M10Service::new(
+        store,
+        cap_issuer,
+        &m71,
+        ustc_campus_agent_client_protocol::WireText::parse("operator:fixture").unwrap(),
+    );
 
     let mut ports = FakePorts::public_admitted();
     let request = submit_request("proc:missing");
@@ -306,4 +316,120 @@ fn lookup_with_wrong_capability_returns_unavailable() {
         },
     );
     assert!(matches!(response, ClientResponseDto::Unavailable));
+}
+
+#[test]
+fn b3_empty_operator_grant_id_rejected_by_wiretext_parse() {
+    assert!(ustc_campus_agent_client_protocol::WireText::parse("").is_err());
+}
+
+#[test]
+fn b3_control_char_operator_grant_id_rejected_by_wiretext_parse() {
+    assert!(ustc_campus_agent_client_protocol::WireText::parse("operator\0bad").is_err());
+}
+
+#[test]
+fn b3_oversize_operator_grant_id_rejected_by_wiretext_parse() {
+    let oversize = "x".repeat(ustc_campus_agent_client_protocol::WireText::MAX_BYTES + 1);
+    assert!(ustc_campus_agent_client_protocol::WireText::parse(oversize).is_err());
+}
+
+#[test]
+fn b3_operator_grant_exact_match_succeeds_lookup() {
+    use affairs_navigator::{
+        FixedClock, InMemoryAffairsRepository, m60_fixture::M60FixtureAdapter,
+    };
+    use common::{FakePorts, M71FixturePort, submit_request, t};
+    use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service};
+    use ustc_campus_agent_client_protocol::{ClientResponseDto, ViewerAuthorizationDto};
+
+    let store = FileRecordStore::open(common::temp_path()).unwrap();
+    let cap_issuer = common::cap_issuer();
+    let repo = InMemoryAffairsRepository::new();
+    let m60 = M60FixtureAdapter::new("verifier:fixture", 1).unwrap();
+    let clock = FixedClock::new(t(200));
+    let m71 = M71FixturePort::new(&repo, &m60, &clock);
+    let grant = ustc_campus_agent_client_protocol::WireText::parse("operator:fixture").unwrap();
+    let service = M10Service::new(store, cap_issuer, &m71, grant);
+
+    let mut ports = FakePorts::public_admitted();
+    let request = submit_request("proc:missing");
+    let _response = service.submit(&request, &mut ports, 1_000_000);
+
+    let response = service.lookup(
+        "command:fixture",
+        &ViewerAuthorizationDto::Operator {
+            grant_id: ustc_campus_agent_client_protocol::WireText::parse("operator:fixture")
+                .unwrap(),
+        },
+    );
+    match response {
+        ClientResponseDto::Available { redaction, .. } => {
+            assert!(matches!(
+                redaction,
+                ustc_campus_agent_client_protocol::RedactionDto::Operator
+            ));
+        }
+        _ => panic!("expected Available with Operator redaction, got {response:?}"),
+    }
+}
+
+#[test]
+fn b3_operator_grant_wrong_match_returns_unavailable() {
+    use affairs_navigator::{
+        FixedClock, InMemoryAffairsRepository, m60_fixture::M60FixtureAdapter,
+    };
+    use common::{FakePorts, M71FixturePort, submit_request, t};
+    use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service};
+    use ustc_campus_agent_client_protocol::{ClientResponseDto, ViewerAuthorizationDto};
+
+    let store = FileRecordStore::open(common::temp_path()).unwrap();
+    let cap_issuer = common::cap_issuer();
+    let repo = InMemoryAffairsRepository::new();
+    let m60 = M60FixtureAdapter::new("verifier:fixture", 1).unwrap();
+    let clock = FixedClock::new(t(200));
+    let m71 = M71FixturePort::new(&repo, &m60, &clock);
+    let grant = ustc_campus_agent_client_protocol::WireText::parse("operator:fixture").unwrap();
+    let service = M10Service::new(store, cap_issuer, &m71, grant);
+
+    let mut ports = FakePorts::public_admitted();
+    let request = submit_request("proc:missing");
+    let _response = service.submit(&request, &mut ports, 1_000_000);
+
+    let response = service.lookup(
+        "command:fixture",
+        &ViewerAuthorizationDto::Operator {
+            grant_id: ustc_campus_agent_client_protocol::WireText::parse("operator:wrong").unwrap(),
+        },
+    );
+    assert!(matches!(response, ClientResponseDto::Unavailable));
+}
+
+#[test]
+fn b3_operator_grant_never_appears_in_debug() {
+    use affairs_navigator::{
+        FixedClock, InMemoryAffairsRepository, m60_fixture::M60FixtureAdapter,
+    };
+    use common::{FakePorts, M71FixturePort, submit_request, t};
+    use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service};
+
+    let store = FileRecordStore::open(common::temp_path()).unwrap();
+    let cap_issuer = common::cap_issuer();
+    let repo = InMemoryAffairsRepository::new();
+    let m60 = M60FixtureAdapter::new("verifier:fixture", 1).unwrap();
+    let clock = FixedClock::new(t(200));
+    let m71 = M71FixturePort::new(&repo, &m60, &clock);
+    let secret_grant = "operator:secret-canary-12345";
+    let grant = ustc_campus_agent_client_protocol::WireText::parse(secret_grant).unwrap();
+    let service = M10Service::new(store, cap_issuer, &m71, grant);
+
+    let mut ports = FakePorts::public_admitted();
+    let request = submit_request("proc:missing");
+    let response = service.submit(&request, &mut ports, 1_000_000);
+
+    let debug = format!("{response:?}");
+    assert!(
+        !debug.contains(secret_grant),
+        "operator grant must not leak in ClientResponseDto Debug, got: {debug}"
+    );
 }

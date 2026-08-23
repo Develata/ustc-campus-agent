@@ -3,7 +3,10 @@
 mod common;
 
 use affairs_navigator::{FixedClock, InMemoryAffairsRepository, m60_fixture::M60FixtureAdapter};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use ustc_campus_agent_application_ingress::{FileRecordStore, RecordState, StoreError};
+use ustc_campus_agent_client_protocol::{ClientResponseDto, ViewerAuthorizationDto, WireText};
 
 use common::{FakePorts, M71FixturePort, cap_issuer, submit_request, t, temp_path};
 
@@ -30,7 +33,7 @@ fn reopen_persists_terminal_state_across_store_instances() {
             store,
             cap_issuer(),
             &m71,
-            "operator:fixture",
+            ustc_campus_agent_client_protocol::WireText::parse("operator:fixture").unwrap(),
         );
         let mut ports = FakePorts::public_admitted();
         let request = submit_request(procedure_id);
@@ -46,7 +49,7 @@ fn reopen_persists_terminal_state_across_store_instances() {
     {
         let store = FileRecordStore::open(path).unwrap();
         let record = store
-            .get("command:fixture")
+            .test_get("command:fixture")
             .unwrap()
             .expect("record must persist across reopen");
         assert!(
@@ -60,7 +63,7 @@ fn reopen_persists_terminal_state_across_store_instances() {
 #[test]
 fn get_returns_none_for_missing() {
     let store = FileRecordStore::open(temp_path()).unwrap();
-    assert!(store.get("nonexistent").unwrap().is_none());
+    assert!(store.test_get("nonexistent").unwrap().is_none());
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +82,7 @@ fn seed_valid_store() -> (std::path::PathBuf, serde_json::Value) {
             store,
             cap_issuer(),
             &m71,
-            "operator:fixture",
+            ustc_campus_agent_client_protocol::WireText::parse("operator:fixture").unwrap(),
         );
         let mut ports = FakePorts::public_admitted();
         let request = submit_request("proc:missing");
@@ -296,4 +299,149 @@ fn r4_empty_file_rejected() {
     std::fs::write(&path, b"").unwrap();
     let result = FileRecordStore::open(&path);
     assert!(matches!(result, Err(StoreError::Corrupted(_))));
+}
+
+struct CountingM71Port<'a> {
+    inner: M71FixturePort<'a>,
+    count: Arc<AtomicU64>,
+}
+
+impl<'a> CountingM71Port<'a> {
+    fn new(
+        repo: &'a InMemoryAffairsRepository,
+        m60: &'a M60FixtureAdapter,
+        clock: &'a FixedClock,
+        count: Arc<AtomicU64>,
+    ) -> Self {
+        Self {
+            inner: M71FixturePort::new(repo, m60, clock),
+            count,
+        }
+    }
+}
+
+impl<'a> affairs_navigator::M71AffairsGetPort for CountingM71Port<'a> {
+    fn affairs_get(
+        &self,
+        query: &affairs_navigator::AffairsGetQuery,
+    ) -> Result<affairs_navigator::M71AffairsGetReceipt, affairs_navigator::GetProcedureError> {
+        self.count.fetch_add(1, Ordering::SeqCst);
+        self.inner.affairs_get(query)
+    }
+}
+
+#[test]
+fn s2_response_loss_recovery_retries_to_identical_terminal_with_one_m71_call() {
+    let path = temp_path();
+    let repo = InMemoryAffairsRepository::new();
+    let m60 = M60FixtureAdapter::new("verifier:fixture", 1).unwrap();
+    let clock = FixedClock::new(t(200));
+    let m71_call_count = Arc::new(AtomicU64::new(0));
+    let operator_grant = WireText::parse("operator:fixture").unwrap();
+
+    let (terminal_first, capability_first) = {
+        let store = FileRecordStore::open(path.clone()).unwrap();
+        let m71 = CountingM71Port::new(&repo, &m60, &clock, Arc::clone(&m71_call_count));
+        let service = ustc_campus_agent_application_ingress::M10Service::new(
+            store,
+            cap_issuer(),
+            &m71,
+            operator_grant.clone(),
+        );
+        let mut ports = FakePorts::public_admitted();
+        let request = submit_request("proc:missing");
+        let response = service.submit(&request, &mut ports, 1_000_000);
+        match response {
+            ClientResponseDto::Accepted {
+                terminal,
+                public_capability,
+                ..
+            } => (terminal, public_capability),
+            _ => panic!("expected Accepted on first submit, got {response:?}"),
+        }
+    };
+
+    assert_eq!(
+        m71_call_count.load(Ordering::SeqCst),
+        1,
+        "first submit must call M71 exactly once"
+    );
+
+    let (terminal_retry, capability_retry) = {
+        let store = FileRecordStore::open(path.clone()).unwrap();
+        let m71 = CountingM71Port::new(&repo, &m60, &clock, Arc::clone(&m71_call_count));
+        let service = ustc_campus_agent_application_ingress::M10Service::new(
+            store,
+            cap_issuer(),
+            &m71,
+            operator_grant.clone(),
+        );
+        let mut ports = FakePorts::public_admitted();
+        let request = submit_request("proc:missing");
+        let response = service.submit(&request, &mut ports, 1_000_000);
+        match response {
+            ClientResponseDto::Accepted {
+                terminal,
+                public_capability,
+                ..
+            } => (terminal, public_capability),
+            _ => panic!("expected Accepted on retry, got {response:?}"),
+        }
+    };
+
+    assert_eq!(
+        m71_call_count.load(Ordering::SeqCst),
+        1,
+        "retry must not call M71 — total must remain 1"
+    );
+    assert_eq!(
+        terminal_first, terminal_retry,
+        "terminal must be identical across response-loss recovery"
+    );
+    assert_eq!(
+        capability_first, capability_retry,
+        "public capability must be reproducible across response-loss recovery"
+    );
+
+    let store = FileRecordStore::open(&path).unwrap();
+    let lookup_response = {
+        let m71 = CountingM71Port::new(&repo, &m60, &clock, Arc::clone(&m71_call_count));
+        let service = ustc_campus_agent_application_ingress::M10Service::new(
+            store,
+            cap_issuer(),
+            &m71,
+            operator_grant,
+        );
+        service.lookup(
+            "command:fixture",
+            &ViewerAuthorizationDto::Operator {
+                grant_id: WireText::parse("operator:fixture").unwrap(),
+            },
+        )
+    };
+    match lookup_response {
+        ClientResponseDto::Available { terminal, .. } => {
+            assert_eq!(
+                terminal, terminal_first,
+                "lookup terminal must match the original accepted terminal"
+            );
+        }
+        _ => panic!("expected Available on operator lookup, got {lookup_response:?}"),
+    }
+    assert_eq!(
+        m71_call_count.load(Ordering::SeqCst),
+        1,
+        "lookup must not call M71"
+    );
+
+    let record_count = std::fs::read_to_string(&path)
+        .map(|content| {
+            let value: serde_json::Value = serde_json::from_str(&content).unwrap();
+            value["records"].as_object().unwrap().len()
+        })
+        .unwrap();
+    assert_eq!(
+        record_count, 1,
+        "exactly one terminal record must exist in the store"
+    );
 }

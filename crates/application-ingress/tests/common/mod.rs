@@ -24,7 +24,7 @@ pub fn temp_path() -> PathBuf {
 
 use ustc_campus_agent_client_protocol::{
     AdmittedActorDto, AffairsGetPayloadDto, DispatchCapsuleBodyV2, FrozenPrerequisitesDto,
-    M71LineageDto, M71OutcomeDto, M71TerminalDto, UnixMillis, WireText,
+    M71LineageDto, M71OutcomeDto, M71TerminalDto, UnixMillis, WireText, affairs_get_payload_digest,
 };
 
 pub fn authenticated_capsule(command_id: &str) -> DispatchCapsuleBodyV2 {
@@ -657,6 +657,8 @@ impl<'a> affairs_navigator::M71AffairsGetPort for M71FixturePort<'a> {
 pub fn submit_request(
     procedure_id: &str,
 ) -> ustc_campus_agent_client_protocol::SubmitAffairsGetDto {
+    let procedure_id_wire = WireText::parse(procedure_id).unwrap();
+    let payload_digest = affairs_get_payload_digest(&procedure_id_wire, None).unwrap();
     ustc_campus_agent_client_protocol::SubmitAffairsGetDto {
         request_id: WireText::parse("req:fixture").unwrap(),
         correlation_id: WireText::parse("corr:fixture").unwrap(),
@@ -668,8 +670,8 @@ pub fn submit_request(
             target: WireText::parse("linux").unwrap(),
             protocol: WireText::parse("m10:v2").unwrap(),
         },
-        payload_digest: WireText::parse(DIGEST).unwrap(),
-        procedure_id: WireText::parse(procedure_id).unwrap(),
+        payload_digest,
+        procedure_id: procedure_id_wire,
         as_of: None,
     }
 }
@@ -678,6 +680,8 @@ pub fn submit_request_authenticated(
     procedure_id: &str,
     session_id: &str,
 ) -> ustc_campus_agent_client_protocol::SubmitAffairsGetDto {
+    let procedure_id_wire = WireText::parse(procedure_id).unwrap();
+    let payload_digest = affairs_get_payload_digest(&procedure_id_wire, None).unwrap();
     ustc_campus_agent_client_protocol::SubmitAffairsGetDto {
         request_id: WireText::parse("req:fixture").unwrap(),
         correlation_id: WireText::parse("corr:fixture").unwrap(),
@@ -691,8 +695,8 @@ pub fn submit_request_authenticated(
             target: WireText::parse("linux").unwrap(),
             protocol: WireText::parse("m10:v2").unwrap(),
         },
-        payload_digest: WireText::parse(DIGEST).unwrap(),
-        procedure_id: WireText::parse(procedure_id).unwrap(),
+        payload_digest,
+        procedure_id: procedure_id_wire,
         as_of: None,
     }
 }
