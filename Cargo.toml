@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "apps/ustc-agentd",
+  "apps/ustc-agent",
   "apps/ustc-agentctl",
   "crates/platform-core",
   "crates/agent-runtime",
@@ -8,6 +9,7 @@ members = [
   "crates/adapters",
   "crates/course-planning",
   "crates/affairs-navigator",
+  "crates/client-core",
   "crates/client-protocol",
   "crates/application-ingress",
 ]

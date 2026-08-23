@@ -219,9 +219,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.54"
+version = "0.3.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e1d5e639ff6bab73cb6885cc7e7b1de96c3f32c68ec55f3952614bec1092244"
+checksum = "cdb87b95ec50ddfa440816d227a17b2ccbdda963a316a727fda0fc4334f7d134"
 dependencies = [
  "deranged",
  "num-conv",
@@ -258,6 +258,15 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "ustc-agent"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ustc-campus-agent-client-core",
+]
 
 [[package]]
 name = "ustc-agent-tool-protocol"
@@ -308,6 +317,15 @@ dependencies = [
  "time",
  "ustc-campus-agent-client-protocol",
  "ustc-campus-agent-core",
+]
+
+[[package]]
+name = "ustc-campus-agent-client-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ustc-campus-agent-client-protocol",
 ]
 
 [[package]]
