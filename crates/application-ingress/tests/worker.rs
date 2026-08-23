@@ -9,9 +9,10 @@ use affairs_navigator::{
     AffairsAuthority, AuthorityComparison, AuthoritySubject, ConflictKind, EvidenceConflictState,
     FixedClock, InMemoryAffairsRepository,
 };
-use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service, RecordState};
+use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service};
 use ustc_campus_agent_client_protocol::{
-    ClientErrorDto, ClientResponseDto, M71OutcomeDto, WireErrorClassDto, WireText,
+    ClientErrorDto, ClientResponseDto, M71OutcomeDto, ViewerAuthorizationDto, WireErrorClassDto,
+    WireText,
 };
 use ustc_campus_agent_core::request_context::{
     AdmissionPortError, AdmissionPortKind, CapabilityDisposition, DescriptorSnapshotError,
@@ -32,6 +33,12 @@ fn make_service(m71: &dyn affairs_navigator::M71AffairsGetPort) -> M10Service<'_
         m71,
         WireText::parse("operator:fixture").unwrap(),
     )
+}
+
+fn operator_viewer() -> ViewerAuthorizationDto {
+    ViewerAuthorizationDto::Operator {
+        grant_id: WireText::parse("operator:fixture").unwrap(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -368,16 +375,10 @@ fn m60_infrastructure_failure_returns_infra_error_and_abandons() {
         _ => panic!("expected Infrastructure error, got {response:?}"),
     }
 
-    let record = service
-        .test_store()
-        .test_get("command:fixture")
-        .unwrap()
-        .expect("record should exist after abandon");
-    assert!(
-        matches!(record.state, RecordState::Pending { .. }),
-        "record should be Pending after abandon, got {:?}",
-        record.state
-    );
+    assert!(matches!(
+        service.lookup("command:fixture", &operator_viewer()),
+        ClientResponseDto::Incomplete { .. }
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -604,14 +605,10 @@ fn rejection_creates_no_store_record() {
     ports.reservation = Err(IdempotencyError::StoreUnavailable);
     let _response = service.submit(&submit_request("proc:x"), &mut ports, 1_000_000);
 
-    assert!(
-        service
-            .test_store()
-            .test_get("command:fixture")
-            .unwrap()
-            .is_none(),
-        "rejection must not create a store record"
-    );
+    assert!(matches!(
+        service.lookup("command:fixture", &operator_viewer()),
+        ClientResponseDto::Unavailable
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -690,16 +687,10 @@ fn r6_bad_procedure_id_returns_internal_error_and_abandons() {
         _ => panic!("expected InternalInvariant, got {response:?}"),
     }
 
-    let record = service
-        .test_store()
-        .test_get("command:fixture")
-        .unwrap()
-        .expect("record should exist after abandon");
-    assert!(
-        matches!(record.state, RecordState::Pending { .. }),
-        "record should be Pending after abandon, got {:?}",
-        record.state
-    );
+    assert!(matches!(
+        service.lookup("command:fixture", &operator_viewer()),
+        ClientResponseDto::Incomplete { .. }
+    ));
 }
 
 /// `as_of` value far exceeding `i64::MAX` nanoseconds, causing
@@ -745,16 +736,10 @@ fn r6_bad_as_of_returns_internal_error_and_abandons() {
         _ => panic!("expected InternalInvariant, got {response:?}"),
     }
 
-    let record = service
-        .test_store()
-        .test_get("command:fixture")
-        .unwrap()
-        .expect("record should exist after abandon");
-    assert!(
-        matches!(record.state, RecordState::Pending { .. }),
-        "record should be Pending after abandon, got {:?}",
-        record.state
-    );
+    assert!(matches!(
+        service.lookup("command:fixture", &operator_viewer()),
+        ClientResponseDto::Incomplete { .. }
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -779,16 +764,10 @@ fn r3_m71_infrastructure_failure_abandons_and_returns_retryable_error() {
         _ => panic!("expected Infrastructure error, got {response:?}"),
     }
 
-    let record = service
-        .test_store()
-        .test_get("command:fixture")
-        .unwrap()
-        .expect("record should exist after abandon");
-    assert!(
-        matches!(record.state, RecordState::Pending { .. }),
-        "record should be Pending after M71 failure abandon, got {:?}",
-        record.state
-    );
+    assert!(matches!(
+        service.lookup("command:fixture", &operator_viewer()),
+        ClientResponseDto::Incomplete { .. }
+    ));
 }
 
 use ustc_campus_agent_client_protocol::{
@@ -940,11 +919,10 @@ fn b1_wrong_digest_produces_zero_record_and_zero_m71_calls() {
     let mut ports = FakePorts::public_admitted();
     let _ = service.submit(&request, &mut ports, 1_000_000);
 
-    let record_opt = service.test_store().test_get("command:fixture").unwrap();
-    assert!(
-        record_opt.is_none(),
-        "B1 mismatch must not produce any record, got {record_opt:?}"
-    );
+    assert!(matches!(
+        service.lookup("command:fixture", &operator_viewer()),
+        ClientResponseDto::Unavailable
+    ));
 }
 
 #[test]

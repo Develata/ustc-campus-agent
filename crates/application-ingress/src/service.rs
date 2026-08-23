@@ -94,9 +94,6 @@ impl<'a> M10Service<'a> {
         let Ok(Some(record)) = self.store.get(command_id) else {
             return ClientResponseDto::Unavailable;
         };
-        let RecordState::Terminal { terminal, .. } = &record.state else {
-            return ClientResponseDto::Unavailable;
-        };
         let redaction = match (&record.read_policy, viewer) {
             (
                 StoredReadPolicy::Public { authorization },
@@ -125,22 +122,24 @@ impl<'a> M10Service<'a> {
             }
             _ => return ClientResponseDto::Unavailable,
         };
-        ClientResponseDto::Available {
-            command_id: wire(command_id),
-            terminal: terminal.clone(),
-            redaction,
+        match &record.state {
+            RecordState::Terminal { terminal, .. } => ClientResponseDto::Available {
+                command_id: wire(command_id),
+                terminal: terminal.clone(),
+                redaction,
+            },
+            RecordState::Pending { .. } | RecordState::Claimed { .. } => {
+                ClientResponseDto::Incomplete {
+                    command_id: wire(command_id),
+                    retry_not_before: UnixMillis::new(0),
+                }
+            }
         }
     }
 
     #[must_use]
     pub fn capabilities(&self) -> &CapabilityIssuer {
         &self.capabilities
-    }
-
-    #[cfg(feature = "test-helpers")]
-    #[must_use]
-    pub fn test_store(&self) -> &FileRecordStore {
-        &self.store
     }
 
     fn process_admitted(

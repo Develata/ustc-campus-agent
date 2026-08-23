@@ -824,6 +824,90 @@ fn b5_serde_accepts_unverified_with_valid_reason() {
     assert!(serde_json::from_str::<M71TerminalDto>(json).is_ok());
 }
 
+// B2: exact outcome↔lineage pairing — SourceRevisionUnverified must NOT accept
+// effective_interval_missing, and EffectiveIntervalMissing must NOT accept any
+// of the source-revision reasons.
+
+#[test]
+fn b2_source_revision_unverified_rejects_effective_interval_missing_reason() {
+    assert!(
+        M71TerminalDto::try_new(
+            M71OutcomeDto::CannotVerify {
+                procedure_id: WireText::parse("proc:stale").unwrap(),
+                reason: CannotVerifyReasonDto::SourceRevisionUnverified,
+            },
+            M71LineageDto::Unverified {
+                materialization_receipt_id: WireText::parse("receipt:fixture").unwrap(),
+                reason: WireText::parse("effective_interval_missing").unwrap(),
+            },
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn b2_effective_interval_missing_rejects_missing_revision_reason() {
+    assert!(
+        M71TerminalDto::try_new(
+            M71OutcomeDto::CannotVerify {
+                procedure_id: WireText::parse("proc:stale").unwrap(),
+                reason: CannotVerifyReasonDto::EffectiveIntervalMissing,
+            },
+            M71LineageDto::Unverified {
+                materialization_receipt_id: WireText::parse("receipt:fixture").unwrap(),
+                reason: WireText::parse("missing_revision").unwrap(),
+            },
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn b2_effective_interval_missing_rejects_digest_mismatch_reason() {
+    assert!(
+        M71TerminalDto::try_new(
+            M71OutcomeDto::CannotVerify {
+                procedure_id: WireText::parse("proc:stale").unwrap(),
+                reason: CannotVerifyReasonDto::EffectiveIntervalMissing,
+            },
+            M71LineageDto::Unverified {
+                materialization_receipt_id: WireText::parse("receipt:fixture").unwrap(),
+                reason: WireText::parse("digest_mismatch").unwrap(),
+            },
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn b2_effective_interval_missing_rejects_revoked_or_unaccepted_reason() {
+    assert!(
+        M71TerminalDto::try_new(
+            M71OutcomeDto::CannotVerify {
+                procedure_id: WireText::parse("proc:stale").unwrap(),
+                reason: CannotVerifyReasonDto::EffectiveIntervalMissing,
+            },
+            M71LineageDto::Unverified {
+                materialization_receipt_id: WireText::parse("receipt:fixture").unwrap(),
+                reason: WireText::parse("revoked_or_unaccepted").unwrap(),
+            },
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn b2_serde_rejects_source_revision_unverified_with_effective_interval_missing() {
+    let json = r#"{"outcome":{"kind":"cannot_verify","procedure_id":"proc:stale","reason":{"kind":"source_revision_unverified"}},"lineage":{"kind":"unverified","materialization_receipt_id":"receipt:fixture","reason":"effective_interval_missing"}}"#;
+    assert!(serde_json::from_str::<M71TerminalDto>(json).is_err());
+}
+
+#[test]
+fn b2_serde_rejects_effective_interval_missing_with_missing_revision() {
+    let json = r#"{"outcome":{"kind":"cannot_verify","procedure_id":"proc:stale","reason":{"kind":"effective_interval_missing"}},"lineage":{"kind":"unverified","materialization_receipt_id":"receipt:fixture","reason":"missing_revision"}}"#;
+    assert!(serde_json::from_str::<M71TerminalDto>(json).is_err());
+}
+
 #[test]
 fn terminal_round_trips_through_serde() {
     let terminal = not_found_terminal();

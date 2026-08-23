@@ -332,13 +332,18 @@ impl M71TerminalDto {
             ) => true,
             (
                 M71OutcomeDto::CannotVerify {
-                    reason:
-                        CannotVerifyReasonDto::SourceRevisionUnverified
-                        | CannotVerifyReasonDto::EffectiveIntervalMissing,
+                    reason: CannotVerifyReasonDto::SourceRevisionUnverified,
                     ..
                 },
                 M71LineageDto::Unverified { reason, .. },
-            ) if is_valid_unverified_reason(reason.as_str()) => true,
+            ) if is_valid_source_revision_unverified_reason(reason.as_str()) => true,
+            (
+                M71OutcomeDto::CannotVerify {
+                    reason: CannotVerifyReasonDto::EffectiveIntervalMissing,
+                    ..
+                },
+                M71LineageDto::Unverified { reason, .. },
+            ) if reason.as_str() == "effective_interval_missing" => true,
             (M71OutcomeDto::NotFound { .. }, M71LineageDto::NotRequired { reason, .. })
                 if reason.as_str() == "no_visible_artifact" =>
             {
@@ -393,12 +398,9 @@ impl std::fmt::Display for M71PairingError {
 
 impl std::error::Error for M71PairingError {}
 
-fn is_valid_unverified_reason(value: &str) -> bool {
+fn is_valid_source_revision_unverified_reason(value: &str) -> bool {
     matches!(
         value,
-        "missing_revision"
-            | "digest_mismatch"
-            | "revoked_or_unaccepted"
-            | "effective_interval_missing"
+        "missing_revision" | "digest_mismatch" | "revoked_or_unaccepted"
     )
 }

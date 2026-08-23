@@ -5,10 +5,16 @@ mod common;
 use affairs_navigator::{FixedClock, InMemoryAffairsRepository, m60_fixture::M60FixtureAdapter};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use ustc_campus_agent_application_ingress::{FileRecordStore, RecordState, StoreError};
+use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service, StoreError};
 use ustc_campus_agent_client_protocol::{ClientResponseDto, ViewerAuthorizationDto, WireText};
 
-use common::{FakePorts, M71FixturePort, cap_issuer, submit_request, t, temp_path};
+use common::{FailingM71Port, FakePorts, M71FixturePort, cap_issuer, submit_request, t, temp_path};
+
+fn operator_viewer() -> ViewerAuthorizationDto {
+    ViewerAuthorizationDto::Operator {
+        grant_id: WireText::parse("operator:fixture").unwrap(),
+    }
+}
 
 fn make_m71_fixture() -> (InMemoryAffairsRepository, M60FixtureAdapter, FixedClock) {
     let repo = InMemoryAffairsRepository::new();
@@ -48,22 +54,34 @@ fn reopen_persists_terminal_state_across_store_instances() {
     }
     {
         let store = FileRecordStore::open(path).unwrap();
-        let record = store
-            .test_get("command:fixture")
-            .unwrap()
-            .expect("record must persist across reopen");
-        assert!(
-            matches!(record.state, RecordState::Terminal { .. }),
-            "record must be Terminal after reopen, got {:?}",
-            record.state
+        let m71 = FailingM71Port;
+        let service = M10Service::new(
+            store,
+            cap_issuer(),
+            &m71,
+            WireText::parse("operator:fixture").unwrap(),
         );
+        assert!(matches!(
+            service.lookup("command:fixture", &operator_viewer()),
+            ClientResponseDto::Available { .. }
+        ));
     }
 }
 
 #[test]
 fn get_returns_none_for_missing() {
     let store = FileRecordStore::open(temp_path()).unwrap();
-    assert!(store.test_get("nonexistent").unwrap().is_none());
+    let m71 = FailingM71Port;
+    let service = M10Service::new(
+        store,
+        cap_issuer(),
+        &m71,
+        WireText::parse("operator:fixture").unwrap(),
+    );
+    assert!(matches!(
+        service.lookup("nonexistent", &operator_viewer()),
+        ClientResponseDto::Unavailable
+    ));
 }
 
 // ---------------------------------------------------------------------------

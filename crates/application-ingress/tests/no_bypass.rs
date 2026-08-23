@@ -93,6 +93,60 @@ fn _probe(store: &FileRecordStore) { let _ = store.get(\"x\"); }
 ```"]
 const _NO_PUBLIC_GET: () = ();
 
+/// `M10Service::test_store` is removed — no public accessor may expose the
+/// raw `FileRecordStore` to downstream callers.
+#[cfg(doctest)]
+#[doc = "```compile_fail
+use ustc_campus_agent_application_ingress::M10Service;
+fn _probe<'a, P>(svc: &M10Service<'a>) { let _ = svc.test_store(); }
+```"]
+const _NO_PUBLIC_TEST_STORE: () = ();
+
+/// `FileRecordStore::test_get` is removed — no public accessor may return a
+/// full `StoredRecord` without `ViewerAuthorization`.
+#[cfg(doctest)]
+#[doc = "```compile_fail
+use ustc_campus_agent_application_ingress::FileRecordStore;
+fn _probe(store: &FileRecordStore) { let _ = store.test_get(\"x\"); }
+```"]
+const _NO_PUBLIC_TEST_GET: () = ();
+
+/// `M10Service::observe_record_state` is removed — no public unauthenticated
+/// state observation may bypass `ViewerAuthorization`.
+#[cfg(doctest)]
+#[doc = "```compile_fail
+use ustc_campus_agent_application_ingress::M10Service;
+fn _probe<'a>(svc: &M10Service<'a>) { let _ = svc.observe_record_state(\"x\"); }
+```"]
+const _NO_PUBLIC_OBSERVE_RECORD_STATE: () = ();
+
+/// `ObservedRecordState` is removed — no public unauthenticated state enum
+/// may be exported.
+#[cfg(doctest)]
+#[doc = "```compile_fail
+use ustc_campus_agent_application_ingress::ObservedRecordState;
+```"]
+const _NO_PUBLIC_OBSERVED_RECORD_STATE: () = ();
+
+#[test]
+fn no_test_helpers_feature_or_bypass_method_remains() {
+    for src in &ALL_SOURCES {
+        assert!(
+            !src.contains("test-helpers")
+                && !src.contains("test_store")
+                && !src.contains("test_get")
+                && !src.contains("observe_record_state")
+                && !src.contains("ObservedRecordState"),
+            "application-ingress must not retain test-helpers, test_store/test_get, or observe_record_state/ObservedRecordState"
+        );
+    }
+    let cargo = include_str!("../Cargo.toml");
+    assert!(
+        !cargo.contains("test-helpers"),
+        "Cargo.toml must not declare the test-helpers feature"
+    );
+}
+
 #[test]
 fn no_m60_port_trait_imported() {
     for src in &ALL_SOURCES {

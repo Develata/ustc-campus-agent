@@ -19,8 +19,5 @@ affairs-navigator = { path = "../affairs-navigator" }
 ustc-campus-agent-client-protocol = { path = "../client-protocol" }
 ustc-campus-agent-core = { path = "../platform-core" }
 
-[features]
-test-helpers = []
-
 [lints]
 workspace = true

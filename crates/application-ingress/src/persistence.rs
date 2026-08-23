@@ -434,11 +434,6 @@ impl FileRecordStore {
         Ok(state.records.get(command_id).cloned())
     }
 
-    #[cfg(feature = "test-helpers")]
-    pub fn test_get(&self, command_id: &str) -> Result<Option<StoredRecord>, StoreError> {
-        self.get(command_id)
-    }
-
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
