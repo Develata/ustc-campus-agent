@@ -14,6 +14,18 @@
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_test_ids_not_list",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_unsorted",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_wrong_schema",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_api_schema_and_failure_matrix",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_changed_files_pagination_and_renames",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_check_run_inventory_and_duplicates",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_head_race_and_replaced_pending_event",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_issue_comment_pr_custody",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_ordinary_and_protected_paths",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_owner_grant_identity_and_event",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_protected_registry_mutations_fail_closed",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_publication_ambiguity_and_readback",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_workflow_authority_inventory",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_workflow_baseline_contract",
+    "test_check_repo_contracts.CiGovernanceWorkflowTests.test_governance_workflow_grammar_mutations_fail_closed",
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_duplicate_row_id",
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_empty",
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_empty_cell",
@@ -663,5 +675,5 @@
     "test_run_checker_shards.ProcessIsolationTests.test_36_sigterm_ignoring_group_descendant_killed",
     "test_run_checker_shards.TransactionalSpawnTests.test_34_spawn_failure_cleans_prior_handles"
   ],
-  "expected_count": 661
+  "expected_count": 673
 }

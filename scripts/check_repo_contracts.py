@@ -10741,7 +10741,12 @@ CI_TRANSITION_LEDGER_IDS = (
     "CI-TR-004",
     "CI-TR-005",
     "CI-TR-006",
+    "CI-TR-007",
 )
+CI_TRANSITION_LEDGER_STATES = {
+    **{row_id: "inert-not-active" for row_id in CI_TRANSITION_LEDGER_IDS[:-1]},
+    "CI-TR-007": "guard-active-not-required",
+}
 CI_TRANSITION_LEDGER_HEADER = (
     "| ID | Legacy invariant | Legacy carrier | Future v2 carrier | Mechanical test | Slice state |"
 )
@@ -10750,7 +10755,10 @@ CI_TRANSITION_LEDGER_STATE_DECLARATIONS = (
     "is inert test data only",
     "No selective omission, path filtering, or package-selective Rust is active",
     "No acceptance matrix status is promoted by this slice",
-    "selective activation remain later prerequisites",
+    "`Status`: `guard-active-not-required`",
+    "`Version`: `ci-transition/v1`",
+    "is active and publishes the head-scoped `ci-governance` Check Run",
+    "Making `ci-governance` a protected-main required check remains gated",
 )
 CI_TRANSITION_LEDGER_ROW_CELLS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
@@ -10811,6 +10819,16 @@ CI_TRANSITION_LEDGER_ROW_CELLS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "python3 scripts/check_repo_contracts.py` exactly once",
             "validates checker command presence, count, and after-runner ordering in fixture",
             "inert-not-active",
+        ),
+    ),
+    (
+        "CI-TR-007",
+        (
+            "trusted-base governance is active without yet becoming a required check",
+            "`.github/workflows/ci-governance.yml` publishes one head-scoped `ci-governance` Check Run",
+            "S2 failure-to-success same-ID smoke and exact app-bound activation read-back",
+            "structurally validates both active workflows, the head-scoped external identity, stable repeated head/base/updated-at file observations",
+            "guard-active-not-required",
         ),
     ),
 )
@@ -10904,8 +10922,13 @@ def check_ci_transition_ledger(issues: list[str]) -> None:
             if not cell.strip():
                 fail(f"CI transition ledger row {expected_id} cell {cell_index} is empty", issues)
         state = cells[5].strip()
-        if state != "`inert-not-active`":
-            fail(f"CI transition ledger row {expected_id} slice state drift: expected `inert-not-active` actual {state}", issues)
+        expected_state = f"`{CI_TRANSITION_LEDGER_STATES[expected_id]}`"
+        if state != expected_state:
+            fail(
+                f"CI transition ledger row {expected_id} slice state drift: "
+                f"expected {expected_state} actual {state}",
+                issues,
+            )
         expected_substrings = row_specs.get(expected_id)
         if expected_substrings is None:
             continue
@@ -11222,6 +11245,393 @@ def check_run_checker_shards_runner(issues: list[str]) -> None:
             fail(f"checker shard runner missing required substring: {substring!r}", issues)
 
 
+# --- Trusted-base CI-governance controller ---
+
+CI_GOVERNANCE_WORKFLOW_PATH = ".github/workflows/ci-governance.yml"
+CI_GOVERNANCE_YAML_PREFIX = """name: ci-governance-controller
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  checks: write
+
+concurrency:
+  group: ci-governance-controller
+  cancel-in-progress: false
+
+jobs:
+  controller:
+    name: controller
+    runs-on: ubuntu-24.04
+    steps:
+      - name: controller
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+"""
+CI_GOVERNANCE_YAML_SUFFIX = "          PY\n"
+CI_GOVERNANCE_SCRIPT_INDENT = " " * 10
+CI_GOVERNANCE_PROTECTED_PREFIXES = (
+    ".github/workflows/",
+    ".github/actions/",
+)
+CI_GOVERNANCE_PROTECTED_PATHS = frozenset(
+    {
+        "docs/acceptance/case-registry.md",
+        "docs/acceptance/ci-transition-ledger.md",
+        "docs/acceptance/gates.md",
+        "scripts/check_repo_contracts.py",
+        "scripts/checker_test_inventory.json",
+        "scripts/run_checker_shards.py",
+        "scripts/tests/fixtures/ci-v2.yml",
+        "scripts/tests/test_check_repo_contracts.py",
+        "scripts/tests/test_run_checker_shards.py",
+    }
+)
+
+# Each entry freezes one executable top-level Python unit independently.  The
+# checker deliberately has no whole-workflow or whole-controller digest: YAML
+# structure is an exact allowlisted grammar and Python semantics are normalized
+# per AST node, so comments and source locations are not authority while a
+# changed constant, call, branch, endpoint, or function body is rejected.
+CI_GOVERNANCE_CONTROLLER_AST_MANIFEST: tuple[tuple[str, str], ...] = (
+    ("import:json", "211ee42757705c7e350e70e36b762987a737f5e9c268f2a343e2dbfcb8fbea75"),
+    ("import:os", "ac3a74d6dd975a8e8fe4b7f85fce794793a9355595b850e3926964913948d386"),
+    ("import:re", "6b81b4ca19c88ec507aad63f1f49291209368a9490113655a68e994c91d092c1"),
+    ("import:urllib.error", "532ccfe0e99dc9f7dd9a19d39a519260f8bf1f46371d3201bb6e5911bc220869"),
+    ("import:urllib.request", "6e0f76526c6d4c47fb54fd80b1a9075af18e040d8abcba786757ca55a9676c61"),
+    ("assign:REPOSITORY_ID", "d143dc7b390d97c8ac3c4877235236882fab65c7fbabeb9a92d89ddb26dd85c3"),
+    ("assign:REPOSITORY_OWNER_LOGIN", "7d2ec764ce3ca1995e6fe89e6082b2db9935e2bc20b3d10cf681bd2abf462d2b"),
+    ("assign:REPOSITORY_OWNER_ID", "fdca253f694829d7e0200bbddbe0f94a56a2acf20fd0ca14002041188f7620a5"),
+    ("assign:REPOSITORY_OWNER_TYPE", "4f89455fabcd93ac59ac9b9e0f989514d49e150917fdbd3ae802b3c691a8ef54"),
+    ("assign:OWNER_LOGIN", "67b819324f1a9f757881fc196303533797be5756074bdede9c3a4aa5abd5c089"),
+    ("assign:OWNER_ID", "39ead92aec18700107017409b89bd381507d785fca005ae4da6c60cd031bb65d"),
+    ("assign:OWNER_TYPE", "11e533ad3afb87db7542ac36b6664377a5587589f98acbc689b66bddb61c7e4e"),
+    ("assign:OWNER_ASSOCIATION", "29f1d44832ac2e162d9e0072bbb6f101051d0a9af072a3a8338003cb997f2ed4"),
+    ("assign:DEFAULT_BRANCH", "1c6a1adcb1c493b5e7d63fced58608dde9f16eb5ebd27842d82694c4a2ae93a2"),
+    ("assign:CHECK_NAME", "552d9f802dcb986bcf1d405bc9e3f9dfa4b44e2e28f54684ec15900a963d0b96"),
+    ("assign:EXTERNAL_ID_PREFIX", "62f366c95e89220ce03846ea3c099ed5dfe9caabf384558aa586d7a63f87db2a"),
+    ("assign:APPROVAL_PREFIX", "ceafab0a0df83a3868c64bc71057fd08ba7bbccf435cdb2abdd859c93f13b93f"),
+    ("assign:GITHUB_ACTIONS_APP_ID", "08ab6ecad9bce33f82fa11519628ceb42fa2962b340dc14882a7495650a28517"),
+    ("assign:GITHUB_ACTIONS_APP_SLUG", "b79ead4badab075224237f08ea4aaf8e2f47f988ca17ea333fb2d7ad50298b07"),
+    ("assign:CHANGED_FILES_LIMIT", "0868054c756d3428b91fc72fe5d4704ffd175f1f99eba4b0082a265e24837fdf"),
+    ("assign:PER_PAGE", "7bdeda2cde93ed2d5c80b8f1147c6991d614585feba72a4218c0063c798acd1b"),
+    ("assign:CHECK_RUN_LIMIT", "6ad72413ecb36642d74136e42559f82178ade6ed195459ca8acb83a536b148dd"),
+    ("assign:COMPLETED_STATUS", "cb224757fc4d467c8e48ccbf9fa73ff255be4d0cd203881a35b60214bedffb98"),
+    ("assign:SUCCESS_CONCLUSION", "9763c9f645dd62dd98d4d57a16e4e0448b0afd01cc6ab25f2a9d3eac750fb643"),
+    ("assign:FAILURE_CONCLUSION", "4c4e542f1204e55b0678f1599ab34d86f7617531c356b2cf2de55ec1057517a1"),
+    ("assign:RENAMED_STATUS", "e5288c5c5fc4e9383bd7738f37d23ea7d546fbb028084cea73f6cb77e2c2b7be"),
+    ("assign:FILE_STATUSES", "b29c0fdc8f5fb818ed2157961eae5a3aa0b406fd74797cfce31c08208d2af1b1"),
+    ("assign:COMMENT_CREATED_ACTION", "278c50b5046b712d578d5e9526aefc665f3682cd8f9be5d461fa173c86ed689e"),
+    ("assign:PULL_REQUEST_ACTIONS", "7c49289cdcdd0e93bc75f743034818e3b542a5147ded3cde5e587bba4d87711c"),
+    ("assign:TRUSTED_ENVIRONMENT", "6fc7124ae785b198abf2245a12214e66503b989f295f682d41cebd407dce65bf"),
+    ("assign:PROTECTED_PREFIXES", "fc05b611eb6b09a75c3c2af1310d4d55ebb114d405a124419dc7e64b7ded6d9c"),
+    ("assign:PROTECTED_PATHS", "e22b4c8bd19094b677ef15f4043a173b0492997fb2849bbf610cc13b67228ede"),
+    ("assign:SHA_PATTERN", "860e25dc34ae817f45c7f56272514ad5701beb11c552dea1ee8baac957d64f6b"),
+    ("assign:API_VERSION", "f64c905e3f147f90270a1f0129dac28e6e6cd41d31251665d16f3b4de757ff43"),
+    ("assign:REQUEST_TIMEOUT_SECONDS", "c970bbb2424776cf290f86e3daf8b4dc3ba55a0c2c34d5bdbdea524d4099edcf"),
+    ("classdef:ControllerFailure", "6cafa942d39dffc62ce5f0596302cb105211d4e40d2dd44140bbde38c892e35b"),
+    ("classdef:TransportLost", "37131e19601f78abe3437eee36d788f48841a337abd4eb0269d5fb33052a149a"),
+    ("functiondef:repository_path", "2ecf949d1a121a4496741e1cee2cde0cb96fe7461c2c9c6c8b5790f60ba39945"),
+    ("functiondef:pull_path", "d931d6b1cdb3e6138670041c91e55ca8f5553db000834fe29d3e4f7a2f6db7e1"),
+    ("functiondef:pull_files_page_path", "445673744b0cacdc3a359142f44a5b073638e656aeecc4a17b4f78675427c3b9"),
+    ("functiondef:commit_check_runs_page_path", "f32501135b412e92f638df3cdd7f8a06ec8056d4f81d336bb5022f83296ab045"),
+    ("functiondef:check_runs_collection_path", "868288b86fd6bd8fe86062e262385d0fee54eaa702bc10b9c45a6a172bc8b8df"),
+    ("functiondef:check_run_path", "52f1db0692e5006ebfbeaffc8b7d7a471a1754243ac56da3b9e6078483f82bc6"),
+    ("functiondef:external_identity", "71e04e5b555eda29d97f9cfc0528afc11c702a469183d005b1e9a32d998b2f7b"),
+    ("functiondef:is_lower_hex_sha", "3c09bcf137025bebf409231e89a024c064e552532a10c5f922499b12e345077f"),
+    ("functiondef:is_safe_path", "5e235478a3eab621dcd5269bfaa6a171bbdafd994be6b5959e36283271dc1323"),
+    ("functiondef:is_protected_path", "880d4ae69cb7332d04eb17f0595e4eedff17726f7f2a838ef2cc1f3ba80941d5"),
+    ("functiondef:read_environment", "87380b6fb6a43d283044846326eafc0051f46907143f299b72fdc83b761c361b"),
+    ("functiondef:read_event", "3dbcc542d4a998900e669605cf8686398e61fe4a655ebfecff37c29118693592"),
+    ("functiondef:api_request", "31cca6160fb95195d958c0ac5c7d0075b9e30c04aa9a38f45e12d5d6a348ef67"),
+    ("functiondef:fetch_repository", "01ff9c1dc886320863b5f61bdd42983dc709d1b6a37b6b7d74bd93df1e270d95"),
+    ("functiondef:fetch_pull", "b23cdea35ad5862748106083ee53206cc86ed0d22ca5e10e64291dd228252507"),
+    ("functiondef:fetch_changed_files", "f51c2eb4a8dfef1a27473990da0b4c31a98dc12dd165efe257ed780819c2748f"),
+    ("functiondef:validate_changed_files", "82ccdeac487cedf6410d42a8b5aac2691cdf7016c124bf6edeef981994a75fd6"),
+    ("functiondef:is_protected_change", "c0c491d0c7f67e79addd484d59cbdd92c08859258e58dc72e0542d7b064aca38"),
+    ("functiondef:pull_state", "b96ac467cf76fa214f32366c780b3bcf479f436446d1e84b04cdef5f65af8b79"),
+    ("functiondef:observe_change_set", "4f218135fbec78801c141c312894811a9cf17c41abef7b9d4e02c794c2110f3f"),
+    ("functiondef:read_pull_event", "c67cab9d23d1339f42750e10ec83062005c3fd387e9d55715420e047657e1bdd"),
+    ("functiondef:read_comment_event", "d7f529d14db8431286fea635dbd9120b898f4761c7d640c9f457f57f37f93b84"),
+    ("functiondef:evaluate_grant", "5eb0fb7c44e7f3ab8b8d82c9130f02a0929892ed2c5105bba068c146d2aad8ab"),
+    ("functiondef:validate_check_run_record", "2c84948f6cd22bed08fa6087b57a0ec38d2a267bfbe937ce9ac6aa8b21527b51"),
+    ("functiondef:partition_check_runs", "8abae7767748bf592abee603f8833dd49fc1455f7d89fb053bf1eaaaec8ccdb1"),
+    ("functiondef:fetch_check_runs", "0e6c4a2b7c0223484f367f82c67b0d5749ae8ce5a3b02a79463d7a1c110393c3"),
+    ("functiondef:classify_matching_record", "fc845d95e878256270c945c01031dbcb57e92f7eeb4b611ab01d9b8d6b3d25dc"),
+    ("functiondef:decide_action", "4a9ad2cabe7e812681364db34ab054cb03ace342cd64d9c32f97d4f16ae1c435"),
+    ("functiondef:read_created_check_run_id", "f8ca209363431e612828f0682ed669a04aef0680751a6d3f19066c4f1289807e"),
+    ("functiondef:verify_publication", "dd8c9c20221db7031ad1750dcc11559c69237d04e923b2356486439c908437f5"),
+    ("functiondef:post_check_run", "d0fb7843e37d4b9c4234588cc1b89bb437b130aa87d1a6d045c98c552773b971"),
+    ("functiondef:patch_check_run", "5073d30c10fcf2f2ed78567b7d51b4627a75b4953d4ae8175e26f0691c2c3470"),
+    ("functiondef:run_controller", "a0f1debbe6903775afea00fb899077e480b56d613409efb57de74a9f63772b44"),
+    ("functiondef:main", "e4257dcadee7f302d3e58f553ca351c34aad6214d04b24accd1d30e2614a1c24"),
+    ("if:Compare(left=Name(id='__name__', ctx=Load()), ops=[Eq()], comparators=[Constant(value='__main__')])", "f0ea0be627ebd2887d7f161de9c610e749cbd38d176e8efffefbc0424d175c46"),
+)
+
+
+def _ci_governance_node_signature(node: ast.AST) -> str:
+    if isinstance(node, ast.Import):
+        return "import:" + ",".join(alias.name for alias in node.names)
+    if isinstance(node, ast.ImportFrom):
+        return f"from:{node.module}:" + ",".join(alias.name for alias in node.names)
+    if isinstance(node, (ast.Assign, ast.AnnAssign)):
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        rendered = [
+            target.id if isinstance(target, ast.Name) else ast.dump(target, include_attributes=False)
+            for target in targets
+        ]
+        return "assign:" + ",".join(rendered)
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return type(node).__name__.lower() + ":" + node.name
+    if isinstance(node, ast.If):
+        return "if:" + ast.dump(node.test, include_attributes=False)
+    return type(node).__name__.lower()
+
+
+def _ci_governance_controller_manifest(tree: ast.Module) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (
+            _ci_governance_node_signature(node),
+            hashlib.sha256(
+                ast.dump(node, include_attributes=False).encode("utf-8")
+            ).hexdigest(),
+        )
+        for node in tree.body
+    )
+
+
+def _ci_governance_assignment_value(tree: ast.Module, name: str) -> object:
+    matches = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == name
+    ]
+    if len(matches) != 1:
+        raise ValueError(f"controller assignment {name!r} missing or duplicated")
+    value = matches[0].value
+    if (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Name)
+        and value.func.id == "frozenset"
+        and len(value.args) == 1
+        and not value.keywords
+    ):
+        return frozenset(ast.literal_eval(value.args[0]))
+    return ast.literal_eval(value)
+
+
+def _extract_ci_governance_controller(text: str) -> tuple[str | None, str | None]:
+    if not text.startswith(CI_GOVERNANCE_YAML_PREFIX):
+        return None, "workflow YAML header/grammar drift"
+    if not text.endswith(CI_GOVERNANCE_YAML_SUFFIX):
+        return None, "workflow YAML footer/grammar drift"
+    middle = text[
+        len(CI_GOVERNANCE_YAML_PREFIX) : -len(CI_GOVERNANCE_YAML_SUFFIX)
+    ]
+    script_lines: list[str] = []
+    for line_number, line in enumerate(middle.splitlines(), start=29):
+        if not line:
+            script_lines.append("")
+            continue
+        if not line.startswith(CI_GOVERNANCE_SCRIPT_INDENT):
+            return None, f"inline controller indentation drift at workflow line {line_number}"
+        script_lines.append(line[len(CI_GOVERNANCE_SCRIPT_INDENT) :])
+    return "\n".join(script_lines) + "\n", None
+
+
+CI_GOVERNANCE_BASELINE_CI_STRUCTURE: tuple[
+    tuple[bool, tuple[str, ...], str], ...
+] = (
+    (False, ("name",), "ci"),
+    (False, ("on",), ""),
+    (False, ("on", "pull_request"), ""),
+    (False, ("on", "push"), ""),
+    (False, ("on", "push", "branches"), "[main]"),
+    (False, ("permissions",), ""),
+    (False, ("permissions", "contents"), "read"),
+    (False, ("jobs",), ""),
+    (False, ("jobs", "rust"), ""),
+    (False, ("jobs", "rust", "name"), "rust"),
+    (False, ("jobs", "rust", "runs-on"), "ubuntu-latest"),
+    (False, ("jobs", "rust", "steps"), ""),
+    (True, ("jobs", "rust", "steps", "uses"), "actions/checkout@v6"),
+    (True, ("jobs", "rust", "steps", "uses"), "dtolnay/rust-toolchain@1.97.1"),
+    (False, ("jobs", "rust", "steps", "with"), ""),
+    (False, ("jobs", "rust", "steps", "with", "components"), "rustfmt, clippy"),
+    (True, ("jobs", "rust", "steps", "name"), "Format"),
+    (False, ("jobs", "rust", "steps", "run"), "cargo fmt --all -- --check"),
+    (True, ("jobs", "rust", "steps", "name"), "Clippy"),
+    (False, ("jobs", "rust", "steps", "run"), "cargo clippy --locked --all-targets --all-features -- -D warnings"),
+    (True, ("jobs", "rust", "steps", "name"), "Test"),
+    (False, ("jobs", "rust", "steps", "run"), "cargo test --locked --all-targets --all-features"),
+    (True, ("jobs", "rust", "steps", "name"), "Doc tests"),
+    (False, ("jobs", "rust", "steps", "run"), "cargo test --locked --all-features --doc"),
+    (False, ("jobs", "contracts"), ""),
+    (False, ("jobs", "contracts", "name"), "docs-and-contracts"),
+    (False, ("jobs", "contracts", "runs-on"), "ubuntu-latest"),
+    (False, ("jobs", "contracts", "steps"), ""),
+    (True, ("jobs", "contracts", "steps", "uses"), "actions/checkout@v6"),
+    (False, ("jobs", "contracts", "steps", "with"), ""),
+    (False, ("jobs", "contracts", "steps", "with", "fetch-depth"), "0"),
+    (True, ("jobs", "contracts", "steps", "uses"), "actions/setup-python@v6"),
+    (False, ("jobs", "contracts", "steps", "with"), ""),
+    (False, ("jobs", "contracts", "steps", "with", "python-version"), "'3.x'"),
+    (True, ("jobs", "contracts", "steps", "name"), "Contract unit tests"),
+    (False, ("jobs", "contracts", "steps", "run"), "python3 -m unittest discover -s scripts/tests -p 'test_*.py'"),
+    (True, ("jobs", "contracts", "steps", "name"), "Repository contract checks"),
+    (False, ("jobs", "contracts", "steps", "run"), "python3 scripts/check_repo_contracts.py"),
+)
+
+
+def _other_workflow_authority_issues(rel: str, text: str) -> list[str]:
+    found: list[str] = []
+    significant = [
+        (line_number, line)
+        for line_number, line in enumerate(text.splitlines(), start=1)
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    parsed: list[tuple[int, bool, tuple[str, ...], str]] = []
+    containers: dict[int, tuple[str, ...]] = {}
+    for line_number, line in significant:
+        if "\t" in line or "#" in line or "${{" in line:
+            found.append(f"{rel}:{line_number}: forbidden YAML comment/tab/expression surface")
+            continue
+        if any(token in line for token in ("{", "}")):
+            found.append(f"{rel}:{line_number}: forbidden YAML alias/flow/tag/block surface")
+            continue
+        match = re.fullmatch(
+            r"(?P<indent> *)(?P<item>- )?(?P<key>[A-Za-z0-9_-]+):(?: (?P<value>.*))?",
+            line,
+        )
+        if match is None:
+            found.append(f"{rel}:{line_number}: line is outside the strict workflow grammar")
+            continue
+        indent = len(match.group("indent"))
+        if indent % 2 != 0 or indent > 10:
+            found.append(f"{rel}:{line_number}: indentation is outside the strict workflow grammar")
+            continue
+        for level in [level for level in containers if level >= indent]:
+            del containers[level]
+        lower_levels = [level for level in containers if level < indent]
+        parent = containers[max(lower_levels)] if lower_levels else ()
+        key = match.group("key")
+        value = match.group("value") or ""
+        if value.startswith(("&", "*", "!")) or value in {"|", ">"}:
+            found.append(f"{rel}:{line_number}: forbidden YAML alias/flow/tag/block surface")
+            continue
+        is_item = match.group("item") is not None
+        path = parent + (key,)
+        parsed.append((line_number, is_item, path, value))
+        if not is_item and not value:
+            containers[indent] = path
+
+    actual_structure = tuple(
+        (is_item, path, value) for _, is_item, path, value in parsed
+    )
+    if actual_structure != CI_GOVERNANCE_BASELINE_CI_STRUCTURE:
+        found.append(
+            f"{rel}: exact ordered workflow structure/multiplicity drift"
+        )
+    return found
+
+
+def check_ci_governance_workflow(issues: list[str]) -> None:
+    path = ROOT / CI_GOVERNANCE_WORKFLOW_PATH
+    if not path.is_file() or path.is_symlink():
+        fail(f"CI-governance workflow missing or not a regular file: {CI_GOVERNANCE_WORKFLOW_PATH}", issues)
+        return
+    try:
+        raw = path.read_bytes()
+        text = raw.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        fail(f"CI-governance workflow unreadable: {exc}", issues)
+        return
+    if b"\r" in raw or not raw.endswith(b"\n"):
+        fail("CI-governance workflow must use LF and one terminal newline", issues)
+        return
+    script, grammar_error = _extract_ci_governance_controller(text)
+    if grammar_error is not None or script is None:
+        fail(f"CI-governance {grammar_error}", issues)
+        return
+    try:
+        tree = ast.parse(script, filename=CI_GOVERNANCE_WORKFLOW_PATH)
+    except SyntaxError as exc:
+        fail(f"CI-governance inline controller is unparseable: {exc}", issues)
+        return
+    actual_manifest = _ci_governance_controller_manifest(tree)
+    if actual_manifest != CI_GOVERNANCE_CONTROLLER_AST_MANIFEST:
+        expected_signatures = [entry[0] for entry in CI_GOVERNANCE_CONTROLLER_AST_MANIFEST]
+        actual_signatures = [entry[0] for entry in actual_manifest]
+        if actual_signatures != expected_signatures:
+            fail(
+                "CI-governance controller top-level AST allowlist drift: "
+                f"expected={expected_signatures!r} actual={actual_signatures!r}",
+                issues,
+            )
+        for index, (expected, actual) in enumerate(
+            zip(CI_GOVERNANCE_CONTROLLER_AST_MANIFEST, actual_manifest)
+        ):
+            if expected != actual:
+                fail(
+                    "CI-governance controller normalized AST node drift at "
+                    f"index {index} ({expected[0]}): expected={expected[1][:16]} actual={actual[1][:16]}",
+                    issues,
+                )
+        if len(actual_manifest) != len(CI_GOVERNANCE_CONTROLLER_AST_MANIFEST):
+            fail("CI-governance controller AST node count drift", issues)
+    try:
+        protected_prefixes = _ci_governance_assignment_value(tree, "PROTECTED_PREFIXES")
+        protected_paths = _ci_governance_assignment_value(tree, "PROTECTED_PATHS")
+    except (ValueError, TypeError, SyntaxError) as exc:
+        fail(f"CI-governance protected registry is not a literal exact projection: {exc}", issues)
+    else:
+        if protected_prefixes != CI_GOVERNANCE_PROTECTED_PREFIXES:
+            fail("CI-governance protected prefix registry drift", issues)
+        if protected_paths != CI_GOVERNANCE_PROTECTED_PATHS:
+            fail("CI-governance protected path registry drift", issues)
+
+    workflow_dir = ROOT / ".github/workflows"
+    candidates = sorted(
+        set(workflow_dir.glob("*.yml")) | set(workflow_dir.glob("*.yaml"))
+    )
+    governance_count = 0
+    for candidate in candidates:
+        rel = candidate.relative_to(ROOT).as_posix()
+        if candidate.is_symlink() or not candidate.is_file():
+            fail(f"workflow inventory contains non-regular file: {rel}", issues)
+            continue
+        if rel == CI_GOVERNANCE_WORKFLOW_PATH:
+            governance_count += 1
+            continue
+        try:
+            other_raw = candidate.read_bytes()
+            other_text = other_raw.decode("utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            fail(f"workflow inventory unreadable {rel}: {exc}", issues)
+            continue
+        if b"\r" in other_raw or not other_raw.endswith(b"\n"):
+            fail(f"workflow inventory requires LF and terminal newline: {rel}", issues)
+        for found in _other_workflow_authority_issues(rel, other_text):
+            fail(found, issues)
+    if governance_count != 1:
+        fail(
+            f"CI-governance workflow inventory identity count drift: expected 1 actual {governance_count}",
+            issues,
+        )
+
+
 EXPECTED_MAIN_CALLS = (
     "check_key_files_present_and_nonempty(issues)",
     "check_campaign_authorization(issues)",
@@ -11250,6 +11660,7 @@ EXPECTED_MAIN_CALLS = (
     "check_s0_architecture_review(issues)",
     "check_ci_transition_ledger(issues)",
     "check_ci_v2_inert_fixture(issues)",
+    "check_ci_governance_workflow(issues)",
     "check_checker_test_inventory(issues)",
     "check_run_checker_shards_runner(issues)",
     "check_source_sensitive_guard_registry(issues)",
@@ -11309,8 +11720,9 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_campaign_taskbook_state": {"digest": "85b30689fd0ae05695c337d8808e919f69639ace8d98643c90a4b47522fe2d65", "status": "active"},
     "check_cargo_dependency_sources": {"digest": "0f645288c48f56eb3c8282f5fe9b9c0e379ae8ff82e1c06f64f740278a77ad7d", "status": "active"},
     "check_checker_test_inventory": {"digest": "7c92107dae4d99854ed8680abbf2b5648f0d20fe6ddaac8c42d2ed5076ca98ed", "status": "active"},
-    "check_ci_transition_ledger": {"digest": "ac88ca9043508ae22fe535334368e80aa02c701454c4d085fcd3cc1343d6d1f9", "status": "active"},
+    "check_ci_transition_ledger": {"digest": "83e0913d8f0961ec47dad5ce08b0a5316a1c80140a0f2b94e8b5e1b829fe114a", "status": "active"},
     "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
+    "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
     "check_external_agent_access_contract": {"digest": "b5f042f9d195b8a82d15059da493f2ecb92f372aa79733a7d0fb598c3881bd79", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
@@ -11464,6 +11876,7 @@ def main() -> int:
     check_s0_architecture_review(issues)
     check_ci_transition_ledger(issues)
     check_ci_v2_inert_fixture(issues)
+    check_ci_governance_workflow(issues)
     check_checker_test_inventory(issues)
     check_run_checker_shards_runner(issues)
     check_source_sensitive_guard_registry(issues)
