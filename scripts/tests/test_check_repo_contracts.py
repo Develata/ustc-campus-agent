@@ -9,6 +9,7 @@ import unittest
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHECKER_PATH = REPO_ROOT / "scripts/check_repo_contracts.py"
@@ -7283,6 +7284,10 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_external_agent_access_contract(issues)",
         "check_module_registry(issues)",
         "check_s0_architecture_review(issues)",
+        "check_ci_transition_ledger(issues)",
+        "check_ci_v2_inert_fixture(issues)",
+        "check_checker_test_inventory(issues)",
+        "check_run_checker_shards_runner(issues)",
         "check_source_sensitive_guard_registry(issues)",
     )
 
@@ -7779,6 +7784,660 @@ class SourceSensitiveGuardRegistryTests(unittest.TestCase):
             )
         finally:
             checker.SOURCE_SENSITIVE_GUARD_REGISTRY[target]["status"] = original_status
+
+
+class _M90MutationTestBase(unittest.TestCase):
+    FILES: tuple[str, ...] = ()
+
+    def setUp(self) -> None:
+        self._temp = tempfile.TemporaryDirectory()
+        self.root = Path(self._temp.name)
+        for rel in self.FILES:
+            dest = self.root / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(REPO_ROOT / rel, dest)
+        self._original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self._original_root)
+        self._temp.cleanup()
+
+    def path(self, rel: str) -> Path:
+        return self.root / rel
+
+    def rewrite(self, rel: str, old: str, new: str) -> None:
+        p = self.path(rel)
+        text = p.read_text(encoding="utf-8")
+        count = text.count(old)
+        assert count == 1, f"mutation target count {count} != 1 in {rel}: {old!r}"
+        p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def rewrite_all(self, rel: str, old: str, new: str) -> None:
+        p = self.path(rel)
+        text = p.read_text(encoding="utf-8")
+        assert old in text, f"mutation target absent in {rel}: {old!r}"
+        p.write_text(text.replace(old, new), encoding="utf-8")
+
+    def fresh_copy(self, rel: str) -> None:
+        shutil.copy2(REPO_ROOT / rel, self.path(rel))
+
+    def assert_rejected(self, issues: list[str], expected: str) -> None:
+        self.assertTrue(
+            any(expected in i for i in issues),
+            f"expected {expected!r} in issues, got {issues}",
+        )
+
+
+class CiTransitionLedgerMutationTests(_M90MutationTestBase):
+    FILES = (
+        "docs/acceptance/ci-transition-ledger.md",
+    )
+
+    def check(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_ci_transition_ledger(issues)
+        return issues
+
+    def test_ledger_passes(self) -> None:
+        self.assertEqual(self.check(), [])
+
+    def test_ledger_missing(self) -> None:
+        self.path(checker.CI_TRANSITION_LEDGER_PATH).unlink()
+        self.assert_rejected(self.check(), "missing")
+
+    def test_ledger_empty(self) -> None:
+        self.path(checker.CI_TRANSITION_LEDGER_PATH).write_text("", encoding="utf-8")
+        self.assert_rejected(self.check(), "empty")
+
+    def test_ledger_header_drifted(self) -> None:
+        self.rewrite(
+            checker.CI_TRANSITION_LEDGER_PATH,
+            checker.CI_TRANSITION_LEDGER_HEADER,
+            "| WRONG | HEADER | | | | |",
+        )
+        self.assert_rejected(self.check(), "header row missing or drifted")
+
+    def test_ledger_separator_malformed(self) -> None:
+        self.rewrite(
+            checker.CI_TRANSITION_LEDGER_PATH,
+            "|---|---|---|---|---|---|",
+            "| === === === === === ===",
+        )
+        self.assert_rejected(self.check(), "separator malformed")
+
+    def test_ledger_row_count_extra(self) -> None:
+        p = self.path(checker.CI_TRANSITION_LEDGER_PATH)
+        text = p.read_text(encoding="utf-8")
+        lines = text.splitlines(keepends=True)
+        last_data = lines[-1]
+        p.write_text(text + last_data, encoding="utf-8")
+        self.assert_rejected(self.check(), "row count drift")
+
+    def test_ledger_row_count_missing(self) -> None:
+        p = self.path(checker.CI_TRANSITION_LEDGER_PATH)
+        text = p.read_text(encoding="utf-8")
+        lines = text.splitlines(keepends=True)
+        p.write_text("".join(lines[:-1]), encoding="utf-8")
+        self.assert_rejected(self.check(), "row count drift")
+
+    def test_ledger_row_id_drift_each_row(self) -> None:
+        for row_id in checker.CI_TRANSITION_LEDGER_IDS:
+            with self.subTest(row_id=row_id):
+                self.fresh_copy(checker.CI_TRANSITION_LEDGER_PATH)
+                self.rewrite(
+                    checker.CI_TRANSITION_LEDGER_PATH,
+                    f"`{row_id}`",
+                    "`CI-TR-999`",
+                )
+                self.assert_rejected(self.check(), "ID drift")
+
+    def test_ledger_duplicate_row_id(self) -> None:
+        self.rewrite(
+            checker.CI_TRANSITION_LEDGER_PATH,
+            "`CI-TR-006`",
+            "`CI-TR-001`",
+        )
+        self.assert_rejected(self.check(), "duplicate row ID")
+
+    def test_ledger_empty_cell(self) -> None:
+        self.rewrite(
+            checker.CI_TRANSITION_LEDGER_PATH,
+            "active workflow exact digest remains frozen",
+            "   ",
+        )
+        self.assert_rejected(self.check(), "is empty")
+
+    def test_ledger_slice_state_drift(self) -> None:
+        text = self.path(checker.CI_TRANSITION_LEDGER_PATH).read_text(encoding="utf-8")
+        old = "| `inert-not-active` |\n"
+        self.assertIn(old, text)
+        self.path(checker.CI_TRANSITION_LEDGER_PATH).write_text(
+            text.replace(old, "| `active` |\n", 1), encoding="utf-8"
+        )
+        self.assert_rejected(self.check(), "slice state drift")
+
+    def test_ledger_state_declaration_missing(self) -> None:
+        decl = checker.CI_TRANSITION_LEDGER_STATE_DECLARATIONS[0]
+        self.rewrite(checker.CI_TRANSITION_LEDGER_PATH, decl, "MUTATED_DECLARATION_REPLACED")
+        self.assert_rejected(self.check(), "state declaration missing")
+
+    def test_ledger_row_semantic_drift_each_cell(self) -> None:
+        for row_id, expected_substrings in checker.CI_TRANSITION_LEDGER_ROW_CELLS:
+            for cell_index, expected_substring in enumerate(expected_substrings, start=1):
+                with self.subTest(row_id=row_id, cell=cell_index):
+                    self.fresh_copy(checker.CI_TRANSITION_LEDGER_PATH)
+                    self._mutate_row_cell(row_id, expected_substring)
+                    self.assert_rejected(self.check(), f"row {row_id} cell {cell_index} semantic drift")
+
+    def _mutate_row_cell(self, row_id: str, expected_substring: str) -> None:
+        p = self.path(checker.CI_TRANSITION_LEDGER_PATH)
+        lines = p.read_text(encoding="utf-8").splitlines(keepends=True)
+        row_marker = f"`{row_id}`"
+        target_line_index: int | None = None
+        for idx, line in enumerate(lines):
+            if line.lstrip().startswith(f"| {row_marker} |"):
+                target_line_index = idx
+                break
+        assert target_line_index is not None, f"row {row_id} not found"
+        line = lines[target_line_index]
+        assert expected_substring in line, f"substring {expected_substring!r} not in row {row_id} line"
+        mid = len(expected_substring) // 2
+        if mid == 0:
+            mid = 1
+        mutation = expected_substring[:mid] + "_MUTATED_" + expected_substring[mid:]
+        lines[target_line_index] = line.replace(expected_substring, mutation, 1)
+        p.write_text("".join(lines), encoding="utf-8")
+
+    def test_ledger_row_cell_count_drift_preserving_id(self) -> None:
+        text = self.path(checker.CI_TRANSITION_LEDGER_PATH).read_text(encoding="utf-8")
+        old = "| `CI-TR-001` | active workflow exact digest remains frozen |"
+        new = "| `CI-TR-001` |"
+        self.assertIn(old, text)
+        self.path(checker.CI_TRANSITION_LEDGER_PATH).write_text(
+            text.replace(old, new, 1), encoding="utf-8"
+        )
+        self.assert_rejected(self.check(), "cell count drift")
+
+
+class CiV2InertFixtureMutationTests(_M90MutationTestBase):
+    FILES = (
+        "scripts/tests/fixtures/ci-v2.yml",
+    )
+
+    def check(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_ci_v2_inert_fixture(issues)
+        return issues
+
+    def test_fixture_passes(self) -> None:
+        self.assertEqual(self.check(), [])
+
+    def test_fixture_missing(self) -> None:
+        self.path(checker.CI_V2_FIXTURE_PATH).unlink()
+        self.assert_rejected(self.check(), "missing")
+
+    def test_fixture_empty(self) -> None:
+        self.path(checker.CI_V2_FIXTURE_PATH).write_text("", encoding="utf-8")
+        self.assert_rejected(self.check(), "empty")
+
+    def test_fixture_display_only_drift_remains_accepted(self) -> None:
+        """F6: no whole-fixture fingerprint; harmless display-only drift is accepted
+        while semantic mutations remain rejected."""
+        p = self.path(checker.CI_V2_FIXTURE_PATH)
+        text = p.read_text(encoding="utf-8")
+        p.write_text(text + "# harmless display-only drift comment\n", encoding="utf-8")
+        self.assertEqual(self.check(), [])
+        # Semantic mutations must remain rejected even alongside display-only drift.
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, "if: ${{ always() }}", "if: ${{ MUTED() }}")
+        self.assert_rejected(self.check(), "missing always() evidence upload condition")
+
+    def test_fixture_missing_pull_request_trigger(self) -> None:
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, "on:\n  pull_request:", "on:\n  pull_request_MUTED:")
+        self.assert_rejected(self.check(), "missing pull_request trigger")
+
+    def test_fixture_missing_push_to_main(self) -> None:
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, "push:\n    branches:", "push:\n    branches_MUTED:")
+        self.assert_rejected(self.check(), "missing push-to-main trigger")
+
+    def test_fixture_missing_rust_job(self) -> None:
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, "  rust:", "  rust_MUTED:")
+        self.assert_rejected(self.check(), "missing rust job")
+
+    def test_fixture_missing_docs_job(self) -> None:
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, "  docs-and-contracts:", "  docs-and-contracts_MUTED:")
+        self.assert_rejected(self.check(), "missing docs-and-contracts job")
+
+    def test_fixture_missing_action_sha(self) -> None:
+        sha = checker.CI_V2_REQUIRED_ACTION_SHAS[0]
+        self.rewrite_all(checker.CI_V2_FIXTURE_PATH, sha, sha.replace("@", "@0000000000000000000000000000000000000000"))
+        self.assert_rejected(self.check(), "missing pinned action SHA")
+
+    def test_fixture_missing_toolchain(self) -> None:
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, "toolchain: 1.97.1", "toolchain: 1.97.99")
+        self.assert_rejected(self.check(), "missing Rust toolchain")
+
+    def test_fixture_missing_rustfmt_clippy(self) -> None:
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, "components: rustfmt, clippy", "components: rustfmt_MUTED, clippy")
+        self.assert_rejected(self.check(), "missing rustfmt/clippy components")
+
+    def test_fixture_missing_python_version(self) -> None:
+        self.rewrite(
+            checker.CI_V2_FIXTURE_PATH,
+            f"python-version: {checker.CI_V2_PYTHON_VERSION}",
+            "python-version: 3.13.99",
+        )
+        self.assert_rejected(self.check(), "missing Python")
+
+    def test_fixture_missing_pyprefix_line(self) -> None:
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, checker.CI_V2_PYPREFIX_LINE, "PYTHONPYCACHEPREFIX_MUTED: placeholder")
+        self.assert_rejected(self.check(), "missing job-level PYTHONPYCACHEPREFIX")
+
+    def test_fixture_missing_rust_command(self) -> None:
+        cmd = checker.CI_V2_REQUIRED_RUST_COMMANDS[0]
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, cmd, "cargo MUTED --all -- --check")
+        self.assert_rejected(self.check(), "missing Rust command")
+
+    def test_fixture_missing_runner_arg(self) -> None:
+        arg = checker.CI_V2_REQUIRED_RUNNER_ARGS[0]
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, arg, "python3 scripts/MUTED_shards.py")
+        self.assert_rejected(self.check(), "missing runner argument")
+
+    def test_fixture_checker_count_drift(self) -> None:
+        p = self.path(checker.CI_V2_FIXTURE_PATH)
+        text = p.read_text(encoding="utf-8")
+        # A commented-out copy is display-only and does not count as executable.
+        p.write_text(text + "# python3 scripts/check_repo_contracts.py\n", encoding="utf-8")
+        self.assertEqual(self.check(), [])
+        # A second executable copy is a real duplicate command and must fail.
+        self.fresh_copy(checker.CI_V2_FIXTURE_PATH)
+        text = p.read_text(encoding="utf-8")
+        p.write_text(
+            text + "      - name: Extra check\n        run: python3 scripts/check_repo_contracts.py\n",
+            encoding="utf-8",
+        )
+        self.assert_rejected(self.check(), "checker command count drift: expected 1 actual 2")
+
+    def test_fixture_checker_before_runner_rejected(self) -> None:
+        """F5: both commands preserved but the checker before the shard runner
+        must be rejected (CI-TR-006 ordering)."""
+        p = self.path(checker.CI_V2_FIXTURE_PATH)
+        lines = p.read_text(encoding="utf-8").splitlines(keepends=True)
+        shard_idx = next(
+            i for i, line in enumerate(lines)
+            if line.startswith("      - name: Run exact-inventory checker shards")
+        )
+        checker_idx = next(
+            i for i, line in enumerate(lines)
+            if line.startswith("      - name: Check repository contracts")
+        )
+        self.assertLess(shard_idx, checker_idx)
+
+        def block_end(start: int) -> int:
+            for j in range(start + 1, len(lines)):
+                if lines[j].startswith("      - name: "):
+                    return j
+            return len(lines)
+
+        shard_end = block_end(shard_idx)
+        checker_end = block_end(checker_idx)
+        shard_block = lines[shard_idx:shard_end]
+        checker_block = lines[checker_idx:checker_end]
+        reordered = (
+            lines[:shard_idx]
+            + checker_block
+            + lines[shard_end:checker_idx]
+            + shard_block
+            + lines[checker_end:]
+        )
+        p.write_text("".join(reordered), encoding="utf-8")
+        self.assert_rejected(self.check(), "ordering drift")
+
+        # A displayed command is not an executable command. Preserve the full
+        # command text behind an ``echo`` prefix to prove substring search
+        # cannot satisfy CI-TR-006 for either side of the ordering relation.
+        for label, command, diagnostic in (
+            (
+                "checker",
+                checker.CI_V2_CHECKER_COMMAND,
+                "checker command count drift: expected 1 actual 0",
+            ),
+            (
+                "runner",
+                checker.CI_V2_SHARD_RUNNER_COMMAND,
+                "shard runner command count drift: expected 1 actual 0",
+            ),
+        ):
+            with self.subTest(display_only=label):
+                self.fresh_copy(checker.CI_V2_FIXTURE_PATH)
+                self.rewrite(
+                    checker.CI_V2_FIXTURE_PATH,
+                    command,
+                    f"echo {command}",
+                )
+                self.assert_rejected(self.check(), diagnostic)
+
+    def test_fixture_missing_always_condition(self) -> None:
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, "if: ${{ always() }}", "if: ${{ MUTED() }}")
+        self.assert_rejected(self.check(), "missing always() evidence upload condition")
+
+    def test_fixture_pyprefix_step_level_env_rejected(self) -> None:
+        old = (
+            "    timeout-minutes: 40\n"
+            "    env:\n"
+            "      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache\n"
+            "    steps:\n"
+            "      - name: Checkout\n"
+        )
+        new = (
+            "    timeout-minutes: 40\n"
+            "    steps:\n"
+            "      - name: Checkout\n"
+            "        env:\n"
+            "          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache\n"
+        )
+        p = self.path(checker.CI_V2_FIXTURE_PATH)
+        text = p.read_text(encoding="utf-8")
+        self.assertIn(old, text)
+        p.write_text(text.replace(old, new, 1), encoding="utf-8")
+        issues = self.check()
+        self.assertTrue(
+            any("indent drift" in i or "enclosing env:" in i or "under docs-and-contracts" in i for i in issues),
+            f"expected pyprefix placement rejection, got {issues}",
+        )
+
+    def test_fixture_pyprefix_workflow_level_env_rejected(self) -> None:
+        old = (
+            "permissions:\n"
+            "  contents: read\n"
+            "\n"
+            "jobs:\n"
+        )
+        new = (
+            "permissions:\n"
+            "  contents: read\n"
+            "env:\n"
+            "  PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache\n"
+            "\n"
+            "jobs:\n"
+        )
+        p = self.path(checker.CI_V2_FIXTURE_PATH)
+        text = p.read_text(encoding="utf-8")
+        original_block = (
+            "    env:\n"
+            "      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache\n"
+        )
+        text = text.replace(original_block, "", 1)
+        self.assertIn(old, text)
+        p.write_text(text.replace(old, new, 1), encoding="utf-8")
+        issues = self.check()
+        self.assertTrue(
+            any("indent drift" in i or "enclosing env:" in i or "under docs-and-contracts" in i for i in issues),
+            f"expected pyprefix placement rejection, got {issues}",
+        )
+
+    def test_fixture_pyprefix_sibling_job_env_rejected(self) -> None:
+        old = "  rust:\n    runs-on: ubuntu-latest\n"
+        new = (
+            "  rust:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    env:\n"
+            "      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache\n"
+        )
+        p = self.path(checker.CI_V2_FIXTURE_PATH)
+        text = p.read_text(encoding="utf-8")
+        original_block = (
+            "    env:\n"
+            "      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache\n"
+        )
+        text = text.replace(original_block, "", 1)
+        self.assertIn(old, text)
+        p.write_text(text.replace(old, new, 1), encoding="utf-8")
+        issues = self.check()
+        self.assertTrue(
+            any("indent drift" in i or "enclosing env:" in i or "under docs-and-contracts" in i or "occurrence count drift" in i for i in issues),
+            f"expected pyprefix placement rejection, got {issues}",
+        )
+
+    def test_fixture_pyprefix_duplicate_rejected(self) -> None:
+        p = self.path(checker.CI_V2_FIXTURE_PATH)
+        text = p.read_text(encoding="utf-8")
+        original_line = "      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache\n"
+        self.assertIn(original_line, text)
+        p.write_text(text + "      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache\n", encoding="utf-8")
+        issues = self.check()
+        self.assertTrue(
+            any("occurrence count drift" in i or "extra PYTHONPYCACHEPREFIX" in i for i in issues),
+            f"expected pyprefix duplicate rejection, got {issues}",
+        )
+
+
+class CheckerTestInventoryMutationTests(_M90MutationTestBase):
+    FILES: tuple[str, ...] = ()
+
+    VALID_IDS = [
+        "module.TestA.test_a",
+        "module.TestA.test_b",
+        "module.TestB.test_c",
+    ]
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write_valid_inventory()
+        # Isolate the mutation tests from the real repository's live discovery
+        # by binding the live-discovery helper to this class's synthetic IDs.
+        live_patcher = mock.patch.object(
+            checker, "_live_checker_test_ids", return_value=list(self.VALID_IDS)
+        )
+        live_patcher.start()
+        self.addCleanup(live_patcher.stop)
+
+    def write_valid_inventory(self) -> None:
+        data = {
+            "schema_version": checker.CHECKER_TEST_INVENTORY_SCHEMA_VERSION,
+            "test_ids": list(self.VALID_IDS),
+            "expected_count": len(self.VALID_IDS),
+        }
+        inv_path = self.path(checker.CHECKER_TEST_INVENTORY_PATH)
+        inv_path.parent.mkdir(parents=True, exist_ok=True)
+        inv_path.write_text(
+            json.dumps(data, indent=2) + "\n", encoding="utf-8"
+        )
+
+    def write_inventory_raw(self, content: str) -> None:
+        self.path(checker.CHECKER_TEST_INVENTORY_PATH).write_text(content, encoding="utf-8")
+
+    def check(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_checker_test_inventory(issues)
+        return issues
+
+    def test_inventory_passes(self) -> None:
+        self.assertEqual(self.check(), [])
+
+    def test_inventory_missing(self) -> None:
+        self.path(checker.CHECKER_TEST_INVENTORY_PATH).unlink()
+        self.assert_rejected(self.check(), "missing")
+
+    def test_inventory_empty(self) -> None:
+        self.write_inventory_raw("")
+        self.assert_rejected(self.check(), "empty")
+
+    def test_inventory_invalid_json(self) -> None:
+        self.write_inventory_raw("{not json")
+        self.assert_rejected(self.check(), "invalid JSON")
+
+    def test_inventory_not_object(self) -> None:
+        self.write_inventory_raw("[1, 2, 3]")
+        self.assert_rejected(self.check(), "must be an object")
+
+    def test_inventory_wrong_schema(self) -> None:
+        self.write_inventory_raw(
+            json.dumps({
+                "schema_version": "wrong/v9",
+                "test_ids": list(self.VALID_IDS),
+                "expected_count": len(self.VALID_IDS),
+            })
+        )
+        self.assert_rejected(self.check(), "schema_version drift")
+
+    def test_inventory_test_ids_not_list(self) -> None:
+        self.write_inventory_raw(
+            json.dumps({
+                "schema_version": checker.CHECKER_TEST_INVENTORY_SCHEMA_VERSION,
+                "test_ids": "not_a_list",
+                "expected_count": 0,
+            })
+        )
+        self.assert_rejected(self.check(), "test_ids must be a list")
+
+    def test_inventory_duplicates(self) -> None:
+        dup_ids = list(self.VALID_IDS) + [self.VALID_IDS[0]]
+        self.write_inventory_raw(
+            json.dumps({
+                "schema_version": checker.CHECKER_TEST_INVENTORY_SCHEMA_VERSION,
+                "test_ids": dup_ids,
+                "expected_count": len(dup_ids),
+            })
+        )
+        self.assert_rejected(self.check(), "contains duplicates")
+
+    def test_inventory_unsorted(self) -> None:
+        unsorted_ids = list(reversed(self.VALID_IDS))
+        self.write_inventory_raw(
+            json.dumps({
+                "schema_version": checker.CHECKER_TEST_INVENTORY_SCHEMA_VERSION,
+                "test_ids": unsorted_ids,
+                "expected_count": len(unsorted_ids),
+            })
+        )
+        self.assert_rejected(self.check(), "must be sorted")
+
+    def test_inventory_count_mismatch(self) -> None:
+        self.write_inventory_raw(
+            json.dumps({
+                "schema_version": checker.CHECKER_TEST_INVENTORY_SCHEMA_VERSION,
+                "test_ids": list(self.VALID_IDS),
+                "expected_count": len(self.VALID_IDS) + 1,
+            })
+        )
+        self.assert_rejected(self.check(), "expected_count drift")
+
+    def test_inventory_failed_test_id(self) -> None:
+        ids_with_failed = sorted(self.VALID_IDS + ["unittest.loader._FailedTest.test_bad"])
+        self.write_inventory_raw(
+            json.dumps({
+                "schema_version": checker.CHECKER_TEST_INVENTORY_SCHEMA_VERSION,
+                "test_ids": ids_with_failed,
+                "expected_count": len(ids_with_failed),
+            })
+        )
+        self.assert_rejected(self.check(), "_FailedTest ID")
+
+    def test_inventory_malformed_entries_fail_closed_without_traceback(self) -> None:
+        """F1: non-string/empty/unhashable entries must yield an issue, never a TypeError."""
+        malformed_batches = [
+            # Unhashable entry first: set()/sorted() below would raise TypeError
+            # if the checker did not return after recording the typed issue.
+            [{"unhashable": True}, *self.VALID_IDS],
+            [1, *self.VALID_IDS],
+            [None, *self.VALID_IDS],
+            [["nested"], *self.VALID_IDS],
+            ["", *self.VALID_IDS],
+        ]
+        for batch in malformed_batches:
+            with self.subTest(batch=batch):
+                self.write_inventory_raw(
+                    json.dumps({
+                        "schema_version": checker.CHECKER_TEST_INVENTORY_SCHEMA_VERSION,
+                        "test_ids": batch,
+                        "expected_count": len(batch),
+                    })
+                )
+                issues = self.check()
+                self.assert_rejected(issues, "non-string/empty entry")
+
+    def test_inventory_stale_against_live_discovery_fails_closed(self) -> None:
+        """F4: a structurally valid but stale inventory must be rejected."""
+        # Inventory claims an ID live discovery does not produce.
+        stale_extra = sorted(self.VALID_IDS + ["module.TestStale.test_stale"])
+        self.write_inventory_raw(
+            json.dumps({
+                "schema_version": checker.CHECKER_TEST_INVENTORY_SCHEMA_VERSION,
+                "test_ids": stale_extra,
+                "expected_count": len(stale_extra),
+            })
+        )
+        issues = self.check()
+        self.assertTrue(
+            any(
+                "inventory/live discovery drift" in i and "missing_from_live=['module.TestStale.test_stale']" in i
+                for i in issues
+            ),
+            f"expected stale-inventory rejection, got {issues}",
+        )
+
+        # Live discovery produces an ID the inventory does not carry.
+        self.write_valid_inventory()
+        with mock.patch.object(
+            checker, "_live_checker_test_ids", return_value=self.VALID_IDS + ["module.TestLive.test_live"]
+        ):
+            issues = self.check()
+        self.assertTrue(
+            any(
+                "inventory/live discovery drift" in i and "unexpected_in_live=['module.TestLive.test_live']" in i
+                for i in issues
+            ),
+            f"expected unexpected-live rejection, got {issues}",
+        )
+
+        # Discovery/import failure must become a typed issue, not a traceback.
+        with mock.patch.object(
+            checker,
+            "_live_checker_test_ids",
+            side_effect=ValueError("discovery produced _FailedTest: unittest.loader._FailedTest.test_bad"),
+        ):
+            issues = self.check()
+        self.assertTrue(
+            any(
+                "live discovery failed" in i and "_FailedTest" in i
+                for i in issues
+            ),
+            f"expected discovery-failure issue, got {issues}",
+        )
+
+
+class RunCheckerShardsRunnerMutationTests(_M90MutationTestBase):
+    FILES = (
+        "scripts/run_checker_shards.py",
+    )
+
+    def check(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_run_checker_shards_runner(issues)
+        return issues
+
+    def test_runner_passes(self) -> None:
+        self.assertEqual(self.check(), [])
+
+    def test_runner_missing(self) -> None:
+        self.path(checker.RUN_CHECKER_SHARDS_PATH).unlink()
+        self.assert_rejected(self.check(), "missing")
+
+    def test_runner_empty(self) -> None:
+        self.path(checker.RUN_CHECKER_SHARDS_PATH).write_text("", encoding="utf-8")
+        self.assert_rejected(self.check(), "empty")
+
+    def test_runner_missing_each_substring(self) -> None:
+        for substring in checker.RUN_CHECKER_SHARDS_REQUIRED_SUBSTRINGS:
+            with self.subTest(substring=substring):
+                self.fresh_copy(checker.RUN_CHECKER_SHARDS_PATH)
+                self.rewrite_all(
+                    checker.RUN_CHECKER_SHARDS_PATH,
+                    substring,
+                    "X" * len(substring),
+                )
+                self.assert_rejected(self.check(), "missing required substring")
 
 
 if __name__ == "__main__":
