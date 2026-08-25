@@ -1266,12 +1266,16 @@ def _parent_main(argv: list[str]) -> int:
     if evidence_repo_local_error is not None:
         print(f"ERROR: {evidence_repo_local_error}", file=sys.stderr)
         return 2
-    if evidence_dir.exists():
-        if any(evidence_dir.iterdir()):
-            print(f"ERROR: evidence directory exists and is not empty: {evidence_dir}", file=sys.stderr)
-            return 2
-    else:
-        evidence_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        if evidence_dir.exists():
+            if any(evidence_dir.iterdir()):
+                print(f"ERROR: evidence directory exists and is not empty: {evidence_dir}", file=sys.stderr)
+                return 2
+        else:
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print(f"ERROR: evidence setup failed: {exc}", file=sys.stderr)
+        return 2
 
     try:
         pycache_prefix, pycache_source = _resolve_pycache_prefix()
@@ -1307,7 +1311,11 @@ def _parent_main(argv: list[str]) -> int:
         return 2
 
     plan_dir = evidence_dir / "plan"
-    plan_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        plan_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print(f"ERROR: evidence setup failed: {exc}", file=sys.stderr)
+        return 2
 
     try:
         plan = _build_plan(
