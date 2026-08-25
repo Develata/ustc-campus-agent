@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import ast
+import contextlib
 import importlib.util
+import io
 import hashlib
 import json
 import shutil
@@ -7286,6 +7289,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_s0_architecture_review(issues)",
         "check_ci_transition_ledger(issues)",
         "check_ci_v2_inert_fixture(issues)",
+        "check_ci_governance_workflow(issues)",
         "check_checker_test_inventory(issues)",
         "check_run_checker_shards_runner(issues)",
         "check_source_sensitive_guard_registry(issues)",
@@ -7786,6 +7790,920 @@ class SourceSensitiveGuardRegistryTests(unittest.TestCase):
             checker.SOURCE_SENSITIVE_GUARD_REGISTRY[target]["status"] = original_status
 
 
+class CiGovernanceWorkflowTests(unittest.TestCase):
+    WORKFLOW_REL = ".github/workflows/ci-governance.yml"
+
+    def setUp(self) -> None:
+        self._temp = tempfile.TemporaryDirectory()
+        self.root = Path(self._temp.name)
+        for source in (REPO_ROOT / ".github/workflows").iterdir():
+            if source.suffix not in {".yml", ".yaml"}:
+                continue
+            destination = self.root / ".github/workflows" / source.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        self.workflow = self.root / self.WORKFLOW_REL
+        self.baseline = self.workflow.read_text(encoding="utf-8")
+        self._original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self._original_root)
+        self._temp.cleanup()
+
+    def _reset_workflow(self) -> None:
+        self.workflow.write_text(self.baseline, encoding="utf-8")
+
+    def _mutate_workflow(self, old: str, new: str) -> None:
+        self._reset_workflow()
+        text = self.workflow.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, old)
+        self.workflow.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def _check(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_ci_governance_workflow(issues)
+        return issues
+
+    def _assert_rejected(self, fragment: str = "CI-governance") -> None:
+        issues = self._check()
+        self.assertTrue(any(fragment in issue for issue in issues), issues)
+
+    def _controller(self) -> dict[str, object]:
+        script, error = checker._extract_ci_governance_controller(
+            self.workflow.read_text(encoding="utf-8")
+        )
+        self.assertIsNone(error)
+        self.assertIsNotNone(script)
+        namespace: dict[str, object] = {"__name__": "ci_governance_test"}
+        exec(compile(cast(str, script), self.WORKFLOW_REL, "exec"), namespace)
+        return namespace
+
+    def _controller_failure(self, namespace: dict[str, object], call: Callable[[], object]) -> str:
+        failure = cast(type[Exception], namespace["ControllerFailure"])
+        with self.assertRaises(failure) as caught:
+            call()
+        return str(caught.exception)
+
+    def _record(
+        self,
+        namespace: dict[str, object],
+        *,
+        record_id: int = 41,
+        conclusion: str = "failure",
+        external_id: str | None = None,
+        head_sha: str = "a" * 40,
+        app_id: int = 15368,
+        app_slug: str = "github-actions",
+    ) -> dict[str, object]:
+        if external_id is None:
+            external = cast(Callable[[int, str], str], namespace["external_identity"])
+            external_id = external(1308221459, head_sha)
+        return {
+            "id": record_id,
+            "name": "ci-governance",
+            "head_sha": head_sha,
+            "status": "completed",
+            "conclusion": conclusion,
+            "external_id": external_id,
+            "app": {"id": app_id, "slug": app_slug},
+        }
+
+    def _pull_payload(
+        self, head_sha: str, changed_files: int, base_sha: str = "b" * 40
+    ) -> dict[str, object]:
+        repository = {"full_name": "Develata/ustc-campus-agent"}
+        return {
+            "state": "open",
+            "updated_at": "2026-08-26T00:00:00Z",
+            "changed_files": changed_files,
+            "head": {"sha": head_sha, "repo": repository},
+            "base": {"ref": "main", "sha": base_sha, "repo": repository},
+            "user": {"login": "author", "id": 2},
+        }
+
+    def _run_controller_scenario(
+        self,
+        namespace: dict[str, object],
+        *,
+        event_name: str,
+        event: dict[str, object],
+        changed_file: dict[str, object],
+        initial: dict[str, object] | None,
+        conclusion: str,
+    ) -> tuple[str, list[tuple[str, str, object, int]], dict[str, bool]]:
+        head = "a" * 40
+        repository = "Develata/ustc-campus-agent"
+        pull = self._pull_payload(head, 1)
+        final = self._record(namespace, conclusion=conclusion)
+        def stable_observation() -> list[tuple[str, str, object, int]]:
+            return [
+                ("GET", f"/repos/{repository}/pulls/7", pull, 200),
+                ("GET", f"/repos/{repository}/pulls/7/files?per_page=100&page=1", [changed_file], 200),
+                ("GET", f"/repos/{repository}/pulls/7/files?per_page=100&page=2", [], 200),
+                ("GET", f"/repos/{repository}/pulls/7", pull, 200),
+                ("GET", f"/repos/{repository}/pulls/7/files?per_page=100&page=1", [changed_file], 200),
+                ("GET", f"/repos/{repository}/pulls/7/files?per_page=100&page=2", [], 200),
+                ("GET", f"/repos/{repository}/pulls/7", pull, 200),
+            ]
+        queue: list[tuple[str, str, object, int]] = [
+            ("GET", f"/repos/{repository}", {
+                "id": 1308221459,
+                "default_branch": "main",
+                "owner": {"login": "Develata", "id": 179165876, "type": "User"},
+            }, 200),
+        ]
+        queue.extend(stable_observation())
+        if event_name == "issue_comment":
+            queue.append(("GET", f"/repos/{repository}/pulls/7", pull, 200))
+        initial_runs = [] if initial is None else [initial]
+        queue.extend(
+            [
+                ("GET", f"/repos/{repository}/commits/{head}/check-runs?filter=all&per_page=100&page=1", {"total_count": len(initial_runs), "check_runs": initial_runs}, 200),
+                ("GET", f"/repos/{repository}/commits/{head}/check-runs?filter=all&per_page=100&page=2", {"total_count": len(initial_runs), "check_runs": []}, 200),
+            ]
+        )
+        queue.extend(stable_observation())
+        mutation_method = "POST" if initial is None else "PATCH"
+        mutation_path = (
+            f"/repos/{repository}/check-runs"
+            if initial is None
+            else f"/repos/{repository}/check-runs/41"
+        )
+        queue.extend(
+            [
+                (mutation_method, mutation_path, {"id": 41}, 201 if mutation_method == "POST" else 200),
+                ("GET", f"/repos/{repository}/commits/{head}/check-runs?filter=all&per_page=100&page=1", {"total_count": 1, "check_runs": [final]}, 200),
+                ("GET", f"/repos/{repository}/commits/{head}/check-runs?filter=all&per_page=100&page=2", {"total_count": 1, "check_runs": []}, 200),
+                ("GET", f"/repos/{repository}/check-runs/41", final, 200),
+            ]
+        )
+        calls: list[tuple[str, str, object, int]] = []
+
+        def api_request(
+            environment: dict[str, str],
+            method: str,
+            path: str,
+            body: object = None,
+            expected_status: int = 200,
+        ) -> object:
+            self.assertEqual(environment["GITHUB_REPOSITORY"], repository)
+            self.assertTrue(queue, (method, path))
+            expected_method, expected_path, response, status = queue.pop(0)
+            self.assertEqual((method, path, expected_status), (expected_method, expected_path, status))
+            calls.append((method, path, body, expected_status))
+            return response
+
+        environment = {
+            "GITHUB_API_URL": "https://api.github.invalid",
+            "GITHUB_EVENT_NAME": event_name,
+            "GITHUB_EVENT_PATH": "/event.json",
+            "GITHUB_REPOSITORY": repository,
+            "GITHUB_TOKEN": "token",
+        }
+        publication = {"attempted": False}
+        with mock.patch.dict(
+            namespace,
+            {
+                "read_environment": lambda: environment,
+                "read_event": lambda *_: event,
+                "api_request": api_request,
+            },
+        ):
+            actual = cast(Callable[[dict[str, bool]], str], namespace["run_controller"])(publication)
+        self.assertEqual(queue, [])
+        return actual, calls, publication
+
+    def test_governance_workflow_baseline_contract(self) -> None:
+        self.assertEqual(self._check(), [])
+        script, error = checker._extract_ci_governance_controller(self.baseline)
+        self.assertIsNone(error)
+        tree = ast.parse(cast(str, script))
+        self.assertEqual(
+            checker._ci_governance_controller_manifest(tree),
+            checker.CI_GOVERNANCE_CONTROLLER_AST_MANIFEST,
+        )
+        namespace = self._controller()
+        self.assertEqual(namespace["REPOSITORY_ID"], 1308221459)
+        self.assertEqual(namespace["GITHUB_ACTIONS_APP_ID"], 15368)
+        external = cast(Callable[[int, str], str], namespace["external_identity"])
+        self.assertEqual(
+            external(1308221459, "a" * 40),
+            "ci-governance:1308221459:" + "a" * 40,
+        )
+
+    def test_governance_workflow_grammar_mutations_fail_closed(self) -> None:
+        mutations = (
+            ("name: ci-governance-controller", "name: ci-governance-shadow"),
+            ("    types: [opened, synchronize, reopened]", "    types: [opened, reopened]"),
+            ("  checks: write", "  checks: read"),
+            ("  group: ci-governance-controller", "  group: ci-governance-per-pr"),
+            ("  cancel-in-progress: false", "  cancel-in-progress: true"),
+            ("    runs-on: ubuntu-24.04", "    runs-on: ubuntu-latest"),
+            ("          python3 - <<'PY'", "          python - <<'PY'"),
+        )
+        for old, new in mutations:
+            with self.subTest(old=old):
+                self._mutate_workflow(old, new)
+                self._assert_rejected("grammar drift")
+        script, error = checker._extract_ci_governance_controller(self.baseline)
+        self.assertIsNone(error)
+        for index in range(len(checker.CI_GOVERNANCE_CONTROLLER_AST_MANIFEST)):
+            with self.subTest(ast_node=index):
+                tree = ast.parse(cast(str, script))
+                node = tree.body[index]
+                if isinstance(node, ast.Import):
+                    node.names[0].asname = "_mutated"
+                elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    node.value = ast.Tuple(
+                        elts=[cast(ast.expr, node.value)], ctx=ast.Load()
+                    )
+                elif isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.If)):
+                    node.body.insert(0, ast.Expr(value=ast.Constant(value="_mutated")))
+                else:
+                    self.fail(f"unhandled manifest node: {type(node).__name__}")
+                ast.fix_missing_locations(tree)
+                rendered = ast.unparse(tree)
+                indented = "\n".join(
+                    checker.CI_GOVERNANCE_SCRIPT_INDENT + line if line else ""
+                    for line in rendered.splitlines()
+                )
+                self.workflow.write_text(
+                    checker.CI_GOVERNANCE_YAML_PREFIX
+                    + indented
+                    + "\n"
+                    + checker.CI_GOVERNANCE_YAML_SUFFIX,
+                    encoding="utf-8",
+                )
+                self._assert_rejected(f"normalized AST node drift at index {index}")
+
+    def test_governance_protected_registry_mutations_fail_closed(self) -> None:
+        mutations = (
+            (
+                'PROTECTED_PREFIXES = (".github/workflows/", ".github/actions/")',
+                'PROTECTED_PREFIXES = (".github/workflow/", ".github/actions/")',
+            ),
+            (
+                '    "scripts/check_repo_contracts.py",',
+                '    "scripts/check_repo_contract.py",',
+            ),
+            (
+                '    "docs/acceptance/gates.md",',
+                '    "docs/acceptance/gates.md",\n              "README.md",',
+            ),
+        )
+        for old, new in mutations:
+            with self.subTest(old=old):
+                self._mutate_workflow(old, new)
+                self._assert_rejected("normalized AST node drift")
+        self._reset_workflow()
+        script, error = checker._extract_ci_governance_controller(self.baseline)
+        self.assertIsNone(error)
+        tree = ast.parse(cast(str, script))
+        self.assertEqual(
+            checker._ci_governance_assignment_value(tree, "PROTECTED_PREFIXES"),
+            checker.CI_GOVERNANCE_PROTECTED_PREFIXES,
+        )
+        self.assertEqual(
+            checker._ci_governance_assignment_value(tree, "PROTECTED_PATHS"),
+            checker.CI_GOVERNANCE_PROTECTED_PATHS,
+        )
+        original_paths = checker.CI_GOVERNANCE_PROTECTED_PATHS
+        try:
+            setattr(
+                checker,
+                "CI_GOVERNANCE_PROTECTED_PATHS",
+                frozenset(original_paths - {"scripts/check_repo_contracts.py"}),
+            )
+            self._assert_rejected("protected path registry drift")
+        finally:
+            setattr(checker, "CI_GOVERNANCE_PROTECTED_PATHS", original_paths)
+
+    def test_governance_ordinary_and_protected_paths(self) -> None:
+        namespace = self._controller()
+        protected = cast(Callable[[list[object]], bool], namespace["is_protected_change"])
+        self.assertFalse(protected([{"filename": "README.md", "status": "modified"}]))
+        for record in (
+            {"filename": "scripts/check_repo_contracts.py", "status": "modified"},
+            {"filename": ".github/actions/x/action.yml", "status": "added"},
+            {
+                "filename": "README.md",
+                "status": "renamed",
+                "previous_filename": ".github/workflows/old.yml",
+            },
+        ):
+            with self.subTest(record=record):
+                self.assertTrue(protected([record]))
+        event = {"action": "opened", "pull_request": {"number": 7}}
+        for changed_file, conclusion in (
+            ({"filename": "README.md", "status": "modified"}, "success"),
+            ({"filename": "scripts/check_repo_contracts.py", "status": "modified"}, "failure"),
+        ):
+            with self.subTest(end_to_end=conclusion):
+                actual, calls, publication = self._run_controller_scenario(
+                    namespace,
+                    event_name="pull_request_target",
+                    event=event,
+                    changed_file=changed_file,
+                    initial=None,
+                    conclusion=conclusion,
+                )
+                self.assertEqual(actual, conclusion)
+                mutations = [call for call in calls if call[0] != "GET"]
+                self.assertEqual(len(mutations), 1)
+                self.assertEqual(mutations[0][0], "POST")
+                self.assertEqual(cast(dict[str, object], mutations[0][2])["conclusion"], conclusion)
+                self.assertTrue(publication["attempted"])
+
+    def test_governance_owner_grant_identity_and_event(self) -> None:
+        namespace = self._controller()
+        evaluate = cast(Callable[[dict[str, str], int, dict[str, object], str], bool], namespace["evaluate_grant"])
+        head = "a" * 40
+        comment: dict[str, object] = {
+            "body": "CI-GOVERNANCE-APPROVED:" + head,
+            "user": {"id": 179165876, "login": "Develata", "type": "User"},
+            "author_association": "OWNER",
+        }
+        with mock.patch.dict(namespace, {"fetch_pull": lambda *_: {"head_sha": head}}):
+            self.assertTrue(evaluate({}, 7, comment, head))
+            mutations = (
+                ("body", "CI-GOVERNANCE-APPROVED:" + "b" * 40),
+                ("author_association", "MEMBER"),
+            )
+            for field, value in mutations:
+                with self.subTest(field=field):
+                    changed = dict(comment)
+                    changed[field] = value
+                    self.assertFalse(evaluate({}, 7, changed, head))
+            for field, value in (("id", 1), ("login", "develata"), ("type", "Bot")):
+                with self.subTest(user_field=field):
+                    changed = dict(comment)
+                    changed["user"] = {**cast(dict[str, object], comment["user"]), field: value}
+                    self.assertFalse(evaluate({}, 7, changed, head))
+        read_pull = cast(Callable[[dict[str, object]], int], namespace["read_pull_event"])
+        self.assertEqual(read_pull({"action": "opened", "pull_request": {"number": 7}}), 7)
+        self._controller_failure(namespace, lambda: read_pull({"action": "closed", "pull_request": {"number": 7}}))
+        failure = self._record(namespace, conclusion="failure")
+        event = {
+            "action": "created",
+            "issue": {"number": 7, "pull_request": {"url": "x"}},
+            "comment": comment,
+        }
+        actual, calls, publication = self._run_controller_scenario(
+            namespace,
+            event_name="issue_comment",
+            event=event,
+            changed_file={"filename": "scripts/check_repo_contracts.py", "status": "modified"},
+            initial=failure,
+            conclusion="success",
+        )
+        self.assertEqual(actual, "success")
+        mutations = [call for call in calls if call[0] != "GET"]
+        self.assertEqual(mutations, [
+            (
+                "PATCH",
+                "/repos/Develata/ustc-campus-agent/check-runs/41",
+                {"conclusion": "success", "status": "completed"},
+                200,
+            )
+        ])
+        self.assertTrue(publication["attempted"])
+
+    def test_governance_issue_comment_pr_custody(self) -> None:
+        namespace = self._controller()
+        read_comment = cast(
+            Callable[[dict[str, object]], tuple[int, dict[str, object]]],
+            namespace["read_comment_event"],
+        )
+        comment = {"body": "x"}
+        number, actual = read_comment(
+            {
+                "action": "created",
+                "issue": {"number": 7, "pull_request": {"url": "x"}},
+                "comment": comment,
+            }
+        )
+        self.assertEqual((number, actual), (7, comment))
+        invalid = (
+            {"action": "edited", "issue": {"number": 7, "pull_request": {}}, "comment": comment},
+            {"action": "created", "issue": {"number": 7}, "comment": comment},
+            {"action": "created", "issue": {"number": True, "pull_request": {}}, "comment": comment},
+        )
+        for event in invalid:
+            with self.subTest(event=event):
+                self._controller_failure(namespace, lambda event=event: read_comment(event))
+        fetch_pull = cast(Callable[[dict[str, str], int], dict[str, object]], namespace["fetch_pull"])
+        good = {
+            "state": "open",
+            "updated_at": "2026-08-26T00:00:00Z",
+            "changed_files": 0,
+            "head": {"sha": "a" * 40, "repo": {"full_name": "Develata/ustc-campus-agent"}},
+            "base": {"ref": "main", "sha": "b" * 40, "repo": {"full_name": "Develata/ustc-campus-agent"}},
+            "user": {"login": "author", "id": 2},
+        }
+        with mock.patch.dict(namespace, {"api_request": lambda *_: good}):
+            self.assertEqual(fetch_pull({"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}, 7)["head_sha"], "a" * 40)
+            for field, value in (("state", "closed"), ("changed_files", True), ("updated_at", "")):
+                with self.subTest(field=field):
+                    broken = {**good, field: value}
+                    with mock.patch.dict(namespace, {"api_request": lambda *_, broken=broken: broken}):
+                        self._controller_failure(namespace, lambda: fetch_pull({"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}, 7))
+        custody_mutations = (
+            ("head", "repo", "full_name", "fork/repository"),
+            ("base", "repo", "full_name", "fork/repository"),
+            ("base", None, "ref", "dev"),
+            ("base", None, "sha", "not-a-sha"),
+        )
+        for section, nested, field, value in custody_mutations:
+            with self.subTest(custody=(section, nested, field)):
+                broken = json.loads(json.dumps(good))
+                target = cast(dict[str, object], broken[section])
+                if nested is not None:
+                    target = cast(dict[str, object], target[nested])
+                target[field] = value
+                with mock.patch.dict(namespace, {"api_request": lambda *_, broken=broken: broken}):
+                    self._controller_failure(
+                        namespace,
+                        lambda: fetch_pull(
+                            {"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}, 7
+                        ),
+                    )
+
+    def test_governance_changed_files_pagination_and_renames(self) -> None:
+        namespace = self._controller()
+        fetch = cast(Callable[[dict[str, str], int, int], list[object]], namespace["fetch_changed_files"])
+        validate = cast(Callable[[list[object]], None], namespace["validate_changed_files"])
+        pages = iter(
+            [
+                [{"filename": "README.md", "status": "modified"}],
+                [],
+            ]
+        )
+        calls: list[str] = []
+        def api(_: object, method: str, path: str, *args: object, **kwargs: object) -> object:
+            self.assertEqual(method, "GET")
+            calls.append(path)
+            return next(pages)
+        with mock.patch.dict(namespace, {"api_request": api}):
+            records = fetch({"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}, 7, 1)
+        self.assertEqual(len(calls), 2)
+        validate(records)
+        validate([{"filename": "new.md", "status": "renamed", "previous_filename": "old.md"}])
+        validate([{"filename": "vendor/submodule", "status": "changed"}])
+        malformed = (
+            [{"filename": "x", "status": "modified", "previous_filename": "old"}],
+            [{"filename": "x", "status": "renamed"}],
+            [
+                {"filename": "x", "status": "renamed", "previous_filename": "old"},
+                {"filename": "old", "status": "modified"},
+            ],
+        )
+        for records in malformed:
+            with self.subTest(records=records):
+                self._controller_failure(namespace, lambda records=records: validate(records))
+        pages_3000 = iter(
+            [
+                [
+                    {"filename": f"ordinary/{page * 100 + index}.txt", "status": "modified"}
+                    for index in range(100)
+                ]
+                for page in range(30)
+            ]
+            + [[]]
+        )
+        with mock.patch.dict(namespace, {"api_request": lambda *_: next(pages_3000)}):
+            exact = fetch({"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}, 7, 3000)
+        self.assertEqual(len(exact), 3000)
+        self._controller_failure(
+            namespace,
+            lambda: fetch({"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}, 7, 3001),
+        )
+        short_pages = iter(
+            [[{"filename": "one", "status": "modified"}], []]
+        )
+        with mock.patch.dict(namespace, {"api_request": lambda *_: next(short_pages)}):
+            self._controller_failure(
+                namespace,
+                lambda: fetch({"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}, 7, 2),
+            )
+
+    def test_governance_head_race_and_replaced_pending_event(self) -> None:
+        namespace = self._controller()
+        decide = cast(
+            Callable[[bool, bool, bool, dict[str, object] | None], dict[str, object]],
+            namespace["decide_action"],
+        )
+        failure = self._record(namespace)
+        success = self._record(namespace, conclusion="success")
+        self.assertEqual(decide(True, False, False, failure)["conclusion"], "failure")
+        self.assertEqual(decide(True, True, True, failure)["kind"], "patch")
+        self.assertEqual(decide(True, False, False, success)["kind"], "none")
+        # If main has absorbed the protected bytes while the head is unchanged, the
+        # current diff becomes ordinary; upgrading the shared exact-head record is safe.
+        ordinary_after_main_advance = decide(False, False, False, failure)
+        self.assertEqual(ordinary_after_main_advance["kind"], "patch")
+        self.assertEqual(ordinary_after_main_advance["conclusion"], "success")
+        self._controller_failure(namespace, lambda: decide(True, True, True, None))
+        self._controller_failure(
+            namespace,
+            lambda: cast(Callable[[dict[str, object]], str], namespace["classify_matching_record"])(
+                {**failure, "status": "in_progress", "conclusion": None}
+            ),
+        )
+        observe = cast(
+            Callable[[dict[str, str], int], dict[str, object]],
+            namespace["observe_change_set"],
+        )
+        environment = {"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}
+        ordinary = [{"filename": "README.md", "status": "modified"}]
+        protected_records = [
+            {"filename": "scripts/check_repo_contracts.py", "status": "modified"}
+        ]
+        stable_pull = {
+            "base_sha": "b" * 40,
+            "changed_files": 1,
+            "head_sha": "a" * 40,
+            "updated_at": "2026-08-26T00:00:00Z",
+        }
+        changed_update = {**stable_pull, "updated_at": "2026-08-26T00:01:00Z"}
+        with mock.patch.dict(
+            namespace,
+            {
+                "fetch_pull": lambda *_: next(iter_pulls),
+                "fetch_changed_files": lambda *_: ordinary,
+            },
+        ):
+            iter_pulls = iter([stable_pull, changed_update])
+            self._controller_failure(namespace, lambda: observe(environment, 7))
+        changed_base = {**stable_pull, "base_sha": "c" * 40}
+        with mock.patch.dict(
+            namespace,
+            {
+                "fetch_pull": lambda *_: next(iter_pulls),
+                "fetch_changed_files": lambda *_: ordinary,
+            },
+        ):
+            iter_pulls = iter([stable_pull, changed_base])
+            self._controller_failure(namespace, lambda: observe(environment, 7))
+        with mock.patch.dict(
+            namespace,
+            {
+                "fetch_pull": lambda *_: next(iter_pulls),
+                "fetch_changed_files": lambda *_: next(iter_files),
+            },
+        ):
+            iter_pulls = iter([stable_pull, stable_pull, stable_pull])
+            iter_files = iter([ordinary, protected_records])
+            self._controller_failure(namespace, lambda: observe(environment, 7))
+
+        initial_observation = {
+            "protected": False,
+            "pull": {
+                "base_sha": "b" * 40,
+                "changed_files": 0,
+                "head_sha": "a" * 40,
+                "updated_at": "2026-08-26T00:00:00Z",
+            },
+            "records": [],
+        }
+        drifted_observation = {
+            **initial_observation,
+            "pull": {
+                **cast(dict[str, object], initial_observation["pull"]),
+                "base_sha": "c" * 40,
+            },
+        }
+        observations = iter([initial_observation, drifted_observation])
+        mutations: list[str] = []
+        with mock.patch.dict(
+            namespace,
+            {
+                "read_environment": lambda: {
+                    "GITHUB_EVENT_NAME": "pull_request_target",
+                    "GITHUB_EVENT_PATH": "x",
+                },
+                "read_event": lambda *_: {
+                    "action": "opened",
+                    "pull_request": {"number": 7},
+                },
+                "fetch_repository": lambda *_: {"id": 1308221459},
+                "observe_change_set": lambda *_: next(observations),
+                "fetch_check_runs": lambda *_: {"matching": success},
+                "post_check_run": lambda *_: mutations.append("post"),
+                "patch_check_run": lambda *_: mutations.append("patch"),
+            },
+        ):
+            publication = {"attempted": False}
+            self._controller_failure(
+                namespace,
+                lambda: cast(
+                    Callable[[dict[str, bool]], str], namespace["run_controller"]
+                )(publication),
+            )
+        self.assertEqual(mutations, [])
+
+    def test_governance_check_run_inventory_and_duplicates(self) -> None:
+        namespace = self._controller()
+        partition = cast(
+            Callable[[list[dict[str, object]], str, str], dict[str, object]],
+            namespace["partition_check_runs"],
+        )
+        head = "a" * 40
+        external = cast(Callable[[int, str], str], namespace["external_identity"])(1308221459, head)
+        record = self._record(namespace, external_id=external)
+        self.assertIs(partition([record], external, head)["matching"], record)
+        for records in (
+            [record, {**record, "id": 42}],
+            [record, self._record(namespace, record_id=43, external_id="foreign")],
+            [self._record(namespace, external_id=external, app_id=1)],
+        ):
+            with self.subTest(records=records):
+                self._controller_failure(namespace, lambda records=records: partition(records, external, head))
+        fetch = cast(Callable[[dict[str, str], int, str], dict[str, object]], namespace["fetch_check_runs"])
+        pages = iter([
+            {"total_count": 1, "check_runs": [record]},
+            {"total_count": 1, "check_runs": []},
+        ])
+        with mock.patch.dict(namespace, {"api_request": lambda *_: next(pages)}):
+            self.assertEqual(fetch({"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}, 1308221459, head)["matching"], record)
+        for count in (100, 200):
+            with self.subTest(exact_page_count=count):
+                records = [
+                    {
+                        **self._record(
+                            namespace,
+                            record_id=index + 1000,
+                            external_id=f"other:{index}",
+                        ),
+                        "name": "rust",
+                    }
+                    for index in range(count)
+                ]
+                payloads = [
+                    {"total_count": count, "check_runs": records[offset : offset + 100]}
+                    for offset in range(0, count, 100)
+                ]
+                payloads.append({"total_count": count, "check_runs": []})
+                queued = iter(payloads)
+                with mock.patch.dict(namespace, {"api_request": lambda *_: next(queued)}):
+                    inventory = fetch(
+                        {"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"},
+                        1308221459,
+                        head,
+                    )
+                self.assertEqual(len(cast(list[object], inventory["records"])), count)
+        drift_pages = iter(
+            [
+                {"total_count": 101, "check_runs": [
+                    {
+                        **self._record(namespace, record_id=index + 2000, external_id=f"drift:{index}"),
+                        "name": "rust",
+                    }
+                    for index in range(100)
+                ]},
+                {"total_count": 100, "check_runs": []},
+            ]
+        )
+        with mock.patch.dict(namespace, {"api_request": lambda *_: next(drift_pages)}):
+            self._controller_failure(
+                namespace,
+                lambda: fetch(
+                    {"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"},
+                    1308221459,
+                    head,
+                ),
+            )
+
+    def test_governance_publication_ambiguity_and_readback(self) -> None:
+        namespace = self._controller()
+        transport_lost = cast(type[Exception], namespace["TransportLost"])
+        with mock.patch.dict(
+            namespace,
+            {"run_controller": lambda publication: publication.__setitem__("attempted", True) or (_ for _ in ()).throw(transport_lost("lost"))},
+        ):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(cast(Callable[[], int], namespace["main"])(), 1)
+            self.assertIn("PUBLICATION_AMBIGUOUS", output.getvalue())
+        controller_failure = cast(type[Exception], namespace["ControllerFailure"])
+        with mock.patch.dict(
+            namespace,
+            {"run_controller": lambda publication: publication.__setitem__("attempted", True) or (_ for _ in ()).throw(controller_failure("readback drift"))},
+        ):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(cast(Callable[[], int], namespace["main"])(), 1)
+            self.assertIn("PUBLICATION_AMBIGUOUS", output.getvalue())
+        verify = cast(Callable[..., None], namespace["verify_publication"])
+        record = self._record(namespace, conclusion="success")
+        responses = iter([{"matching": record}, {**record, "app": {"id": 1, "slug": "foreign"}}])
+        with mock.patch.dict(
+            namespace,
+            {
+                "fetch_check_runs": lambda *_: next(responses),
+                "api_request": lambda *_: next(responses),
+            },
+        ):
+            self._controller_failure(
+                namespace,
+                lambda: verify(
+                    {"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"},
+                    1308221459,
+                    "a" * 40,
+                    41,
+                    "success",
+                ),
+            )
+        post = cast(Callable[..., int], namespace["post_check_run"])
+        publication = {"attempted": False}
+        captured: list[tuple[str, str, object, int]] = []
+        def api(_: object, method: str, path: str, body: object = None, expected_status: int = 200) -> object:
+            captured.append((method, path, body, expected_status))
+            return {"id": 41}
+        with mock.patch.dict(namespace, {"api_request": api, "verify_publication": lambda *_: None}):
+            self.assertEqual(post({"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}, 1308221459, "a" * 40, "failure", publication), 41)
+        self.assertEqual(captured[0][0], "POST")
+        self.assertEqual(captured[0][3], 201)
+        self.assertTrue(publication["attempted"])
+
+    def test_governance_workflow_authority_inventory(self) -> None:
+        self.assertEqual(self._check(), [])
+        ci_path = self.root / ".github/workflows/ci.yml"
+        ci_baseline = ci_path.read_text(encoding="utf-8")
+        bypasses = (
+            (
+                "permissions:\n  contents: read",
+                "permissions: {contents: read, checks: write}",
+            ),
+            ("permissions:", "permissions: write-all # hidden"),
+            ("permissions:", "permissions: &authority"),
+            ("permissions:\n  contents: read", "permissions: *authority"),
+            (
+                "run: python3 scripts/check_repo_contracts.py",
+                "run: |\n          python3 scripts/check_repo_contracts.py",
+            ),
+            (
+                "run: python3 scripts/check_repo_contracts.py",
+                "run: ${{ github.event.pull_request.title }}",
+            ),
+            (
+                "run: python3 scripts/check_repo_contracts.py",
+                "run: python3 -c 'name=\"ci-\"+\"governance\"'",
+            ),
+            ("  pull_request:", "  pull_request_target:"),
+            (
+                "    name: rust\n    runs-on: ubuntu-latest\n    steps:",
+                "    name: rust\n    steps:",
+            ),
+            (
+                "      - name: Repository contract checks\n        run: python3 scripts/check_repo_contracts.py\n",
+                "",
+            ),
+            (
+                "      - name: Clippy\n        run: cargo clippy --locked --all-targets --all-features -- -D warnings\n",
+                "",
+            ),
+            (
+                "      - name: Format\n        run: cargo fmt --all -- --check\n",
+                "      - name: Format\n        run: cargo fmt --all -- --check\n"
+                "      - name: Format\n        run: cargo fmt --all -- --check\n",
+            ),
+            (
+                "      - name: Format\n        run: cargo fmt --all -- --check\n"
+                "      - name: Clippy\n        run: cargo clippy --locked --all-targets --all-features -- -D warnings\n",
+                "      - name: Clippy\n        run: cargo clippy --locked --all-targets --all-features -- -D warnings\n"
+                "      - name: Format\n        run: cargo fmt --all -- --check\n",
+            ),
+            (
+                "      - uses: actions/checkout@v6\n"
+                "        with:\n          fetch-depth: 0\n"
+                "      - uses: actions/setup-python@v6\n",
+                "      - uses: actions/checkout@v6\n"
+                "      - uses: actions/setup-python@v6\n"
+                "        with:\n          fetch-depth: 0\n",
+            ),
+        )
+        for old, new in bypasses:
+            with self.subTest(bypass=old + " -> " + new):
+                self.assertEqual(ci_baseline.count(old), 1)
+                ci_path.write_text(ci_baseline.replace(old, new, 1), encoding="utf-8")
+                issues = self._check()
+                self.assertTrue(any("ci.yml" in issue for issue in issues), issues)
+                ci_path.write_text(ci_baseline, encoding="utf-8")
+        mutations = {
+            "foreign-check.yml": "name: other\non: push\npermissions:\n  checks: write\njobs:\n  x:\n    runs-on: ubuntu-24.04\n    steps: []\n",
+            "duplicate-name.yml": "name: ci-governance-controller\non: push\npermissions:\n  contents: read\njobs:\n  x:\n    runs-on: ubuntu-24.04\n    steps: []\n",
+            "job-permission.yml": "name: other\non: push\npermissions:\n  contents: read\njobs:\n  x:\n    permissions:\n      checks: write\n    uses: x/y/.github/workflows/z.yml@main\n",
+        }
+        for name, contents in mutations.items():
+            with self.subTest(name=name):
+                path = self.root / ".github/workflows" / name
+                path.write_text(contents, encoding="utf-8")
+                issues = self._check()
+                self.assertTrue(any(name in issue for issue in issues), issues)
+                path.unlink()
+
+    def test_governance_api_schema_and_failure_matrix(self) -> None:
+        namespace = self._controller()
+        repository = {
+            "id": 1308221459,
+            "default_branch": "main",
+            "owner": {"login": "Develata", "id": 179165876, "type": "User"},
+        }
+        fetch_repository = cast(Callable[[dict[str, str]], dict[str, object]], namespace["fetch_repository"])
+        with mock.patch.dict(namespace, {"api_request": lambda *_: repository}):
+            self.assertEqual(fetch_repository({"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"})["id"], 1308221459)
+        for key, value in (("id", True), ("default_branch", "dev")):
+            with self.subTest(key=key):
+                broken = {**repository, key: value}
+                with mock.patch.dict(namespace, {"api_request": lambda *_, broken=broken: broken}):
+                    self._controller_failure(namespace, lambda: fetch_repository({"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}))
+        for field, value in (("login", "develata"), ("id", 1), ("type", "Organization")):
+            with self.subTest(owner_field=field):
+                broken = json.loads(json.dumps(repository))
+                cast(dict[str, object], broken["owner"])[field] = value
+                with mock.patch.dict(namespace, {"api_request": lambda *_, broken=broken: broken}):
+                    self._controller_failure(
+                        namespace,
+                        lambda: fetch_repository(
+                            {"GITHUB_REPOSITORY": "Develata/ustc-campus-agent"}
+                        ),
+                    )
+        validate = cast(Callable[[object], dict[str, object]], namespace["validate_check_run_record"])
+        valid = self._record(namespace)
+        self.assertEqual(validate(valid), valid)
+        for field, value in (("id", True), ("name", None), ("app", {"id": True, "slug": "github-actions"}), ("external_id", 7)):
+            with self.subTest(field=field):
+                self._controller_failure(namespace, lambda field=field, value=value: validate({**valid, field: value}))
+        environment = {
+            "GITHUB_TOKEN": "token",
+            "GITHUB_API_URL": "https://api.github.invalid",
+        }
+        requests: list[tuple[str, str]] = []
+        class Response:
+            status = 201
+            def __enter__(self) -> "Response":
+                return self
+            def __exit__(self, *args: object) -> bool:
+                return False
+            def read(self) -> bytes:
+                return b'{"id":41}'
+        def urlopen(request: object, timeout: int) -> Response:
+            requests.append((cast(str, getattr(request, "method")), cast(str, getattr(request, "full_url"))))
+            self.assertEqual(timeout, 30)
+            return Response()
+        urllib_module = cast(object, namespace["urllib"])
+        with mock.patch.object(getattr(urllib_module, "request"), "urlopen", urlopen):
+            response = cast(Callable[..., object], namespace["api_request"])(
+                environment,
+                "POST",
+                "/repos/Develata/ustc-campus-agent/check-runs",
+                {"name": "ci-governance"},
+                expected_status=201,
+            )
+        self.assertEqual(response, {"id": 41})
+        self.assertEqual(requests, [("POST", "https://api.github.invalid/repos/Develata/ustc-campus-agent/check-runs")])
+        class InvalidJsonResponse(Response):
+            status = 200
+            def read(self) -> bytes:
+                return b"not-json"
+        with mock.patch.object(
+            getattr(urllib_module, "request"),
+            "urlopen",
+            lambda *_args, **_kwargs: InvalidJsonResponse(),
+        ):
+            self._controller_failure(
+                namespace,
+                lambda: cast(Callable[..., object], namespace["api_request"])(
+                    environment, "GET", "/repos/Develata/ustc-campus-agent"
+                ),
+            )
+        http_error = getattr(getattr(urllib_module, "error"), "HTTPError")(
+            "https://api.github.invalid", 403, "forbidden", {}, None
+        )
+        with mock.patch.object(
+            getattr(urllib_module, "request"),
+            "urlopen",
+            side_effect=http_error,
+        ):
+            self._controller_failure(
+                namespace,
+                lambda: cast(Callable[..., object], namespace["api_request"])(
+                    environment, "GET", "/repos/Develata/ustc-campus-agent"
+                ),
+            )
+        transport_lost = cast(type[Exception], namespace["TransportLost"])
+        with mock.patch.dict(
+            namespace,
+            {"run_controller": lambda _publication: (_ for _ in ()).throw(transport_lost("lost"))},
+        ):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(cast(Callable[[], int], namespace["main"])(), 1)
+            self.assertIn("transport lost before effect", output.getvalue())
+            self.assertNotIn("PUBLICATION_AMBIGUOUS", output.getvalue())
+
+
 class _M90MutationTestBase(unittest.TestCase):
     FILES: tuple[str, ...] = ()
 
@@ -7916,10 +8834,25 @@ class CiTransitionLedgerMutationTests(_M90MutationTestBase):
             text.replace(old, "| `active` |\n", 1), encoding="utf-8"
         )
         self.assert_rejected(self.check(), "slice state drift")
+        self.fresh_copy(checker.CI_TRANSITION_LEDGER_PATH)
+        text = self.path(checker.CI_TRANSITION_LEDGER_PATH).read_text(encoding="utf-8")
+        active = "| `guard-active-not-required` |\n"
+        self.assertIn(active, text)
+        self.path(checker.CI_TRANSITION_LEDGER_PATH).write_text(
+            text.replace(active, "| `inert-not-active` |\n", 1), encoding="utf-8"
+        )
+        self.assert_rejected(self.check(), "slice state drift")
 
     def test_ledger_state_declaration_missing(self) -> None:
         decl = checker.CI_TRANSITION_LEDGER_STATE_DECLARATIONS[0]
         self.rewrite(checker.CI_TRANSITION_LEDGER_PATH, decl, "MUTATED_DECLARATION_REPLACED")
+        self.assert_rejected(self.check(), "state declaration missing")
+        self.fresh_copy(checker.CI_TRANSITION_LEDGER_PATH)
+        self.rewrite(
+            checker.CI_TRANSITION_LEDGER_PATH,
+            "`Version`: `ci-transition/v1`",
+            "`Version`: `ci-transition/v2`",
+        )
         self.assert_rejected(self.check(), "state declaration missing")
 
     def test_ledger_row_semantic_drift_each_cell(self) -> None:

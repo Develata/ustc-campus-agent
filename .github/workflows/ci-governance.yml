@@ -1,0 +1,675 @@
+name: ci-governance-controller
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  checks: write
+
+concurrency:
+  group: ci-governance-controller
+  cancel-in-progress: false
+
+jobs:
+  controller:
+    name: controller
+    runs-on: ubuntu-24.04
+    steps:
+      - name: controller
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.request
+
+          REPOSITORY_ID = 1308221459
+          REPOSITORY_OWNER_LOGIN = "Develata"
+          REPOSITORY_OWNER_ID = 179165876
+          REPOSITORY_OWNER_TYPE = "User"
+          OWNER_LOGIN = "Develata"
+          OWNER_ID = 179165876
+          OWNER_TYPE = "User"
+          OWNER_ASSOCIATION = "OWNER"
+          DEFAULT_BRANCH = "main"
+          CHECK_NAME = "ci-governance"
+          EXTERNAL_ID_PREFIX = "ci-governance:"
+          APPROVAL_PREFIX = "CI-GOVERNANCE-APPROVED:"
+          GITHUB_ACTIONS_APP_ID = 15368
+          GITHUB_ACTIONS_APP_SLUG = "github-actions"
+          CHANGED_FILES_LIMIT = 3000
+          PER_PAGE = 100
+          CHECK_RUN_LIMIT = 1000
+          COMPLETED_STATUS = "completed"
+          SUCCESS_CONCLUSION = "success"
+          FAILURE_CONCLUSION = "failure"
+          RENAMED_STATUS = "renamed"
+          FILE_STATUSES = frozenset({"added", "changed", "copied", "modified", "removed", "renamed"})
+          COMMENT_CREATED_ACTION = "created"
+          PULL_REQUEST_ACTIONS = frozenset({"opened", "reopened", "synchronize"})
+          TRUSTED_ENVIRONMENT = (
+              "GITHUB_API_URL",
+              "GITHUB_EVENT_NAME",
+              "GITHUB_EVENT_PATH",
+              "GITHUB_REPOSITORY",
+              "GITHUB_TOKEN",
+          )
+          PROTECTED_PREFIXES = (".github/workflows/", ".github/actions/")
+          PROTECTED_PATHS = frozenset({
+              "docs/acceptance/case-registry.md",
+              "docs/acceptance/ci-transition-ledger.md",
+              "docs/acceptance/gates.md",
+              "scripts/check_repo_contracts.py",
+              "scripts/checker_test_inventory.json",
+              "scripts/run_checker_shards.py",
+              "scripts/tests/fixtures/ci-v2.yml",
+              "scripts/tests/test_check_repo_contracts.py",
+              "scripts/tests/test_run_checker_shards.py",
+          })
+          SHA_PATTERN = re.compile(r"\A[0-9a-f]{40}\Z")
+          API_VERSION = "2022-11-28"
+          REQUEST_TIMEOUT_SECONDS = 30
+
+
+          class ControllerFailure(Exception):
+              pass
+
+
+          class TransportLost(Exception):
+              pass
+
+
+          def repository_path(full_name: str) -> str:
+              return f"/repos/{full_name}"
+
+
+          def pull_path(full_name: str, number: int) -> str:
+              return f"/repos/{full_name}/pulls/{number}"
+
+
+          def pull_files_page_path(full_name: str, number: int, page: int) -> str:
+              return f"/repos/{full_name}/pulls/{number}/files?per_page={PER_PAGE}&page={page}"
+
+
+          def commit_check_runs_page_path(full_name: str, head_sha: str, page: int) -> str:
+              return f"/repos/{full_name}/commits/{head_sha}/check-runs?filter=all&per_page={PER_PAGE}&page={page}"
+
+
+          def check_runs_collection_path(full_name: str) -> str:
+              return f"/repos/{full_name}/check-runs"
+
+
+          def check_run_path(full_name: str, check_run_id: int) -> str:
+              return f"/repos/{full_name}/check-runs/{check_run_id}"
+
+
+          def external_identity(repository_id: int, head_sha: str) -> str:
+              # GitHub required checks are commit-scoped. One head may be compared to successive
+              # main SHAs; classification can relax only when protected bytes became main-owned.
+              # Approval remains an exact-byte capability and never transfers to another head.
+              return f"{EXTERNAL_ID_PREFIX}{repository_id}:{head_sha}"
+
+
+          def is_lower_hex_sha(value: object) -> bool:
+              return isinstance(value, str) and SHA_PATTERN.fullmatch(value) is not None
+
+
+          def is_safe_path(value: object) -> bool:
+              if not isinstance(value, str) or not value or "\x00" in value:
+                  return False
+              if value.startswith("/"):
+                  return False
+              return all(part not in ("", ".", "..") for part in value.split("/"))
+
+
+          def is_protected_path(path: str) -> bool:
+              return path in PROTECTED_PATHS or path.startswith(PROTECTED_PREFIXES)
+
+
+          def read_environment() -> dict[str, str]:
+              environment: dict[str, str] = {}
+              for name in TRUSTED_ENVIRONMENT:
+                  value = os.environ.get(name)
+                  if not isinstance(value, str) or not value:
+                      raise ControllerFailure("missing trusted environment variable: " + name)
+                  environment[name] = value
+              return environment
+
+
+          def read_event(path: str) -> dict[str, object]:
+              try:
+                  with open(path, "r", encoding="utf-8") as handle:
+                      event = json.load(handle)
+              except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                  raise ControllerFailure("unreadable event payload: " + str(error)) from error
+              if not isinstance(event, dict):
+                  raise ControllerFailure("event payload is not an object")
+              return event
+
+
+          def api_request(
+              environment: dict[str, str],
+              method: str,
+              path: str,
+              body: object = None,
+              expected_status: int = 200,
+          ) -> object:
+              headers = {
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": "Bearer " + environment["GITHUB_TOKEN"],
+                  "User-Agent": "uca-ci-governance-controller",
+                  "X-GitHub-Api-Version": API_VERSION,
+              }
+              payload = None
+              if body is not None:
+                  payload = json.dumps(body).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              request = urllib.request.Request(
+                  environment["GITHUB_API_URL"].rstrip("/") + path,
+                  data=payload,
+                  headers=headers,
+                  method=method,
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+                      status = response.status
+                      raw = response.read()
+              except urllib.error.HTTPError as error:
+                  raise ControllerFailure("HTTP " + str(error.code) + " " + method + " " + path) from error
+              except urllib.error.URLError as error:
+                  raise TransportLost("transport lost before response: " + method + " " + path) from error
+              except OSError as error:
+                  raise TransportLost("transport error before response: " + method + " " + path) from error
+              if status != expected_status:
+                  raise ControllerFailure("unexpected HTTP status " + str(status) + " " + method + " " + path)
+              try:
+                  return json.loads(raw.decode("utf-8"))
+              except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                  raise ControllerFailure("invalid JSON response for " + method + " " + path) from error
+
+
+          def fetch_repository(environment: dict[str, str]) -> dict[str, object]:
+              repository = api_request(environment, "GET", repository_path(environment["GITHUB_REPOSITORY"]))
+              if not isinstance(repository, dict):
+                  raise ControllerFailure("repository response is not an object")
+              if repository.get("id") != REPOSITORY_ID:
+                  raise ControllerFailure("repository identity drift")
+              owner = repository.get("owner")
+              if not isinstance(owner, dict):
+                  raise ControllerFailure("repository owner missing")
+              if owner.get("login") != REPOSITORY_OWNER_LOGIN:
+                  raise ControllerFailure("repository owner login drift")
+              if owner.get("id") != REPOSITORY_OWNER_ID:
+                  raise ControllerFailure("repository owner id drift")
+              if owner.get("type") != REPOSITORY_OWNER_TYPE:
+                  raise ControllerFailure("repository owner type drift")
+              if repository.get("default_branch") != DEFAULT_BRANCH:
+                  raise ControllerFailure("repository default branch drift")
+              return repository
+
+
+          def fetch_pull(environment: dict[str, str], number: int) -> dict[str, object]:
+              pull = api_request(environment, "GET", pull_path(environment["GITHUB_REPOSITORY"], number))
+              if not isinstance(pull, dict):
+                  raise ControllerFailure("pull request response is not an object")
+              if pull.get("state") != "open":
+                  raise ControllerFailure("pull request is not open: " + repr(pull.get("state")))
+              head = pull.get("head")
+              base = pull.get("base")
+              user = pull.get("user")
+              if not isinstance(head, dict) or not isinstance(base, dict) or not isinstance(user, dict):
+                  raise ControllerFailure("pull request head/base/user missing")
+              head_repository = head.get("repo")
+              base_repository = base.get("repo")
+              if not isinstance(head_repository, dict) or not isinstance(base_repository, dict):
+                  raise ControllerFailure("pull request head/base repository missing")
+              head_sha = head.get("sha")
+              base_sha = base.get("sha")
+              if not is_lower_hex_sha(head_sha):
+                  raise ControllerFailure("pull request head sha is not lowercase 40-hex")
+              if not is_lower_hex_sha(base_sha):
+                  raise ControllerFailure("pull request base sha is not lowercase 40-hex")
+              if head_repository.get("full_name") != environment["GITHUB_REPOSITORY"]:
+                  raise ControllerFailure("pull request head repository is not this repository")
+              if base_repository.get("full_name") != environment["GITHUB_REPOSITORY"]:
+                  raise ControllerFailure("pull request base repository drift")
+              if base.get("ref") != DEFAULT_BRANCH:
+                  raise ControllerFailure("pull request base branch drift")
+              if not isinstance(user.get("login"), str):
+                  raise ControllerFailure("pull request author login malformed")
+              if not isinstance(user.get("id"), int) or isinstance(user.get("id"), bool):
+                  raise ControllerFailure("pull request author id malformed")
+              changed_files = pull.get("changed_files")
+              if not isinstance(changed_files, int) or isinstance(changed_files, bool) or changed_files < 0:
+                  raise ControllerFailure("pull request changed_files malformed")
+              updated_at = pull.get("updated_at")
+              if not isinstance(updated_at, str) or not updated_at:
+                  raise ControllerFailure("pull request updated_at malformed")
+              return {
+                  "base_sha": base_sha,
+                  "changed_files": changed_files,
+                  "head_sha": head_sha,
+                  "updated_at": updated_at,
+                  "user": user,
+              }
+
+
+          def fetch_changed_files(environment: dict[str, str], number: int, expected_count: int) -> list[object]:
+              if expected_count > CHANGED_FILES_LIMIT:
+                  raise ControllerFailure("changed files exceed ceiling: " + str(expected_count))
+              full_name = environment["GITHUB_REPOSITORY"]
+              records: list[object] = []
+              page = 1
+              while True:
+                  payload = api_request(environment, "GET", pull_files_page_path(full_name, number, page))
+                  if not isinstance(payload, list):
+                      raise ControllerFailure("changed files page is not a list")
+                  if not payload:
+                      if page == 1 and expected_count == 0:
+                          break
+                      raise ControllerFailure("changed files page ended before exact completion")
+                  records.extend(payload)
+                  if len(records) > expected_count:
+                      raise ControllerFailure("changed files count mismatch: over-collection")
+                  if len(records) == expected_count:
+                      break
+                  page += 1
+                  if page > 31:
+                      raise ControllerFailure("changed files pagination bound exceeded")
+              sentinel = api_request(environment, "GET", pull_files_page_path(full_name, number, page + 1))
+              if not isinstance(sentinel, list) or sentinel:
+                  raise ControllerFailure("changed files pagination produced more pages after exact completion")
+              return records
+
+
+          def validate_changed_files(records: list[object]) -> None:
+              seen_paths: set[str] = set()
+              for record in records:
+                  if not isinstance(record, dict):
+                      raise ControllerFailure("changed file record is not an object")
+                  filename = record.get("filename")
+                  if not is_safe_path(filename):
+                      raise ControllerFailure("changed file filename is unsafe: " + repr(filename))
+                  status = record.get("status")
+                  if status not in FILE_STATUSES:
+                      raise ControllerFailure("changed file status unexpected: " + repr(status))
+                  if filename in seen_paths:
+                      raise ControllerFailure("duplicate changed file identity: " + filename)
+                  seen_paths.add(filename)
+                  if status == RENAMED_STATUS:
+                      previous = record.get("previous_filename")
+                      if not is_safe_path(previous):
+                          raise ControllerFailure("renamed previous_filename missing or unsafe")
+                      if previous in seen_paths:
+                          raise ControllerFailure("duplicate changed file identity: " + previous)
+                      seen_paths.add(previous)
+                  elif "previous_filename" in record:
+                      raise ControllerFailure("previous_filename is only valid for renamed files")
+
+
+          def is_protected_change(records: list[object]) -> bool:
+              for record in records:
+                  if not isinstance(record, dict):
+                      raise ControllerFailure("changed file record is not an object")
+                  if is_protected_path(record["filename"]):
+                      return True
+                  previous = record.get("previous_filename")
+                  if previous is not None and is_protected_path(previous):
+                      return True
+              return False
+
+
+          def pull_state(pull: dict[str, object]) -> tuple[object, object, object, object]:
+              return (
+                  pull["head_sha"],
+                  pull["base_sha"],
+                  pull["changed_files"],
+                  pull["updated_at"],
+              )
+
+
+          def observe_change_set(environment: dict[str, str], number: int) -> dict[str, object]:
+              first = fetch_pull(environment, number)
+              first_records = fetch_changed_files(environment, number, first["changed_files"])
+              validate_changed_files(first_records)
+              second = fetch_pull(environment, number)
+              if pull_state(second) != pull_state(first):
+                  raise ControllerFailure("pull request state changed during first file inventory")
+              second_records = fetch_changed_files(environment, number, second["changed_files"])
+              validate_changed_files(second_records)
+              third = fetch_pull(environment, number)
+              if pull_state(third) != pull_state(second):
+                  raise ControllerFailure("pull request state changed during repeated file inventory")
+              if second_records != first_records:
+                  raise ControllerFailure("changed files inventory is not repeatable")
+              return {
+                  "protected": is_protected_change(second_records),
+                  "pull": third,
+                  "records": second_records,
+              }
+
+
+          def read_pull_event(event: dict[str, object]) -> int:
+              action = event.get("action")
+              if action not in PULL_REQUEST_ACTIONS:
+                  raise ControllerFailure("unsupported pull_request_target action: " + repr(action))
+              pull = event.get("pull_request")
+              if not isinstance(pull, dict):
+                  raise ControllerFailure("pull_request_target payload missing pull_request")
+              number = pull.get("number")
+              if not isinstance(number, int) or isinstance(number, bool) or number <= 0:
+                  raise ControllerFailure("pull_request_target number malformed")
+              return number
+
+
+          def read_comment_event(event: dict[str, object]) -> tuple[int, dict[str, object]]:
+              action = event.get("action")
+              if action != COMMENT_CREATED_ACTION:
+                  raise ControllerFailure("issue_comment action is not created: " + repr(action))
+              issue = event.get("issue")
+              if not isinstance(issue, dict):
+                  raise ControllerFailure("issue_comment payload missing issue")
+              if not isinstance(issue.get("pull_request"), dict):
+                  raise ControllerFailure("issue_comment target is not a pull request")
+              number = issue.get("number")
+              if not isinstance(number, int) or isinstance(number, bool) or number <= 0:
+                  raise ControllerFailure("issue_comment number malformed")
+              comment = event.get("comment")
+              if not isinstance(comment, dict):
+                  raise ControllerFailure("issue_comment payload missing comment")
+              return number, comment
+
+
+          def evaluate_grant(environment: dict[str, str], number: int, comment: dict[str, object], head_sha: str) -> bool:
+              body = comment.get("body")
+              user = comment.get("user")
+              if not isinstance(user, dict):
+                  return False
+              if body != APPROVAL_PREFIX + head_sha:
+                  return False
+              if user.get("id") != OWNER_ID:
+                  return False
+              if user.get("login") != OWNER_LOGIN:
+                  return False
+              if user.get("type") != OWNER_TYPE:
+                  return False
+              if comment.get("author_association") != OWNER_ASSOCIATION:
+                  return False
+              current = fetch_pull(environment, number)
+              return current["head_sha"] == head_sha
+
+
+          def validate_check_run_record(record: object) -> dict[str, object]:
+              if not isinstance(record, dict):
+                  raise ControllerFailure("check run record is not an object")
+              if not isinstance(record.get("id"), int) or isinstance(record.get("id"), bool):
+                  raise ControllerFailure("check run id malformed")
+              if not isinstance(record.get("name"), str):
+                  raise ControllerFailure("check run name malformed")
+              if not isinstance(record.get("head_sha"), str):
+                  raise ControllerFailure("check run head_sha malformed")
+              if not isinstance(record.get("status"), str):
+                  raise ControllerFailure("check run status malformed")
+              app = record.get("app")
+              if not isinstance(app, dict) or not isinstance(app.get("id"), int) or isinstance(app.get("id"), bool):
+                  raise ControllerFailure("check run app id malformed")
+              if not isinstance(app.get("slug"), str):
+                  raise ControllerFailure("check run app slug malformed")
+              if record.get("external_id") is not None and not isinstance(record.get("external_id"), str):
+                  raise ControllerFailure("check run external_id malformed")
+              if record.get("conclusion") is not None and not isinstance(record.get("conclusion"), str):
+                  raise ControllerFailure("check run conclusion malformed")
+              return record
+
+
+          def partition_check_runs(records: list[dict[str, object]], expected_external_id: str, head_sha: str) -> dict[str, object]:
+              matching: list[dict[str, object]] = []
+              for record in records:
+                  if record.get("external_id") == expected_external_id:
+                      matching.append(record)
+              if len(matching) > 1:
+                  raise ControllerFailure("more than one matching check run record")
+              matching_record = matching[0] if matching else None
+              if matching_record is not None:
+                  if matching_record.get("name") != CHECK_NAME:
+                      raise ControllerFailure("matching check run record name drift")
+                  if matching_record.get("head_sha") != head_sha:
+                      raise ControllerFailure("matching check run record head_sha drift")
+                  app = matching_record.get("app")
+                  if app.get("id") != GITHUB_ACTIONS_APP_ID or app.get("slug") != GITHUB_ACTIONS_APP_SLUG:
+                      raise ControllerFailure("matching check run record app identity drift")
+              for record in records:
+                  if record is matching_record:
+                      continue
+                  if record.get("name") == CHECK_NAME and record.get("head_sha") == head_sha:
+                      if record.get("app", {}).get("id") == GITHUB_ACTIONS_APP_ID:
+                          raise ControllerFailure("foreign check producer record for this head")
+              return {"matching": matching_record, "records": records}
+
+
+          def fetch_check_runs(environment: dict[str, str], repository_id: int, head_sha: str) -> dict[str, object]:
+              full_name = environment["GITHUB_REPOSITORY"]
+              expected_external_id = external_identity(repository_id, head_sha)
+              records: list[dict[str, object]] = []
+              seen_ids: set[int] = set()
+              total_count: int | None = None
+              page = 1
+              while True:
+                  payload = api_request(environment, "GET", commit_check_runs_page_path(full_name, head_sha, page))
+                  if not isinstance(payload, dict):
+                      raise ControllerFailure("check runs response is not an object")
+                  current_total = payload.get("total_count")
+                  if not isinstance(current_total, int) or isinstance(current_total, bool) or current_total < 0:
+                      raise ControllerFailure("check runs total_count malformed")
+                  if current_total > CHECK_RUN_LIMIT:
+                      raise ControllerFailure("check runs total_count exceeds accepted bound")
+                  if total_count is None:
+                      total_count = current_total
+                  elif current_total != total_count:
+                      raise ControllerFailure("check runs total_count drift across pages")
+                  runs = payload.get("check_runs")
+                  if not isinstance(runs, list):
+                      raise ControllerFailure("check runs check_runs is not a list")
+                  if not runs:
+                      if page == 1 and total_count == 0:
+                          break
+                      raise ControllerFailure("check runs page ended before exact completion")
+                  for run in runs:
+                      validate_check_run_record(run)
+                      if run["id"] in seen_ids:
+                          raise ControllerFailure("duplicate check run id: " + str(run["id"]))
+                      seen_ids.add(run["id"])
+                      records.append(run)
+                  if len(records) > total_count:
+                      raise ControllerFailure("check runs pagination over-collection")
+                  if len(records) == total_count:
+                      break
+                  page += 1
+                  if page > 11:
+                      raise ControllerFailure("check runs pagination bound exceeded")
+              sentinel = api_request(environment, "GET", commit_check_runs_page_path(full_name, head_sha, page + 1))
+              if not isinstance(sentinel, dict) or not isinstance(sentinel.get("check_runs"), list):
+                  raise ControllerFailure("check runs sentinel page malformed")
+              if sentinel["check_runs"]:
+                  raise ControllerFailure("check runs pagination produced more pages after exact completion")
+              if sentinel.get("total_count") != total_count:
+                  raise ControllerFailure("check runs sentinel total_count drift")
+              return partition_check_runs(records, expected_external_id, head_sha)
+
+
+          def classify_matching_record(record: dict[str, object]) -> str:
+              if record.get("status") == COMPLETED_STATUS and record.get("conclusion") == SUCCESS_CONCLUSION:
+                  return SUCCESS_CONCLUSION
+              if record.get("status") == COMPLETED_STATUS and record.get("conclusion") == FAILURE_CONCLUSION:
+                  return FAILURE_CONCLUSION
+              raise ControllerFailure("matching check run record is unclassifiable")
+
+
+          def decide_action(
+              protected: bool,
+              grant: bool,
+              comment_event: bool,
+              matching: dict[str, object] | None,
+          ) -> dict[str, object]:
+              if matching is None:
+                  if protected and comment_event:
+                      raise ControllerFailure("protected comment event requires a preexisting failure")
+                  conclusion = FAILURE_CONCLUSION if protected else SUCCESS_CONCLUSION
+                  return {"conclusion": conclusion, "kind": "post", "record_id": None}
+              state = classify_matching_record(matching)
+              if state == SUCCESS_CONCLUSION:
+                  return {"conclusion": SUCCESS_CONCLUSION, "kind": "none", "record_id": None}
+              if grant or not protected:
+                  return {"conclusion": SUCCESS_CONCLUSION, "kind": "patch", "record_id": matching["id"]}
+              return {"conclusion": FAILURE_CONCLUSION, "kind": "none", "record_id": None}
+
+
+          def read_created_check_run_id(response: object) -> int:
+              if not isinstance(response, dict):
+                  raise ControllerFailure("check run mutation response is not an object")
+              record_id = response.get("id")
+              if not isinstance(record_id, int) or isinstance(record_id, bool):
+                  raise ControllerFailure("check run mutation response id malformed")
+              return record_id
+
+
+          def verify_publication(environment: dict[str, str], repository_id: int, head_sha: str, record_id: int, conclusion: str) -> None:
+              inventory = fetch_check_runs(environment, repository_id, head_sha)
+              matching = inventory["matching"]
+              if not isinstance(matching, dict):
+                  raise ControllerFailure("post-mutation inventory lost the matching record")
+              if matching.get("id") != record_id:
+                  raise ControllerFailure("post-mutation inventory record id drift")
+              if matching.get("status") != COMPLETED_STATUS or matching.get("conclusion") != conclusion:
+                  raise ControllerFailure("post-mutation inventory conclusion drift")
+              record = api_request(environment, "GET", check_run_path(environment["GITHUB_REPOSITORY"], record_id))
+              if not isinstance(record, dict):
+                  raise ControllerFailure("check run read-back is not an object")
+              if record.get("id") != record_id:
+                  raise ControllerFailure("check run read-back id drift")
+              if record.get("external_id") != external_identity(repository_id, head_sha):
+                  raise ControllerFailure("check run read-back external_id drift")
+              if record.get("name") != CHECK_NAME:
+                  raise ControllerFailure("check run read-back name drift")
+              if record.get("head_sha") != head_sha:
+                  raise ControllerFailure("check run read-back head_sha drift")
+              if record.get("status") != COMPLETED_STATUS:
+                  raise ControllerFailure("check run read-back status drift")
+              if record.get("conclusion") != conclusion:
+                  raise ControllerFailure("check run read-back conclusion drift")
+              app = record.get("app")
+              if (
+                  not isinstance(app, dict)
+                  or app.get("id") != GITHUB_ACTIONS_APP_ID
+                  or app.get("slug") != GITHUB_ACTIONS_APP_SLUG
+              ):
+                  raise ControllerFailure("check run read-back app identity drift")
+
+
+          def post_check_run(environment: dict[str, str], repository_id: int, head_sha: str, conclusion: str, publication: dict[str, bool]) -> int:
+              body = {
+                  "conclusion": conclusion,
+                  "external_id": external_identity(repository_id, head_sha),
+                  "head_sha": head_sha,
+                  "name": CHECK_NAME,
+                  "status": COMPLETED_STATUS,
+              }
+              publication["attempted"] = True
+              response = api_request(
+                  environment,
+                  "POST",
+                  check_runs_collection_path(environment["GITHUB_REPOSITORY"]),
+                  body,
+                  expected_status=201,
+              )
+              record_id = read_created_check_run_id(response)
+              verify_publication(environment, repository_id, head_sha, record_id, conclusion)
+              return record_id
+
+
+          def patch_check_run(environment: dict[str, str], repository_id: int, head_sha: str, record_id: int, publication: dict[str, bool]) -> None:
+              body = {
+                  "conclusion": SUCCESS_CONCLUSION,
+                  "status": COMPLETED_STATUS,
+              }
+              publication["attempted"] = True
+              response = api_request(environment, "PATCH", check_run_path(environment["GITHUB_REPOSITORY"], record_id), body)
+              if read_created_check_run_id(response) != record_id:
+                  raise ControllerFailure("check run patch response id drift")
+              verify_publication(environment, repository_id, head_sha, record_id, SUCCESS_CONCLUSION)
+
+
+          def run_controller(publication: dict[str, bool]) -> str:
+              environment = read_environment()
+              event = read_event(environment["GITHUB_EVENT_PATH"])
+              event_name = environment["GITHUB_EVENT_NAME"]
+              comment = None
+              if event_name == "pull_request_target":
+                  number = read_pull_event(event)
+              elif event_name == "issue_comment":
+                  number, comment = read_comment_event(event)
+              else:
+                  raise ControllerFailure("unsupported event name: " + repr(event_name))
+              repository = fetch_repository(environment)
+              repository_id = repository["id"]
+              observation = observe_change_set(environment, number)
+              pull = observation["pull"]
+              head_sha = pull["head_sha"]
+              protected = observation["protected"]
+              grant = False
+              if comment is not None and protected:
+                  grant = evaluate_grant(environment, number, comment, head_sha)
+              inventory = fetch_check_runs(environment, repository_id, head_sha)
+              action = decide_action(protected, grant, comment is not None, inventory["matching"])
+              current_observation = observe_change_set(environment, number)
+              current = current_observation["pull"]
+              if pull_state(current) != pull_state(pull):
+                  raise ControllerFailure("pull request state changed before publication")
+              if current_observation["records"] != observation["records"]:
+                  raise ControllerFailure("changed files inventory changed before publication")
+              if current_observation["protected"] != protected:
+                  raise ControllerFailure("protected classification changed before publication")
+              if action["kind"] == "none":
+                  return action["conclusion"]
+              if action["kind"] == "patch":
+                  patch_check_run(environment, repository_id, head_sha, action["record_id"], publication)
+              else:
+                  post_check_run(environment, repository_id, head_sha, action["conclusion"], publication)
+              return action["conclusion"]
+
+
+          def main() -> int:
+              publication = {"attempted": False}
+              try:
+                  conclusion = run_controller(publication)
+              except TransportLost as error:
+                  if publication["attempted"]:
+                      print("ci-governance: PUBLICATION_AMBIGUOUS: " + str(error))
+                      return 1
+                  print("ci-governance: controller-failure: transport lost before effect: " + str(error))
+                  return 1
+              except ControllerFailure as error:
+                  if publication["attempted"]:
+                      print("ci-governance: PUBLICATION_AMBIGUOUS: " + str(error))
+                      return 1
+                  print("ci-governance: controller-failure: " + str(error))
+                  return 1
+              if conclusion == SUCCESS_CONCLUSION:
+                  print("ci-governance: success")
+                  return 0
+              print("ci-governance: failure")
+              return 1
+
+
+          if __name__ == "__main__":
+              raise SystemExit(main())
+          PY
