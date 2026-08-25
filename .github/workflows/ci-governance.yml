@@ -527,10 +527,10 @@ jobs:
                   return {"conclusion": conclusion, "kind": "post", "record_id": None}
               state = classify_matching_record(matching)
               if state == SUCCESS_CONCLUSION:
-                  return {"conclusion": SUCCESS_CONCLUSION, "kind": "none", "record_id": None}
+                  return {"conclusion": SUCCESS_CONCLUSION, "kind": "none", "record_id": matching["id"]}
               if grant or not protected:
                   return {"conclusion": SUCCESS_CONCLUSION, "kind": "patch", "record_id": matching["id"]}
-              return {"conclusion": FAILURE_CONCLUSION, "kind": "none", "record_id": None}
+              return {"conclusion": FAILURE_CONCLUSION, "kind": "none", "record_id": matching["id"]}
 
 
           def read_created_check_run_id(response: object) -> int:
@@ -596,7 +596,7 @@ jobs:
               return record_id
 
 
-          def patch_check_run(environment: dict[str, str], repository_id: int, head_sha: str, record_id: int, publication: dict[str, bool]) -> None:
+          def patch_check_run(environment: dict[str, str], repository_id: int, head_sha: str, record_id: int, publication: dict[str, bool]) -> int:
               body = {
                   "conclusion": SUCCESS_CONCLUSION,
                   "status": COMPLETED_STATUS,
@@ -606,9 +606,10 @@ jobs:
               if read_created_check_run_id(response) != record_id:
                   raise ControllerFailure("check run patch response id drift")
               verify_publication(environment, repository_id, head_sha, record_id, SUCCESS_CONCLUSION)
+              return record_id
 
 
-          def run_controller(publication: dict[str, bool]) -> str:
+          def run_controller(publication: dict[str, bool]) -> tuple[str, int]:
               environment = read_environment()
               event = read_event(environment["GITHUB_EVENT_PATH"])
               event_name = environment["GITHUB_EVENT_NAME"]
@@ -639,18 +640,28 @@ jobs:
               if current_observation["protected"] != protected:
                   raise ControllerFailure("protected classification changed before publication")
               if action["kind"] == "none":
-                  return action["conclusion"]
+                  record_id = action["record_id"]
+                  if not isinstance(record_id, int) or isinstance(record_id, bool):
+                      raise ControllerFailure("terminal action record id malformed")
+                  verify_publication(
+                      environment,
+                      repository_id,
+                      head_sha,
+                      record_id,
+                      action["conclusion"],
+                  )
+                  return action["conclusion"], record_id
               if action["kind"] == "patch":
-                  patch_check_run(environment, repository_id, head_sha, action["record_id"], publication)
+                  record_id = patch_check_run(environment, repository_id, head_sha, action["record_id"], publication)
               else:
-                  post_check_run(environment, repository_id, head_sha, action["conclusion"], publication)
-              return action["conclusion"]
+                  record_id = post_check_run(environment, repository_id, head_sha, action["conclusion"], publication)
+              return action["conclusion"], record_id
 
 
           def main() -> int:
               publication = {"attempted": False}
               try:
-                  conclusion = run_controller(publication)
+                  conclusion, record_id = run_controller(publication)
               except TransportLost as error:
                   if publication["attempted"]:
                       print("ci-governance: PUBLICATION_AMBIGUOUS: " + str(error))
@@ -664,9 +675,9 @@ jobs:
                   print("ci-governance: controller-failure: " + str(error))
                   return 1
               if conclusion == SUCCESS_CONCLUSION:
-                  print("ci-governance: success")
+                  print("ci-governance: check " + str(record_id) + "=success")
                   return 0
-              print("ci-governance: failure")
+              print("ci-governance: check " + str(record_id) + "=failure")
               return 1
 
 

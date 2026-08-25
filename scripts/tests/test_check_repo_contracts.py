@@ -7891,7 +7891,7 @@ class CiGovernanceWorkflowTests(unittest.TestCase):
         changed_file: dict[str, object],
         initial: dict[str, object] | None,
         conclusion: str,
-    ) -> tuple[str, list[tuple[str, str, object, int]], dict[str, bool]]:
+    ) -> tuple[tuple[str, int], list[tuple[str, str, object, int]], dict[str, bool]]:
         head = "a" * 40
         repository = "Develata/ustc-campus-agent"
         pull = self._pull_payload(head, 1)
@@ -7970,7 +7970,10 @@ class CiGovernanceWorkflowTests(unittest.TestCase):
                 "api_request": api_request,
             },
         ):
-            actual = cast(Callable[[dict[str, bool]], str], namespace["run_controller"])(publication)
+            actual = cast(
+                Callable[[dict[str, bool]], tuple[str, int]],
+                namespace["run_controller"],
+            )(publication)
         self.assertEqual(queue, [])
         return actual, calls, publication
 
@@ -8108,7 +8111,7 @@ class CiGovernanceWorkflowTests(unittest.TestCase):
                     initial=None,
                     conclusion=conclusion,
                 )
-                self.assertEqual(actual, conclusion)
+                self.assertEqual(actual, (conclusion, 41))
                 mutations = [call for call in calls if call[0] != "GET"]
                 self.assertEqual(len(mutations), 1)
                 self.assertEqual(mutations[0][0], "POST")
@@ -8157,7 +8160,7 @@ class CiGovernanceWorkflowTests(unittest.TestCase):
             initial=failure,
             conclusion="success",
         )
-        self.assertEqual(actual, "success")
+        self.assertEqual(actual, ("success", 41))
         mutations = [call for call in calls if call[0] != "GET"]
         self.assertEqual(mutations, [
             (
@@ -8296,8 +8299,10 @@ class CiGovernanceWorkflowTests(unittest.TestCase):
         failure = self._record(namespace)
         success = self._record(namespace, conclusion="success")
         self.assertEqual(decide(True, False, False, failure)["conclusion"], "failure")
+        self.assertEqual(decide(True, False, False, failure)["record_id"], 41)
         self.assertEqual(decide(True, True, True, failure)["kind"], "patch")
         self.assertEqual(decide(True, False, False, success)["kind"], "none")
+        self.assertEqual(decide(True, False, False, success)["record_id"], 41)
         # If main has absorbed the protected bytes while the head is unchanged, the
         # current diff becomes ordinary; upgrading the shared exact-head record is safe.
         ordinary_after_main_advance = decide(False, False, False, failure)
@@ -8494,6 +8499,69 @@ class CiGovernanceWorkflowTests(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 self.assertEqual(cast(Callable[[], int], namespace["main"])(), 1)
             self.assertIn("PUBLICATION_AMBIGUOUS", output.getvalue())
+        for conclusion, expected_status in (("failure", 1), ("success", 0)):
+            with self.subTest(terminal_receipt=conclusion), mock.patch.dict(
+                namespace,
+                {"run_controller": lambda _publication, value=conclusion: (value, 41)},
+            ):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(
+                        cast(Callable[[], int], namespace["main"])(),
+                        expected_status,
+                    )
+                self.assertEqual(
+                    output.getvalue(),
+                    f"ci-governance: check 41={conclusion}\n",
+                )
+        run_controller = cast(
+            Callable[[dict[str, bool]], tuple[str, int]],
+            namespace["run_controller"],
+        )
+        head = "a" * 40
+        for conclusion, protected in (("failure", True), ("success", False)):
+            with self.subTest(noop_readback=conclusion):
+                record = self._record(namespace, conclusion=conclusion)
+                observation = {
+                    "protected": protected,
+                    "pull": {
+                        "base_sha": "b" * 40,
+                        "changed_files": 1,
+                        "head_sha": head,
+                        "updated_at": "2026-08-26T00:00:00Z",
+                    },
+                    "records": [{"filename": "README.md", "status": "modified"}],
+                }
+                verified: list[tuple[object, ...]] = []
+                with mock.patch.dict(
+                    namespace,
+                    {
+                        "read_environment": lambda: {
+                            "GITHUB_API_URL": "https://api.github.invalid",
+                            "GITHUB_EVENT_NAME": "pull_request_target",
+                            "GITHUB_EVENT_PATH": "/event.json",
+                            "GITHUB_REPOSITORY": "Develata/ustc-campus-agent",
+                            "GITHUB_TOKEN": "token",
+                        },
+                        "read_event": lambda *_: {
+                            "action": "opened",
+                            "pull_request": {"number": 7},
+                        },
+                        "fetch_repository": lambda *_: {"id": 1308221459},
+                        "observe_change_set": lambda *_: observation,
+                        "fetch_check_runs": lambda *_: {"matching": record},
+                        "verify_publication": lambda *args: verified.append(args),
+                    },
+                ):
+                    self.assertEqual(
+                        run_controller({"attempted": False}),
+                        (conclusion, 41),
+                    )
+                self.assertEqual(len(verified), 1)
+                self.assertEqual(
+                    verified[0][1:],
+                    (1308221459, head, 41, conclusion),
+                )
         verify = cast(Callable[..., None], namespace["verify_publication"])
         record = self._record(namespace, conclusion="success")
         responses = iter([{"matching": record}, {**record, "app": {"id": 1, "slug": "foreign"}}])
