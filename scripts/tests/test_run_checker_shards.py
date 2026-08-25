@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -474,6 +475,95 @@ class ProcessIsolationTests(RunnerTestBase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not empty", result.stderr)
 
+    def test_36_sigterm_ignoring_group_descendant_killed(self) -> None:
+        """F3: cleanup must kill a same-group descendant that ignores SIGTERM.
+
+        The leader exits on SIGTERM; without group-wide re-check and SIGKILL
+        the descendant would survive. Only the exact child/process-group
+        identities created by this test are created and signalled.
+        """
+        pid_file = Path(self.pycache_temp.name) / "f3_descendant.pid"
+        descendant_code = (
+            "import signal\n"
+            "import time\n"
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            "time.sleep(300)\n"
+        )
+        leader_code = (
+            "import subprocess\n"
+            "import sys\n"
+            "import time\n"
+            "descendant = subprocess.Popen([sys.executable, '-c', sys.argv[1]])\n"
+            "with open(sys.argv[2], 'w') as handle:\n"
+            "    handle.write(str(descendant.pid))\n"
+            "time.sleep(300)\n"
+        )
+        leader = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                leader_code,
+                descendant_code,
+                str(pid_file),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        descendant_pid: int | None = None
+        try:
+            deadline = time.monotonic() + 15
+            while not pid_file.is_file():
+                if leader.poll() is not None:
+                    self.fail("leader exited before publishing descendant pid")
+                if time.monotonic() > deadline:
+                    self.fail("descendant pid file was not written in time")
+                time.sleep(0.05)
+            descendant_pid = int(pid_file.read_text(encoding="utf-8").strip())
+            leader_pgid = os.getpgid(leader.pid)
+            self.assertEqual(leader_pgid, leader.pid, "leader must own its group")
+            self.assertEqual(
+                os.getpgid(descendant_pid),
+                leader_pgid,
+                "descendant must share the leader's process group",
+            )
+            self.assertTrue(self._pid_is_live(descendant_pid))
+            runner._terminate_process_group(leader)
+            self.assertIsNotNone(leader.poll(), "leader must be reaped by cleanup")
+            self.assertFalse(
+                self._pid_is_live(descendant_pid),
+                "SIGTERM-ignoring group descendant must not survive cleanup",
+            )
+        finally:
+            if leader.poll() is None:
+                leader.kill()
+                leader.wait()
+            if descendant_pid is not None and self._pid_is_live(descendant_pid):
+                try:
+                    os.kill(descendant_pid, signal.SIGKILL)
+                except OSError:
+                    pass
+
+    @staticmethod
+    def _pid_is_live(pid: int) -> bool:
+        """True when ``pid`` exists in a non-zombie state (Linux /proc aware)."""
+        stat_path = Path("/proc") / str(pid) / "stat"
+        try:
+            data = stat_path.read_bytes()
+        except OSError:
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                return False
+            return True
+        close = data.rfind(b")")
+        if close < 0:
+            return True
+        fields = data[close + 2:].split()
+        if not fields:
+            return True
+        return fields[0] != b"Z"
+
 
 class FanInTests(RunnerTestBase):
     def test_15_report_tampering_rejected(self) -> None:
@@ -855,6 +945,69 @@ class CLIBoundaryTests(RunnerTestBase):
             if moved.is_dir():
                 moved.rename(git_dir)
         self.assertNotEqual(proc.returncode, 0, stderr)
+
+    def test_35_require_clean_revalidated_at_plan_construction(self) -> None:
+        """F2: --require-clean must be revalidated on the plan's own baseline.
+
+        The pre-discovery cleanliness check passes, then a mutation lands
+        during discovery; the plan-freeze recheck must reject that dirty
+        baseline through ``ERROR: plan construction failed`` with no plan and
+        no summary PASS. This proves the recheck plus existing post-launch
+        comparison, not filesystem-level atomicity.
+        """
+        import contextlib
+        import io
+        from unittest import mock
+
+        ids = self.setup_passing_suite(2)
+        evidence = Path(self.pycache_temp.name) / "evidence_f2_plan_freeze"
+        original_discover = runner.discover_test_ids
+
+        def mutate_during_discovery() -> list[str]:
+            (self.root / "scripts" / "dirty_marker.py").write_text(
+                "# mutation landing during discovery\n", encoding="utf-8"
+            )
+            return original_discover()
+
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+        with mock.patch.object(runner, "_repo_root", return_value=self.root):
+            with mock.patch.object(
+                runner, "discover_test_ids", side_effect=mutate_during_discovery
+            ):
+                with mock.patch.dict(
+                    os.environ, {"PYTHONPYCACHEPREFIX": self.pycache}
+                ):
+                    with contextlib.redirect_stdout(stdout_capture):
+                        with contextlib.redirect_stderr(stderr_capture):
+                            returncode = runner._parent_main(
+                                [
+                                    "--jobs", "1",
+                                    "--timeout-seconds", "30",
+                                    "--inventory",
+                                    str(
+                                        self.root
+                                        / "scripts"
+                                        / "checker_test_inventory.json"
+                                    ),
+                                    "--evidence-dir", str(evidence),
+                                    "--require-clean",
+                                ]
+                            )
+        self._purge_stale_test_modules()
+        self.assertNotEqual(returncode, 0)
+        self.assertIn("plan construction failed", stderr_capture.getvalue())
+        self.assertIn("--require-clean", stderr_capture.getvalue())
+        self.assertIn("dirty at plan construction", stderr_capture.getvalue())
+        self.assertNotIn("PASS", stdout_capture.getvalue())
+        self.assertFalse(
+            (evidence / "plan" / "plan.json").is_file(),
+            "no plan must be written when the plan-freeze recheck rejects dirt",
+        )
+        self.assertFalse(
+            (evidence / "summary.json").is_file(),
+            "no summary must be written when the plan-freeze recheck rejects dirt",
+        )
 
 
 class InventoryInSourceDigestsTests(RunnerTestBase):

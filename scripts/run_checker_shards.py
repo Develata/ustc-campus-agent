@@ -17,6 +17,7 @@ mapping and docs/acceptance/gates.md for the broader gate context.
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -504,6 +505,17 @@ def _build_plan(
     head_tree = _git_rev_parse(repo, "HEAD^{tree}")
     branch = _git_branch(repo)
     porcelain = _git_porcelain_status(repo)
+    # Plan-freeze revalidation: the parent already rejected a dirty tree before
+    # discovery, but discovery takes time. Re-reject right here, on the porcelain
+    # baseline the plan itself captures, so a mutation that lands during
+    # discovery cannot be frozen into the plan as a "clean" baseline. This is a
+    # recheck plus the existing post-launch source/status comparison, not a
+    # claim of filesystem-level atomicity between the two probes.
+    if require_clean and porcelain.strip():
+        raise ValueError(
+            "--require-clean set but working tree is dirty at plan construction:\n"
+            f"{porcelain}"
+        )
     inventory_path = _inventory_path(inventory_rel)
     source_digests = _compute_source_digests(inventory_path)
     inventory_digest = _sha256_file(inventory_path)
@@ -698,22 +710,89 @@ def _spawn_child(
     )
 
 
+def _process_group_alive(pgid: int) -> bool:
+    """Return True when process group ``pgid`` has a live (non-zombie) member.
+
+    ``kill(pgid, 0)`` semantics alone treat a not-yet-reaped zombie as alive,
+    which would keep cleanup spinning on a member that is already dead; on
+    Linux the /proc scan below excludes zombie members. ``ESRCH`` from the
+    fallback probe means the group is already gone; any other probe failure
+    conservatively counts as alive so cleanup escalates to SIGKILL.
+    """
+    proc_root = Path("/proc")
+    if proc_root.is_dir():
+        found_member = False
+        try:
+            entries = os.listdir(proc_root)
+        except OSError:
+            entries = []
+        for entry in entries:
+            if not entry.isdigit():
+                continue
+            try:
+                data = (proc_root / entry / "stat").read_bytes()
+            except OSError:
+                continue
+            close = data.rfind(b")")
+            if close < 0:
+                continue
+            fields = data[close + 2:].split()
+            if len(fields) < 3:
+                continue
+            try:
+                member_pgid = int(fields[2])
+            except ValueError:
+                continue
+            if member_pgid != pgid:
+                continue
+            found_member = True
+            if fields[0] != b"Z":
+                return True
+        if found_member:
+            return False
+    try:
+        os.killpg(pgid, 0)
+    except OSError as exc:
+        return exc.errno != errno.ESRCH
+    return True
+
+
 def _terminate_process_group(proc: subprocess.Popen[bytes]) -> None:
-    """Send SIGTERM then SIGKILL to the child's process group; never raise."""
+    """Send SIGTERM then SIGKILL to the child's whole process group; never raise.
+
+    The original PGID is captured before signalling and preserved afterwards:
+    a leader that exits on SIGTERM does not imply the group is gone, because
+    another member may ignore SIGTERM and stay alive. The leader is reaped
+    (waited) as applicable, then the group itself is independently re-checked;
+    if any live member remains, SIGKILL is sent to the same owned PGID and the
+    check repeats under a bounded deadline. ``ESRCH`` is treated as already
+    gone; every OSError path returns instead of raising.
+    """
     try:
         pgid = os.getpgid(proc.pid)
     except OSError:
         return
-    for sig in (signal.SIGTERM, signal.SIGKILL):
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except OSError:
+        pass
+    try:
+        proc.wait(timeout=GRACEFUL_TERMINATION_SECONDS)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    deadline = time.monotonic() + GRACEFUL_TERMINATION_SECONDS
+    while _process_group_alive(pgid):
         try:
-            os.killpg(pgid, sig)
+            os.killpg(pgid, signal.SIGKILL)
         except OSError:
             return
         try:
-            proc.wait(timeout=GRACEFUL_TERMINATION_SECONDS)
+            proc.poll()
+        except OSError:
             return
-        except subprocess.TimeoutExpired:
-            continue
+        if time.monotonic() >= deadline:
+            return
+        time.sleep(0.05)
 
 
 def _run_children(

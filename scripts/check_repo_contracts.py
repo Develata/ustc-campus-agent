@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+import unittest
 from collections import Counter
 from pathlib import Path
 
@@ -10722,11 +10723,16 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
 
 CI_TRANSITION_LEDGER_PATH = "docs/acceptance/ci-transition-ledger.md"
 CI_V2_FIXTURE_PATH = "scripts/tests/fixtures/ci-v2.yml"
-CI_V2_FIXTURE_SHA256 = (
-    "5ade8421716bc39d11cf6d070884fd56b6d8928eb1caf4957711b5af8c6be675"
-)
+# The inert future fixture is governed by explicit semantic invariants below
+# and is intentionally NOT whole-file fingerprinted: docs/acceptance/gates.md
+# (Fingerprint moratorium / replacement-before-deletion) forbids new whole
+# mutable CI workflow hashes when narrower semantic checks exist.
+CI_V2_SHARD_RUNNER_COMMAND = "python3 scripts/run_checker_shards.py"
+CI_V2_CHECKER_COMMAND = "python3 scripts/check_repo_contracts.py"
 CHECKER_TEST_INVENTORY_PATH = "scripts/checker_test_inventory.json"
 CHECKER_TEST_INVENTORY_SCHEMA_VERSION = "checker-test-inventory/v1"
+CHECKER_TESTS_DIR_REL = "scripts/tests"
+CHECKER_TEST_PATTERN = "test_*.py"
 RUN_CHECKER_SHARDS_PATH = "scripts/run_checker_shards.py"
 CI_TRANSITION_LEDGER_IDS = (
     "CI-TR-001",
@@ -10752,8 +10758,8 @@ CI_TRANSITION_LEDGER_ROW_CELLS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "active workflow exact digest remains frozen",
             f".github/workflows/ci.yml` SHA-256 `{CAMPAIGN_CI_WORKFLOW_SHA256}",
-            f"scripts/tests/fixtures/ci-v2.yml` inert fixture SHA-256 `{CI_V2_FIXTURE_SHA256}",
-            "scripts/check_repo_contracts.py` pins both digests",
+            "inert fixture is governed by explicit semantic invariants and is intentionally not whole-file fingerprinted",
+            "freezes the active workflow digest and enforces the fixture's semantic invariants",
             "inert-not-active",
         ),
     ),
@@ -10803,7 +10809,7 @@ CI_TRANSITION_LEDGER_ROW_CELLS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "repository checker remains an exact executable command",
             "python3 scripts/check_repo_contracts.py",
             "python3 scripts/check_repo_contracts.py` exactly once",
-            "validates checker command presence and count in fixture",
+            "validates checker command presence, count, and after-runner ordering in fixture",
             "inert-not-active",
         ),
     ),
@@ -10821,7 +10827,7 @@ CI_V2_REQUIRED_RUST_COMMANDS = (
     "cargo test --workspace --all-features --doc --locked",
 )
 CI_V2_REQUIRED_RUNNER_ARGS = (
-    "python3 scripts/run_checker_shards.py",
+    CI_V2_SHARD_RUNNER_COMMAND,
     "--jobs 4",
     "--timeout-seconds 1800",
     "--inventory scripts/checker_test_inventory.json",
@@ -10998,6 +11004,41 @@ def _check_ci_v2_pyprefix_placement(text: str, issues: list[str]) -> None:
             )
 
 
+def _ci_v2_executable_command_positions(
+    text: str, command: str, *, exact_argv: bool
+) -> list[int]:
+    """Line offsets where ``command`` is the shell argv, not display text.
+
+    Both an inline YAML ``run:`` payload and a block-scalar shell line are
+    admitted.  ``shlex`` tokenization rejects prefixes such as ``echo`` that
+    merely print the command.  The checker command is exact; the shard runner
+    admits its taskbook-bound arguments after the executable prefix.
+    """
+    expected = shlex.split(command)
+    positions: list[int] = []
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        candidate = line.strip()
+        if not candidate or candidate.startswith("#"):
+            offset += len(line)
+            continue
+        if candidate.startswith("run:"):
+            candidate = candidate.removeprefix("run:").strip()
+            if candidate in {"|", "|-", "|+", ">", ">-", ">+"}:
+                offset += len(line)
+                continue
+        try:
+            argv = shlex.split(candidate)
+        except ValueError:
+            offset += len(line)
+            continue
+        matches = argv == expected if exact_argv else argv[: len(expected)] == expected
+        if matches:
+            positions.append(offset)
+        offset += len(line)
+    return positions
+
+
 def check_ci_v2_inert_fixture(issues: list[str]) -> None:
     path = ROOT / CI_V2_FIXTURE_PATH
     if not path.is_file():
@@ -11007,9 +11048,6 @@ def check_ci_v2_inert_fixture(issues: list[str]) -> None:
     if not text.strip():
         fail(f"CI v2 inert fixture empty: {CI_V2_FIXTURE_PATH}", issues)
         return
-    actual_sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    if actual_sha != CI_V2_FIXTURE_SHA256:
-        fail(f"CI v2 inert fixture digest drift: expected={CI_V2_FIXTURE_SHA256} actual={actual_sha}", issues)
     if "on:\n  pull_request:" not in text:
         fail("CI v2 fixture missing pull_request trigger", issues)
     if "push:\n    branches:" not in text or "- main" not in text:
@@ -11036,11 +11074,73 @@ def check_ci_v2_inert_fixture(issues: list[str]) -> None:
     for arg in CI_V2_REQUIRED_RUNNER_ARGS:
         if arg not in text:
             fail(f"CI v2 fixture missing runner argument: {arg}", issues)
-    checker_count = text.count("python3 scripts/check_repo_contracts.py")
-    if checker_count != 1:
-        fail(f"CI v2 fixture checker command count drift: expected 1 actual {checker_count}", issues)
+    # CI-TR-006: the executable shard-runner command and the exact repository
+    # checker command must each appear exactly once, with the checker after
+    # the full shard runner. Commented/display-only copies are not executable
+    # and do not count.
+    runner_positions = _ci_v2_executable_command_positions(
+        text, CI_V2_SHARD_RUNNER_COMMAND, exact_argv=False
+    )
+    if len(runner_positions) != 1:
+        fail(
+            f"CI v2 fixture shard runner command count drift: expected 1 actual {len(runner_positions)}",
+            issues,
+        )
+    checker_positions = _ci_v2_executable_command_positions(
+        text, CI_V2_CHECKER_COMMAND, exact_argv=True
+    )
+    if len(checker_positions) != 1:
+        fail(
+            f"CI v2 fixture checker command count drift: expected 1 actual {len(checker_positions)}",
+            issues,
+        )
+    if runner_positions and checker_positions and checker_positions[0] < runner_positions[0]:
+        fail(
+            "CI v2 fixture ordering drift: repository checker must run after the shard runner",
+            issues,
+        )
     if "if: ${{ always() }}" not in text:
         fail("CI v2 fixture missing always() evidence upload condition", issues)
+
+
+def _live_checker_test_ids() -> list[str]:
+    """Discover the live checker suite exactly as the shard runner does.
+
+    Leaf test IDs are collected with multiplicity; any duplicate leaf ID, any
+    ``_FailedTest`` import failure, and an empty discovery all raise
+    ValueError so the caller fails closed with a typed diagnostic instead of
+    a traceback.
+    """
+    loader = unittest.TestLoader()
+    suite = loader.discover(
+        start_dir=str(ROOT / CHECKER_TESTS_DIR_REL), pattern=CHECKER_TEST_PATTERN
+    )
+    stack: list[object] = [suite]
+    ids: list[str] = []
+    while stack:
+        item = stack.pop()
+        if isinstance(item, unittest.TestCase):
+            test_id = item.id()
+            if "_FailedTest" in test_id:
+                raise ValueError(f"discovery produced _FailedTest: {test_id}")
+            ids.append(test_id)
+        elif isinstance(item, unittest.TestSuite):
+            stack.extend(item)
+    if not ids:
+        raise ValueError("discovery produced zero tests")
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for test_id in ids:
+        if test_id in seen:
+            duplicates.add(test_id)
+        else:
+            seen.add(test_id)
+    if duplicates:
+        raise ValueError(
+            f"discovery produced duplicate test IDs (leaf multiplicity collapsed by set): "
+            f"{sorted(duplicates)}"
+        )
+    return sorted(ids)
 
 
 def check_checker_test_inventory(issues: list[str]) -> None:
@@ -11071,7 +11171,11 @@ def check_checker_test_inventory(issues: list[str]) -> None:
         return
     for entry in test_ids:
         if not isinstance(entry, str) or not entry:
+            # Fail closed on the first malformed entry: set()/sorted() below
+            # raise TypeError on unhashable/mixed-type entries, so returning
+            # after recording the typed issue is the only traceback-free path.
             fail(f"checker test inventory test_ids contains non-string/empty entry: {entry!r}", issues)
+            return
     if len(test_ids) != len(set(test_ids)):
         fail("checker test inventory test_ids contains duplicates", issues)
     if test_ids != sorted(test_ids):
@@ -11082,6 +11186,26 @@ def check_checker_test_inventory(issues: list[str]) -> None:
     for test_id in test_ids:
         if "_FailedTest" in test_id:
             fail(f"checker test inventory contains _FailedTest ID: {test_id}", issues)
+    # Structural validation is necessary but not sufficient: a stale inventory
+    # that is internally consistent would pass active CI and later break the
+    # inert sharded workflow. Synchronize the inventory against live discovery
+    # with the same leaf-ID/duplicate-ID/_FailedTest semantics as the runner.
+    try:
+        live_ids = _live_checker_test_ids()
+    except Exception as exc:  # noqa: BLE001 - discovery failure must be a typed issue, not a traceback
+        fail(
+            f"checker test inventory live discovery failed: {type(exc).__name__}: {exc}",
+            issues,
+        )
+        return
+    missing_from_live = sorted(set(test_ids) - set(live_ids))
+    unexpected_in_live = sorted(set(live_ids) - set(test_ids))
+    if missing_from_live or unexpected_in_live:
+        fail(
+            f"checker test inventory/live discovery drift: "
+            f"missing_from_live={missing_from_live} unexpected_in_live={unexpected_in_live}",
+            issues,
+        )
 
 
 def check_run_checker_shards_runner(issues: list[str]) -> None:
@@ -11184,9 +11308,9 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_campaign_authorization": {"digest": "7a1184e0d9f133a48a79c9ba6f66bc912252fa1732c7b13faa0b99373466571a", "status": "active"},
     "check_campaign_taskbook_state": {"digest": "85b30689fd0ae05695c337d8808e919f69639ace8d98643c90a4b47522fe2d65", "status": "active"},
     "check_cargo_dependency_sources": {"digest": "0f645288c48f56eb3c8282f5fe9b9c0e379ae8ff82e1c06f64f740278a77ad7d", "status": "active"},
-    "check_checker_test_inventory": {"digest": "d861000067563fa4870670a8f1b3869e72731df7a6a2398ba3d3415d5813f6cd", "status": "active"},
+    "check_checker_test_inventory": {"digest": "7c92107dae4d99854ed8680abbf2b5648f0d20fe6ddaac8c42d2ed5076ca98ed", "status": "active"},
     "check_ci_transition_ledger": {"digest": "ac88ca9043508ae22fe535334368e80aa02c701454c4d085fcd3cc1343d6d1f9", "status": "active"},
-    "check_ci_v2_inert_fixture": {"digest": "6a2f76a7a34316ee6d4f34bde93d0be9124293b24e55727149ec74e10e89cbed", "status": "active"},
+    "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
     "check_external_agent_access_contract": {"digest": "b5f042f9d195b8a82d15059da493f2ecb92f372aa79733a7d0fb598c3881bd79", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},

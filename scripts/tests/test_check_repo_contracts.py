@@ -9,6 +9,7 @@ import unittest
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHECKER_PATH = REPO_ROOT / "scripts/check_repo_contracts.py"
@@ -7980,10 +7981,16 @@ class CiV2InertFixtureMutationTests(_M90MutationTestBase):
         self.path(checker.CI_V2_FIXTURE_PATH).write_text("", encoding="utf-8")
         self.assert_rejected(self.check(), "empty")
 
-    def test_fixture_digest_drift(self) -> None:
+    def test_fixture_display_only_drift_remains_accepted(self) -> None:
+        """F6: no whole-fixture fingerprint; harmless display-only drift is accepted
+        while semantic mutations remain rejected."""
         p = self.path(checker.CI_V2_FIXTURE_PATH)
-        p.write_text(p.read_text(encoding="utf-8") + "# mutation\n", encoding="utf-8")
-        self.assert_rejected(self.check(), "digest drift")
+        text = p.read_text(encoding="utf-8")
+        p.write_text(text + "# harmless display-only drift comment\n", encoding="utf-8")
+        self.assertEqual(self.check(), [])
+        # Semantic mutations must remain rejected even alongside display-only drift.
+        self.rewrite(checker.CI_V2_FIXTURE_PATH, "if: ${{ always() }}", "if: ${{ MUTED() }}")
+        self.assert_rejected(self.check(), "missing always() evidence upload condition")
 
     def test_fixture_missing_pull_request_trigger(self) -> None:
         self.rewrite(checker.CI_V2_FIXTURE_PATH, "on:\n  pull_request:", "on:\n  pull_request_MUTED:")
@@ -8039,29 +8046,80 @@ class CiV2InertFixtureMutationTests(_M90MutationTestBase):
     def test_fixture_checker_count_drift(self) -> None:
         p = self.path(checker.CI_V2_FIXTURE_PATH)
         text = p.read_text(encoding="utf-8")
+        # A commented-out copy is display-only and does not count as executable.
         p.write_text(text + "# python3 scripts/check_repo_contracts.py\n", encoding="utf-8")
-        self.assert_rejected(self.check(), "checker command count drift")
+        self.assertEqual(self.check(), [])
+        # A second executable copy is a real duplicate command and must fail.
+        self.fresh_copy(checker.CI_V2_FIXTURE_PATH)
+        text = p.read_text(encoding="utf-8")
+        p.write_text(
+            text + "      - name: Extra check\n        run: python3 scripts/check_repo_contracts.py\n",
+            encoding="utf-8",
+        )
+        self.assert_rejected(self.check(), "checker command count drift: expected 1 actual 2")
+
+    def test_fixture_checker_before_runner_rejected(self) -> None:
+        """F5: both commands preserved but the checker before the shard runner
+        must be rejected (CI-TR-006 ordering)."""
+        p = self.path(checker.CI_V2_FIXTURE_PATH)
+        lines = p.read_text(encoding="utf-8").splitlines(keepends=True)
+        shard_idx = next(
+            i for i, line in enumerate(lines)
+            if line.startswith("      - name: Run exact-inventory checker shards")
+        )
+        checker_idx = next(
+            i for i, line in enumerate(lines)
+            if line.startswith("      - name: Check repository contracts")
+        )
+        self.assertLess(shard_idx, checker_idx)
+
+        def block_end(start: int) -> int:
+            for j in range(start + 1, len(lines)):
+                if lines[j].startswith("      - name: "):
+                    return j
+            return len(lines)
+
+        shard_end = block_end(shard_idx)
+        checker_end = block_end(checker_idx)
+        shard_block = lines[shard_idx:shard_end]
+        checker_block = lines[checker_idx:checker_end]
+        reordered = (
+            lines[:shard_idx]
+            + checker_block
+            + lines[shard_end:checker_idx]
+            + shard_block
+            + lines[checker_end:]
+        )
+        p.write_text("".join(reordered), encoding="utf-8")
+        self.assert_rejected(self.check(), "ordering drift")
+
+        # A displayed command is not an executable command. Preserve the full
+        # command text behind an ``echo`` prefix to prove substring search
+        # cannot satisfy CI-TR-006 for either side of the ordering relation.
+        for label, command, diagnostic in (
+            (
+                "checker",
+                checker.CI_V2_CHECKER_COMMAND,
+                "checker command count drift: expected 1 actual 0",
+            ),
+            (
+                "runner",
+                checker.CI_V2_SHARD_RUNNER_COMMAND,
+                "shard runner command count drift: expected 1 actual 0",
+            ),
+        ):
+            with self.subTest(display_only=label):
+                self.fresh_copy(checker.CI_V2_FIXTURE_PATH)
+                self.rewrite(
+                    checker.CI_V2_FIXTURE_PATH,
+                    command,
+                    f"echo {command}",
+                )
+                self.assert_rejected(self.check(), diagnostic)
 
     def test_fixture_missing_always_condition(self) -> None:
         self.rewrite(checker.CI_V2_FIXTURE_PATH, "if: ${{ always() }}", "if: ${{ MUTED() }}")
         self.assert_rejected(self.check(), "missing always() evidence upload condition")
-
-    def _run_check_with_substituted_fixture_digest(self) -> list[str]:
-        """Run the fixture check with the pinned digest updated to the mutated file.
-
-        The structural placement check only runs after the digest check passes.
-        Mutations that move the pyprefix line without otherwise breaking the
-        structural invariants need the digest re-pinned to exercise placement
-        validation; otherwise the test stops at "digest drift".
-        """
-        p = self.path(checker.CI_V2_FIXTURE_PATH)
-        new_digest = hashlib.sha256(p.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
-        original = checker.CI_V2_FIXTURE_SHA256
-        setattr(checker, "CI_V2_FIXTURE_SHA256", new_digest)
-        try:
-            return self.check()
-        finally:
-            setattr(checker, "CI_V2_FIXTURE_SHA256", original)
 
     def test_fixture_pyprefix_step_level_env_rejected(self) -> None:
         old = (
@@ -8082,7 +8140,7 @@ class CiV2InertFixtureMutationTests(_M90MutationTestBase):
         text = p.read_text(encoding="utf-8")
         self.assertIn(old, text)
         p.write_text(text.replace(old, new, 1), encoding="utf-8")
-        issues = self._run_check_with_substituted_fixture_digest()
+        issues = self.check()
         self.assertTrue(
             any("indent drift" in i or "enclosing env:" in i or "under docs-and-contracts" in i for i in issues),
             f"expected pyprefix placement rejection, got {issues}",
@@ -8112,7 +8170,7 @@ class CiV2InertFixtureMutationTests(_M90MutationTestBase):
         text = text.replace(original_block, "", 1)
         self.assertIn(old, text)
         p.write_text(text.replace(old, new, 1), encoding="utf-8")
-        issues = self._run_check_with_substituted_fixture_digest()
+        issues = self.check()
         self.assertTrue(
             any("indent drift" in i or "enclosing env:" in i or "under docs-and-contracts" in i for i in issues),
             f"expected pyprefix placement rejection, got {issues}",
@@ -8135,7 +8193,7 @@ class CiV2InertFixtureMutationTests(_M90MutationTestBase):
         text = text.replace(original_block, "", 1)
         self.assertIn(old, text)
         p.write_text(text.replace(old, new, 1), encoding="utf-8")
-        issues = self._run_check_with_substituted_fixture_digest()
+        issues = self.check()
         self.assertTrue(
             any("indent drift" in i or "enclosing env:" in i or "under docs-and-contracts" in i or "occurrence count drift" in i for i in issues),
             f"expected pyprefix placement rejection, got {issues}",
@@ -8147,7 +8205,7 @@ class CiV2InertFixtureMutationTests(_M90MutationTestBase):
         original_line = "      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache\n"
         self.assertIn(original_line, text)
         p.write_text(text + "      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache\n", encoding="utf-8")
-        issues = self._run_check_with_substituted_fixture_digest()
+        issues = self.check()
         self.assertTrue(
             any("occurrence count drift" in i or "extra PYTHONPYCACHEPREFIX" in i for i in issues),
             f"expected pyprefix duplicate rejection, got {issues}",
@@ -8166,6 +8224,13 @@ class CheckerTestInventoryMutationTests(_M90MutationTestBase):
     def setUp(self) -> None:
         super().setUp()
         self.write_valid_inventory()
+        # Isolate the mutation tests from the real repository's live discovery
+        # by binding the live-discovery helper to this class's synthetic IDs.
+        live_patcher = mock.patch.object(
+            checker, "_live_checker_test_ids", return_value=list(self.VALID_IDS)
+        )
+        live_patcher.start()
+        self.addCleanup(live_patcher.stop)
 
     def write_valid_inventory(self) -> None:
         data = {
@@ -8268,6 +8333,78 @@ class CheckerTestInventoryMutationTests(_M90MutationTestBase):
             })
         )
         self.assert_rejected(self.check(), "_FailedTest ID")
+
+    def test_inventory_malformed_entries_fail_closed_without_traceback(self) -> None:
+        """F1: non-string/empty/unhashable entries must yield an issue, never a TypeError."""
+        malformed_batches = [
+            # Unhashable entry first: set()/sorted() below would raise TypeError
+            # if the checker did not return after recording the typed issue.
+            [{"unhashable": True}, *self.VALID_IDS],
+            [1, *self.VALID_IDS],
+            [None, *self.VALID_IDS],
+            [["nested"], *self.VALID_IDS],
+            ["", *self.VALID_IDS],
+        ]
+        for batch in malformed_batches:
+            with self.subTest(batch=batch):
+                self.write_inventory_raw(
+                    json.dumps({
+                        "schema_version": checker.CHECKER_TEST_INVENTORY_SCHEMA_VERSION,
+                        "test_ids": batch,
+                        "expected_count": len(batch),
+                    })
+                )
+                issues = self.check()
+                self.assert_rejected(issues, "non-string/empty entry")
+
+    def test_inventory_stale_against_live_discovery_fails_closed(self) -> None:
+        """F4: a structurally valid but stale inventory must be rejected."""
+        # Inventory claims an ID live discovery does not produce.
+        stale_extra = sorted(self.VALID_IDS + ["module.TestStale.test_stale"])
+        self.write_inventory_raw(
+            json.dumps({
+                "schema_version": checker.CHECKER_TEST_INVENTORY_SCHEMA_VERSION,
+                "test_ids": stale_extra,
+                "expected_count": len(stale_extra),
+            })
+        )
+        issues = self.check()
+        self.assertTrue(
+            any(
+                "inventory/live discovery drift" in i and "missing_from_live=['module.TestStale.test_stale']" in i
+                for i in issues
+            ),
+            f"expected stale-inventory rejection, got {issues}",
+        )
+
+        # Live discovery produces an ID the inventory does not carry.
+        self.write_valid_inventory()
+        with mock.patch.object(
+            checker, "_live_checker_test_ids", return_value=self.VALID_IDS + ["module.TestLive.test_live"]
+        ):
+            issues = self.check()
+        self.assertTrue(
+            any(
+                "inventory/live discovery drift" in i and "unexpected_in_live=['module.TestLive.test_live']" in i
+                for i in issues
+            ),
+            f"expected unexpected-live rejection, got {issues}",
+        )
+
+        # Discovery/import failure must become a typed issue, not a traceback.
+        with mock.patch.object(
+            checker,
+            "_live_checker_test_ids",
+            side_effect=ValueError("discovery produced _FailedTest: unittest.loader._FailedTest.test_bad"),
+        ):
+            issues = self.check()
+        self.assertTrue(
+            any(
+                "live discovery failed" in i and "_FailedTest" in i
+                for i in issues
+            ),
+            f"expected discovery-failure issue, got {issues}",
+        )
 
 
 class RunCheckerShardsRunnerMutationTests(_M90MutationTestBase):

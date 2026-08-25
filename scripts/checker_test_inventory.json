@@ -6,9 +6,11 @@
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_empty",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_failed_test_id",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_invalid_json",
+    "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_malformed_entries_fail_closed_without_traceback",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_missing",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_not_object",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_passes",
+    "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_stale_against_live_discovery_fails_closed",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_test_ids_not_list",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_unsorted",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_wrong_schema",
@@ -26,8 +28,9 @@
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_separator_malformed",
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_slice_state_drift",
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_state_declaration_missing",
+    "test_check_repo_contracts.CiV2InertFixtureMutationTests.test_fixture_checker_before_runner_rejected",
     "test_check_repo_contracts.CiV2InertFixtureMutationTests.test_fixture_checker_count_drift",
-    "test_check_repo_contracts.CiV2InertFixtureMutationTests.test_fixture_digest_drift",
+    "test_check_repo_contracts.CiV2InertFixtureMutationTests.test_fixture_display_only_drift_remains_accepted",
     "test_check_repo_contracts.CiV2InertFixtureMutationTests.test_fixture_empty",
     "test_check_repo_contracts.CiV2InertFixtureMutationTests.test_fixture_missing",
     "test_check_repo_contracts.CiV2InertFixtureMutationTests.test_fixture_missing_action_sha",
@@ -628,6 +631,7 @@
     "test_run_checker_shards.CLIBoundaryTests.test_26_repo_local_evidence_via_symlink_rejected",
     "test_run_checker_shards.CLIBoundaryTests.test_27_git_identity_failure_fail_closed",
     "test_run_checker_shards.CLIBoundaryTests.test_28_git_identity_failure_post_launch_fails",
+    "test_run_checker_shards.CLIBoundaryTests.test_35_require_clean_revalidated_at_plan_construction",
     "test_run_checker_shards.ChildExecutionTests.test_06_zero_tests_fails",
     "test_run_checker_shards.ChildExecutionTests.test_07_failed_test_id_fails_before_execution",
     "test_run_checker_shards.ChildExecutionTests.test_08_skipped_test_fails",
@@ -656,7 +660,8 @@
     "test_run_checker_shards.ProcessIsolationTests.test_12_child_crash_fails",
     "test_run_checker_shards.ProcessIsolationTests.test_13_timeout_terminates_child_fails",
     "test_run_checker_shards.ProcessIsolationTests.test_14_stale_evidence_dir_rejected",
+    "test_run_checker_shards.ProcessIsolationTests.test_36_sigterm_ignoring_group_descendant_killed",
     "test_run_checker_shards.TransactionalSpawnTests.test_34_spawn_failure_cleans_prior_handles"
   ],
-  "expected_count": 656
+  "expected_count": 661
 }
