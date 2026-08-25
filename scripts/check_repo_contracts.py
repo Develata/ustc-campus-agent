@@ -10717,6 +10717,387 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
                     issues,
                 )
 
+
+# --- M90 CI evidence shard slice carriers ---
+
+CI_TRANSITION_LEDGER_PATH = "docs/acceptance/ci-transition-ledger.md"
+CI_V2_FIXTURE_PATH = "scripts/tests/fixtures/ci-v2.yml"
+CI_V2_FIXTURE_SHA256 = (
+    "5ade8421716bc39d11cf6d070884fd56b6d8928eb1caf4957711b5af8c6be675"
+)
+CHECKER_TEST_INVENTORY_PATH = "scripts/checker_test_inventory.json"
+CHECKER_TEST_INVENTORY_SCHEMA_VERSION = "checker-test-inventory/v1"
+RUN_CHECKER_SHARDS_PATH = "scripts/run_checker_shards.py"
+CI_TRANSITION_LEDGER_IDS = (
+    "CI-TR-001",
+    "CI-TR-002",
+    "CI-TR-003",
+    "CI-TR-004",
+    "CI-TR-005",
+    "CI-TR-006",
+)
+CI_TRANSITION_LEDGER_HEADER = (
+    "| ID | Legacy invariant | Legacy carrier | Future v2 carrier | Mechanical test | Slice state |"
+)
+CI_TRANSITION_LEDGER_STATE_DECLARATIONS = (
+    "remains the legacy/full CI authority",
+    "is inert test data only",
+    "No selective omission, path filtering, or package-selective Rust is active",
+    "No acceptance matrix status is promoted by this slice",
+    "selective activation remain later prerequisites",
+)
+CI_TRANSITION_LEDGER_ROW_CELLS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "CI-TR-001",
+        (
+            "active workflow exact digest remains frozen",
+            f".github/workflows/ci.yml` SHA-256 `{CAMPAIGN_CI_WORKFLOW_SHA256}",
+            f"scripts/tests/fixtures/ci-v2.yml` inert fixture SHA-256 `{CI_V2_FIXTURE_SHA256}",
+            "scripts/check_repo_contracts.py` pins both digests",
+            "inert-not-active",
+        ),
+    ),
+    (
+        "CI-TR-002",
+        (
+            "pull_request` plus push-to-main trigger semantics remain",
+            ".github/workflows/ci.yml` `on: pull_request`",
+            "scripts/tests/fixtures/ci-v2.yml` preserves `on: pull_request`",
+            "validates trigger semantics in both active and fixture",
+            "inert-not-active",
+        ),
+    ),
+    (
+        "CI-TR-003",
+        (
+            "stable `rust` and `docs-and-contracts` job names remain",
+            ".github/workflows/ci.yml` jobs `rust` and `docs-and-contracts`",
+            "scripts/tests/fixtures/ci-v2.yml` preserves job names `rust` and `docs-and-contracts`",
+            "validates job names in both active and fixture",
+            "inert-not-active",
+        ),
+    ),
+    (
+        "CI-TR-004",
+        (
+            "full Python discovery is replaced only in the inert fixture",
+            "python3 -m unittest discover",
+            "python3 scripts/run_checker_shards.py --jobs 4",
+            "bidirectional inventory coverage and exact-union fan-in",
+            "inert-not-active",
+        ),
+    ),
+    (
+        "CI-TR-005",
+        (
+            "full Rust fmt/clippy/workspace-test/doctest commands remain",
+            "cargo fmt --all -- --check",
+            "cargo test --workspace --all-features --doc --locked",
+            "validates all four Rust commands in fixture",
+            "inert-not-active",
+        ),
+    ),
+    (
+        "CI-TR-006",
+        (
+            "repository checker remains an exact executable command",
+            "python3 scripts/check_repo_contracts.py",
+            "python3 scripts/check_repo_contracts.py` exactly once",
+            "validates checker command presence and count in fixture",
+            "inert-not-active",
+        ),
+    ),
+)
+CI_V2_REQUIRED_ACTION_SHAS = (
+    "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+    "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
+    "dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5",
+    "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+)
+CI_V2_REQUIRED_RUST_COMMANDS = (
+    "cargo fmt --all -- --check",
+    "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+    "cargo test --workspace --all-targets --all-features --locked",
+    "cargo test --workspace --all-features --doc --locked",
+)
+CI_V2_REQUIRED_RUNNER_ARGS = (
+    "python3 scripts/run_checker_shards.py",
+    "--jobs 4",
+    "--timeout-seconds 1800",
+    "--inventory scripts/checker_test_inventory.json",
+    "--require-clean",
+    "--require-runner-image-identity",
+)
+CI_V2_PYTHON_VERSION = "3.13.5"
+CI_V2_PYPREFIX_LINE = "PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache"
+RUN_CHECKER_SHARDS_REQUIRED_SUBSTRINGS = (
+    "--jobs",
+    "--timeout-seconds",
+    "--inventory",
+    "--evidence-dir",
+    "--require-clean",
+    "--require-runner-image-identity",
+    "PYTHONPYCACHEPREFIX",
+    "os.setsid",
+)
+
+
+def check_ci_transition_ledger(issues: list[str]) -> None:
+    path = ROOT / CI_TRANSITION_LEDGER_PATH
+    if not path.is_file():
+        fail(f"CI transition ledger missing: {CI_TRANSITION_LEDGER_PATH}", issues)
+        return
+    text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        fail(f"CI transition ledger empty: {CI_TRANSITION_LEDGER_PATH}", issues)
+        return
+    for declaration in CI_TRANSITION_LEDGER_STATE_DECLARATIONS:
+        if declaration not in text:
+            fail(f"CI transition ledger state declaration missing: {declaration[:60]!r}", issues)
+    lines = text.splitlines()
+    header_index = None
+    for i, line in enumerate(lines):
+        if line.strip() == CI_TRANSITION_LEDGER_HEADER:
+            header_index = i
+            break
+    if header_index is None:
+        fail("CI transition ledger header row missing or drifted", issues)
+        return
+    if header_index + 1 >= len(lines):
+        fail("CI transition ledger table separator missing", issues)
+        return
+    separator = lines[header_index + 1].strip()
+    if not all(ch in "|-" for ch in separator) or "|" not in separator:
+        fail("CI transition ledger table separator malformed", issues)
+    data_lines: list[str] = []
+    for line in lines[header_index + 2:]:
+        if line.strip().startswith("|"):
+            data_lines.append(line)
+        elif data_lines:
+            break
+    if len(data_lines) != len(CI_TRANSITION_LEDGER_IDS):
+        fail(
+            f"CI transition ledger row count drift: expected {len(CI_TRANSITION_LEDGER_IDS)} actual {len(data_lines)}",
+            issues,
+        )
+    seen_ids: list[str] = []
+    row_specs = {row_id: cells for row_id, cells in CI_TRANSITION_LEDGER_ROW_CELLS}
+    for index, (expected_id, line) in enumerate(zip(CI_TRANSITION_LEDGER_IDS, data_lines)):
+        cells = markdown_cells(line)
+        if len(cells) != 6:
+            fail(f"CI transition ledger row {expected_id} cell count drift: expected 6 actual {len(cells)}", issues)
+            continue
+        row_id = cells[0].strip()
+        expected_cell = f"`{expected_id}`"
+        if row_id != expected_cell:
+            fail(f"CI transition ledger row {index} ID drift: expected {expected_cell} actual {row_id}", issues)
+        if row_id in seen_ids:
+            fail(f"CI transition ledger duplicate row ID: {row_id}", issues)
+        seen_ids.append(row_id)
+        for cell_index, cell in enumerate(cells):
+            if not cell.strip():
+                fail(f"CI transition ledger row {expected_id} cell {cell_index} is empty", issues)
+        state = cells[5].strip()
+        if state != "`inert-not-active`":
+            fail(f"CI transition ledger row {expected_id} slice state drift: expected `inert-not-active` actual {state}", issues)
+        expected_substrings = row_specs.get(expected_id)
+        if expected_substrings is None:
+            continue
+        for cell_index, expected_substring in enumerate(expected_substrings, start=1):
+            if expected_substring not in cells[cell_index]:
+                fail(
+                    f"CI transition ledger row {expected_id} cell {cell_index} semantic drift: "
+                    f"expected substring {expected_substring[:60]!r} not in {cells[cell_index][:80]!r}",
+                    issues,
+                )
+    if len(seen_ids) == len(CI_TRANSITION_LEDGER_IDS):
+        for expected_id in CI_TRANSITION_LEDGER_IDS:
+            if f"`{expected_id}`" not in seen_ids:
+                fail(f"CI transition ledger missing row: {expected_id}", issues)
+
+
+def _check_ci_v2_pyprefix_placement(text: str, issues: list[str]) -> None:
+    """Indentation-aware proof that PYTHONPYCACHEPREFIX sits at the
+    ``docs-and-contracts`` job-level ``env:`` block and nowhere else.
+
+    The accepted shape is:
+      ``  docs-and-contracts:`` (2 spaces)
+      ``    env:``              (4 spaces, job-level)
+      ``      PYTHONPYCACHEPREFIX: ...`` (6 spaces)
+
+    Any other placement (workflow-level, step-level, sibling job, or duplicate)
+    is rejected. Substring-only checks would miss a step-level relocation that
+    preserves the literal line.
+    """
+    lines = text.splitlines()
+    pyprefix_occurrences = [
+        (idx, line)
+        for idx, line in enumerate(lines)
+        if CI_V2_PYPREFIX_LINE in line
+    ]
+    if len(pyprefix_occurrences) != 1:
+        fail(
+            "CI v2 fixture PYTHONPYCACHEPREFIX occurrence count drift: "
+            f"expected 1 actual {len(pyprefix_occurrences)}",
+            issues,
+        )
+        return
+    pyprefix_idx, pyprefix_line = pyprefix_occurrences[0]
+    pyprefix_indent = len(pyprefix_line) - len(pyprefix_line.lstrip(" "))
+    if pyprefix_indent != 6:
+        fail(
+            f"CI v2 fixture PYTHONPYCACHEPREFIX indent drift: expected 6 spaces actual {pyprefix_indent}",
+            issues,
+        )
+    env_idx: int | None = None
+    for idx in range(pyprefix_idx - 1, -1, -1):
+        candidate = lines[idx]
+        stripped = candidate.lstrip(" ")
+        indent = len(candidate) - len(stripped)
+        if indent >= pyprefix_indent:
+            continue
+        if stripped == "env:":
+            env_idx = idx
+            break
+        if stripped.startswith("env:") or stripped.startswith("steps:") or stripped.startswith("runs-on:") or stripped.startswith("timeout-minutes:"):
+            break
+    if env_idx is None:
+        fail("CI v2 fixture PYTHONPYCACHEPREFIX has no enclosing env: block", issues)
+        return
+    env_line = lines[env_idx]
+    env_indent = len(env_line) - len(env_line.lstrip(" "))
+    if env_indent != 4:
+        fail(
+            f"CI v2 fixture enclosing env: indent drift: expected 4 spaces actual {env_indent}",
+            issues,
+        )
+    job_idx: int | None = None
+    for idx in range(env_idx - 1, -1, -1):
+        candidate = lines[idx]
+        stripped = candidate.lstrip(" ")
+        indent = len(candidate) - len(stripped)
+        if indent >= env_indent:
+            continue
+        if indent == 2 and stripped.startswith("docs-and-contracts:"):
+            job_idx = idx
+            break
+        if indent == 2 and stripped and not stripped.startswith("#"):
+            break
+    if job_idx is None:
+        fail(
+            "CI v2 fixture PYTHONPYCACHEPREFIX env: is not under docs-and-contracts job",
+            issues,
+        )
+    for idx, line in enumerate(lines):
+        if idx == pyprefix_idx:
+            continue
+        if CI_V2_PYPREFIX_LINE.split(":")[0] in line and "PYTHONPYCACHEPREFIX" in line:
+            fail(
+                f"CI v2 fixture extra PYTHONPYCACHEPREFIX occurrence at line {idx + 1}: {line.strip()!r}",
+                issues,
+            )
+
+
+def check_ci_v2_inert_fixture(issues: list[str]) -> None:
+    path = ROOT / CI_V2_FIXTURE_PATH
+    if not path.is_file():
+        fail(f"CI v2 inert fixture missing: {CI_V2_FIXTURE_PATH}", issues)
+        return
+    text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        fail(f"CI v2 inert fixture empty: {CI_V2_FIXTURE_PATH}", issues)
+        return
+    actual_sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    if actual_sha != CI_V2_FIXTURE_SHA256:
+        fail(f"CI v2 inert fixture digest drift: expected={CI_V2_FIXTURE_SHA256} actual={actual_sha}", issues)
+    if "on:\n  pull_request:" not in text:
+        fail("CI v2 fixture missing pull_request trigger", issues)
+    if "push:\n    branches:" not in text or "- main" not in text:
+        fail("CI v2 fixture missing push-to-main trigger", issues)
+    if "  rust:" not in text:
+        fail("CI v2 fixture missing rust job", issues)
+    if "  docs-and-contracts:" not in text:
+        fail("CI v2 fixture missing docs-and-contracts job", issues)
+    for action_sha in CI_V2_REQUIRED_ACTION_SHAS:
+        if action_sha not in text:
+            fail(f"CI v2 fixture missing pinned action SHA: {action_sha}", issues)
+    if "toolchain: 1.97.1" not in text:
+        fail("CI v2 fixture missing Rust toolchain 1.97.1", issues)
+    if "components: rustfmt, clippy" not in text:
+        fail("CI v2 fixture missing rustfmt/clippy components", issues)
+    if f"python-version: {CI_V2_PYTHON_VERSION}" not in text:
+        fail(f"CI v2 fixture missing Python {CI_V2_PYTHON_VERSION}", issues)
+    if CI_V2_PYPREFIX_LINE not in text:
+        fail("CI v2 fixture missing job-level PYTHONPYCACHEPREFIX", issues)
+    _check_ci_v2_pyprefix_placement(text, issues)
+    for command in CI_V2_REQUIRED_RUST_COMMANDS:
+        if command not in text:
+            fail(f"CI v2 fixture missing Rust command: {command}", issues)
+    for arg in CI_V2_REQUIRED_RUNNER_ARGS:
+        if arg not in text:
+            fail(f"CI v2 fixture missing runner argument: {arg}", issues)
+    checker_count = text.count("python3 scripts/check_repo_contracts.py")
+    if checker_count != 1:
+        fail(f"CI v2 fixture checker command count drift: expected 1 actual {checker_count}", issues)
+    if "if: ${{ always() }}" not in text:
+        fail("CI v2 fixture missing always() evidence upload condition", issues)
+
+
+def check_checker_test_inventory(issues: list[str]) -> None:
+    path = ROOT / CHECKER_TEST_INVENTORY_PATH
+    if not path.is_file():
+        fail(f"checker test inventory missing: {CHECKER_TEST_INVENTORY_PATH}", issues)
+        return
+    text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        fail(f"checker test inventory empty: {CHECKER_TEST_INVENTORY_PATH}", issues)
+        return
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        fail(f"checker test inventory invalid JSON: {exc}", issues)
+        return
+    if not isinstance(data, dict):
+        fail("checker test inventory top-level value must be an object", issues)
+        return
+    if data.get("schema_version") != CHECKER_TEST_INVENTORY_SCHEMA_VERSION:
+        fail(
+            f"checker test inventory schema_version drift: expected {CHECKER_TEST_INVENTORY_SCHEMA_VERSION!r} actual {data.get('schema_version')!r}",
+            issues,
+        )
+    test_ids = data.get("test_ids")
+    if not isinstance(test_ids, list):
+        fail("checker test inventory test_ids must be a list", issues)
+        return
+    for entry in test_ids:
+        if not isinstance(entry, str) or not entry:
+            fail(f"checker test inventory test_ids contains non-string/empty entry: {entry!r}", issues)
+    if len(test_ids) != len(set(test_ids)):
+        fail("checker test inventory test_ids contains duplicates", issues)
+    if test_ids != sorted(test_ids):
+        fail("checker test inventory test_ids must be sorted", issues)
+    expected_count = data.get("expected_count")
+    if not isinstance(expected_count, int) or expected_count != len(test_ids):
+        fail(f"checker test inventory expected_count drift: expected {len(test_ids)} actual {expected_count!r}", issues)
+    for test_id in test_ids:
+        if "_FailedTest" in test_id:
+            fail(f"checker test inventory contains _FailedTest ID: {test_id}", issues)
+
+
+def check_run_checker_shards_runner(issues: list[str]) -> None:
+    path = ROOT / RUN_CHECKER_SHARDS_PATH
+    if not path.is_file():
+        fail(f"checker shard runner missing: {RUN_CHECKER_SHARDS_PATH}", issues)
+        return
+    text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        fail(f"checker shard runner empty: {RUN_CHECKER_SHARDS_PATH}", issues)
+        return
+    for substring in RUN_CHECKER_SHARDS_REQUIRED_SUBSTRINGS:
+        if substring not in text:
+            fail(f"checker shard runner missing required substring: {substring!r}", issues)
+
+
 EXPECTED_MAIN_CALLS = (
     "check_key_files_present_and_nonempty(issues)",
     "check_campaign_authorization(issues)",
@@ -10743,6 +11124,10 @@ EXPECTED_MAIN_CALLS = (
     "check_external_agent_access_contract(issues)",
     "check_module_registry(issues)",
     "check_s0_architecture_review(issues)",
+    "check_ci_transition_ledger(issues)",
+    "check_ci_v2_inert_fixture(issues)",
+    "check_checker_test_inventory(issues)",
+    "check_run_checker_shards_runner(issues)",
     "check_source_sensitive_guard_registry(issues)",
 )
 
@@ -10799,6 +11184,9 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_campaign_authorization": {"digest": "7a1184e0d9f133a48a79c9ba6f66bc912252fa1732c7b13faa0b99373466571a", "status": "active"},
     "check_campaign_taskbook_state": {"digest": "85b30689fd0ae05695c337d8808e919f69639ace8d98643c90a4b47522fe2d65", "status": "active"},
     "check_cargo_dependency_sources": {"digest": "0f645288c48f56eb3c8282f5fe9b9c0e379ae8ff82e1c06f64f740278a77ad7d", "status": "active"},
+    "check_checker_test_inventory": {"digest": "d861000067563fa4870670a8f1b3869e72731df7a6a2398ba3d3415d5813f6cd", "status": "active"},
+    "check_ci_transition_ledger": {"digest": "ac88ca9043508ae22fe535334368e80aa02c701454c4d085fcd3cc1343d6d1f9", "status": "active"},
+    "check_ci_v2_inert_fixture": {"digest": "6a2f76a7a34316ee6d4f34bde93d0be9124293b24e55727149ec74e10e89cbed", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
     "check_external_agent_access_contract": {"digest": "b5f042f9d195b8a82d15059da493f2ecb92f372aa79733a7d0fb598c3881bd79", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
@@ -10817,6 +11205,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_platform_session_implementation": {"digest": "f1a25036ae6940b332c258af80f2e23815071ca19cb1d5db79d7a4f8b844be8f", "status": "active"},
     "check_rust_doctest_gate": {"digest": "372200f9ce289b3af148b7e7001408498b3d817098d7013692f016b766d2ec58", "status": "active"},
     "check_rust_lexical_corpus": {"digest": "ac8c09ce53ca4949c8e5c61eca0a958301735d7cdb2dc0ecd00eb3472a0e2aef", "status": "active"},
+    "check_run_checker_shards_runner": {"digest": "c6abd4f4d049cb1836f333badf20d0d08bec3ea319a0549812f076b8b419de39", "status": "active"},
     "check_s0_architecture_review": {"digest": "4073abe0147a1c30653047aedfe168b8ed6684281f4c445c4ee803a428b8760e", "status": "active"},
     "exact_marked_block": {"digest": "71fc49a8490fad3b9bc262667c0fb91f1e00fe554b8d1fe04495fdf1c72c80aa", "status": "active"},
     "load_json": {"digest": "e4537fd821653c24dee9db7592a94a514962b69e839ed24399af78f773dab0db", "status": "active"},
@@ -10949,6 +11338,10 @@ def main() -> int:
     check_external_agent_access_contract(issues)
     check_module_registry(issues)
     check_s0_architecture_review(issues)
+    check_ci_transition_ledger(issues)
+    check_ci_v2_inert_fixture(issues)
+    check_checker_test_inventory(issues)
+    check_run_checker_shards_runner(issues)
     check_source_sensitive_guard_registry(issues)
     if issues:
         print("contract-check: FAIL")
