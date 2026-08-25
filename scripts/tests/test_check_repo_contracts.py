@@ -9375,3 +9375,4 @@ class RunCheckerShardsRunnerMutationTests(_M90MutationTestBase):
 
 if __name__ == "__main__":
     unittest.main()
+# S2 ci-governance protected-path smoke; no runtime effect.
