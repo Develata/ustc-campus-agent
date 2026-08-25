@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -12,6 +14,7 @@ import time
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNNER_PATH = REPO_ROOT / "scripts/run_checker_shards.py"
@@ -670,14 +673,73 @@ class FanInTests(RunnerTestBase):
         ids = self.discover_ids()
         self.write_inventory(ids)
         self.git_commit_all()
-        self.evidence.mkdir(parents=True)
-        os.chmod(self.evidence, 0o555)
-        try:
-            result = self.run_runner()
-            self.assertNotEqual(result.returncode, 0)
-            self.assertFalse((self.evidence / "summary.json").exists())
-        finally:
-            os.chmod(self.evidence, 0o755)
+
+        cases = (
+            ("evidence-root", self.evidence, self.evidence),
+            (
+                "plan-directory",
+                Path(self.pycache_temp.name) / "evidence-plan",
+                Path(self.pycache_temp.name) / "evidence-plan" / "plan",
+            ),
+        )
+        real_mkdir = Path.mkdir
+        for label, evidence_dir, failing_path in cases:
+            with self.subTest(site=label):
+                if label == "plan-directory":
+                    evidence_dir.mkdir(parents=True)
+                sentinel = PermissionError(f"sentinel-{label}-mkdir")
+
+                def injected_mkdir(
+                    path: Path,
+                    *args: Any,
+                    **kwargs: Any,
+                ) -> None:
+                    if path == failing_path:
+                        raise sentinel
+                    real_mkdir(path, *args, **kwargs)
+
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                with (
+                    mock.patch.object(
+                        Path,
+                        "mkdir",
+                        autospec=True,
+                        side_effect=injected_mkdir,
+                    ),
+                    mock.patch.object(runner, "_repo_root", return_value=self.root),
+                    mock.patch.object(runner, "_run_children") as run_children,
+                    mock.patch.dict(
+                        os.environ,
+                        {"PYTHONPYCACHEPREFIX": self.pycache},
+                        clear=False,
+                    ),
+                    contextlib.redirect_stdout(stdout),
+                    contextlib.redirect_stderr(stderr),
+                ):
+                    return_code = runner._parent_main(
+                        [
+                            "--jobs",
+                            "1",
+                            "--timeout-seconds",
+                            "30",
+                            "--inventory",
+                            str(self.root / "scripts" / "checker_test_inventory.json"),
+                            "--evidence-dir",
+                            str(evidence_dir),
+                        ]
+                    )
+
+                self.assertEqual(return_code, 2)
+                self.assertTrue(
+                    stderr.getvalue().startswith("ERROR: evidence setup failed:"),
+                    stderr.getvalue(),
+                )
+                self.assertIn(str(sentinel), stderr.getvalue())
+                self.assertNotIn("Traceback", stderr.getvalue())
+                self.assertNotIn("PASS", stdout.getvalue())
+                run_children.assert_not_called()
+                self.assertFalse((evidence_dir / "summary.json").exists())
 
     def test_22_concurrent_mutation_fails(self) -> None:
         self.write_test("test_slow.py", SLOW_TEST)
