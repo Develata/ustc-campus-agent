@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- `Status`: Accepted target architecture and phased external-Agent access boundary; no client-core, user CLI, inbound MCP adapter, Windows package or Dioxus client implemented
+- `Status`: Accepted target architecture with bounded client-core, ordinary-user Affairs CLI and one operation-specific loopback thin-Web presentation proof; production auth/remote HTTP/stream, inbound MCP and Dioxus clients remain planned
 - `Version`: `client-shell/v2.1`
-- `Last Review`: `2026-08-12`
+- `Last Review`: `2026-08-26`
 - `Owning Plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
 - `Counterpart Plans`: [`M10 Application Ingress Host`](../plan/modules/20-application-api-host.md), [`platform authority`](../plan/03-platform-authority.md)
 - `Decisions`: [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md), [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
@@ -32,6 +32,12 @@ Peer adapters reuse code through the typed core. They do not invoke one another 
 
 `ustc-agentctl` remains a separate operator/developer CLI and is not part of this contract's least-privilege user/automation surface.
 
+### Current bounded evidence
+
+`crates/client-core` and the real `apps/ustc-agent` binary retain one typed `affairs get/lookup` path over numeric loopback framing. `ustc-agentd serve-web` additionally retains one loopback-only, operation-specific Axum/HTTP presentation proof whose static page renders a public-redacted server-owned `ClientResponseDto::Available` without making domain decisions. The CLI core validates endpoint/protocol/value bounds, propagates correlation/idempotency/provenance, reduces typed M10 responses/errors, emits one canonical JSON result and maps stable exit classes without importing backend or operator implementations. The colocated Web proof is not a replacement for that core and does not count as the future peer Dioxus shell. This is partial evidence only: no production profile/auth, remote HTTP/TLS, NDJSON/SSE, reconnect/cancellation/version-skew matrix, inbound MCP or Dioxus target exists.
+
+The bounded Web page is deliberately not a second client authority. It accepts only a stable procedure ID, calls the colocated same-origin endpoint and presents prerequisites, ordered steps, explicit unknown effective/deadline time, entry points, contacts, safe public lineage (`source_id`, `evidence_set_digest`, `materialization_receipt_id`, `revision_count`), freshness, conflict and uncertainty already present in the typed response. The server consumes the response-only public capability internally and returns only the public-redacted lookup result; JavaScript never receives a capability or raw revision identity. It never computes procedure truth, freshness, conflict resolution, authorization or eligibility. Its loopback bind, embedded assets and retained source-grounded noncanonical fixture make it demo evidence, not the final Dioxus peer adapter or a remotely deployable public service.
+
 ## 2. Required client surfaces
 
 ### 2.1 Dioxus
@@ -51,6 +57,8 @@ Dioxus owns routes, accessible components, forms, presentation reduction, Web SS
 `ustc-agent` is the user-facing and automation-facing headless client. It consumes explicit versioned M10 HTTP/JSON and typed event streams through client-core. Its noninteractive machine modes are stable public contracts; they are not debug printouts.
 
 The initial CLI is read-oriented and least privilege. It does not inherit `ustc-agentctl` administrative commands or credentials.
+
+The retained fixture proof precedes that production transport: it exposes only public `affairs get` and capability-stdin result lookup over numeric loopback. It accepts no raw session/operator authority and makes no remote-client or authentication claim.
 
 ### 2.3 Inbound MCP adapter
 
@@ -296,9 +304,9 @@ The inbound MCP session, CLI process and Dioxus page lifecycle are transport/ses
 Start with modules until actual boundaries justify crates/artifacts. The accepted target shape is:
 
 ```text
-future crates/client-protocol/   # M10-owned versioned wire DTO/error/event/compatibility carrier
-future crates/client-core/       # M80-owned client behavior and fakes
-future apps/ustc-agent/          # user/automation CLI
+crates/client-protocol/          # M10-owned versioned wire DTO/error carrier; bounded Affairs evidence
+crates/client-core/              # M80-owned client behavior; bounded Affairs evidence
+apps/ustc-agent/                 # bounded ordinary-user Affairs CLI evidence; production adapters planned
 future apps/ustc-client/         # Dioxus Web/Android source; later admitted Windows target
 future inbound MCP adapter       # exact package/process placement chosen by first slice
 apps/ustc-agentctl/              # existing separate operator/developer CLI
@@ -316,7 +324,8 @@ The final dependency shape MUST satisfy:
 ```text
 M10 client-protocol
   owns versioned wire DTO/error/event/compatibility schemas
-  must not depend on M80 client-core or any outer adapter
+  may use only narrow deterministic data-format/digest helpers required to construct those carriers
+  must not depend on M80 client-core, peer shells, network/async runtimes or backend domain implementations
 
 M80 client-core
   may depend on M10 client-protocol + narrow transport abstractions
@@ -379,7 +388,7 @@ The framework-neutral conformance suite runs every peer adapter against equivale
 
 `CLIENT-007` proves shared typed-core and peer equivalence. `CLIENT-008` proves no shell-out path and operator privilege isolation. `CLIENT-009` proves the user CLI machine contract. `CLIENT-010` proves the least-privilege inbound MCP boundary.
 
-These rows remain `planned` until executable bindings pass. Existing long-horizon Dioxus `CLIENT-001` through `CLIENT-006`, `WEB-*` and deployment cases remain non-active until projected into the active matrix.
+These rows remain `planned` until every assertion in their executable bindings passes. The bounded Affairs client/CLI path is supporting partial evidence, not a substitute for `CLIENT-007`/`CLIENT-008`/`CLIENT-009` completion. Existing long-horizon Dioxus `CLIENT-001` through `CLIENT-006`, `WEB-*` and deployment cases remain non-active until projected into the active matrix.
 
 ## 18. Current status
 
@@ -393,6 +402,6 @@ Accepted now:
 - required Web/PWA, Docker Compose server and Android targets remain unchanged.
 - Windows is admitted as a later desktop peer target but is not a current required release gate.
 
-Implemented now: none of the client core, user CLI, inbound MCP adapter, Dioxus application, public ingress, typed stream, auth/session service, Web journey or Android package.
+Implemented now as bounded non-production evidence: one framework-neutral client-core and real `ustc-agent` public Affairs get/capability-lookup JSON path against the fixture-only loopback composition, including dependency confinement and real subprocess tests.
 
-This contract does not make any client operational or promote a planned acceptance row to pass.
+Not implemented: production profile/auth, HTTP/TLS ingress, typed event stream, full peer conformance, inbound MCP adapter, Dioxus application, Web journey, Android/Windows package or deployment. This partial evidence does not promote any planned acceptance row to pass.

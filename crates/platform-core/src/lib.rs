@@ -7,6 +7,7 @@
 pub mod identity;
 pub mod invocation;
 pub mod market;
+pub mod request_context;
 pub mod session;
 pub mod source_registry;
 

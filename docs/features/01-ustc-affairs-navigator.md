@@ -1,10 +1,12 @@
 # USTC Affairs Navigator
 
 - `Package ID`: `ustc.affairs-navigator`
-- `Status`: Planned manifest skeleton; no executable component claimed
+- `Status`: Bounded executable procedure kernel plus one retained source-grounded noncanonical fixture, exact-query and loopback-only Web demonstration; complete administrator/source-ingestion/production-Web feature remains planned
 - `Owning plan`: `docs/plan/06-first-party-plugins.md`
 - `Contracts`: `docs/contracts/source-import.md`, `docs/contracts/permissions.md`
 - `Acceptance`: `FP-001`, `PROC-*`
+
+Current retained evidence covers checked stable procedure/artifact identities, draft/policy/freshness/conflict semantics and one retained source-grounded noncanonical fixture for the USTC undergraduate transcript/enrollment-certificate procedure. The exact lookup runs through M00→M10→M71 and is exposed both through the loopback `ustc-agentd`/`ustc-agent` product path and a loopback-only thin Web renderer. Retained and normalized source bytes are hash-accounted; this is not administrator review/publication or approved M60 source authority. It does not implement general M60 import, administrator review/publish/archive, supersession, broad structured search, production auth/TLS/remote HTTP, Dioxus, Android, inbound MCP or Agent/Market integration; `PROC-011` therefore remains planned.
 
 ## Goal
 

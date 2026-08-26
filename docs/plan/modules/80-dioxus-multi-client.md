@@ -3,13 +3,13 @@
 ## Metadata
 
 - `Module ID`: `M80`
-- `Status`: Accepted blueprint amended for phased external-Agent access and an admitted later Windows peer; no client-core, user CLI, inbound MCP adapter, Windows package or Dioxus application implemented
-- `Implementation State`: `planned`
+- `Status`: Accepted blueprint with bounded client-core, real ordinary-user CLI evidence and one operation-specific loopback Web presentation proof for Affairs; inbound MCP, Dioxus targets and full client conformance remain planned
+- `Implementation State`: `partial-evidence`
 - `Version`: `m80-client-shells/v2.1`
-- `Last Review`: `2026-08-12`
+- `Last Review`: `2026-08-24`
 - `Decisions`: [`ADR-0009`](../../adr/0009-dioxus-multi-client-shell.md), [`ADR-0010`](../../adr/0010-typed-client-peer-adapters.md)
 - `Owning Contract`: [`client-shell/v2.1`](../../contracts/client-shell.md)
-- `Primary code areas`: future `crates/client-core/`, `apps/ustc-agent/`, `apps/ustc-client/`, and one inbound MCP adapter surface finalized by its first accepted slice
+- `Primary code areas`: `crates/client-core/`, `apps/ustc-agent/`, future `apps/ustc-client/`, and one future inbound MCP adapter surface finalized by its first accepted slice
 
 ## 1. Purpose
 
@@ -24,6 +24,14 @@ It owns client-side protocol use, compatibility reaction, authentication adapter
 Web is the first graphical proof surface. Android remains a required peer target. The headless CLI and one least-privilege inbound MCP read path are also required initial client surfaces. Windows is an explicitly admitted later desktop peer target but not a current required release gate; iOS and other desktop targets remain later candidates.
 
 M80 displays or serializes server-owned state and submits typed intent through M10. It performs no canonical product calculation or mutation.
+
+### Current bounded evidence
+
+The retained framework-neutral `client-core` constructs and reduces the M10-owned typed Affairs requests/responses, confines transport to numeric loopback endpoints, preserves correlation/idempotency/provenance, emits one canonical `ustc-client-result/v1` JSON value and maps typed/transport failures to stable exit classes. The real `ustc-agent` binary exposes only `affairs get`, `affairs lookup`, help and version; dependency guards keep backend domain, repository, executor, `ustc-agentd` and `ustc-agentctl` implementations out of the client.
+
+`ustc-agentd serve-web` separately provides one operation-specific loopback presentation proof over the same M10-owned typed DTO: conditions, steps, explicit unknown time bounds, entries, contacts, safe lineage, freshness, conflict and uncertainty. It consumes the public capability internally and exposes no raw revision identity. Because this proof is colocated in the composition root and does not use the shared client core or Dioxus, it does not establish the peer Web/PWA target.
+
+This slice is not the complete `CLIENT-009` claim. It has no production HTTP/TLS profile/auth adapter, NDJSON/SSE stream, cursor/reconnect/cancellation or version-skew host matrix, and it does not implement inbound MCP, Dioxus Web/PWA, Android, Windows or shared graphical presentation state. The loopback fixture paths are bounded composition evidence and must not be projected as production remote-client support.
 
 ## 2. Non-goals
 

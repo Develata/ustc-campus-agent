@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="USTC Campus Agent 办事导航：从保留并校验过的校内公开来源呈现条件、步骤、入口与证据。">
+  <title>科大办事导航 · USTC Campus Agent</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header" aria-label="产品标识">
+    <a class="brand" href="/" aria-label="科大办事导航首页">
+      <span class="brand-mark" aria-hidden="true">科</span>
+      <span>USTC Campus Agent</span>
+    </a>
+    <span class="demo-badge">Bounded demo</span>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="eyebrow">AFFAIRS NAVIGATOR · 办事导航</p>
+      <h1 id="hero-title">把“怎么办”变成<br><span>可核对的下一步。</span></h1>
+      <p class="lead">不猜流程，也不替你作决定。页面只呈现保留并校验过的公开来源快照、办理条件、官方入口与证据状态。</p>
+
+      <form id="lookup-form" class="lookup" aria-describedby="lookup-hint">
+        <label for="procedure-id">流程 ID</label>
+        <div class="lookup-row">
+          <textarea id="procedure-id" name="procedure-id" rows="2" autocomplete="off" spellcheck="false" aria-describedby="procedure-id-preview lookup-hint" required>proc:ustc:undergraduate:transcript-certificate</textarea>
+          <button id="lookup-button" type="submit">查看流程</button>
+        </div>
+        <output id="procedure-id-preview" class="input-preview" for="procedure-id">完整流程 ID：proc:ustc:undergraduate:transcript-certificate</output>
+        <p id="lookup-hint">当前演示绑定一个中国科大教务处公开页面的 source-grounded fixture；它不是管理员发布记录。</p>
+      </form>
+      <p id="status" class="status" role="status" aria-live="polite">正在读取可验证结果…</p>
+    </section>
+
+    <section id="error-panel" class="notice notice-error" role="alert" hidden>
+      <h2>暂时无法显示</h2>
+      <p id="error-message">请稍后重试。</p>
+    </section>
+
+    <article id="result" class="result" aria-labelledby="result-title" hidden>
+      <header class="result-header">
+        <div>
+          <p id="result-kicker" class="eyebrow">SOURCE-GROUNDED FIXTURE</p>
+          <h2 id="result-title"></h2>
+          <div id="audience-tags" class="tags" aria-label="适用人群"></div>
+        </div>
+        <div class="truth-state" aria-label="证据状态">
+          <span id="freshness-dot" class="state-dot" aria-hidden="true"></span>
+          <div>
+            <strong id="freshness-label"></strong>
+            <span id="uncertainty-label"></span>
+          </div>
+        </div>
+      </header>
+
+      <div class="result-grid">
+        <div class="primary-column">
+          <section class="content-section" aria-labelledby="prerequisites-title">
+            <div class="section-heading">
+              <span>01</span>
+              <h3 id="prerequisites-title">办理条件</h3>
+            </div>
+            <ul id="prerequisites" class="plain-list"></ul>
+          </section>
+
+          <section class="content-section" aria-labelledby="steps-title">
+            <div class="section-heading">
+              <span>02</span>
+              <h3 id="steps-title">按顺序办理</h3>
+            </div>
+            <ol id="steps" class="timeline"></ol>
+          </section>
+
+          <section class="content-section" aria-labelledby="timing-title">
+            <div class="section-heading">
+              <span>03</span>
+              <h3 id="timing-title">时间边界</h3>
+            </div>
+            <dl class="fact-grid">
+              <div><dt>生效区间</dt><dd id="effective-window"></dd></div>
+              <div><dt>截止日期</dt><dd id="deadline-state"></dd></div>
+              <div><dt>来源有效期</dt><dd id="validity-horizon"></dd></div>
+            </dl>
+          </section>
+
+          <section id="entry-section" class="content-section" aria-labelledby="entry-title">
+            <div class="section-heading">
+              <span>04</span>
+              <h3 id="entry-title">官方入口</h3>
+            </div>
+            <div id="entry-points" class="link-list"></div>
+          </section>
+
+          <section class="content-section" aria-labelledby="contacts-title">
+            <div class="section-heading">
+              <span>05</span>
+              <h3 id="contacts-title">官方联系</h3>
+            </div>
+            <div id="contacts" class="contact-list"></div>
+          </section>
+        </div>
+
+        <aside class="evidence-column" aria-labelledby="evidence-title">
+          <div class="section-heading compact">
+            <span>EVIDENCE</span>
+            <h3 id="evidence-title">为什么可信</h3>
+          </div>
+          <dl class="evidence-list">
+            <div>
+              <dt>查询路径</dt>
+              <dd id="lookup-path"></dd>
+            </div>
+            <div>
+              <dt>最近核验</dt>
+              <dd id="last-verified"></dd>
+            </div>
+            <div>
+              <dt>证据链</dt>
+              <dd id="lineage-state"></dd>
+            </div>
+            <div>
+              <dt>冲突状态</dt>
+              <dd id="conflict-state"></dd>
+            </div>
+            <div>
+              <dt>证据集摘要</dt>
+              <dd id="evidence-set-digest"></dd>
+            </div>
+            <div>
+              <dt>物化收据</dt>
+              <dd id="materialization-receipt"></dd>
+            </div>
+            <div>
+              <dt>修订计数</dt>
+              <dd id="revision-count"></dd>
+            </div>
+            <div>
+              <dt>投影完整性</dt>
+              <dd id="projection-state"></dd>
+            </div>
+          </dl>
+          <div id="source-list" class="source-list"></div>
+        </aside>
+      </div>
+    </article>
+
+    <section class="notice" aria-labelledby="boundary-title">
+      <p class="eyebrow">BOUNDARY</p>
+      <h2 id="boundary-title">这是可验证的演示纵切，不是自动审批系统。</h2>
+      <p>当前页面只读、仅绑定本机 loopback，并使用保留且校验过字节摘要的公开来源 fixture。它不代表管理员审批、正式发布或实时 M60 导入；最终办理要求仍以中国科学技术大学官方页面和现场通知为准。</p>
+    </section>
+  </main>
+
+  <footer>
+    <span>USTC Campus Agent</span>
+    <span>Source-aware · Fail-closed · Human-verifiable</span>
+  </footer>
+</body>
+</html>

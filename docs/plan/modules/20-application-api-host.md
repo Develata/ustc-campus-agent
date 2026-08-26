@@ -3,12 +3,12 @@
 ## Metadata
 
 - `Module ID`: `M10`
-- `Status`: Accepted blueprint amended for one versioned application-operation registry and phased Dioxus, user CLI and inbound MCP projections; daemon skeleton exists, application ingress implementation planned
-- `Implementation State`: `skeleton`
+- `Status`: Accepted blueprint with bounded executable evidence for the M10-owned client-protocol/application-ingress carriers, one fixture-backed loopback Affairs composition and one operation-specific loopback HTTP/Web route; production public HTTP/Dioxus/stream hosting remains planned
+- `Implementation State`: `partial-evidence`
 - `Version`: `m10-application-ingress/v2.1`
-- `Last Review`: `2026-08-12`
+- `Last Review`: `2026-08-24`
 - `Composition`: `apps/ustc-agentd`
-- `Primary code area`: `apps/ustc-agentd/`, future M10-owned `crates/client-protocol/`, plus shared Dioxus server-function declarations in the Fullstack application boundary
+- `Primary code area`: `apps/ustc-agentd/`, M10-owned `crates/client-protocol/` and `crates/application-ingress/`, plus future shared Dioxus server-function declarations in the Fullstack application boundary
 
 ## 1. Purpose
 
@@ -26,6 +26,12 @@
 It translates and coordinates. It does not become a second implementation of domain rules.
 
 M10 owns the versioned public wire schema and compatibility carrier (`client-protocol` when extraction is justified). M80 produces request instances and consumes M10 results/events through that carrier, but cannot redefine the schema. M10 server code MUST NOT depend on M80 `client-core`; both sides may depend on the M10-owned protocol carrier, preventing a server↔client cycle.
+
+### Current bounded evidence
+
+The retained `client-protocol` and `application-ingress` carriers prove checked request/value/error envelopes, M00 admission, capability and owner/operator lookup projections, idempotent submit/finalize behavior and typed M71 result mapping. `apps/ustc-agentd` composes one fixture-backed Affairs operation over numeric loopback TCP, with durable fixture record/idempotency files and real subprocess coverage through `ustc-agent`. It also hosts one loopback-only Axum route and embedded page for the exact `affairs.get` result; the route consumes the submit capability internally and emits only the public-redacted typed lookup result.
+
+This evidence is deliberately narrower than the module exit gate. It does not establish remotely exposed production HTTP/TLS, a Dioxus server-function surface, broad operation registry, stream cursor/reconnect semantics, supported-version matrix, graceful drain, Docker Compose deployment, inbound MCP projection or Web/Android parity journey. The loopback fixture transports are integration proof surfaces, not the final heterogeneous-client transport contract.
 
 ## 2. Non-goals
 

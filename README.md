@@ -6,7 +6,19 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 
 平台有三个正式的 default first-party Plugins：**USTC Affairs Navigator**、**USTC ChangeRadar** 与 **Campus Opportunity Graph**。三者共享 Campus Trust Kernel，但保持独立的 package identity、版本、安装与启停边界。
 
-平台主线已建立 framework-neutral Agent runtime kernel、typed invocation resolver 与 `agent-tool-protocol/v0` 的 executable evidence，并固定 `Agent ↔ ToolGateway ↔ PluginExecutor` 为唯一扩展边界。具体业务实现当前暂停：先按 [`docs/plan/modules/00-module-map.md`](docs/plan/modules/00-module-map.md) 冻结 13 个可独立开发/验收/组装的大型模块，再按 [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md) 逐模块推进。现有 runtime/resolver/protocol 与 **Course Planning** 均是 bounded evidence，不代表完整 Market/runtime/product 闭环。
+平台主线已建立 framework-neutral Agent runtime kernel、typed invocation resolver 与 `agent-tool-protocol/v0` 的 executable evidence，并固定 `Agent ↔ ToolGateway ↔ PluginExecutor` 为唯一扩展边界。当前另有一个可直接运行的 **Affairs Navigator** bounded vertical slice：retained source-grounded fixture → M71 typed result → M10 durable ingress → ordinary-user CLI/loopback Web。它证明一个公开办事流程 fixture 的端到端产品路径，不代表管理员审批/发布、完整 M60 自动导入、生产认证、远程部署、Market/runtime 或三插件闭环。
+
+## 可运行的办事导航纵切
+
+准备好 Rust stable toolchain 后，在仓库根目录执行：
+
+```bash
+./scripts/run_affairs_web_demo.sh
+```
+
+然后访问 <http://127.0.0.1:8787>。页面默认查询 `proc:ustc:undergraduate:transcript-certificate`，展示办理条件、步骤、明确的未知时间边界、入口、联系方式、safe lineage、freshness、conflict 与 uncertainty。当前 fixture 保留了 2026-08-26 获取的[中国科大教务处公开页面](https://www.teach.ustc.edu.cn/service/svc-student/13824.html)及 normalized bytes，并由测试核对两者 SHA-256；这不是管理员审批/发布，也不会替代原始页面。
+
+该命令只绑定 loopback。运行状态默认写入 `$XDG_STATE_HOME/ustc-campus-agent/affairs-demo`（未设置时为 `~/.local/state/ustc-campus-agent/affairs-demo`）；可用 `USTC_AFFAIRS_BIND` 与 `USTC_AFFAIRS_STATE_DIR` 覆盖。当前 slice 没有生产认证、TLS、多用户隔离或自动来源更新，不应直接暴露到公网。
 
 ## Current decisions
 
@@ -26,19 +38,19 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
 | Required delivery targets | Web/PWA + Docker Compose Fullstack server + Android；Windows 为已接纳的 later peer、当前不进入 required gate；iOS/其他 desktop 后续候选 |
 | Multi-client shell | `M10` owns framework-neutral versioned operation/client-protocol registry；`M80` owns client core over it；Dioxus Web/Android、`ustc-agent` 与 public-read-first inbound MCP 为 peer adapters；later Windows 复用同一 core；M10 不依赖 client-core，GUI 不 spawn CLI；client/server adapter 不拥有平台 authority |
-| CLI privilege split | `ustc-agentctl` 为 operator/developer；未来 `ustc-agent` 为 ordinary-user/headless automation；MCP 仅暴露 selected least-privilege tools/resources |
+| CLI privilege split | `ustc-agentctl` 为 operator/developer；`ustc-agent` 已有 bounded ordinary-user/headless Affairs path；`ustc-agentd serve-web` 只提供 loopback-only source-grounded fixture demo，生产 auth/remote HTTP/streaming 仍未实现；MCP 仅暴露 selected least-privilege tools/resources |
 
 ## Repository layout
 
 ```text
 apps/                     # runnable binaries and future interaction-shell source
-  ustc-agentd/            # service daemon skeleton
+  ustc-agentd/            # daemon plus bounded source-grounded fixture CLI/Web Affairs composition
   ustc-agentctl/          # operator/developer CLI skeleton
-  ustc-agent/             # future ordinary-user/headless automation CLI
+  ustc-agent/             # bounded ordinary-user/headless Affairs CLI evidence; production transport/auth planned
   ustc-client/            # future shared Dioxus Web/Android Fullstack source
 crates/
-  client-protocol/        # future M10-owned framework-neutral versioned wire DTO/error/event carrier
-  client-core/            # future M80-owned client behavior and fake-M10 conformance
+  client-protocol/        # M10-owned framework-neutral versioned wire DTO/error carrier; bounded Affairs slice exists
+  client-core/            # M80-owned client behavior; bounded loopback Affairs slice exists
   platform-core/          # canonical domain invariants and authority decisions
   agent-runtime/          # Plugin-neutral node AgentRun; future finite harness state, graph, context and review kernel
   agent-tool-protocol/    # provider-neutral canonical tool values and sealed view/call/result envelopes
@@ -81,6 +93,7 @@ cargo run --locked -p ustc-agentctl -- course plan \
   --fixture market/fixtures/course-planning/minimal-v0.json \
   --format json
 cargo run --locked -p ustc-agentd -- --version
+cargo run --locked -p ustc-agent -- --version
 ```
 
 ## Documentation map

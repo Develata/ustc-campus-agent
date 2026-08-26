@@ -127,7 +127,7 @@ RetrievalReplayIdentity {
 }
 ```
 
-Identity and operator authority never come from the caller command. M00-B3 owns sealed `AuthenticatedActor`/`PlatformRequestContext`; M10 passes one admitted context beside the typed command over existing `B-M10-APP-CALL`.
+Identity and operator authority never come from the caller command. [`platform-request-context/v0`](platform-request-context.md) owns the sealed `M00AdmittedActor::{Public, Authenticated}`, `PlatformRequestContext`, and request-scoped immutable operation descriptor projection; M10 will pass one admitted context beside the typed command over existing `B-M10-APP-CALL`. This retrieval contract consumes only the exact authenticated arm where private source authority is required and never upgrades `Public` into synthetic tenant/user/session identity. The bounded M00 kernel is implemented, while that M10 composition remains planned.
 
 `SourceStartAuthorization` is the effect-time current authority witness. `SourceOperatorPolicyPort::authorize_start` consumes the sealed context continuation, validates current session/operation and exact capability, then mints one owner-private witness bound to the complete command/source/revision/tenant/user/operator with a trusted `issued_at..=not_after` window ≤ 5 seconds. The witness is non-clone, no Copy/Serde/Default/Display/public constructor, and the B3 start transaction atomically consumes its unique ID.
 

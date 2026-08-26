@@ -2,12 +2,12 @@
 
 ## Metadata
 
-- `Status`: current operator CLI contract plus accepted phased user/automation CLI boundary
+- `Status`: current operator CLI contract plus bounded fixture-backed ordinary-user Affairs evidence; production user/automation transport, auth and streaming remain planned
 - `Version`: `cli/v2.1`
-- `Last Review`: `2026-08-12`
+- `Last Review`: `2026-08-24`
 - `Owning plans`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md), [`M90 Infrastructure and Operations`](../plan/modules/90-infrastructure-operations.md)
 - `Counterpart contract`: [`client-shell/v2.1`](client-shell.md)
-- `Acceptance`: implemented command-specific evidence below; planned `CLIENT-008` and `CLIENT-009`
+- `Acceptance`: implemented command-specific evidence below plus bounded non-production Affairs CLI evidence; `CLIENT-008` and `CLIENT-009` remain planned/non-pass
 
 ## 1. Binary and privilege split
 
@@ -68,9 +68,30 @@ The command is a bounded offline spike. It is read-only: it does not access the 
 
 Any durable mutation must define dry-run/plan semantics, idempotency identity, authorization, receipt and recovery before implementation.
 
-## 4. Planned `ustc-agent` initial command families
+## 4. Bounded `ustc-agent` evidence and planned production families
 
-The first retained slice freezes and implements only an admitted read-only subset of:
+The retained non-production slice implements only these fixture-loopback commands:
+
+```bash
+ustc-agent --version
+ustc-agent affairs get \
+  --endpoint <numeric-loopback-host:port> \
+  --procedure-id <stable-id> \
+  --request-id <id> \
+  --correlation-id <id> \
+  --payload-digest <sha256-hex> \
+  [--as-of <unix-millis>] [--causation-id <id>] \
+  [--idempotency-key <key>] [--timeout <1..=300>] \
+  [--non-interactive] [--format json]
+ustc-agent affairs lookup \
+  --endpoint <numeric-loopback-host:port> \
+  --command-id <id> --capability-stdin \
+  [--timeout <1..=300>] [--non-interactive] [--format json]
+```
+
+`affairs get` is public/fixture-only. `affairs lookup` accepts only the public lookup capability from bounded stdin; it has no `--capability <value>`, raw session, tenant/user impersonation or operator-grant argv surface. The binary exposes no owner/operator lookup and no authenticated command until the profile/AuthPort contract is implemented. The current endpoint parser accepts only numeric loopback addresses; this is proof infrastructure, not production remote-client support.
+
+The planned production slice still begins with:
 
 ```bash
 ustc-agent --version
@@ -79,11 +100,11 @@ ustc-agent capabilities list --format json
 ustc-agent market packages list --format json
 ```
 
-These commands project `server.info`, `capability.list` and `market.package.list` from [`interfaces.md`](interfaces.md). Exact options, DTO schema versions and route bindings are fixed in the first accepted command-registry slice before implementation. Product-specific query/command/event families are added only after their owning M10/application contracts and active acceptance rows exist. Command spelling never creates an operation absent from that registry.
+These planned commands project `server.info`, `capability.list` and `market.package.list` from [`interfaces.md`](interfaces.md). Exact options, DTO schema versions and route bindings are fixed in the first accepted production command-registry slice before implementation. Product-specific query/command/event families are added only after their owning M10/application contracts and active acceptance rows exist. Command spelling never creates an operation absent from that registry.
 
 The initial CLI does not include install/grant/source-publish/operator actions, an embedded model loop or a generic arbitrary HTTP/tool invocation command.
 
-After real campus-product contracts exist, the CLI lane may add read-only projections in the existing product order: `affairs search/get` first, then approved ChangeRadar and Opportunity Graph operations. Cultivation programs use `program`; tenant-local planning drafts use `planner draft`. An ambiguous `plan` namespace is not admitted.
+The fixture-backed `affairs get/lookup` evidence does not activate broad `affairs search`, production auth/HTTP, inbound MCP or another product family. Later read-only projections retain the product order: approved ChangeRadar and Opportunity Graph operations only after their contracts; cultivation programs use `program`; tenant-local planning drafts use `planner draft`. An ambiguous `plan` namespace is not admitted.
 
 The inbound MCP adapter's executable/subcommand packaging is intentionally not fixed by this command table. Its first accepted slice may choose a dedicated binary or `ustc-agent mcp serve`; either choice must preserve the same client-core and privilege contract and cannot change the user CLI command semantics by implication.
 
@@ -102,6 +123,8 @@ parse bounded command input
 
 The CLI never imports backend domain implementations to “optimize” a remote operation. It may use local deterministic formatting/validation, but the server recomputes every truth-affecting decision.
 
+The current loopback proof intentionally omits production profile loading, user-session authentication, compatibility/capability preflight and streaming. Its synthetic fixture identifiers/capability are not production credentials. This omission is a non-claim, not an alternate production request path.
+
 ## 6. Machine output
 
 Machine mode is selected explicitly by `--format json` or `--format ndjson` where streaming is supported.
@@ -115,6 +138,8 @@ Machine mode is selected explicitly by `--format json` or `--format ndjson` wher
 - a non-success typed result is represented by the stable envelope and matching nonzero exit class.
 
 ### NDJSON stream
+
+NDJSON streaming is planned and has no retained implementation evidence.
 
 - each complete stdout line is one versioned `ustc-client-event/v1` value;
 - every line carries correlation identity, event kind and monotone cursor when the server supplied one;
@@ -157,7 +182,7 @@ Process termination or broken stdout means only that the observer stopped. It do
 
 ## 9. Authentication and secrets
 
-`ustc-agent` accepts a validated profile/reference, not a raw secret in argv. Secret/session material:
+The production `ustc-agent` accepts a validated profile/reference, not a raw secret in argv. The current public fixture slice accepts no user session or operator credential and reads its bounded public lookup capability only from stdin. Secret/session material:
 
 - is resolved through the user client auth adapter;
 - is stored with restrictive target-appropriate permissions;
@@ -169,11 +194,11 @@ Production config rejects loopback/default-server ambiguity where the target pro
 
 ## 10. Conformance and current status
 
-Before `ustc-agent` is claimed implemented:
+Before `ustc-agent` is claimed implemented for production:
 
 - `CLIENT-008` proves no GUI/service shell-out path and no operator command/credential reachability;
 - `CLIENT-009` proves real M10 read-only invocation, JSON/NDJSON framing, stderr separation, exit classes, auth isolation, version mismatch, reconnect/cancellation distinction and timeout reconciliation;
 - dependency checks prove no backend domain, repository, executor, provider, M51 or `ustc-agentctl` implementation dependency;
 - the real binary is exercised, not only a parser/unit test.
 
-Current status: `ustc-agent` does not exist. Only the `ustc-agentctl` commands in §2 and `ustc-agentd --version` are implemented. All other command rows remain planned and non-operational.
+Current status: a real `ustc-agent` binary and framework-neutral client-core exist for the bounded public fixture-loopback `affairs get/lookup` JSON path, with stable exit classes and real subprocess evidence. It is `partial-evidence`, not production readiness: authenticated profile/HTTP/TLS, server compatibility preflight, NDJSON/SSE, reconnect/cancellation/version-skew, inbound MCP and Dioxus peers remain planned; `CLIENT-008`/`CLIENT-009` remain non-pass.
