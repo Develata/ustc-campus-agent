@@ -486,7 +486,9 @@
     "test_check_repo_contracts.PlatformIdentityImplementationContractTests.test_whole_module_reexport_fails_closed",
     "test_check_repo_contracts.PlatformIdentityImplementationContractTests.test_widened_generator_grammar_fails_closed",
     "test_check_repo_contracts.PlatformIdentityImplementationContractTests.test_widened_test_helper_matcher_fails_closed",
+    "test_check_repo_contracts.PlatformIdentityImplementationContractTests.test_workspace_base64_dependency_removal_fails_closed",
     "test_check_repo_contracts.PlatformIdentityImplementationContractTests.test_workspace_dependency_redirect_fails_closed",
+    "test_check_repo_contracts.PlatformIdentityImplementationContractTests.test_workspace_hmac_dependency_redirect_fails_closed",
     "test_check_repo_contracts.PlatformIdentityNameResolutionTests.test_aliased_sweep_span_fails_closed",
     "test_check_repo_contracts.PlatformIdentityNameResolutionTests.test_auth011_shadow_fails_closed",
     "test_check_repo_contracts.PlatformIdentityNameResolutionTests.test_cfg_twinned_sweep_seeds_fail_closed",
@@ -523,6 +525,12 @@
     "test_check_repo_contracts.PlatformIdentityReachabilityTests.test_question_mark_before_runtime_proof_fails_closed",
     "test_check_repo_contracts.PlatformIdentityReachabilityTests.test_result_returning_proof_helper_fails_closed",
     "test_check_repo_contracts.PlatformIdentityReachabilityTests.test_weakened_length_sweep_fails_closed",
+    "test_check_repo_contracts.PlatformRequestContextContractTests.test_request_context_contract_empty_fails_closed",
+    "test_check_repo_contracts.PlatformRequestContextContractTests.test_request_context_contract_missing_fails_closed",
+    "test_check_repo_contracts.PlatformRequestContextContractTests.test_request_context_contract_unregistered_fails_closed",
+    "test_check_repo_contracts.PlatformRequestContextContractTests.test_request_context_exact_test_inventory_drift_fails_closed",
+    "test_check_repo_contracts.PlatformRequestContextContractTests.test_request_context_identity_six_kind_drift_fails_closed",
+    "test_check_repo_contracts.PlatformRequestContextContractTests.test_request_context_module_source_registration_drift_fails_closed",
     "test_check_repo_contracts.PlatformSessionContractTests.test_assertion_drift_from_the_catalog_fails_closed",
     "test_check_repo_contracts.PlatformSessionContractTests.test_binding_naming_no_exact_test_function_fails_closed",
     "test_check_repo_contracts.PlatformSessionContractTests.test_binding_without_the_repository_checker_leg_fails_closed",
@@ -675,5 +683,5 @@
     "test_run_checker_shards.ProcessIsolationTests.test_36_sigterm_ignoring_group_descendant_killed",
     "test_run_checker_shards.TransactionalSpawnTests.test_34_spawn_failure_cleans_prior_handles"
   ],
-  "expected_count": 673
+  "expected_count": 681
 }

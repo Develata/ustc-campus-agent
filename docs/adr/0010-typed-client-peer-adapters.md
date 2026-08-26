@@ -2,7 +2,7 @@
 
 - `Status`: Accepted; amended for phased public-read inbound MCP, one application-operation registry and a later admitted Windows peer
 - `Date`: `2026-07-31`
-- `Last Amendment`: `2026-08-12`
+- `Last Amendment`: `2026-08-24`
 - `Decision owner`: Develata
 - `Depends on`: [`ADR-0009`](0009-dioxus-multi-client-shell.md)
 - `Owning contract`: [`client-shell/v2.1`](../contracts/client-shell.md)
@@ -107,8 +107,8 @@ Costs:
 
 ## Verification and rollback
 
-Acceptance is bound to `CLIENT-007` through `CLIENT-010` in the active matrix. All remain planned until executable evidence exists.
+Acceptance is bound to `CLIENT-007` through `CLIENT-010` in the active matrix. All remain planned until every bound assertion passes. The retained client-core and fixture-loopback `ustc-agent affairs get/lookup` path is bounded partial evidence only; it does not complete peer equivalence, production CLI, inbound MCP or Dioxus acceptance.
 
-Before implementation, rollback is documentation-only. After implementation, rollback may remove one outer adapter while preserving the client-core/M10 contract and other peer artifacts. Replacing client-core transport must preserve compatibility, correlation, reconnect, cancellation and typed failure fixtures.
+The bounded implementation may be rolled back by removing the fixture-only client/CLI adapter while preserving the accepted M10/M80 contract. A later production rollback may remove one outer adapter while preserving the client-core/M10 contract and other peer artifacts. Replacing client-core transport must preserve compatibility, correlation, reconnect, cancellation and typed failure fixtures.
 
-This ADR does not introduce a Dioxus dependency, client-core crate, CLI binary or MCP runtime by itself.
+This ADR still does not introduce a Dioxus dependency or MCP runtime by itself. The later bounded implementation introduced `client-protocol`, `client-core` and `ustc-agent` under this decision without changing its authority split.

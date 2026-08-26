@@ -1757,6 +1757,7 @@ fn assert_public_surface_is_frozen() {
                 "identity",
                 "invocation",
                 "market",
+                "request_context",
                 "session",
                 "source_registry",
             ] as &[&str],
@@ -4213,10 +4214,11 @@ const ADMITTED_MARKET_ITEMS: [&str; 12] = [
     "type Value = UniqueStringMap;",
 ];
 
-const ADMITTED_LIB_ITEMS: [&str; 7] = [
+const ADMITTED_LIB_ITEMS: [&str; 8] = [
     "pub mod identity;",
     "pub mod invocation;",
     "pub mod market;",
+    "pub mod request_context;",
     "pub mod session;",
     "pub mod source_registry;",
     "#[cfg(test)] mod tests",

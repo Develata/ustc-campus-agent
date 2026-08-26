@@ -1,10 +1,12 @@
 # USTC Affairs Navigator
 
 - `Package ID`: `ustc.affairs-navigator`
-- `Status`: Planned manifest skeleton; no executable component claimed
+- `Status`: Bounded executable procedure-kernel and fixture-backed exact-query evidence; complete administrator/source/Web feature remains planned
 - `Owning plan`: `docs/plan/06-first-party-plugins.md`
 - `Contracts`: `docs/contracts/source-import.md`, `docs/contracts/permissions.md`
 - `Acceptance`: `FP-001`, `PROC-*`
+
+Current retained evidence covers checked stable procedure/artifact identities, draft/policy/freshness/conflict semantics and one synthetic reviewed-snapshot lookup through the loopback `ustc-agentd`/`ustc-agent` product path. It does not implement real M60 import, administrator review/publish/archive, supersession, broad structured search or the thin Web result; `PROC-010` and `PROC-011` remain planned/non-pass.
 
 ## Goal
 

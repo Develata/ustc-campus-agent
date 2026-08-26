@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- `Status`: Accepted registry; every operation remains planned until its bound executable evidence passes
+- `Status`: Accepted registry; one fixture-backed loopback `affairs.get`/result-lookup proof is retained as bounded partial evidence, while public routes and all other operation projections remain planned
 - `Version`: `application-interface-registry/v2`
-- `Last Review`: `2026-08-12`
+- `Last Review`: `2026-08-24`
 - `Owning plan`: [`M10 Application Ingress Host`](../plan/modules/20-application-api-host.md)
 - `Client counterpart`: [`client-shell/v2.1`](client-shell.md)
 - `Permission counterpart`: [`permissions.md`](permissions.md)
@@ -24,7 +24,7 @@ Operation IDs name semantics independently of transport or CLI spelling. Each ad
 | `market.package.list` | M20 | `public-read` | read | CLI, HTTP, inbound MCP | planned first vertical slice |
 | `market.package.get` | M20 | `public-read` | read | CLI, HTTP | planned |
 | `affairs.search` | M71 | `public-read` | read | CLI, HTTP, inbound MCP | planned after owning product contract |
-| `affairs.get` | M71 | `public-read` | read | CLI, HTTP, inbound MCP | planned after owning product contract |
+| `affairs.get` | M71 | `public-read` | read | CLI, HTTP, inbound MCP | bounded exact stable-ID fixture evidence through `ustc-agentd` and `ustc-agent`; production HTTP/inbound-MCP projection planned |
 | `change.list` | M70 | `public-read` | read | CLI, HTTP | planned after owning product contract |
 | `change.get` | M70 | `public-read` | read | CLI, HTTP | planned after owning product contract |
 | `program.list` | M72 | `public-read` | read | CLI, HTTP, inbound MCP | planned after owning product contract |
@@ -43,7 +43,7 @@ Operation IDs name semantics independently of transport or CLI spelling. Each ad
 
 `program.*` means an approved cultivation-program projection. `planner.draft.*` means a tenant-local planning draft. Neither is an Agent/Harness plan, and no ambiguous `plan.*` alias is admitted.
 
-The first retained protocol proof is `server.info` plus `capability.list`; the first shared CLI/inbound-MCP vertical slice is `market.package.list`. The first campus-product query follows the existing product order and should be `affairs.search`/`affairs.get` after M60/M71 own the real source and procedure contracts. Existing Course Planning code remains bounded offline evidence and does not make M72 operations operational.
+The first planned production protocol proof remains `server.info` plus `capability.list`, followed by the shared CLI/inbound-MCP `market.package.list` slice. A bounded fixture-only `affairs.get` proof now exists earlier as vertical-slice evidence for the M10→M71→M80 typed path; it does not make a public HTTP route, inbound MCP tool, real M60 source, administrator publication lifecycle, broad `affairs.search` or `PROC-011` operational. Existing Course Planning code remains bounded offline evidence and does not make M72 operations operational.
 
 ## 2. Schema identity and grant invalidation
 
@@ -80,7 +80,7 @@ Every request carries client build/target/protocol identity. M10 performs versio
 | Client adapter | Direction | Admitted transport | Registry constraint |
 |---|---|---|---|
 | Dioxus Web/Android | user → platform | generated server function / typed events or equivalent M10 transport | presentation only; explicit operation allowlist; no CLI/process bridge |
-| `ustc-agent` | user/script → platform | explicit versioned HTTP/JSON and SSE | least-privilege user profile; its command registry projects a subset of §1 |
+| `ustc-agent` | user/script → platform | production contract: explicit versioned HTTP/JSON and SSE; bounded current evidence: numeric-loopback fixture framing only | least-privilege user profile; its command registry projects a subset of §1 and contains no operator command or raw secret/session argv |
 | inbound MCP | external Agent → platform | reviewed MCP Streamable HTTP surface mapped through client-core to explicit M10 routes | read-only public slice first; exact tool/resource allowlist and schema digests; no operator/domain/M51 reach-through |
 | M51 outbound MCP | platform → external MCP server | M51 binding/session/executor contract | opposite direction; never an M80 client adapter |
 

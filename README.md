@@ -26,19 +26,19 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
 | Required delivery targets | Web/PWA + Docker Compose Fullstack server + Android；Windows 为已接纳的 later peer、当前不进入 required gate；iOS/其他 desktop 后续候选 |
 | Multi-client shell | `M10` owns framework-neutral versioned operation/client-protocol registry；`M80` owns client core over it；Dioxus Web/Android、`ustc-agent` 与 public-read-first inbound MCP 为 peer adapters；later Windows 复用同一 core；M10 不依赖 client-core，GUI 不 spawn CLI；client/server adapter 不拥有平台 authority |
-| CLI privilege split | `ustc-agentctl` 为 operator/developer；未来 `ustc-agent` 为 ordinary-user/headless automation；MCP 仅暴露 selected least-privilege tools/resources |
+| CLI privilege split | `ustc-agentctl` 为 operator/developer；`ustc-agent` 已有一个 fixture-backed loopback Affairs ordinary-user/headless evidence slice，生产 auth/HTTP/streaming 仍未实现；MCP 仅暴露 selected least-privilege tools/resources |
 
 ## Repository layout
 
 ```text
 apps/                     # runnable binaries and future interaction-shell source
-  ustc-agentd/            # service daemon skeleton
+  ustc-agentd/            # daemon plus bounded fixture-backed loopback Affairs composition
   ustc-agentctl/          # operator/developer CLI skeleton
-  ustc-agent/             # future ordinary-user/headless automation CLI
+  ustc-agent/             # bounded ordinary-user/headless Affairs CLI evidence; production transport/auth planned
   ustc-client/            # future shared Dioxus Web/Android Fullstack source
 crates/
-  client-protocol/        # future M10-owned framework-neutral versioned wire DTO/error/event carrier
-  client-core/            # future M80-owned client behavior and fake-M10 conformance
+  client-protocol/        # M10-owned framework-neutral versioned wire DTO/error carrier; bounded Affairs slice exists
+  client-core/            # M80-owned client behavior; bounded loopback Affairs slice exists
   platform-core/          # canonical domain invariants and authority decisions
   agent-runtime/          # Plugin-neutral node AgentRun; future finite harness state, graph, context and review kernel
   agent-tool-protocol/    # provider-neutral canonical tool values and sealed view/call/result envelopes
@@ -81,6 +81,7 @@ cargo run --locked -p ustc-agentctl -- course plan \
   --fixture market/fixtures/course-planning/minimal-v0.json \
   --format json
 cargo run --locked -p ustc-agentd -- --version
+cargo run --locked -p ustc-agent -- --version
 ```
 
 ## Documentation map
