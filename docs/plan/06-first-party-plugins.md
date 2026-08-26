@@ -120,12 +120,12 @@ administrator-imported reviewed snapshot (or later one exact approved public sou
 → administrator review and publish
 → one application query (exact stable ID or structured search)
 → one thin Web result with conditions, steps, effective/deadline time, entry point,
-  source revision/evidence, freshness, conflicts and uncertainty
+  safe public lineage/evidence, freshness, conflicts and uncertainty
 ```
 
 The `ustc-teach-calendar-fall` candidate family is the foundation for the administrator-imported reviewed snapshot path. This decision does not itself approve a concrete source, authorize network retrieval, or commit raw HTML. If the calendar evidence cannot ground one honest procedure, it remains source/revision fixture groundwork and the narrowest separately reviewed Affairs procedure snapshot is selected before claiming the product acceptance.
 
-The thin Web surface renders typed server-owned state and captures intent only. It does not require Agent, Market artifact switching, Android, CLI or inbound MCP.
+The thin Web surface renders typed server-owned state and captures intent only. Its public lineage is limited to `source_id`, `evidence_set_digest`, `materialization_receipt_id` and `revision_count`; it emits no raw revision identity or response-only capability. It does not require Agent, Market artifact switching, Android, CLI or inbound MCP.
 
 ### 2.6 Evidence context (planned)
 

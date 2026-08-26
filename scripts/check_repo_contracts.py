@@ -306,7 +306,7 @@ EXTERNAL_AGENT_OPERATION_ROWS = {
         "public-read",
         "read",
         "CLI, HTTP, inbound MCP",
-        "bounded exact stable-ID fixture evidence through `ustc-agentd` and `ustc-agent`; production HTTP/inbound-MCP projection planned",
+        "bounded exact stable-ID evidence through `ustc-agentd`, `ustc-agent` and the loopback-only Web demo; production HTTP/inbound-MCP projection planned",
     ),
     "change.list": ("M70", "public-read", "read", "CLI, HTTP", "planned after owning product contract"),
     "change.get": ("M70", "public-read", "read", "CLI, HTTP", "planned after owning product contract"),
@@ -4490,6 +4490,11 @@ CRATES_IO_SOURCE = "registry+https://github.com/rust-lang/crates.io-index"
 # requirement; a table is compared key for key, so adding `path`, `git`, `registry` or
 # `default-features` is drift rather than an unnoticed redirect.
 WORKSPACE_ADMITTED_DEPENDENCIES = {
+    "axum": {
+        "version": "0.8.9",
+        "default-features": False,
+        "features": ["http1", "json", "tokio"],
+    },
     "base64": "0.22.1",
     "hmac": "0.12.1",
     "serde": {"version": "1.0.229", "features": ["derive"]},
@@ -4497,6 +4502,7 @@ WORKSPACE_ADMITTED_DEPENDENCIES = {
     "semver": "1.0.27",
     "sha2": "0.10.9",
     "time": {"version": "0.3.54", "features": ["parsing"]},
+    "tokio": {"version": "1.53.1", "features": ["net", "rt-multi-thread"]},
     # The single admitted local path dependency, pinned to its exact in-repo location.
     "ustc-agent-tool-protocol": {"path": "crates/agent-tool-protocol"},
 }
@@ -10673,7 +10679,7 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
 
     required_fragments = {
         "docs/contracts/interfaces.md": (
-            "A bounded fixture-only `affairs.get` proof now exists earlier as vertical-slice evidence for the M10→M71→M80 typed path",
+            "A bounded loopback-only `affairs.get` proof now exists earlier as vertical-slice evidence for the M10→M71 typed path and one operation-specific presentation surface",
             "The first remote profile uses reviewed MCP Streamable HTTP.",
             "`planner.generate` creates only a tenant-local draft. It does not enroll, register, pay or submit a transaction to any external campus system.",
         ),
@@ -12018,7 +12024,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
     "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
-    "check_external_agent_access_contract": {"digest": "0569a40861bad19c857c806dc5abefdf4dde78554c7879f29ccd8751bda0324e", "status": "active"},
+    "check_external_agent_access_contract": {"digest": "0895a4b944369629f088134365ddb128cfde0da3ed40b70aab4e12cee8cdf0d2", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},

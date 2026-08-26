@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- `Status`: Accepted target architecture with bounded client-core and ordinary-user Affairs CLI loopback evidence; production auth/HTTP/stream, inbound MCP and Dioxus clients remain planned
+- `Status`: Accepted target architecture with bounded client-core, ordinary-user Affairs CLI and one operation-specific loopback thin-Web presentation proof; production auth/remote HTTP/stream, inbound MCP and Dioxus clients remain planned
 - `Version`: `client-shell/v2.1`
-- `Last Review`: `2026-08-24`
+- `Last Review`: `2026-08-26`
 - `Owning Plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
 - `Counterpart Plans`: [`M10 Application Ingress Host`](../plan/modules/20-application-api-host.md), [`platform authority`](../plan/03-platform-authority.md)
 - `Decisions`: [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md), [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
@@ -34,7 +34,9 @@ Peer adapters reuse code through the typed core. They do not invoke one another 
 
 ### Current bounded evidence
 
-`crates/client-core` and the real `apps/ustc-agent` binary retain one typed `affairs get/lookup` path over fixture-only numeric loopback framing. The core validates endpoint/protocol/value bounds, propagates correlation/idempotency/provenance, reduces typed M10 responses/errors, emits one canonical JSON result and maps stable exit classes without importing backend or operator implementations. This is partial evidence only: no production profile/auth, HTTP/TLS, NDJSON/SSE, reconnect/cancellation/version-skew matrix, inbound MCP or Dioxus target exists.
+`crates/client-core` and the real `apps/ustc-agent` binary retain one typed `affairs get/lookup` path over numeric loopback framing. `ustc-agentd serve-web` additionally retains one loopback-only, operation-specific Axum/HTTP presentation proof whose static page renders a public-redacted server-owned `ClientResponseDto::Available` without making domain decisions. The CLI core validates endpoint/protocol/value bounds, propagates correlation/idempotency/provenance, reduces typed M10 responses/errors, emits one canonical JSON result and maps stable exit classes without importing backend or operator implementations. The colocated Web proof is not a replacement for that core and does not count as the future peer Dioxus shell. This is partial evidence only: no production profile/auth, remote HTTP/TLS, NDJSON/SSE, reconnect/cancellation/version-skew matrix, inbound MCP or Dioxus target exists.
+
+The bounded Web page is deliberately not a second client authority. It accepts only a stable procedure ID, calls the colocated same-origin endpoint and presents prerequisites, ordered steps, explicit unknown effective/deadline time, entry points, contacts, safe public lineage (`source_id`, `evidence_set_digest`, `materialization_receipt_id`, `revision_count`), freshness, conflict and uncertainty already present in the typed response. The server consumes the response-only public capability internally and returns only the public-redacted lookup result; JavaScript never receives a capability or raw revision identity. It never computes procedure truth, freshness, conflict resolution, authorization or eligibility. Its loopback bind, embedded assets and retained source-grounded noncanonical fixture make it demo evidence, not the final Dioxus peer adapter or a remotely deployable public service.
 
 ## 2. Required client surfaces
 

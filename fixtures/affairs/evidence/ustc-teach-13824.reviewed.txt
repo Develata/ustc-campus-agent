@@ -1,0 +1,25 @@
+schema: ustc-affairs-retained-source/v1
+source_id: src:ustc-teach:13824
+source_url: https://www.teach.ustc.edu.cn/service/svc-student/13824.html
+source_title: 在校生怎样办理成绩单、成绩排名证明、在读证明？
+published_at: 2021-11-09T13:40:00+08:00
+retrieved_at: 2026-08-26T23:54:01+08:00
+retrieval_method: AnySearch extract of the official USTC Academic Affairs Office page
+
+电子版：
+
+学生可以登录教务系统自行下载，每类材料每学年可下载 4 次。可使用自动发送功能，将电子证明发送到指定邮箱，附件计入每学年限定次数。
+
+纸质版：
+
+打印办法：通过自助打印设备缴费、打印。
+
+打印地点：东区第二教学楼一楼西门厅；西区第三教学楼A楼一楼大厅；高新校区图书教育中心B区一楼大厅。
+
+出国成绩单封装办理流程：学生通过自助打印设备打印所需份数→到教务处办理登记手续、使用一卡通缴费→于约定时间领取封装好的材料。
+
+时间：每周一、四下午，周三上午；地点：东区老图书馆217室。
+
+一号通办地址：安徽省合肥市金寨路96号中国科学技术大学东校区老图书馆2楼/教二楼7楼
+热线电话：0551-63602251
+通联邮箱：jwc@ustc.edu.cn

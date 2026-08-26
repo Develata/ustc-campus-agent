@@ -8,6 +8,9 @@
 #![forbid(unsafe_code)]
 
 mod affairs_fixture;
+mod web;
+
+pub use web::web_router;
 
 use std::io::Write;
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -162,7 +165,7 @@ impl AffairsComposition {
     }
 }
 
-pub fn bind_loopback(bind_addr: &str) -> Result<TcpListener, String> {
+pub(crate) fn parse_loopback_socket_addr(bind_addr: &str) -> Result<SocketAddr, String> {
     let socket_addr: SocketAddr = bind_addr
         .parse()
         .map_err(|e| format!("bind_addr parse failed: {e}"))?;
@@ -171,6 +174,11 @@ pub fn bind_loopback(bind_addr: &str) -> Result<TcpListener, String> {
             "bind addr {socket_addr} rejected: only loopback (127.0.0.0/8 or ::1) permitted"
         ));
     }
+    Ok(socket_addr)
+}
+
+pub fn bind_loopback(bind_addr: &str) -> Result<TcpListener, String> {
+    let socket_addr = parse_loopback_socket_addr(bind_addr)?;
     TcpListener::bind(socket_addr).map_err(|e| format!("bind failed: {e}"))
 }
 

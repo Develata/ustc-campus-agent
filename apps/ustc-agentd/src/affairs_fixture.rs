@@ -20,9 +20,10 @@ use affairs_navigator::{
     BoardPolicyVersion, ConflictKind, Contact as ArtifactContact, ContactChannel, ContactName,
     ContactRef, EntryPoint, EntryPointLabel, EvidenceConflictState, FixedClock,
     InMemoryAffairsRepository, Instruction, M60EvidencePortError, M60ProcedureEvidencePort,
-    M60RetainedEvidenceOutcome, M60RetainedEvidenceRequest, M60RevisionRef, ProcedureArtifact,
-    ProcedureEvidenceContext, ProcedureId, ProcedurePublicationState, ProcedureStep, Sha256,
-    SourceId, Title, UncertaintyState, Url, ValidityHorizon,
+    M60RetainedEvidenceOutcome, M60RetainedEvidenceRequest, M60RevisionRef, Prerequisite,
+    PrerequisiteCondition, ProcedureArtifact, ProcedureEvidenceContext, ProcedureId,
+    ProcedurePublicationState, ProcedureStep, Sha256, SourceId, Title, UncertaintyState, Url,
+    ValidityHorizon,
 };
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -75,11 +76,40 @@ impl M60ProcedureEvidencePort for CountingM60Port {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct FixtureEntryPointDto {
+    label: String,
+    url: Option<String>,
+    contact_ref: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FixtureContactDto {
+    contact_ref: String,
+    name: String,
+    channel: String,
+    source_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct AffairsFixtureDto {
     procedure_id: String,
     artifact_id: String,
     title: String,
+    #[serde(default)]
+    audience_tags: Vec<String>,
+    #[serde(default)]
+    prerequisites: Vec<String>,
+    #[serde(default)]
+    steps: Vec<String>,
+    #[serde(default)]
+    entry_points: Vec<FixtureEntryPointDto>,
+    #[serde(default)]
+    contacts: Vec<FixtureContactDto>,
     known_at_secs: i64,
+    observed_at_secs: Option<i64>,
+    reviewed_at_secs: Option<i64>,
     last_verified_at_secs: i64,
     max_fresh_seconds: u32,
     max_presentable_seconds: u32,
@@ -142,8 +172,14 @@ impl AffairsFixture {
     }
 
     fn build(dto: AffairsFixtureDto) -> Result<Self, String> {
-        let epoch =
-            OffsetDateTime::from_unix_timestamp(0).map_err(|e| format!("epoch invalid: {e}"))?;
+        let known_at = OffsetDateTime::from_unix_timestamp(dto.known_at_secs)
+            .map_err(|e| format!("known_at_secs invalid: {e}"))?;
+        let observed_at = OffsetDateTime::from_unix_timestamp(dto.observed_at_secs.unwrap_or(0))
+            .map_err(|e| format!("observed_at_secs invalid: {e}"))?;
+        let reviewed_at = OffsetDateTime::from_unix_timestamp(dto.reviewed_at_secs.unwrap_or(0))
+            .map_err(|e| format!("reviewed_at_secs invalid: {e}"))?;
+        let last_verified_at = OffsetDateTime::from_unix_timestamp(dto.last_verified_at_secs)
+            .map_err(|e| format!("last_verified_at_secs invalid: {e}"))?;
 
         // -- M60 revision ref --
         let raw_digest =
@@ -155,7 +191,7 @@ impl AffairsFixture {
         let revision_ref = M60RevisionRef::new(
             source_id.clone(),
             dto.revision_id.clone(),
-            epoch,
+            observed_at,
             None,
             None,
             None,
@@ -181,20 +217,19 @@ impl AffairsFixture {
         }
 
         // -- Evidence assessment --
+        let prerequisite_revision_ref = revision_ref.clone();
         let authority_assessment = AffairsAuthorityAssessment::new(
             AffairsAuthority::OfficialBulletin,
             AuthoritySubject::ProcedureTitle,
             AuthorityDerivation::Direct,
-            epoch,
+            reviewed_at,
             ActorRef::parse("actor:fixture").map_err(|e| format!("actor_ref invalid: {e}"))?,
         );
-        let assessed_at = OffsetDateTime::from_unix_timestamp(100)
-            .map_err(|e| format!("assessed_at invalid: {e}"))?;
         let assessment = AffairsEvidenceAssessment::new(
             revision_ref,
             authority_assessment,
-            assessed_at,
-            assessed_at,
+            reviewed_at,
+            last_verified_at,
         );
 
         // -- Evidence context --
@@ -215,15 +250,11 @@ impl AffairsFixture {
             Some("authority_conflict") => Some(ConflictKind::AuthorityConflict),
             Some(other) => return Err(format!("unknown conflict_kind: {other}")),
         };
-        let known_at = OffsetDateTime::from_unix_timestamp(dto.known_at_secs)
-            .map_err(|e| format!("known_at_secs invalid: {e}"))?;
-        let last_verified_at = OffsetDateTime::from_unix_timestamp(dto.last_verified_at_secs)
-            .map_err(|e| format!("last_verified_at_secs invalid: {e}"))?;
         let evidence = ProcedureEvidenceContext::new(
             ValidityHorizon::Unknown,
-            epoch,
+            observed_at,
             known_at,
-            epoch,
+            reviewed_at,
             last_verified_at,
             vec![assessment],
             conflict_state,
@@ -249,33 +280,113 @@ impl AffairsFixture {
         let procedure_id = ProcedureId::parse(&dto.procedure_id)
             .map_err(|e| format!("procedure_id invalid: {e}"))?;
         let title = Title::new(&dto.title).map_err(|e| format!("title invalid: {e}"))?;
-        let step = ProcedureStep::new(
-            0,
-            Instruction::new("Do step 1").map_err(|e| format!("instruction invalid: {e}"))?,
-        );
-        let contact = ArtifactContact::new(
-            ContactRef::parse("contact:desk").map_err(|e| format!("contact_ref invalid: {e}"))?,
-            ContactName::new("Desk").map_err(|e| format!("contact_name invalid: {e}"))?,
-            ContactChannel::new("email").map_err(|e| format!("contact_channel invalid: {e}"))?,
-            SourceId::parse("src:desk").map_err(|e| format!("contact_source invalid: {e}"))?,
-        );
-        let entry = EntryPoint::new(
-            EntryPointLabel::new("Portal").map_err(|e| format!("entry_label invalid: {e}"))?,
-            Some(Url::new("https://example.com").map_err(|e| format!("entry_url invalid: {e}"))?),
-            ContactRef::parse("contact:desk").map_err(|e| format!("entry_ref invalid: {e}"))?,
-        );
+        let audience_tags = if dto.audience_tags.is_empty() {
+            vec![AudienceTag::new("students").map_err(|e| format!("audience_tag invalid: {e}"))?]
+        } else {
+            dto.audience_tags
+                .iter()
+                .map(|value| {
+                    AudienceTag::new(value).map_err(|e| format!("audience_tag invalid: {e}"))
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        let prerequisites = dto
+            .prerequisites
+            .iter()
+            .map(|value| {
+                let condition = PrerequisiteCondition::new(value)
+                    .map_err(|e| format!("prerequisite invalid: {e}"))?;
+                Ok(Prerequisite::new(
+                    condition,
+                    Some(prerequisite_revision_ref.clone()),
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let steps = if dto.steps.is_empty() {
+            vec![ProcedureStep::new(
+                0,
+                Instruction::new("Do step 1").map_err(|e| format!("instruction invalid: {e}"))?,
+            )]
+        } else {
+            dto.steps
+                .iter()
+                .enumerate()
+                .map(|(index, value)| {
+                    let ordinal =
+                        u32::try_from(index).map_err(|_| "too many procedure steps".to_owned())?;
+                    let instruction =
+                        Instruction::new(value).map_err(|e| format!("instruction invalid: {e}"))?;
+                    Ok(ProcedureStep::new(ordinal, instruction))
+                })
+                .collect::<Result<Vec<_>, String>>()?
+        };
+        let contacts = if dto.contacts.is_empty() {
+            vec![ArtifactContact::new(
+                ContactRef::parse("contact:desk")
+                    .map_err(|e| format!("contact_ref invalid: {e}"))?,
+                ContactName::new("Desk").map_err(|e| format!("contact_name invalid: {e}"))?,
+                ContactChannel::new("email")
+                    .map_err(|e| format!("contact_channel invalid: {e}"))?,
+                SourceId::parse("src:desk").map_err(|e| format!("contact_source invalid: {e}"))?,
+            )]
+        } else {
+            dto.contacts
+                .iter()
+                .map(|value| {
+                    Ok(ArtifactContact::new(
+                        ContactRef::parse(&value.contact_ref)
+                            .map_err(|e| format!("contact_ref invalid: {e}"))?,
+                        ContactName::new(&value.name)
+                            .map_err(|e| format!("contact_name invalid: {e}"))?,
+                        ContactChannel::new(&value.channel)
+                            .map_err(|e| format!("contact_channel invalid: {e}"))?,
+                        SourceId::parse(&value.source_id)
+                            .map_err(|e| format!("contact_source invalid: {e}"))?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, String>>()?
+        };
+        let entry_points = if dto.entry_points.is_empty() {
+            vec![EntryPoint::new(
+                EntryPointLabel::new("Portal").map_err(|e| format!("entry_label invalid: {e}"))?,
+                Some(
+                    Url::new("https://example.com")
+                        .map_err(|e| format!("entry_url invalid: {e}"))?,
+                ),
+                ContactRef::parse("contact:desk").map_err(|e| format!("entry_ref invalid: {e}"))?,
+            )]
+        } else {
+            dto.entry_points
+                .iter()
+                .map(|value| {
+                    let url = value
+                        .url
+                        .as_deref()
+                        .map(Url::new)
+                        .transpose()
+                        .map_err(|e| format!("entry_url invalid: {e}"))?;
+                    Ok(EntryPoint::new(
+                        EntryPointLabel::new(&value.label)
+                            .map_err(|e| format!("entry_label invalid: {e}"))?,
+                        url,
+                        ContactRef::parse(&value.contact_ref)
+                            .map_err(|e| format!("entry_ref invalid: {e}"))?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, String>>()?
+        };
         let artifact = ProcedureArtifact::new(
             artifact_id.clone(),
             procedure_id.clone(),
             title,
-            vec![AudienceTag::new("students").map_err(|e| format!("audience_tag invalid: {e}"))?],
+            audience_tags,
             board_policy,
-            Vec::new(),
-            vec![step],
+            prerequisites,
+            steps,
             Vec::new(),
             None,
-            vec![entry],
-            vec![contact],
+            entry_points,
+            contacts,
             evidence,
             known_at,
         )

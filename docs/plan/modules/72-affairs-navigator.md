@@ -4,7 +4,7 @@
 
 - `Module ID`: `M71`
 - `Package ID`: `ustc.affairs-navigator`
-- `Status`: Accepted blueprint with bounded executable product-kernel and fixture-backed exact-query evidence; real source/admin/Web lifecycle remains planned
+- `Status`: Accepted blueprint with bounded executable product-kernel, source-grounded fixture-backed exact-query evidence and one loopback thin-Web projection; real source/admin lifecycle and production Web remain planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m71-affairs-navigator/v0`
 - `Last Review`: `2026-08-24`
@@ -18,9 +18,9 @@ Its default truth path is exact/structured lookup over reviewed material, not fr
 
 ### Current bounded evidence
 
-`crates/affairs-navigator` retains checked stable procedure/artifact/source identities, typed drafts and artifacts, board-policy validation, ordered conditions/steps/time/entry projections, freshness/conflict/uncertainty outcomes and deterministic exact lookup. The bounded `ustc-agentd` composition loads one synthetic reviewed snapshot fixture and maps an admitted exact stable-ID request to that kernel; integration tests cover found, unavailable/corrupted source, stale/conflicting authority and lineage/provenance outcomes.
+`crates/affairs-navigator` retains checked stable procedure/artifact/source identities, typed drafts and artifacts, board-policy validation, ordered conditions/steps/time/entry projections, freshness/conflict/uncertainty outcomes and deterministic exact lookup. The bounded `ustc-agentd` composition loads one source-grounded noncanonical fixture from a retained public USTC Academic Affairs page and maps an admitted exact stable-ID request to that kernel; integration tests cover found, unavailable/corrupted source, stale/conflicting authority and lineage/provenance outcomes, while the loopback page displays the safe public projection.
 
-The fixture is proof infrastructure, not a production source or administrator publication system. No real M60 retrieval/import, board repository, administrator review/publish/archive receipt, supersession projection, broad structured search, Web rendering or external campus transaction is claimed. `PROC-011` therefore remains planned until its complete administrator-import → review/publish → application query → thin-Web assertions are bound.
+The fixture is proof infrastructure, not an approved production source or administrator publication system. Retained source bytes and normalized bytes are hash-accounted, but their fixture verifier is not administrator review/publish authority and the page publication time is not used as `known_at` or `valid_at`. No real M60 retrieval/import, board repository, administrator review/publish/archive receipt, supersession projection, broad structured search, production Web or external campus transaction is claimed. `PROC-011` therefore remains planned until its complete administrator-import → review/publish → application query → thin-Web assertions are bound.
 
 ## 2. Non-goals
 

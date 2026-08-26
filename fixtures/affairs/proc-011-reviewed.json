@@ -1,0 +1,68 @@
+{
+  "procedure_id": "proc:ustc:undergraduate:transcript-certificate",
+  "artifact_id": "artifact:ustc:teach:13824:v2026-08-26",
+  "title": "在校生办理成绩单、成绩排名证明与在读证明",
+  "audience_tags": [
+    "中国科学技术大学在校本科生"
+  ],
+  "prerequisites": [
+    "办理对象为中国科学技术大学在校学生。",
+    "电子版材料需登录综合教务系统；出国成绩单封装缴费需使用一卡通。"
+  ],
+  "steps": [
+    "电子版：登录综合教务系统，选择所需材料并下载；每类材料每学年最多下载 4 次。",
+    "如需将电子证明发送到邮箱，使用教务系统自动发送功能；发送的附件计入每学年限定次数。",
+    "纸质版：前往校内自助打印点，通过自助打印设备缴费并打印。",
+    "如需出国成绩单封装：先在自助设备打印，再到教务处登记并使用一卡通缴费，最后于约定时间领取。"
+  ],
+  "entry_points": [
+    {
+      "label": "综合教务系统",
+      "url": "https://jw.ustc.edu.cn/",
+      "contact_ref": "contact:ustc-academic-affairs"
+    },
+    {
+      "label": "教务处原始办理说明",
+      "url": "https://www.teach.ustc.edu.cn/service/svc-student/13824.html",
+      "contact_ref": "contact:ustc-academic-affairs"
+    }
+  ],
+  "contacts": [
+    {
+      "contact_ref": "contact:ustc-academic-affairs",
+      "name": "中国科学技术大学教务处一号通办",
+      "channel": "jwc@ustc.edu.cn · 0551-63602251",
+      "source_id": "src:ustc-teach:13824"
+    }
+  ],
+  "known_at_secs": 1787759641,
+  "observed_at_secs": 1787759641,
+  "reviewed_at_secs": 1787759641,
+  "last_verified_at_secs": 1787759641,
+  "max_fresh_seconds": 2592000,
+  "max_presentable_seconds": 15552000,
+  "source_id": "src:ustc-teach:13824",
+  "revision_id": "rev:ustc-teach:13824:retained-2026-08-26",
+  "raw_digest": "sha256:de0cf446858717898f24aebc4b31a6349c9cf1a4b4170fbe89ad8b162f399a50",
+  "normalized_digest": "sha256:70e2607246c4e7c91f66de4f7488a2ddf6d452ab4059e158978fcdede06ee4f9",
+  "verifier_id": "verifier:fixture-retained-source",
+  "evidence_contract_version": 1,
+  "clock_unix_seconds": 1787759641,
+  "now_ms": 1787759641148,
+  "session_id": "session:proc011-web-demo",
+  "tenant_id": "tenant:public-demo",
+  "user_id": "user:public-demo",
+  "auth_adapter_id": "fixture.public-demo",
+  "credential_evidence_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "authenticated_at_ms": 1787759639000,
+  "opened_at_ms": 1787759639000,
+  "idle_timeout_ms": 3600000,
+  "absolute_timeout_ms": 86400000,
+  "operator_grant_id": "operator:public-demo",
+  "capability_key_hex": "abababababababababababababababababababababababababababababababab",
+  "capability_key_version": 1,
+  "schema_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "descriptor_snapshot_version": 1,
+  "policy_snapshot_id": "policy:public-demo:v1",
+  "idempotency_deadline_ms": 30000
+}

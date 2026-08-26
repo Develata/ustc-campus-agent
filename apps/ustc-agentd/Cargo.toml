@@ -9,6 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+axum.workspace = true
 ustc-campus-agent-runtime = { path = "../../crates/agent-runtime" }
 ustc-campus-agent-core = { path = "../../crates/platform-core" }
 ustc-campus-agent-application-ingress = { path = "../../crates/application-ingress" }
@@ -17,9 +18,11 @@ affairs-navigator = { path = "../../crates/affairs-navigator" }
 serde.workspace = true
 serde_json.workspace = true
 time.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 ustc-agent-tool-protocol.workspace = true
+sha2.workspace = true
 
 [lints]
 workspace = true
