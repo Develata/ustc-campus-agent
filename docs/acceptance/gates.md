@@ -9,7 +9,13 @@ cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-targets --all-features
 cargo test --locked --all-features --doc
-python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+python3 scripts/run_checker_shards.py \
+  --jobs 4 \
+  --timeout-seconds 1800 \
+  --inventory scripts/checker_test_inventory.json \
+  --evidence-dir "$RUNNER_TEMP/uca-checker-evidence" \
+  --require-clean \
+  --require-runner-image-identity
 python3 scripts/check_repo_contracts.py
 git diff --check
 ```
@@ -54,7 +60,7 @@ Prefer typed schema, Cargo/rustc metadata, compiler evidence, public behavior te
 |---|---|---|
 | 1 — fast schema/registry/link/status projection | docs-only, schema/registry/link/status checks | `python3 scripts/check_repo_contracts.py` + `git diff --check` |
 | 2 — Rust behavior/dependency | Rust source, `Cargo.toml`, dependency changes | tier 1 + `cargo fmt --all -- --check` + `cargo clippy --locked --workspace --all-targets -- -D warnings` + `cargo test --locked --workspace --all-targets` + `cargo test --locked --workspace --doc` |
-| 3 — authority/security mutation | authority/security invariants, grant blocks, permission semantics, lifecycle state machines | tier 2 + mutation tests (`python3 -m unittest discover -s scripts/tests`) + contract cross-check + independent review |
+| 3 — authority/security mutation | authority/security invariants, grant blocks, permission semantics, lifecycle state machines | tier 2 + exact-inventory checker shards (the PR-gate command above) + contract cross-check + independent review |
 | 4 — release/full evidence | release, public visibility, deployment | tier 3 + all release-bound rows + artifact/build/restore/read-back evidence |
 
 ## Docs-only fast path

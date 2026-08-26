@@ -1,6 +1,6 @@
 {
   "schema_version": "checker-test-inventory/v1",
-  "expected_count": 690,
+  "expected_count": 692,
   "test_ids": [
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_count_mismatch",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_duplicates",
@@ -41,11 +41,13 @@
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_separator_malformed",
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_slice_state_drift",
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_state_declaration_missing",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_pr_gate_projection_rejects_serial_discovery",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_cannot_cancel_push_runs",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_concurrency_group_drift_fails_closed",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_conditional_rust_job_fails_closed",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_display_only_checker_fails_closed",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_passes",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_push_group_must_use_unique_run_id",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_rejects_job_env_runner_context",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_required_context_name_drift_fails_closed",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_runner_argument_drift_fails_closed",

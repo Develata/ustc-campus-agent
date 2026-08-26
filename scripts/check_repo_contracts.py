@@ -10753,6 +10753,7 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
 # --- M90 CI evidence shard slice carriers ---
 
 CI_TRANSITION_LEDGER_PATH = "docs/acceptance/ci-transition-ledger.md"
+CI_V2_PR_GATES_PATH = "docs/acceptance/gates.md"
 CI_V2_FIXTURE_PATH = "scripts/tests/fixtures/ci-v2.yml"
 # The inert future fixture is governed by explicit semantic invariants below
 # and is intentionally NOT whole-file fingerprinted: docs/acceptance/gates.md
@@ -10807,7 +10808,7 @@ CI_TRANSITION_LEDGER_ROW_CELLS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "CI-TR-002",
         (
             "pull_request` plus push-to-main trigger semantics remain",
-            "preserves both triggers and cancels only superseded pull-request runs",
+            "preserves both triggers, gives push runs unique groups, and cancels only superseded pull-request runs",
             "preserves the trigger baseline without owning active cancellation",
             "widen cancellation to push, or drift the concurrency group",
             "active-full-sharded",
@@ -10897,7 +10898,7 @@ CI_V2_ACTIVE_PYPREFIX_LINE = (
     "${{ github.run_id }}-${{ github.run_attempt }}"
 )
 CI_V2_ACTIVE_CONCURRENCY_GROUP = (
-    "group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+    "group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}"
 )
 CI_V2_ACTIVE_CANCEL_POLICY = (
     "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"
@@ -11305,6 +11306,36 @@ def check_ci_v2_active_workflow(issues: list[str]) -> None:
             f"expected 0 actual {legacy_count}",
             issues,
         )
+
+    gates_path = ROOT / CI_V2_PR_GATES_PATH
+    if not gates_path.is_file():
+        fail(f"CI v2 PR-gate projection missing: {CI_V2_PR_GATES_PATH}", issues)
+        return
+    gates_text = gates_path.read_text(encoding="utf-8")
+    section_match = re.search(
+        r"(?ms)^## PR gate\s*$\n(?P<body>.*?)(?=^## )",
+        gates_text,
+    )
+    if section_match is None:
+        fail("CI v2 PR-gate projection section missing or malformed", issues)
+        return
+    gate_body = section_match.group("body")
+    for arg in CI_V2_REQUIRED_RUNNER_ARGS:
+        count = gate_body.count(arg)
+        if count != 1:
+            fail(
+                f"CI v2 PR-gate runner argument count drift: {arg!r} "
+                f"expected 1 actual {count}",
+                issues,
+            )
+    gate_runner_pos = gate_body.find(CI_V2_SHARD_RUNNER_COMMAND)
+    gate_checker_pos = gate_body.find(CI_V2_CHECKER_COMMAND)
+    if gate_checker_pos < 0:
+        fail("CI v2 PR-gate repository checker command missing", issues)
+    elif gate_runner_pos >= 0 and gate_checker_pos < gate_runner_pos:
+        fail("CI v2 PR-gate ordering drift: repository checker precedes shard runner", issues)
+    if CAMPAIGN_CI_LEGACY_DISCOVERY_COMMAND in gate_body:
+        fail("CI v2 PR-gate projection retains legacy serial discovery", issues)
 
 
 def _live_checker_test_ids() -> list[str]:
@@ -12195,7 +12226,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_cargo_dependency_sources": {"digest": "0f645288c48f56eb3c8282f5fe9b9c0e379ae8ff82e1c06f64f740278a77ad7d", "status": "active"},
     "check_checker_test_inventory": {"digest": "7c92107dae4d99854ed8680abbf2b5648f0d20fe6ddaac8c42d2ed5076ca98ed", "status": "active"},
     "check_ci_transition_ledger": {"digest": "83e0913d8f0961ec47dad5ce08b0a5316a1c80140a0f2b94e8b5e1b829fe114a", "status": "active"},
-    "check_ci_v2_active_workflow": {"digest": "226dbf4be07c35b8851b714e5a2230dd44ea745923b4bec2a003c125d71f0766", "status": "active"},
+    "check_ci_v2_active_workflow": {"digest": "c930a3611b4e805be69ae4e965be4355bc56b08b490d6e7dd0d315c08b51ea7a", "status": "active"},
     "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
     "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},

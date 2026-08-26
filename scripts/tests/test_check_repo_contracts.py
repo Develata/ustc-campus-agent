@@ -9265,7 +9265,7 @@ class CiV2InertFixtureMutationTests(_M90MutationTestBase):
 
 
 class CiV2ActiveWorkflowMutationTests(_M90MutationTestBase):
-    FILES = (checker.CAMPAIGN_CI_WORKFLOW_PATH,)
+    FILES = (checker.CAMPAIGN_CI_WORKFLOW_PATH, checker.CI_V2_PR_GATES_PATH)
 
     def check(self) -> list[str]:
         issues: list[str] = []
@@ -9296,6 +9296,15 @@ class CiV2ActiveWorkflowMutationTests(_M90MutationTestBase):
             checker.CAMPAIGN_CI_WORKFLOW_PATH,
             checker.CI_V2_ACTIVE_CONCURRENCY_GROUP,
             "group: ci-${{ github.ref }}",
+        )
+        self.assert_rejected(self.check(), "group:")
+
+    def test_active_workflow_push_group_must_use_unique_run_id(self) -> None:
+        self.rewrite(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            checker.CI_V2_ACTIVE_CONCURRENCY_GROUP,
+            "group: ci-${{ github.workflow }}-"
+            "${{ github.event.pull_request.number || github.ref }}",
         )
         self.assert_rejected(self.check(), "group:")
 
@@ -9338,6 +9347,14 @@ class CiV2ActiveWorkflowMutationTests(_M90MutationTestBase):
             f"echo {checker.CI_V2_CHECKER_COMMAND}",
         )
         self.assert_rejected(self.check(), "checker command count drift")
+
+    def test_active_pr_gate_projection_rejects_serial_discovery(self) -> None:
+        self.rewrite(
+            checker.CI_V2_PR_GATES_PATH,
+            checker.CI_V2_SHARD_RUNNER_COMMAND,
+            checker.CAMPAIGN_CI_LEGACY_DISCOVERY_COMMAND,
+        )
+        self.assert_rejected(self.check(), "PR-gate")
 
 
 class CheckerTestInventoryMutationTests(_M90MutationTestBase):
