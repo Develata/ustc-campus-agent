@@ -1,5 +1,6 @@
 {
   "schema_version": "checker-test-inventory/v1",
+  "expected_count": 690,
   "test_ids": [
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_count_mismatch",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_duplicates",
@@ -45,6 +46,7 @@
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_conditional_rust_job_fails_closed",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_display_only_checker_fails_closed",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_passes",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_rejects_job_env_runner_context",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_required_context_name_drift_fails_closed",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_runner_argument_drift_fails_closed",
     "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_unpinned_action_fails_closed",
@@ -690,6 +692,5 @@
     "test_run_checker_shards.ProcessIsolationTests.test_14_stale_evidence_dir_rejected",
     "test_run_checker_shards.ProcessIsolationTests.test_36_sigterm_ignoring_group_descendant_killed",
     "test_run_checker_shards.TransactionalSpawnTests.test_34_spawn_failure_cleans_prior_handles"
-  ],
-  "expected_count": 689
+  ]
 }

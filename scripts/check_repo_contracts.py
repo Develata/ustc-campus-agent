@@ -10892,6 +10892,10 @@ CI_V2_REQUIRED_RUNNER_ARGS = (
 )
 CI_V2_PYTHON_VERSION = "3.13.5"
 CI_V2_PYPREFIX_LINE = "PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache"
+CI_V2_ACTIVE_PYPREFIX_LINE = (
+    "PYTHONPYCACHEPREFIX: /tmp/uca-python-cache-"
+    "${{ github.run_id }}-${{ github.run_attempt }}"
+)
 CI_V2_ACTIVE_CONCURRENCY_GROUP = (
     "group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
 )
@@ -11001,13 +11005,14 @@ def _check_ci_v2_pyprefix_placement(
     *,
     job_key: str = "docs-and-contracts",
     label: str = "CI v2 fixture",
+    expected_line: str = CI_V2_PYPREFIX_LINE,
 ) -> None:
     """Prove PYTHONPYCACHEPREFIX is job-level and nowhere else."""
     lines = text.splitlines()
     pyprefix_occurrences = [
         (idx, line)
         for idx, line in enumerate(lines)
-        if CI_V2_PYPREFIX_LINE in line
+        if expected_line in line
     ]
     if len(pyprefix_occurrences) != 1:
         fail(
@@ -11065,7 +11070,7 @@ def _check_ci_v2_pyprefix_placement(
     for idx, line in enumerate(lines):
         if idx == pyprefix_idx:
             continue
-        if CI_V2_PYPREFIX_LINE.split(":")[0] in line and "PYTHONPYCACHEPREFIX" in line:
+        if expected_line.split(":")[0] in line and "PYTHONPYCACHEPREFIX" in line:
             fail(
                 f"{label} extra PYTHONPYCACHEPREFIX occurrence at line {idx + 1}: {line.strip()!r}",
                 issues,
@@ -11199,7 +11204,7 @@ def check_ci_v2_active_workflow(issues: list[str]) -> None:
         "toolchain: 1.97.1",
         "components: rustfmt, clippy",
         f"python-version: {CI_V2_PYTHON_VERSION}",
-        CI_V2_PYPREFIX_LINE,
+        CI_V2_ACTIVE_PYPREFIX_LINE,
         CI_V2_ACTIVE_CONCURRENCY_GROUP,
         CI_V2_ACTIVE_CANCEL_POLICY,
         "python3 scripts/run_checker_shards.py --jobs 4",
@@ -11252,7 +11257,11 @@ def check_ci_v2_active_workflow(issues: list[str]) -> None:
         )
 
     _check_ci_v2_pyprefix_placement(
-        text, issues, job_key="contracts", label="CI v2 active workflow"
+        text,
+        issues,
+        job_key="contracts",
+        label="CI v2 active workflow",
+        expected_line=CI_V2_ACTIVE_PYPREFIX_LINE,
     )
     runner_positions = _ci_v2_executable_command_positions(
         text, CI_V2_SHARD_RUNNER_COMMAND, exact_argv=False
@@ -11662,7 +11671,7 @@ CI_GOVERNANCE_BASELINE_CI_STRUCTURE: tuple[
     (False, ("jobs", "contracts", "runs-on"), "ubuntu-latest"),
     (False, ("jobs", "contracts", "timeout-minutes"), "40"),
     (False, ("jobs", "contracts", "env"), ""),
-    (False, ("jobs", "contracts", "env", "PYTHONPYCACHEPREFIX"), "${{ runner.temp }}/uca-python-cache"),
+    (False, ("jobs", "contracts", "env", "PYTHONPYCACHEPREFIX"), "/tmp/uca-python-cache-${{ github.run_id }}-${{ github.run_attempt }}"),
     (False, ("jobs", "contracts", "steps"), ""),
     (True, ("jobs", "contracts", "steps", "name"), "Checkout"),
     (False, ("jobs", "contracts", "steps", "uses"), "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"),
@@ -12186,7 +12195,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_cargo_dependency_sources": {"digest": "0f645288c48f56eb3c8282f5fe9b9c0e379ae8ff82e1c06f64f740278a77ad7d", "status": "active"},
     "check_checker_test_inventory": {"digest": "7c92107dae4d99854ed8680abbf2b5648f0d20fe6ddaac8c42d2ed5076ca98ed", "status": "active"},
     "check_ci_transition_ledger": {"digest": "83e0913d8f0961ec47dad5ce08b0a5316a1c80140a0f2b94e8b5e1b829fe114a", "status": "active"},
-    "check_ci_v2_active_workflow": {"digest": "d05a2df64f0bd2e550c8e9ed1c897593dad519f7d75ffb98ccc018e44323957b", "status": "active"},
+    "check_ci_v2_active_workflow": {"digest": "226dbf4be07c35b8851b714e5a2230dd44ea745923b4bec2a003c125d71f0766", "status": "active"},
     "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
     "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},

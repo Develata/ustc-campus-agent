@@ -9275,6 +9275,14 @@ class CiV2ActiveWorkflowMutationTests(_M90MutationTestBase):
     def test_active_workflow_passes(self) -> None:
         self.assertEqual(self.check(), [])
 
+    def test_active_workflow_rejects_job_env_runner_context(self) -> None:
+        self.rewrite(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            checker.CI_V2_ACTIVE_PYPREFIX_LINE,
+            checker.CI_V2_PYPREFIX_LINE,
+        )
+        self.assert_rejected(self.check(), "PYTHONPYCACHEPREFIX")
+
     def test_active_workflow_cannot_cancel_push_runs(self) -> None:
         self.rewrite(
             checker.CAMPAIGN_CI_WORKFLOW_PATH,
