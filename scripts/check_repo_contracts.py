@@ -103,8 +103,9 @@ AUTONOMOUS_CAMPAIGN_CATALOG_ONLY_IDS = (
 )
 AUTONOMOUS_CAMPAIGN_CATALOG_PATH = "docs/acceptance/platform-baseline.md"
 CAMPAIGN_CI_WORKFLOW_PATH = ".github/workflows/ci.yml"
-CAMPAIGN_CI_WORKFLOW_SHA256 = (
-    "919080325ade109dab32b556cbc97fb3fcd5844e45ad72e3b74ad231cb669146"
+CAMPAIGN_CI_SHARD_RUNNER_COMMAND = "python3 scripts/run_checker_shards.py"
+CAMPAIGN_CI_LEGACY_DISCOVERY_COMMAND = (
+    "python3 -m unittest discover -s scripts/tests -p 'test_*.py'"
 )
 VALID_CAMPAIGN_LANE_STATUSES = {"queued", "active", "paused", "completed", "rejected"}
 S0_REVIEW_AUTHORITY_LINKS = (
@@ -1097,13 +1098,9 @@ def check_campaign_authorization(issues: list[str]) -> None:
         fail("campaign authorization CI carrier missing", issues)
         return
     ci_text = ci_path.read_text(encoding="utf-8")
-    ci_sha256 = hashlib.sha256(ci_text.encode("utf-8")).hexdigest()
-    if ci_sha256 != CAMPAIGN_CI_WORKFLOW_SHA256:
-        fail(
-            "campaign authorization CI workflow exact digest drift: "
-            f"expected={CAMPAIGN_CI_WORKFLOW_SHA256} actual={ci_sha256}",
-            issues,
-        )
+    # The active CI workflow is mutable infrastructure and is therefore
+    # governed by the semantic v2 checker rather than a whole-file digest.
+    check_ci_v2_active_workflow(issues)
     checker_command = "python3 scripts/check_repo_contracts.py"
     command_count = ci_text.count(checker_command)
     if command_count != 1:
@@ -1112,12 +1109,18 @@ def check_campaign_authorization(issues: list[str]) -> None:
             f"expected 1 actual {command_count}",
             issues,
         )
-    unit_test_command = "python3 -m unittest discover -s scripts/tests -p 'test_*.py'"
-    unit_test_count = ci_text.count(unit_test_command)
-    if unit_test_count != 1:
+    shard_runner_count = ci_text.count(CAMPAIGN_CI_SHARD_RUNNER_COMMAND)
+    if shard_runner_count != 1:
         fail(
             "campaign authorization mutation-test CI binding drift: "
-            f"expected 1 actual {unit_test_count}",
+            f"expected 1 exact shard runner actual {shard_runner_count}",
+            issues,
+        )
+    legacy_discovery_count = ci_text.count(CAMPAIGN_CI_LEGACY_DISCOVERY_COMMAND)
+    if legacy_discovery_count != 0:
+        fail(
+            "campaign authorization legacy serial discovery unexpectedly active: "
+            f"expected 0 actual {legacy_discovery_count}",
             issues,
         )
 
@@ -10772,91 +10775,92 @@ CI_TRANSITION_LEDGER_IDS = (
     "CI-TR-007",
 )
 CI_TRANSITION_LEDGER_STATES = {
-    **{row_id: "inert-not-active" for row_id in CI_TRANSITION_LEDGER_IDS[:-1]},
-    "CI-TR-007": "guard-active-not-required",
+    **{row_id: "active-full-sharded" for row_id in CI_TRANSITION_LEDGER_IDS[:-1]},
+    "CI-TR-007": "guard-required",
 }
 CI_TRANSITION_LEDGER_HEADER = (
-    "| ID | Legacy invariant | Legacy carrier | Future v2 carrier | Mechanical test | Slice state |"
+    "| ID | Legacy invariant | Active v2 carrier | Retained reference carrier | Mechanical test | Slice state |"
 )
 CI_TRANSITION_LEDGER_STATE_DECLARATIONS = (
-    "remains the legacy/full CI authority",
-    "is inert test data only",
+    "is the full exact-inventory sharded CI authority",
+    "remains inert reference and mutation-test data",
     "No selective omission, path filtering, or package-selective Rust is active",
-    "No acceptance matrix status is promoted by this slice",
-    "`Status`: `guard-active-not-required`",
-    "`Version`: `ci-transition/v1`",
-    "is active and publishes the head-scoped `ci-governance` Check Run",
-    "Making `ci-governance` a protected-main required check remains gated",
+    "No acceptance matrix status is promoted by this activation",
+    "Pull-request supersession cancellation is active",
+    "The stable required contexts remain `rust`, `docs-and-contracts`, and `ci-governance`",
+    "`Status`: `active-full-sharded`",
+    "`Version`: `ci-transition/v2`",
+    "publishes the head-scoped required `ci-governance` Check Run",
 )
 CI_TRANSITION_LEDGER_ROW_CELLS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "CI-TR-001",
         (
-            "active workflow exact digest remains frozen",
-            f".github/workflows/ci.yml` SHA-256 `{CAMPAIGN_CI_WORKFLOW_SHA256}",
-            "inert fixture is governed by explicit semantic invariants and is intentionally not whole-file fingerprinted",
-            "freezes the active workflow digest and enforces the fixture's semantic invariants",
-            "inert-not-active",
+            "active workflow must remain fail-closed without a mutable whole-file fingerprint",
+            "governed by explicit semantic invariants for triggers, jobs, pinned actions, commands, evidence and cancellation",
+            "remains semantic mutation/reference data and is intentionally not whole-file fingerprinted",
+            "validates active and reference workflow semantics",
+            "active-full-sharded",
         ),
     ),
     (
         "CI-TR-002",
         (
             "pull_request` plus push-to-main trigger semantics remain",
-            ".github/workflows/ci.yml` `on: pull_request`",
-            "scripts/tests/fixtures/ci-v2.yml` preserves `on: pull_request`",
-            "validates trigger semantics in both active and fixture",
-            "inert-not-active",
+            "preserves both triggers and cancels only superseded pull-request runs",
+            "preserves the trigger baseline without owning active cancellation",
+            "widen cancellation to push, or drift the concurrency group",
+            "active-full-sharded",
         ),
     ),
     (
         "CI-TR-003",
         (
-            "stable `rust` and `docs-and-contracts` job names remain",
-            ".github/workflows/ci.yml` jobs `rust` and `docs-and-contracts`",
-            "scripts/tests/fixtures/ci-v2.yml` preserves job names `rust` and `docs-and-contracts`",
-            "validates job names in both active and fixture",
-            "inert-not-active",
+            "stable required `rust` and `docs-and-contracts` context names remain",
+            "preserves the active job IDs and explicit display names `rust` and `docs-and-contracts`",
+            "preserves its reference job IDs",
+            "rename/remove each job or display name independently",
+            "active-full-sharded",
         ),
     ),
     (
         "CI-TR-004",
         (
-            "full Python discovery is replaced only in the inert fixture",
-            "python3 -m unittest discover",
-            "python3 scripts/run_checker_shards.py --jobs 4",
-            "bidirectional inventory coverage and exact-union fan-in",
-            "inert-not-active",
+            "full Python discovery may be replaced only by an exact full-suite proof with no omission",
+            "python3 scripts/run_checker_shards.py --jobs 4 --timeout-seconds 1800",
+            "retains the same runner shape",
+            "bidirectional inventory coverage, exact-union fan-in, process isolation",
+            "active-full-sharded",
         ),
     ),
     (
         "CI-TR-005",
         (
-            "full Rust fmt/clippy/workspace-test/doctest commands remain",
-            "cargo fmt --all -- --check",
-            "cargo test --workspace --all-features --doc --locked",
-            "validates all four Rust commands in fixture",
-            "inert-not-active",
+            "full Rust fmt/clippy/workspace-test/doctest commands remain unconditional",
+            "runs all four full Rust commands in required job `rust`",
+            "retains the same full Rust command set",
+            "remove or conditionalize each command/job",
+            "active-full-sharded",
         ),
     ),
     (
         "CI-TR-006",
         (
-            "repository checker remains an exact executable command",
-            "python3 scripts/check_repo_contracts.py",
-            "python3 scripts/check_repo_contracts.py` exactly once",
-            "validates checker command presence, count, and after-runner ordering in fixture",
-            "inert-not-active",
+            "repository checker remains an exact executable command after successful full checker fan-in",
+            "runs `python3 scripts/check_repo_contracts.py` exactly once after the shard runner",
+            "retains checker ordering and evidence-upload shape",
+            "rejects display-only copies, duplicates, reordering, missing `always()`",
+            "active-full-sharded",
         ),
     ),
     (
         "CI-TR-007",
         (
-            "trusted-base governance is active without yet becoming a required check",
-            "`.github/workflows/ci-governance.yml` publishes one head-scoped `ci-governance` Check Run",
-            "S2 failure-to-success same-ID smoke and exact app-bound activation read-back",
-            "structurally validates both active workflows, the head-scoped external identity, stable repeated head/base/updated-at file observations, permissions, sole effect endpoints and all-workflow authority; after exact internal Check Run read-back, the controller emits the numeric Check Run ID plus conclusion",
-            "guard-active-not-required",
+            "trusted-base governance remains required and PR-byte-independent",
+            "publishes one head-scoped app-bound `ci-governance` Check Run",
+            "branch-protection read-back binds `rust`, `docs-and-contracts`, and `ci-governance`",
+            "structural workflow tests plus negative-to-positive same-ID smoke",
+            "guard-required",
         ),
     ),
 )
@@ -10872,6 +10876,12 @@ CI_V2_REQUIRED_RUST_COMMANDS = (
     "cargo test --workspace --all-targets --all-features --locked",
     "cargo test --workspace --all-features --doc --locked",
 )
+CI_V2_ACTIVE_REQUIRED_RUST_COMMANDS = (
+    "cargo fmt --all -- --check",
+    "cargo clippy --locked --all-targets --all-features -- -D warnings",
+    "cargo test --locked --all-targets --all-features",
+    "cargo test --locked --all-features --doc",
+)
 CI_V2_REQUIRED_RUNNER_ARGS = (
     CI_V2_SHARD_RUNNER_COMMAND,
     "--jobs 4",
@@ -10882,6 +10892,18 @@ CI_V2_REQUIRED_RUNNER_ARGS = (
 )
 CI_V2_PYTHON_VERSION = "3.13.5"
 CI_V2_PYPREFIX_LINE = "PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-python-cache"
+CI_V2_ACTIVE_CONCURRENCY_GROUP = (
+    "group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+)
+CI_V2_ACTIVE_CANCEL_POLICY = (
+    "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"
+)
+CI_V2_ACTIVE_USES_COUNTS = {
+    "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803": 2,
+    "dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5": 1,
+    "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1": 1,
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": 1,
+}
 RUN_CHECKER_SHARDS_REQUIRED_SUBSTRINGS = (
     "--jobs",
     "--timeout-seconds",
@@ -10973,19 +10995,14 @@ def check_ci_transition_ledger(issues: list[str]) -> None:
                 fail(f"CI transition ledger missing row: {expected_id}", issues)
 
 
-def _check_ci_v2_pyprefix_placement(text: str, issues: list[str]) -> None:
-    """Indentation-aware proof that PYTHONPYCACHEPREFIX sits at the
-    ``docs-and-contracts`` job-level ``env:`` block and nowhere else.
-
-    The accepted shape is:
-      ``  docs-and-contracts:`` (2 spaces)
-      ``    env:``              (4 spaces, job-level)
-      ``      PYTHONPYCACHEPREFIX: ...`` (6 spaces)
-
-    Any other placement (workflow-level, step-level, sibling job, or duplicate)
-    is rejected. Substring-only checks would miss a step-level relocation that
-    preserves the literal line.
-    """
+def _check_ci_v2_pyprefix_placement(
+    text: str,
+    issues: list[str],
+    *,
+    job_key: str = "docs-and-contracts",
+    label: str = "CI v2 fixture",
+) -> None:
+    """Prove PYTHONPYCACHEPREFIX is job-level and nowhere else."""
     lines = text.splitlines()
     pyprefix_occurrences = [
         (idx, line)
@@ -10994,7 +11011,7 @@ def _check_ci_v2_pyprefix_placement(text: str, issues: list[str]) -> None:
     ]
     if len(pyprefix_occurrences) != 1:
         fail(
-            "CI v2 fixture PYTHONPYCACHEPREFIX occurrence count drift: "
+            f"{label} PYTHONPYCACHEPREFIX occurrence count drift: "
             f"expected 1 actual {len(pyprefix_occurrences)}",
             issues,
         )
@@ -11003,7 +11020,7 @@ def _check_ci_v2_pyprefix_placement(text: str, issues: list[str]) -> None:
     pyprefix_indent = len(pyprefix_line) - len(pyprefix_line.lstrip(" "))
     if pyprefix_indent != 6:
         fail(
-            f"CI v2 fixture PYTHONPYCACHEPREFIX indent drift: expected 6 spaces actual {pyprefix_indent}",
+            f"{label} PYTHONPYCACHEPREFIX indent drift: expected 6 spaces actual {pyprefix_indent}",
             issues,
         )
     env_idx: int | None = None
@@ -11019,13 +11036,13 @@ def _check_ci_v2_pyprefix_placement(text: str, issues: list[str]) -> None:
         if stripped.startswith("env:") or stripped.startswith("steps:") or stripped.startswith("runs-on:") or stripped.startswith("timeout-minutes:"):
             break
     if env_idx is None:
-        fail("CI v2 fixture PYTHONPYCACHEPREFIX has no enclosing env: block", issues)
+        fail(f"{label} PYTHONPYCACHEPREFIX has no enclosing env: block", issues)
         return
     env_line = lines[env_idx]
     env_indent = len(env_line) - len(env_line.lstrip(" "))
     if env_indent != 4:
         fail(
-            f"CI v2 fixture enclosing env: indent drift: expected 4 spaces actual {env_indent}",
+            f"{label} enclosing env: indent drift: expected 4 spaces actual {env_indent}",
             issues,
         )
     job_idx: int | None = None
@@ -11035,14 +11052,14 @@ def _check_ci_v2_pyprefix_placement(text: str, issues: list[str]) -> None:
         indent = len(candidate) - len(stripped)
         if indent >= env_indent:
             continue
-        if indent == 2 and stripped.startswith("docs-and-contracts:"):
+        if indent == 2 and stripped.startswith(f"{job_key}:"):
             job_idx = idx
             break
         if indent == 2 and stripped and not stripped.startswith("#"):
             break
     if job_idx is None:
         fail(
-            "CI v2 fixture PYTHONPYCACHEPREFIX env: is not under docs-and-contracts job",
+            f"{label} PYTHONPYCACHEPREFIX env: is not under {job_key} job",
             issues,
         )
     for idx, line in enumerate(lines):
@@ -11050,7 +11067,7 @@ def _check_ci_v2_pyprefix_placement(text: str, issues: list[str]) -> None:
             continue
         if CI_V2_PYPREFIX_LINE.split(":")[0] in line and "PYTHONPYCACHEPREFIX" in line:
             fail(
-                f"CI v2 fixture extra PYTHONPYCACHEPREFIX occurrence at line {idx + 1}: {line.strip()!r}",
+                f"{label} extra PYTHONPYCACHEPREFIX occurrence at line {idx + 1}: {line.strip()!r}",
                 issues,
             )
 
@@ -11152,6 +11169,133 @@ def check_ci_v2_inert_fixture(issues: list[str]) -> None:
         )
     if "if: ${{ always() }}" not in text:
         fail("CI v2 fixture missing always() evidence upload condition", issues)
+
+
+def check_ci_v2_active_workflow(issues: list[str]) -> None:
+    """Fail closed over the active full-suite sharded CI workflow.
+
+    This replaces the legacy whole-file digest with narrow semantic checks so
+    future safe workflow maintenance cannot silently weaken triggers, required
+    context names, full-suite coverage, evidence fan-in or PR-only cancellation.
+    """
+    path = ROOT / CAMPAIGN_CI_WORKFLOW_PATH
+    if not path.is_file():
+        fail(f"CI v2 active workflow missing: {CAMPAIGN_CI_WORKFLOW_PATH}", issues)
+        return
+    text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        fail(f"CI v2 active workflow empty: {CAMPAIGN_CI_WORKFLOW_PATH}", issues)
+        return
+
+    exact_fragments = (
+        "name: ci",
+        "on:\n  pull_request:",
+        "push:\n    branches: [main]",
+        "permissions:\n  contents: read",
+        "  rust:\n    name: rust",
+        "  contracts:\n    name: docs-and-contracts",
+        "timeout-minutes: 20",
+        "timeout-minutes: 40",
+        "toolchain: 1.97.1",
+        "components: rustfmt, clippy",
+        f"python-version: {CI_V2_PYTHON_VERSION}",
+        CI_V2_PYPREFIX_LINE,
+        CI_V2_ACTIVE_CONCURRENCY_GROUP,
+        CI_V2_ACTIVE_CANCEL_POLICY,
+        "python3 scripts/run_checker_shards.py --jobs 4",
+        "if: ${{ always() }}",
+        "path: ${{ runner.temp }}/uca-checker-evidence",
+        "if-no-files-found: error",
+        "retention-days: 14",
+    )
+    for fragment in exact_fragments:
+        count = text.count(fragment)
+        if count != 1:
+            fail(
+                f"CI v2 active workflow semantic fragment count drift: {fragment!r} "
+                f"expected 1 actual {count}",
+                issues,
+            )
+
+    for command in CI_V2_ACTIVE_REQUIRED_RUST_COMMANDS:
+        count = text.count(command)
+        if count != 1:
+            fail(
+                f"CI v2 active workflow Rust command count drift: {command!r} "
+                f"expected 1 actual {count}",
+                issues,
+            )
+    for arg in CI_V2_REQUIRED_RUNNER_ARGS:
+        count = text.count(arg)
+        if count != 1:
+            fail(
+                f"CI v2 active workflow runner argument count drift: {arg!r} "
+                f"expected 1 actual {count}",
+                issues,
+            )
+
+    uses = [
+        line.strip().removeprefix("uses: ")
+        for line in text.splitlines()
+        if line.strip().startswith("uses: ")
+    ]
+    expected_uses = sorted(
+        use
+        for use, expected_count in CI_V2_ACTIVE_USES_COUNTS.items()
+        for _ in range(expected_count)
+    )
+    if sorted(uses) != expected_uses:
+        fail(
+            "CI v2 active workflow action inventory drift: "
+            f"expected={expected_uses!r} actual={sorted(uses)!r}",
+            issues,
+        )
+
+    _check_ci_v2_pyprefix_placement(
+        text, issues, job_key="contracts", label="CI v2 active workflow"
+    )
+    runner_positions = _ci_v2_executable_command_positions(
+        text, CI_V2_SHARD_RUNNER_COMMAND, exact_argv=False
+    )
+    if len(runner_positions) != 1:
+        fail(
+            "CI v2 active workflow shard runner command count drift: "
+            f"expected 1 actual {len(runner_positions)}",
+            issues,
+        )
+    checker_positions = _ci_v2_executable_command_positions(
+        text, CI_V2_CHECKER_COMMAND, exact_argv=True
+    )
+    if len(checker_positions) != 1:
+        fail(
+            "CI v2 active workflow checker command count drift: "
+            f"expected 1 actual {len(checker_positions)}",
+            issues,
+        )
+    if runner_positions and checker_positions and checker_positions[0] < runner_positions[0]:
+        fail(
+            "CI v2 active workflow ordering drift: repository checker must run after shard fan-in",
+            issues,
+        )
+
+    conditional_lines = [
+        line.strip()
+        for line in text.splitlines()
+        if re.match(r"^\s+if:\s", line)
+    ]
+    if conditional_lines != ["if: ${{ always() }}"]:
+        fail(
+            "CI v2 active workflow conditional inventory drift: "
+            f"expected only evidence upload always(), actual={conditional_lines!r}",
+            issues,
+        )
+    legacy_count = text.count(CAMPAIGN_CI_LEGACY_DISCOVERY_COMMAND)
+    if legacy_count != 0:
+        fail(
+            "CI v2 active workflow legacy serial discovery remains active: "
+            f"expected 0 actual {legacy_count}",
+            issues,
+        )
 
 
 def _live_checker_test_ids() -> list[str]:
@@ -11487,16 +11631,23 @@ CI_GOVERNANCE_BASELINE_CI_STRUCTURE: tuple[
     (False, ("on", "pull_request"), ""),
     (False, ("on", "push"), ""),
     (False, ("on", "push", "branches"), "[main]"),
+    (False, ("concurrency",), ""),
+    (False, ("concurrency", "group"), CI_V2_ACTIVE_CONCURRENCY_GROUP.removeprefix("group: ")),
+    (False, ("concurrency", "cancel-in-progress"), CI_V2_ACTIVE_CANCEL_POLICY.removeprefix("cancel-in-progress: ")),
     (False, ("permissions",), ""),
     (False, ("permissions", "contents"), "read"),
     (False, ("jobs",), ""),
     (False, ("jobs", "rust"), ""),
     (False, ("jobs", "rust", "name"), "rust"),
     (False, ("jobs", "rust", "runs-on"), "ubuntu-latest"),
+    (False, ("jobs", "rust", "timeout-minutes"), "20"),
     (False, ("jobs", "rust", "steps"), ""),
-    (True, ("jobs", "rust", "steps", "uses"), "actions/checkout@v6"),
-    (True, ("jobs", "rust", "steps", "uses"), "dtolnay/rust-toolchain@1.97.1"),
+    (True, ("jobs", "rust", "steps", "name"), "Checkout"),
+    (False, ("jobs", "rust", "steps", "uses"), "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"),
+    (True, ("jobs", "rust", "steps", "name"), "Install Rust 1.97.1"),
+    (False, ("jobs", "rust", "steps", "uses"), "dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5"),
     (False, ("jobs", "rust", "steps", "with"), ""),
+    (False, ("jobs", "rust", "steps", "with", "toolchain"), "1.97.1"),
     (False, ("jobs", "rust", "steps", "with", "components"), "rustfmt, clippy"),
     (True, ("jobs", "rust", "steps", "name"), "Format"),
     (False, ("jobs", "rust", "steps", "run"), "cargo fmt --all -- --check"),
@@ -11509,17 +11660,30 @@ CI_GOVERNANCE_BASELINE_CI_STRUCTURE: tuple[
     (False, ("jobs", "contracts"), ""),
     (False, ("jobs", "contracts", "name"), "docs-and-contracts"),
     (False, ("jobs", "contracts", "runs-on"), "ubuntu-latest"),
+    (False, ("jobs", "contracts", "timeout-minutes"), "40"),
+    (False, ("jobs", "contracts", "env"), ""),
+    (False, ("jobs", "contracts", "env", "PYTHONPYCACHEPREFIX"), "${{ runner.temp }}/uca-python-cache"),
     (False, ("jobs", "contracts", "steps"), ""),
-    (True, ("jobs", "contracts", "steps", "uses"), "actions/checkout@v6"),
+    (True, ("jobs", "contracts", "steps", "name"), "Checkout"),
+    (False, ("jobs", "contracts", "steps", "uses"), "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"),
     (False, ("jobs", "contracts", "steps", "with"), ""),
     (False, ("jobs", "contracts", "steps", "with", "fetch-depth"), "0"),
-    (True, ("jobs", "contracts", "steps", "uses"), "actions/setup-python@v6"),
+    (True, ("jobs", "contracts", "steps", "name"), "Install Python 3.13.5"),
+    (False, ("jobs", "contracts", "steps", "uses"), "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"),
     (False, ("jobs", "contracts", "steps", "with"), ""),
-    (False, ("jobs", "contracts", "steps", "with", "python-version"), "'3.x'"),
-    (True, ("jobs", "contracts", "steps", "name"), "Contract unit tests"),
-    (False, ("jobs", "contracts", "steps", "run"), "python3 -m unittest discover -s scripts/tests -p 'test_*.py'"),
+    (False, ("jobs", "contracts", "steps", "with", "python-version"), "3.13.5"),
+    (True, ("jobs", "contracts", "steps", "name"), "Run exact-inventory checker shards"),
+    (False, ("jobs", "contracts", "steps", "run"), "python3 scripts/run_checker_shards.py --jobs 4 --timeout-seconds 1800 --inventory scripts/checker_test_inventory.json --evidence-dir \"$RUNNER_TEMP/uca-checker-evidence\" --require-clean --require-runner-image-identity"),
     (True, ("jobs", "contracts", "steps", "name"), "Repository contract checks"),
     (False, ("jobs", "contracts", "steps", "run"), "python3 scripts/check_repo_contracts.py"),
+    (True, ("jobs", "contracts", "steps", "name"), "Upload checker evidence"),
+    (False, ("jobs", "contracts", "steps", "if"), "${{ always() }}"),
+    (False, ("jobs", "contracts", "steps", "uses"), "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"),
+    (False, ("jobs", "contracts", "steps", "with"), ""),
+    (False, ("jobs", "contracts", "steps", "with", "name"), "checker-evidence-${{ github.run_id }}-${{ github.run_attempt }}"),
+    (False, ("jobs", "contracts", "steps", "with", "path"), "${{ runner.temp }}/uca-checker-evidence"),
+    (False, ("jobs", "contracts", "steps", "with", "if-no-files-found"), "error"),
+    (False, ("jobs", "contracts", "steps", "with", "retention-days"), "14"),
 )
 
 
@@ -11533,10 +11697,11 @@ def _other_workflow_authority_issues(rel: str, text: str) -> list[str]:
     parsed: list[tuple[int, bool, tuple[str, ...], str]] = []
     containers: dict[int, tuple[str, ...]] = {}
     for line_number, line in significant:
-        if "\t" in line or "#" in line or "${{" in line:
+        active_expression = rel == CAMPAIGN_CI_WORKFLOW_PATH and "${{" in line
+        if "\t" in line or "#" in line or ("${{" in line and not active_expression):
             found.append(f"{rel}:{line_number}: forbidden YAML comment/tab/expression surface")
             continue
-        if any(token in line for token in ("{", "}")):
+        if any(token in line for token in ("{", "}")) and not active_expression:
             found.append(f"{rel}:{line_number}: forbidden YAML alias/flow/tag/block surface")
             continue
         match = re.fullmatch(
@@ -12016,11 +12181,12 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_acceptance_matrix": {"digest": "35fad9655eb38702f34c65a3aa6209b79f66256b20183f5c20a67c049e9cd4bd", "status": "active"},
     "check_agent_plugin_dependency_direction": {"digest": "eb43b13ee8c08d397671619ea288b221eb2dc2620066869f8ea9c31c66ac5e50", "status": "active"},
     "check_campaign_acceptance_bindings": {"digest": "60025429af3b75fe7de3adb4043988509f76f20db66dd383888a10b9f04522c2", "status": "active"},
-    "check_campaign_authorization": {"digest": "7a1184e0d9f133a48a79c9ba6f66bc912252fa1732c7b13faa0b99373466571a", "status": "active"},
+    "check_campaign_authorization": {"digest": "f27d12a8be560b6efd73eb2b7dae753637cded8563a83d20ab2b3e2e3cf45f0f", "status": "active"},
     "check_campaign_taskbook_state": {"digest": "85b30689fd0ae05695c337d8808e919f69639ace8d98643c90a4b47522fe2d65", "status": "active"},
     "check_cargo_dependency_sources": {"digest": "0f645288c48f56eb3c8282f5fe9b9c0e379ae8ff82e1c06f64f740278a77ad7d", "status": "active"},
     "check_checker_test_inventory": {"digest": "7c92107dae4d99854ed8680abbf2b5648f0d20fe6ddaac8c42d2ed5076ca98ed", "status": "active"},
     "check_ci_transition_ledger": {"digest": "83e0913d8f0961ec47dad5ce08b0a5316a1c80140a0f2b94e8b5e1b829fe114a", "status": "active"},
+    "check_ci_v2_active_workflow": {"digest": "d05a2df64f0bd2e550c8e9ed1c897593dad519f7d75ffb98ccc018e44323957b", "status": "active"},
     "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
     "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},

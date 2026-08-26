@@ -3,34 +3,36 @@
 ## Metadata
 
 - `Layer`: `Acceptance / CI transition`
-- `Status`: `guard-active-not-required`
-- `Version`: `ci-transition/v1`
-- `Last Review`: 2026-08-25
-- `Authority Owns`: legacy-to-v2 CI workflow invariants plus the trusted-base governance-controller activation state
-- `Authority Defers To`: `.github/workflows/ci.yml` for full build/test CI; `.github/workflows/ci-governance.yml` for the active governance Check Run; `scripts/tests/fixtures/ci-v2.yml` for inert future fixture test data
+- `Status`: `active-full-sharded`
+- `Version`: `ci-transition/v2`
+- `Last Review`: 2026-08-27
+- `Authority Owns`: active full-suite CI sharding, required-context continuity, PR supersession cancellation, and trusted-base governance-controller activation state
+- `Authority Defers To`: `.github/workflows/ci.yml` for active full build/test CI; `.github/workflows/ci-governance.yml` for the required governance Check Run; `scripts/tests/fixtures/ci-v2.yml` for retained mutation/reference test data
 
 ## Scope
 
-This ledger is the transition authority for the M90 CI evidence shard slice and the S1 trusted-base governance bootstrap. It enumerates the legacy invariants that remain unchanged while the inert future workflow fixture and process-isolated checker shard runner are introduced, and separately records the active governance controller. It does not activate selective acceptance, does not promote any acceptance status, and does not remove or weaken any existing CI gate.
+This ledger is the transition authority for the M90 CI evidence shard activation and trusted-base governance controller. It records that full exact-inventory checker sharding is active inside the stable `docs-and-contracts` required job while full Rust and repository checks remain unconditional. It does not activate selective acceptance, omit tests by path/package, promote an acceptance row, or change product authority.
 
 ### State declarations
 
-- The active workflow `.github/workflows/ci.yml` remains the legacy/full CI authority. It is not modified by this slice.
-- The trusted-base workflow `.github/workflows/ci-governance.yml` is active and publishes the head-scoped `ci-governance` Check Run; it executes no PR-controlled bytes.
-- `scripts/tests/fixtures/ci-v2.yml` is inert test data only. It is not placed under `.github/workflows`. Its presence is not implementation or activation evidence.
+- The active workflow `.github/workflows/ci.yml` is the full exact-inventory sharded CI authority.
+- `scripts/tests/fixtures/ci-v2.yml` remains inert reference and mutation-test data; it is not a second active workflow.
 - No selective omission, path filtering, or package-selective Rust is active.
-- No acceptance matrix status is promoted by this slice.
-- Making `ci-governance` a protected-main required check remains gated on the post-merge S2 negative-to-positive same-ID smoke and exact GitHub Actions app read-back; acceptance CLI authority choice and selective CI activation remain later prerequisites.
-- This is the first activation of the controller, so no pre-repair PR-bound live record exists. S2 must still inventory the smoke head and stop on any foreign same-name/head/app record before policy mutation.
+- No acceptance matrix status is promoted by this activation.
+- Pull-request supersession cancellation is active; push-to-main runs are never cancelled by this policy.
+- The stable required contexts remain `rust`, `docs-and-contracts`, and `ci-governance`.
+- The trusted-base workflow `.github/workflows/ci-governance.yml` publishes the head-scoped required `ci-governance` Check Run and executes no PR-controlled bytes.
+- `Status`: `active-full-sharded`
+- `Version`: `ci-transition/v2`
 
 ## Invariant ledger
 
-| ID | Legacy invariant | Legacy carrier | Future v2 carrier | Mechanical test | Slice state |
+| ID | Legacy invariant | Active v2 carrier | Retained reference carrier | Mechanical test | Slice state |
 |---|---|---|---|---|---|
-| `CI-TR-001` | active workflow exact digest remains frozen | `.github/workflows/ci.yml` SHA-256 `919080325ade109dab32b556cbc97fb3fcd5844e45ad72e3b74ad231cb669146` | `scripts/tests/fixtures/ci-v2.yml` inert fixture is governed by explicit semantic invariants and is intentionally not whole-file fingerprinted | `scripts/check_repo_contracts.py` freezes the active workflow digest and enforces the fixture's semantic invariants; mutation tests remove/mutate each semantic invariant independently | `inert-not-active` |
-| `CI-TR-002` | `pull_request` plus push-to-main trigger semantics remain | `.github/workflows/ci.yml` `on: pull_request` and `push: branches: [main]` | `scripts/tests/fixtures/ci-v2.yml` preserves `on: pull_request` and `push: branches: [main]` | `scripts/check_repo_contracts.py` validates trigger semantics in both active and fixture; mutation tests remove each trigger independently | `inert-not-active` |
-| `CI-TR-003` | stable `rust` and `docs-and-contracts` job names remain | `.github/workflows/ci.yml` jobs `rust` and `docs-and-contracts` | `scripts/tests/fixtures/ci-v2.yml` preserves job names `rust` and `docs-and-contracts` | `scripts/check_repo_contracts.py` validates job names in both active and fixture; mutation tests rename/remove each independently | `inert-not-active` |
-| `CI-TR-004` | full Python discovery is replaced only in the inert fixture by exact-inventory full sharding, with no omission | `.github/workflows/ci.yml` `docs-and-contracts` job runs `python3 -m unittest discover -s scripts/tests -p 'test_*.py'` | `scripts/tests/fixtures/ci-v2.yml` replaces discovery with `python3 scripts/run_checker_shards.py --jobs 4 --timeout-seconds 1800 --inventory scripts/checker_test_inventory.json --evidence-dir <RUNNER_TEMP> --require-clean --require-runner-image-identity` | `scripts/run_checker_shards.py` bidirectional inventory coverage and exact-union fan-in; `scripts/checker_test_inventory.json` sorted unique IDs with explicit count; mutation tests for missing/unexpected/duplicate/zero IDs | `inert-not-active` |
-| `CI-TR-005` | full Rust fmt/clippy/workspace-test/doctest commands remain | `.github/workflows/ci.yml` `rust` job runs `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets --all-features -- -D warnings`, `cargo test --locked --all-targets --all-features`, `cargo test --locked --all-features --doc` | `scripts/tests/fixtures/ci-v2.yml` preserves `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, `cargo test --workspace --all-targets --all-features --locked`, `cargo test --workspace --all-features --doc --locked` | `scripts/check_repo_contracts.py` validates all four Rust commands in fixture; mutation tests remove/mutate each command independently | `inert-not-active` |
-| `CI-TR-006` | repository checker remains an exact executable command after the full checker suite | `.github/workflows/ci.yml` `docs-and-contracts` job runs `python3 scripts/check_repo_contracts.py` | `scripts/tests/fixtures/ci-v2.yml` runs `python3 scripts/check_repo_contracts.py` exactly once after the shard runner | `scripts/check_repo_contracts.py` validates checker command presence, count, and after-runner ordering in fixture; mutation tests remove/duplicate/reorder the command | `inert-not-active` |
-| `CI-TR-007` | trusted-base governance is active without yet becoming a required check | `.github/workflows/ci-governance.yml` publishes one head-scoped `ci-governance` Check Run under global serialization and executes no PR-controlled bytes | protected-main requirement remains absent until the S2 failure-to-success same-ID smoke and exact app-bound activation read-back | `scripts/check_repo_contracts.py` structurally validates both active workflows, the head-scoped external identity, stable repeated head/base/updated-at file observations, permissions, sole effect endpoints and all-workflow authority; after exact internal Check Run read-back, the controller emits the numeric Check Run ID plus conclusion to its trusted-base Actions log; `CiGovernanceWorkflowTests` exercises the state machine and mutations | `guard-active-not-required` |
+| `CI-TR-001` | active workflow must remain fail-closed without a mutable whole-file fingerprint | `.github/workflows/ci.yml` is governed by explicit semantic invariants for triggers, jobs, pinned actions, commands, evidence and cancellation | `scripts/tests/fixtures/ci-v2.yml` remains semantic mutation/reference data and is intentionally not whole-file fingerprinted | `scripts/check_repo_contracts.py` validates active and reference workflow semantics; mutation tests remove or relocate each invariant independently | `active-full-sharded` |
+| `CI-TR-002` | `pull_request` plus push-to-main trigger semantics remain | `.github/workflows/ci.yml` preserves both triggers and cancels only superseded pull-request runs | `scripts/tests/fixtures/ci-v2.yml` preserves the trigger baseline without owning active cancellation | checker mutation tests remove each trigger, widen cancellation to push, or drift the concurrency group | `active-full-sharded` |
+| `CI-TR-003` | stable required `rust` and `docs-and-contracts` context names remain | `.github/workflows/ci.yml` preserves the active job IDs and explicit display names `rust` and `docs-and-contracts` | `scripts/tests/fixtures/ci-v2.yml` preserves its reference job IDs | checker mutation tests rename/remove each job or display name independently | `active-full-sharded` |
+| `CI-TR-004` | full Python discovery may be replaced only by an exact full-suite proof with no omission | `.github/workflows/ci.yml` runs `python3 scripts/run_checker_shards.py --jobs 4 --timeout-seconds 1800` over the exact inventory | `scripts/tests/fixtures/ci-v2.yml` retains the same runner shape | bidirectional inventory coverage, exact-union fan-in, process isolation, per-shard reports, and missing/unexpected/duplicate/zero-ID mutation tests | `active-full-sharded` |
+| `CI-TR-005` | full Rust fmt/clippy/workspace-test/doctest commands remain unconditional | `.github/workflows/ci.yml` runs all four full Rust commands in required job `rust` | `scripts/tests/fixtures/ci-v2.yml` retains the same full Rust command set | checker mutation tests remove or conditionalize each command/job; exact-head Actions proves execution | `active-full-sharded` |
+| `CI-TR-006` | repository checker remains an exact executable command after successful full checker fan-in | `.github/workflows/ci.yml` runs `python3 scripts/check_repo_contracts.py` exactly once after the shard runner and always uploads runner evidence | `scripts/tests/fixtures/ci-v2.yml` retains checker ordering and evidence-upload shape | executable-command parsing rejects display-only copies, duplicates, reordering, missing `always()`, and missing evidence paths | `active-full-sharded` |
+| `CI-TR-007` | trusted-base governance remains required and PR-byte-independent | `.github/workflows/ci-governance.yml` publishes one head-scoped app-bound `ci-governance` Check Run; protected main requires it with strict head freshness | branch-protection read-back binds `rust`, `docs-and-contracts`, and `ci-governance` to GitHub Actions app ID `15368` | structural workflow tests plus negative-to-positive same-ID smoke, exact owner grant, Check Run read-back, and strict branch-protection read-back | `guard-required` |

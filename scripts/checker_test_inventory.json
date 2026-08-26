@@ -40,6 +40,14 @@
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_separator_malformed",
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_slice_state_drift",
     "test_check_repo_contracts.CiTransitionLedgerMutationTests.test_ledger_state_declaration_missing",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_cannot_cancel_push_runs",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_concurrency_group_drift_fails_closed",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_conditional_rust_job_fails_closed",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_display_only_checker_fails_closed",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_passes",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_required_context_name_drift_fails_closed",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_runner_argument_drift_fails_closed",
+    "test_check_repo_contracts.CiV2ActiveWorkflowMutationTests.test_active_workflow_unpinned_action_fails_closed",
     "test_check_repo_contracts.CiV2InertFixtureMutationTests.test_fixture_checker_before_runner_rejected",
     "test_check_repo_contracts.CiV2InertFixtureMutationTests.test_fixture_checker_count_drift",
     "test_check_repo_contracts.CiV2InertFixtureMutationTests.test_fixture_display_only_drift_remains_accepted",
@@ -683,5 +691,5 @@
     "test_run_checker_shards.ProcessIsolationTests.test_36_sigterm_ignoring_group_descendant_killed",
     "test_run_checker_shards.TransactionalSpawnTests.test_34_spawn_failure_cleans_prior_handles"
   ],
-  "expected_count": 681
+  "expected_count": 689
 }
