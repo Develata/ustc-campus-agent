@@ -12,10 +12,11 @@ mod web;
 
 pub use web::web_router;
 
-use std::io::Write;
+use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use affairs_fixture::{AffairsFixture, DurableIdempotencyStore, FixturePorts};
 use affairs_navigator::AffairsGetService;
@@ -24,6 +25,8 @@ use ustc_campus_agent_client_protocol::{
     ClientIntentDto, ClientResponseDto, SubmitAffairsGetDto, ViewerAuthorizationDto, read_frame,
     write_frame,
 };
+
+const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Bounded composition root owning the fixture, record store and idempotency
 /// store for the product-path slice.
@@ -152,8 +155,7 @@ impl AffairsComposition {
     }
 
     fn handle_connection(&self, stream: TcpStream) -> Result<(), String> {
-        let intent: ClientIntentDto =
-            read_frame(&stream).map_err(|e| format!("read intent: {e}"))?;
+        let intent = read_intent_with_timeout(&stream, FRAMED_CONNECTION_READ_TIMEOUT)?;
         let response = match intent {
             ClientIntentDto::SubmitAffairsGet { request } => self.handle_submit(&request),
             ClientIntentDto::Lookup { command_id, viewer } => {
@@ -162,6 +164,46 @@ impl AffairsComposition {
         };
         write_frame(&stream, &response).map_err(|e| format!("write response: {e}"))?;
         Ok(())
+    }
+}
+
+fn read_intent_with_timeout(
+    stream: &TcpStream,
+    timeout: Duration,
+) -> Result<ClientIntentDto, String> {
+    let deadline = Instant::now()
+        .checked_add(timeout)
+        .ok_or_else(|| "read intent deadline overflow".to_owned())?;
+    let mut reader = DeadlineReader { stream, deadline };
+    let intent = read_frame(&mut reader).map_err(|error| format!("read intent: {error}"))?;
+    if Instant::now() >= deadline {
+        return Err("read intent: absolute frame deadline exceeded".to_owned());
+    }
+    Ok(intent)
+}
+
+struct DeadlineReader<'a> {
+    stream: &'a TcpStream,
+    deadline: Instant,
+}
+
+impl Read for DeadlineReader<'_> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        let Some(remaining) = self.deadline.checked_duration_since(Instant::now()) else {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "absolute frame deadline exceeded",
+            ));
+        };
+        if remaining.is_zero() {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "absolute frame deadline exceeded",
+            ));
+        }
+        self.stream.set_read_timeout(Some(remaining))?;
+        let mut stream = self.stream;
+        stream.read(buffer)
     }
 }
 
@@ -186,7 +228,55 @@ pub fn bind_loopback(bind_addr: &str) -> Result<TcpListener, String> {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use super::bind_loopback;
+    use std::io::Write as _;
+    use std::net::{TcpListener, TcpStream};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use super::{bind_loopback, read_intent_with_timeout};
+
+    #[test]
+    fn incomplete_framed_connection_times_out() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback test listener");
+        let endpoint = listener.local_addr().expect("test listener address");
+        let _incomplete_client = TcpStream::connect(endpoint).expect("connect incomplete client");
+        let (server_stream, _) = listener.accept().expect("accept incomplete client");
+        let started = Instant::now();
+        let result = read_intent_with_timeout(&server_stream, Duration::from_millis(50));
+
+        assert!(result.is_err(), "an incomplete frame must time out");
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "the bounded read must not stall the sequential server"
+        );
+    }
+
+    #[test]
+    fn drip_fed_incomplete_frame_hits_absolute_deadline() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback test listener");
+        let endpoint = listener.local_addr().expect("test listener address");
+        let mut client = TcpStream::connect(endpoint).expect("connect drip client");
+        let (server_stream, _) = listener.accept().expect("accept drip client");
+        let writer = thread::spawn(move || {
+            let bytes = [0_u8, 0, 0, 100, 1, 2, 3, 4, 5, 6];
+            for byte in bytes {
+                if client.write_all(&[byte]).is_err() {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
+        });
+
+        let started = Instant::now();
+        let result = read_intent_with_timeout(&server_stream, Duration::from_millis(80));
+
+        assert!(result.is_err(), "a drip-fed incomplete frame must time out");
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "progress on individual reads must not extend the absolute deadline"
+        );
+        writer.join().expect("join drip writer");
+    }
 
     #[test]
     fn bind_loopback_ipv4_zero_port_succeeds() {

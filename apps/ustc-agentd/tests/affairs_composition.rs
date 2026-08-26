@@ -636,6 +636,41 @@ fn response_loss_recovery_same_terminal_no_second_m71() {
 }
 
 // ---------------------------------------------------------------------------
+// Unkeyed submits are fresh attempts, including after process restart
+// ---------------------------------------------------------------------------
+
+#[test]
+fn unkeyed_submit_re_evaluates_after_restart() {
+    let env = TestEnv::new();
+    let request = submit_request("proc:fixture", public_actor(), None);
+
+    let comp1 = env.open();
+    let response1 = comp1.handle_submit(&request);
+    let (command_id1, _, _) = extract_accepted(&response1);
+    let command_id1 = command_id1.clone();
+    assert_eq!(comp1.m60_call_count(), 1, "first unkeyed submit calls M71");
+    drop(comp1);
+
+    let mut updated_fixture = base_fixture();
+    updated_fixture["title"] = json!("Updated fixture procedure");
+    fs::write(&env.fixture, updated_fixture.to_string()).expect("update fixture");
+
+    let comp2 = env.open();
+    let response2 = comp2.handle_submit(&request);
+    let (command_id2, _, _) = extract_accepted(&response2);
+
+    assert_ne!(
+        &command_id1, command_id2,
+        "an unkeyed retry must mint a fresh command identity"
+    );
+    assert_eq!(
+        comp2.m60_call_count(),
+        1,
+        "an unkeyed retry after restart must re-evaluate current M71/source state"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Same idempotency key with different actual payload is rejected, no extra M71
 // ---------------------------------------------------------------------------
 

@@ -611,6 +611,8 @@ struct IdempotencyState {
     schema_version: u8,
     entries: BTreeMap<String, IdempotencyEntry>,
     key_index: BTreeMap<String, String>,
+    #[serde(default)]
+    next_unkeyed_sequence: u64,
 }
 
 impl Default for IdempotencyState {
@@ -619,6 +621,7 @@ impl Default for IdempotencyState {
             schema_version: 1,
             entries: BTreeMap::new(),
             key_index: BTreeMap::new(),
+            next_unkeyed_sequence: 0,
         }
     }
 }
@@ -723,13 +726,30 @@ impl DurableIdempotencyStore {
         key: Option<&IdempotencyKey>,
         envelope_hash: &EnvelopeHash,
     ) -> Result<IdempotencyReservation, IdempotencyError> {
-        let command_id = CommandId::parse(envelope_hash.as_str())
-            .map_err(|_| IdempotencyError::StoreUnavailable)?;
-
         let mut state = self
             .state
             .lock()
             .map_err(|_| IdempotencyError::StoreUnavailable)?;
+
+        let mut next_unkeyed_sequence = None;
+        let command_id = if key.is_some() {
+            CommandId::parse(envelope_hash.as_str())
+                .map_err(|_| IdempotencyError::StoreUnavailable)?
+        } else {
+            let mut sequence = state.next_unkeyed_sequence;
+            loop {
+                sequence = sequence
+                    .checked_add(1)
+                    .ok_or(IdempotencyError::StoreUnavailable)?;
+                let candidate =
+                    CommandId::parse(format!("{}-{sequence:016x}", envelope_hash.as_str()))
+                        .map_err(|_| IdempotencyError::StoreUnavailable)?;
+                if !state.entries.contains_key(candidate.as_str()) {
+                    next_unkeyed_sequence = Some(sequence);
+                    break candidate;
+                }
+            }
+        };
 
         // Check idempotency key conflict
         if let Some(key) = key
@@ -805,6 +825,9 @@ impl DurableIdempotencyStore {
             .checked_add(self.deadline_duration_ms)
             .ok_or(IdempotencyError::StoreUnavailable)?;
         let mut candidate = state.clone();
+        if let Some(sequence) = next_unkeyed_sequence {
+            candidate.next_unkeyed_sequence = sequence;
+        }
         candidate.entries.insert(
             command_id.as_str().to_owned(),
             IdempotencyEntry {
