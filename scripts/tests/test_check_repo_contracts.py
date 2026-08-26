@@ -6,6 +6,7 @@ import importlib.util
 import io
 import hashlib
 import json
+import re
 import shutil
 import tempfile
 import unittest
@@ -563,11 +564,28 @@ class DocsTopologyContractTests(unittest.TestCase):
         )
 
     def test_active_campaign_taskbook_requires_exact_source(self) -> None:
-        self.replace_once(
-            checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M30-B0"],
-            "- `Status`: `queued`",
-            "- `Status`: `active`",
+        rel = checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M30-B0"]
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        status_pattern = re.compile(r"^- `Status`:\s*(.+?)\s*$", re.MULTILINE)
+        source_pattern = re.compile(
+            r"^- `Bound source commit`:\s*(.+?)\s*$",
+            re.MULTILINE,
         )
+        status_matches = list(status_pattern.finditer(text))
+        source_matches = list(source_pattern.finditer(text))
+        self.assertEqual(len(status_matches), 1, "missing or ambiguous taskbook status")
+        self.assertEqual(len(source_matches), 1, "missing or ambiguous taskbook source")
+
+        # Mutate from any checker-admitted live lane state, including whitespace variants.
+        updated = status_pattern.sub("- `Status`: `active`", text, count=1)
+        updated = source_pattern.sub(
+            "- `Bound source commit`: `pending-governance-main`",
+            updated,
+            count=1,
+        )
+        self.assertNotEqual(updated, text, "fixture mutation must alter a campaign carrier")
+        path.write_text(updated, encoding="utf-8")
         self.assertTrue(
             any(
                 "campaign taskbook active/completed lane has pending source for M30-B0" in issue
