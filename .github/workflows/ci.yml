@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
@@ -12,10 +16,14 @@ jobs:
   rust:
     name: rust
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Install Rust 1.97.1
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
         with:
+          toolchain: 1.97.1
           components: rustfmt, clippy
       - name: Format
         run: cargo fmt --all -- --check
@@ -29,14 +37,27 @@ jobs:
   contracts:
     name: docs-and-contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PYTHONPYCACHEPREFIX: /tmp/uca-python-cache-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v6
+      - name: Install Python 3.13.5
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
-          python-version: '3.x'
-      - name: Contract unit tests
-        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+          python-version: 3.13.5
+      - name: Run exact-inventory checker shards
+        run: python3 scripts/run_checker_shards.py --jobs 4 --timeout-seconds 1800 --inventory scripts/checker_test_inventory.json --evidence-dir "$RUNNER_TEMP/uca-checker-evidence" --require-clean --require-runner-image-identity
       - name: Repository contract checks
         run: python3 scripts/check_repo_contracts.py
+      - name: Upload checker evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: checker-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/uca-checker-evidence
+          if-no-files-found: error
+          retention-days: 14

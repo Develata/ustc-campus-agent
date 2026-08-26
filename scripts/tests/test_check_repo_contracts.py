@@ -494,15 +494,15 @@ class DocsTopologyContractTests(unittest.TestCase):
     def test_campaign_ci_step_disable_fails_closed(self) -> None:
         self.replace_once(
             checker.CAMPAIGN_CI_WORKFLOW_PATH,
-            "      - name: Contract unit tests\n"
-            "        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'",
-            "      - name: Contract unit tests\n"
+            "      - name: Run exact-inventory checker shards\n"
+            "        run: python3 scripts/run_checker_shards.py",
+            "      - name: Run exact-inventory checker shards\n"
             "        if: false\n"
-            "        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'",
+            "        run: python3 scripts/run_checker_shards.py",
         )
         self.assertTrue(
             any(
-                "campaign authorization CI workflow exact digest drift" in issue
+                "CI v2 active workflow conditional inventory drift" in issue
                 for issue in self.check_campaign_authorization()
             )
         )
@@ -510,8 +510,8 @@ class DocsTopologyContractTests(unittest.TestCase):
     def test_campaign_mutation_test_ci_binding_drift_fails_closed(self) -> None:
         self.replace_once(
             ".github/workflows/ci.yml",
-            "python3 -m unittest discover -s scripts/tests -p 'test_*.py'",
-            "python3 -m unittest discover -s scripts/disabled-tests -p 'test_*.py'",
+            "python3 scripts/run_checker_shards.py",
+            "python3 scripts/run_disabled_checker_shards.py",
         )
         self.assertTrue(
             any(
@@ -8665,8 +8665,8 @@ class CiGovernanceWorkflowTests(unittest.TestCase):
             ),
             ("  pull_request:", "  pull_request_target:"),
             (
-                "    name: rust\n    runs-on: ubuntu-latest\n    steps:",
-                "    name: rust\n    steps:",
+                "    name: rust\n    runs-on: ubuntu-latest\n    timeout-minutes: 20\n    steps:",
+                "    name: rust\n    timeout-minutes: 20\n    steps:",
             ),
             (
                 "      - name: Repository contract checks\n        run: python3 scripts/check_repo_contracts.py\n",
@@ -8688,12 +8688,17 @@ class CiGovernanceWorkflowTests(unittest.TestCase):
                 "      - name: Format\n        run: cargo fmt --all -- --check\n",
             ),
             (
-                "      - uses: actions/checkout@v6\n"
+                "      - name: Checkout\n"
+                "        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803\n"
                 "        with:\n          fetch-depth: 0\n"
-                "      - uses: actions/setup-python@v6\n",
-                "      - uses: actions/checkout@v6\n"
-                "      - uses: actions/setup-python@v6\n"
-                "        with:\n          fetch-depth: 0\n",
+                "      - name: Install Python 3.13.5\n"
+                "        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1\n"
+                "        with:\n          python-version: 3.13.5\n",
+                "      - name: Checkout\n"
+                "        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803\n"
+                "      - name: Install Python 3.13.5\n"
+                "        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1\n"
+                "        with:\n          fetch-depth: 0\n          python-version: 3.13.5\n",
             ),
         )
         for old, new in bypasses:
@@ -8934,22 +8939,22 @@ class CiTransitionLedgerMutationTests(_M90MutationTestBase):
     def test_ledger_empty_cell(self) -> None:
         self.rewrite(
             checker.CI_TRANSITION_LEDGER_PATH,
-            "active workflow exact digest remains frozen",
+            "active workflow must remain fail-closed without a mutable whole-file fingerprint",
             "   ",
         )
         self.assert_rejected(self.check(), "is empty")
 
     def test_ledger_slice_state_drift(self) -> None:
         text = self.path(checker.CI_TRANSITION_LEDGER_PATH).read_text(encoding="utf-8")
-        old = "| `inert-not-active` |\n"
+        old = "| `active-full-sharded` |\n"
         self.assertIn(old, text)
         self.path(checker.CI_TRANSITION_LEDGER_PATH).write_text(
-            text.replace(old, "| `active` |\n", 1), encoding="utf-8"
+            text.replace(old, "| `inert-not-active` |\n", 1), encoding="utf-8"
         )
         self.assert_rejected(self.check(), "slice state drift")
         self.fresh_copy(checker.CI_TRANSITION_LEDGER_PATH)
         text = self.path(checker.CI_TRANSITION_LEDGER_PATH).read_text(encoding="utf-8")
-        active = "| `guard-active-not-required` |\n"
+        active = "| `guard-required` |\n"
         self.assertIn(active, text)
         self.path(checker.CI_TRANSITION_LEDGER_PATH).write_text(
             text.replace(active, "| `inert-not-active` |\n", 1), encoding="utf-8"
@@ -8961,10 +8966,11 @@ class CiTransitionLedgerMutationTests(_M90MutationTestBase):
         self.rewrite(checker.CI_TRANSITION_LEDGER_PATH, decl, "MUTATED_DECLARATION_REPLACED")
         self.assert_rejected(self.check(), "state declaration missing")
         self.fresh_copy(checker.CI_TRANSITION_LEDGER_PATH)
+        second_decl = checker.CI_TRANSITION_LEDGER_STATE_DECLARATIONS[-1]
         self.rewrite(
             checker.CI_TRANSITION_LEDGER_PATH,
-            "`Version`: `ci-transition/v1`",
-            "`Version`: `ci-transition/v2`",
+            second_decl,
+            "MUTATED_SECOND_DECLARATION",
         )
         self.assert_rejected(self.check(), "state declaration missing")
 
@@ -8997,7 +9003,7 @@ class CiTransitionLedgerMutationTests(_M90MutationTestBase):
 
     def test_ledger_row_cell_count_drift_preserving_id(self) -> None:
         text = self.path(checker.CI_TRANSITION_LEDGER_PATH).read_text(encoding="utf-8")
-        old = "| `CI-TR-001` | active workflow exact digest remains frozen |"
+        old = "| `CI-TR-001` | active workflow must remain fail-closed without a mutable whole-file fingerprint |"
         new = "| `CI-TR-001` |"
         self.assertIn(old, text)
         self.path(checker.CI_TRANSITION_LEDGER_PATH).write_text(
@@ -9256,6 +9262,99 @@ class CiV2InertFixtureMutationTests(_M90MutationTestBase):
             any("occurrence count drift" in i or "extra PYTHONPYCACHEPREFIX" in i for i in issues),
             f"expected pyprefix duplicate rejection, got {issues}",
         )
+
+
+class CiV2ActiveWorkflowMutationTests(_M90MutationTestBase):
+    FILES = (checker.CAMPAIGN_CI_WORKFLOW_PATH, checker.CI_V2_PR_GATES_PATH)
+
+    def check(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_ci_v2_active_workflow(issues)
+        return issues
+
+    def test_active_workflow_passes(self) -> None:
+        self.assertEqual(self.check(), [])
+
+    def test_active_workflow_rejects_job_env_runner_context(self) -> None:
+        self.rewrite(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            checker.CI_V2_ACTIVE_PYPREFIX_LINE,
+            checker.CI_V2_PYPREFIX_LINE,
+        )
+        self.assert_rejected(self.check(), "PYTHONPYCACHEPREFIX")
+
+    def test_active_workflow_cannot_cancel_push_runs(self) -> None:
+        self.rewrite(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            checker.CI_V2_ACTIVE_CANCEL_POLICY,
+            "cancel-in-progress: true",
+        )
+        self.assert_rejected(self.check(), "cancel-in-progress")
+
+    def test_active_workflow_concurrency_group_drift_fails_closed(self) -> None:
+        self.rewrite(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            checker.CI_V2_ACTIVE_CONCURRENCY_GROUP,
+            "group: ci-${{ github.ref }}",
+        )
+        self.assert_rejected(self.check(), "group:")
+
+    def test_active_workflow_push_group_must_use_unique_run_id(self) -> None:
+        self.rewrite(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            checker.CI_V2_ACTIVE_CONCURRENCY_GROUP,
+            "group: ci-${{ github.workflow }}-"
+            "${{ github.event.pull_request.number || github.ref }}",
+        )
+        self.assert_rejected(self.check(), "group:")
+
+    def test_active_workflow_required_context_name_drift_fails_closed(self) -> None:
+        self.rewrite(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            "  contracts:\n    name: docs-and-contracts",
+            "  contracts-renamed:\n    name: docs-and-contracts-renamed",
+        )
+        self.assert_rejected(self.check(), "docs-and-contracts")
+
+    def test_active_workflow_runner_argument_drift_fails_closed(self) -> None:
+        self.rewrite(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            "--jobs 4",
+            "--jobs 1",
+        )
+        self.assert_rejected(self.check(), "--jobs 4")
+
+    def test_active_workflow_unpinned_action_fails_closed(self) -> None:
+        path = self.path(checker.CAMPAIGN_CI_WORKFLOW_PATH)
+        text = path.read_text(encoding="utf-8")
+        action = "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"
+        self.assertEqual(text.count(action), 2)
+        path.write_text(text.replace(action, "actions/checkout@v6", 1), encoding="utf-8")
+        self.assert_rejected(self.check(), "action inventory drift")
+
+    def test_active_workflow_conditional_rust_job_fails_closed(self) -> None:
+        self.rewrite(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            "  rust:\n    name: rust",
+            "  rust:\n    name: rust\n    if: false",
+        )
+        self.assert_rejected(self.check(), "conditional inventory drift")
+
+    def test_active_workflow_display_only_checker_fails_closed(self) -> None:
+        self.rewrite(
+            checker.CAMPAIGN_CI_WORKFLOW_PATH,
+            checker.CI_V2_CHECKER_COMMAND,
+            f"echo {checker.CI_V2_CHECKER_COMMAND}",
+        )
+        self.assert_rejected(self.check(), "checker command count drift")
+
+    def test_active_pr_gate_projection_rejects_serial_discovery(self) -> None:
+        self.rewrite(
+            checker.CI_V2_PR_GATES_PATH,
+            checker.CI_V2_SHARD_RUNNER_COMMAND,
+            checker.CAMPAIGN_CI_LEGACY_DISCOVERY_COMMAND,
+        )
+        self.assert_rejected(self.check(), "PR-gate")
 
 
 class CheckerTestInventoryMutationTests(_M90MutationTestBase):

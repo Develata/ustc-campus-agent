@@ -15,7 +15,12 @@ cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-targets --all-features
 cargo test --locked --all-features --doc
-python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+checker_evidence="$(mktemp -d)"
+PYTHONPYCACHEPREFIX="$(mktemp -d)" python3 scripts/run_checker_shards.py \
+  --jobs 4 \
+  --timeout-seconds 1800 \
+  --inventory scripts/checker_test_inventory.json \
+  --evidence-dir "$checker_evidence"
 python3 scripts/check_repo_contracts.py
 git diff --check
 ```
