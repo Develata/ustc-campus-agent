@@ -4,17 +4,23 @@
 
 - `Module ID`: `M71`
 - `Package ID`: `ustc.affairs-navigator`
-- `Status`: Accepted blueprint; manifest/design only
-- `Implementation State`: `design-only`
+- `Status`: Accepted blueprint with bounded executable product-kernel and fixture-backed exact-query evidence; real source/admin/Web lifecycle remains planned
+- `Implementation State`: `partial-evidence`
 - `Version`: `m71-affairs-navigator/v0`
-- `Last Review`: `2026-07-25`
-- `Primary code area`: `plugins/first-party/affairs-navigator/` plus a cohesive Rust domain module when implementation begins
+- `Last Review`: `2026-08-24`
+- `Primary code area`: `crates/affairs-navigator/`, `plugins/first-party/affairs-navigator/` and the bounded composition fixture under `apps/ustc-agentd/`
 
 ## 1. Purpose
 
 `M71` answers: “What should I do now?” It owns reviewed campus procedure trees and artifacts: applicability, prerequisites, ordered steps, deadlines/effective time, entry points, sources, conflicts and uncertainty.
 
 Its default truth path is exact/structured lookup over reviewed material, not free-form full-corpus generation.
+
+### Current bounded evidence
+
+`crates/affairs-navigator` retains checked stable procedure/artifact/source identities, typed drafts and artifacts, board-policy validation, ordered conditions/steps/time/entry projections, freshness/conflict/uncertainty outcomes and deterministic exact lookup. The bounded `ustc-agentd` composition loads one synthetic reviewed snapshot fixture and maps an admitted exact stable-ID request to that kernel; integration tests cover found, unavailable/corrupted source, stale/conflicting authority and lineage/provenance outcomes.
+
+The fixture is proof infrastructure, not a production source or administrator publication system. No real M60 retrieval/import, board repository, administrator review/publish/archive receipt, supersession projection, broad structured search, Web rendering or external campus transaction is claimed. `PROC-011` therefore remains planned until its complete administrator-import → review/publish → application query → thin-Web assertions are bound.
 
 ## 2. Non-goals
 

@@ -300,7 +300,13 @@ EXTERNAL_AGENT_OPERATION_ROWS = {
     "market.package.list": ("M20", "public-read", "read", "CLI, HTTP, inbound MCP", "planned first vertical slice"),
     "market.package.get": ("M20", "public-read", "read", "CLI, HTTP", "planned"),
     "affairs.search": ("M71", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
-    "affairs.get": ("M71", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
+    "affairs.get": (
+        "M71",
+        "public-read",
+        "read",
+        "CLI, HTTP, inbound MCP",
+        "bounded exact stable-ID fixture evidence through `ustc-agentd` and `ustc-agent`; production HTTP/inbound-MCP projection planned",
+    ),
     "change.list": ("M70", "public-read", "read", "CLI, HTTP", "planned after owning product contract"),
     "change.get": ("M70", "public-read", "read", "CLI, HTTP", "planned after owning product contract"),
     "program.list": ("M72", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
@@ -4483,6 +4489,8 @@ CRATES_IO_SOURCE = "registry+https://github.com/rust-lang/crates.io-index"
 # requirement; a table is compared key for key, so adding `path`, `git`, `registry` or
 # `default-features` is drift rather than an unnoticed redirect.
 WORKSPACE_ADMITTED_DEPENDENCIES = {
+    "base64": "0.22.1",
+    "hmac": "0.12.1",
     "serde": {"version": "1.0.229", "features": ["derive"]},
     "serde_json": "1.0.151",
     "semver": "1.0.27",
@@ -10664,7 +10672,7 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
 
     required_fragments = {
         "docs/contracts/interfaces.md": (
-            "The first retained protocol proof is `server.info` plus `capability.list`; the first shared CLI/inbound-MCP vertical slice is `market.package.list`.",
+            "A bounded fixture-only `affairs.get` proof now exists earlier as vertical-slice evidence for the M10→M71→M80 typed path",
             "The first remote profile uses reviewed MCP Streamable HTTP.",
             "`planner.generate` creates only a tenant-local draft. It does not enroll, register, pay or submit a transaction to any external campus system.",
         ),
@@ -10679,7 +10687,7 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
             "not part of the current required-target gate",
         ),
         "docs/contracts/cli.md": (
-            "These commands project `server.info`, `capability.list` and `market.package.list`",
+            "The retained non-production slice implements only these fixture-loopback commands",
             "server-mediated browser pairing",
         ),
         "docs/features/05-headless-client-and-agent-integration.md": (
@@ -11089,7 +11097,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_campaign_taskbook_state": {"digest": "85b30689fd0ae05695c337d8808e919f69639ace8d98643c90a4b47522fe2d65", "status": "active"},
     "check_cargo_dependency_sources": {"digest": "0f645288c48f56eb3c8282f5fe9b9c0e379ae8ff82e1c06f64f740278a77ad7d", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
-    "check_external_agent_access_contract": {"digest": "b5f042f9d195b8a82d15059da493f2ecb92f372aa79733a7d0fb598c3881bd79", "status": "active"},
+    "check_external_agent_access_contract": {"digest": "0569a40861bad19c857c806dc5abefdf4dde78554c7879f29ccd8751bda0324e", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},

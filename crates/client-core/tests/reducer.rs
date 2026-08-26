@@ -102,10 +102,10 @@ fn verified_lineage() -> M71LineageDto {
     }
 }
 
-fn unverified_lineage() -> M71LineageDto {
+fn unverified_lineage(reason: &str) -> M71LineageDto {
     M71LineageDto::Unverified {
         materialization_receipt_id: tx("mr-1"),
-        reason: tx("source_unverified"),
+        reason: tx(reason),
     }
 }
 
@@ -235,7 +235,7 @@ fn reduces_cannot_verify_all_four_reasons() {
                 reason:
                     ustc_campus_agent_client_core::wire::CannotVerifyReasonDto::SourceRevisionUnverified,
             },
-            unverified_lineage(),
+            unverified_lineage("missing_revision"),
             "source_revision_unverified",
         ),
         (
@@ -244,7 +244,7 @@ fn reduces_cannot_verify_all_four_reasons() {
                 reason:
                     ustc_campus_agent_client_core::wire::CannotVerifyReasonDto::EffectiveIntervalMissing,
             },
-            unverified_lineage(),
+            unverified_lineage("effective_interval_missing"),
             "effective_interval_missing",
         ),
         (
@@ -396,7 +396,46 @@ fn wire_error_for(class: WireErrorClassDto) -> M10WireErrorDto {
         InfrastructurePortUnavailable => (Retryable, "infrastructure_port_unavailable"),
         MalformedCommand => (RetryableAfterChange, "malformed_command"),
     };
-    M10WireErrorDto::try_new(class, retryability, tx(code), EchoPayloadDto::None).unwrap()
+    let echo = match class {
+        IdempotencyStoreUnavailable | DescriptorSnapshotAbsent | InfrastructurePortUnavailable => {
+            EchoPayloadDto::Operation {
+                operation_id: tx("affairs.get"),
+            }
+        }
+        ConflictingEnvelope => EchoPayloadDto::Envelope {
+            operation_id: tx("affairs.get"),
+            idempotency_key: tx("idem-1"),
+        },
+        DescriptorSnapshotMismatch => EchoPayloadDto::SnapshotMismatch {
+            command_operation_id: tx("affairs.get"),
+            snapshot_operation_id: tx("affairs.get"),
+        },
+        PolicyDenied => EchoPayloadDto::PolicyDenied {
+            operation_id: tx("affairs.get"),
+            permission_class: tx("public-read"),
+        },
+        PolicyExpired => EchoPayloadDto::PolicyExpired {
+            operation_id: tx("affairs.get"),
+            policy_snapshot_id: tx("policy-1"),
+        },
+        SessionNotFound => EchoPayloadDto::SessionId {
+            requested_session_id: tx("session-1"),
+        },
+        SessionIdMismatch => EchoPayloadDto::SessionMismatch {
+            requested_session_id: tx("session-1"),
+            loaded_session_id: tx("session-2"),
+        },
+        SessionNotAdmitted => EchoPayloadDto::SessionNotAdmitted {
+            requested_session_id: tx("session-1"),
+            observed_at: ms(1_000),
+        },
+        CapabilityMissing | CapabilityDisabled | CapabilityRevoked => EchoPayloadDto::Capability {
+            operation_id: tx("affairs.get"),
+            actor_kind: tx("public"),
+        },
+        MalformedCommand => EchoPayloadDto::None,
+    };
+    M10WireErrorDto::try_new(class, retryability, tx(code), echo).unwrap()
 }
 
 #[test]

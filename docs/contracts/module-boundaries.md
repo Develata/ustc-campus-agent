@@ -4,7 +4,7 @@
 
 - `Status`: Current contract
 - `Version`: `module-boundaries/v3`
-- `Last Review`: `2026-08-15`
+- `Last Review`: `2026-08-24`
 - `Owning Plan`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
 - `Task Policy`: [`../tasks/00-module-work-policy.md`](../tasks/00-module-work-policy.md)
 
@@ -27,11 +27,11 @@ This registry defines what may cross each large-module boundary. It does not pre
 | Boundary ID | Producer/owner | Consumer | Values/operation | Status |
 |---|---|---|---|---|
 | `B-M00-M10-ACTOR` | `M00` | `M10` | [`platform-request-context/v0`](platform-request-context.md): closed `M00AdmittedActor::{Public, Authenticated}`, sealed `PlatformRequestContext`, complete scalar `M00AdmittedDisposition`, typed rejection/incomplete outcome | M00 bounded producer implemented (`AUTH-013`); M10-v17 composition/wire runtime planned |
-| `B-M80-M10-CALL` | M80 produces request instances; M10 owns the versioned wire schema | `M10` | versioned client-core request from Dioxus, `ustc-agent` or inbound MCP; client build/target/protocol, admitted session projection, typed intent, precondition and correlation/idempotency identity | accepted contract; implementation planned |
-| `B-M10-M80-RESULT` | `M10` | `M80` | versioned response/error/projection plus compatibility or `UpgradeRequired` outcome reduced/rendered by the calling peer adapter | accepted contract; implementation planned |
+| `B-M80-M10-CALL` | M80 produces request instances; M10 owns the versioned wire schema | `M10` | versioned client-core request from Dioxus, `ustc-agent` or inbound MCP; client build/target/protocol, admitted session projection, typed intent, precondition and correlation/idempotency identity | bounded `affairs get/lookup` request evidence over fixture-only numeric loopback framing; production auth/HTTP/SSE, generic conformance and other adapters planned |
+| `B-M10-M80-RESULT` | `M10` | `M80` | versioned response/error/projection plus compatibility or `UpgradeRequired` outcome reduced/rendered by the calling peer adapter | bounded Affairs response/error/provenance reduction and canonical CLI JSON/exit evidence; production compatibility matrix and other peer adapters planned |
 | `B-M10-M80-EVENT` | `M10` | `M80` | typed server event/stream value, monotone cursor and reconnect/resync outcome shared semantically across peer adapters | accepted contract; implementation planned |
-| `B-M10-APP-CALL` | `M10` | owning backend application module | one admitted typed application command/query; no transport or Dioxus type | planned per ingress |
-| `B-APP-M10-RESULT` | owning backend application module | `M10` | typed application result/error/event projection; no concrete adapter handle | planned per ingress |
+| `B-M10-APP-CALL` | `M10` | owning backend application module | one admitted typed application command/query; no transport or Dioxus type | bounded fixture-backed M71 Affairs command/query evidence; other operations and production ingress planned |
+| `B-APP-M10-RESULT` | owning backend application module | `M10` | typed application result/error/event projection; no concrete adapter handle | bounded M71 Affairs result/error/provenance evidence; other operations and production ingress planned |
 | `B-M20-M40-PROJECTION` | `M20` | `M40` | immutable tool projection, private route and current authorization result | partial implementation |
 | `B-M30-M50-MODEL` | `M30` | `M50` | complete model request, ordered events, usage and typed provider errors | planned |
 | `B-M20-M30-TOOLSET` | `M20` resolver via composition | `M30`/provider | frozen `AgentToolsetView` only; no private route/package/grant internals | partial implementation |

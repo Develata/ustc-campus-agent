@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import hashlib
 import json
+import re
 import shutil
 import tempfile
 import unittest
@@ -1212,10 +1213,16 @@ class ModuleRegistryContractTests(unittest.TestCase):
     def test_module_state_mismatch_fails_closed(self) -> None:
         path = self.root / checker.MODULE_BLUEPRINTS["M80"]
         text = path.read_text(encoding="utf-8")
+        match = re.search(r"`Implementation State`: `([^`]+)`", text)
+        if match is None:
+            self.fail("M80 blueprint must carry exactly one Implementation State field")
+        current_state = match.group(1)
+        self.assertIn(current_state, checker.VALID_MODULE_STATES)
+        replacement_state = "planned" if current_state != "planned" else "skeleton"
         path.write_text(
             text.replace(
-                "`Implementation State`: `planned`",
-                "`Implementation State`: `skeleton`",
+                f"`Implementation State`: `{current_state}`",
+                f"`Implementation State`: `{replacement_state}`",
                 1,
             ),
             encoding="utf-8",
@@ -4792,6 +4799,26 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
             self.workspace_manifest_path(),
             'semver = "1.0.27"',
             'semver = { path = "crates/fake-semver" }',
+        )
+        self.assert_rejected(
+            self.check_identity(), "workspace dependency specifications drifted"
+        )
+
+    def test_workspace_hmac_dependency_redirect_fails_closed(self) -> None:
+        self.rewrite(
+            self.workspace_manifest_path(),
+            'hmac = "0.12.1"',
+            'hmac = { path = "crates/fake-hmac" }',
+        )
+        self.assert_rejected(
+            self.check_identity(), "workspace dependency specifications drifted"
+        )
+
+    def test_workspace_base64_dependency_removal_fails_closed(self) -> None:
+        self.rewrite(
+            self.workspace_manifest_path(),
+            'base64 = "0.22.1"\n',
+            "",
         )
         self.assert_rejected(
             self.check_identity(), "workspace dependency specifications drifted"

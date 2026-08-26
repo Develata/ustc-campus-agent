@@ -31,7 +31,6 @@ const FORBIDDEN_DEPS: &[&str] = &[
     "ustc-agentctl",
     "adapters",
     "course-planning",
-    "sha2",
     "time",
     "semver",
     "tokio",
@@ -43,9 +42,10 @@ const FORBIDDEN_DEPS: &[&str] = &[
 /// The only crates client-core may depend on directly.
 const CLIENT_CORE_ALLOWED: &[&str] = &["ustc-campus-agent-client-protocol", "serde", "serde_json"];
 
-/// The only crates client-protocol may depend on directly (transitive proof:
-/// client-core → client-protocol → {serde, serde_json} only).
-const CLIENT_PROTOCOL_ALLOWED: &[&str] = &["serde", "serde_json"];
+/// The only crates client-protocol may depend on directly. `sha2` is the
+/// M10-owned deterministic payload-digest primitive; it is not a domain,
+/// transport, runtime, or outer-shell dependency.
+const CLIENT_PROTOCOL_ALLOWED: &[&str] = &["serde", "serde_json", "sha2"];
 
 /// The only crates ustc-agent may depend on directly.
 const USTC_AGENT_ALLOWED: &[&str] = &["ustc-campus-agent-client-core", "serde", "serde_json"];
@@ -150,13 +150,14 @@ fn ustc_agent_dependencies_are_allowlisted() {
 }
 
 #[test]
-fn client_core_transitive_closure_is_benign() {
+fn client_core_first_party_closure_is_confined() {
     // client-core -> {client-protocol, serde, serde_json}
-    // client-protocol -> {serde, serde_json}
-    // Therefore the full transitive closure is {client-protocol, serde,
-    // serde_json} plus proc-macro/deps of serde (serde_core, serde_derive),
-    // none of which are domain crates. This static proof holds because both
-    // manifests are allowlisted above.
+    // client-protocol -> {serde, serde_json, sha2}
+    // This source-level proof confines the workspace-visible/direct boundary
+    // and rejects every listed domain/runtime dependency. Cargo's resolved
+    // graph and the repository contract checker own crates.io source/version
+    // admission; this test does not pretend to enumerate all registry
+    // transitives of serde or sha2.
     let core_deps = dep_lines(CLIENT_CORE_CARGO);
     let proto_deps = dep_lines(CLIENT_PROTOCOL_CARGO);
     let mut closure = core_deps.clone();

@@ -290,9 +290,13 @@ dependencies = [
 name = "ustc-agentd"
 version = "0.1.0"
 dependencies = [
+ "affairs-navigator",
  "serde",
  "serde_json",
+ "time",
  "ustc-agent-tool-protocol",
+ "ustc-campus-agent-application-ingress",
+ "ustc-campus-agent-client-protocol",
  "ustc-campus-agent-core",
  "ustc-campus-agent-runtime",
 ]

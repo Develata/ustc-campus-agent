@@ -3,7 +3,8 @@
 //! Sends exactly one typed intent through `client-core` over the bounded
 //! loopback transport, prints exactly one canonical `ustc-client-result/v1`
 //! JSON envelope on stdout, and exits with a stable class code. Diagnostics
-//! go to stderr; no capability/capsule/secret is ever logged or dumped.
+//! go to stderr; no raw session/operator authority or stdin lookup value is
+//! logged or re-echoed outside the typed server result.
 //!
 //! Privilege boundary (`cli/v2.1` §1, `client-shell/v2.1` §14): this binary
 //! depends only on `client-core` (and `serde_json` for stdout). It has no
@@ -13,14 +14,14 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
+use std::io::{self, Read};
 use std::process::ExitCode;
 use std::time::Duration;
 
 use ustc_campus_agent_client_core::{
     self as core, ClientIntentDto, ClientProvenanceDto, ClientState, DEFAULT_CALL_TIMEOUT,
-    Endpoint, Origin, RESULT_SCHEMA, TransportError, UnixMillis, authenticated_affairs_get,
-    exit_class, lookup_as_operator, lookup_as_owner, lookup_by_capability, public_affairs_get,
-    reduce_response, reduce_transport_failure, render_result,
+    Endpoint, Origin, RESULT_SCHEMA, TransportError, UnixMillis, exit_class, lookup_by_capability,
+    public_affairs_get, reduce_response, reduce_transport_failure, render_result,
 };
 
 const PROTOCOL: &str = "client-protocol/v0.1";
@@ -28,6 +29,10 @@ const TARGET: &str = "cli";
 /// Maximum accepted `--timeout` value in seconds. An automation client must
 /// not block indefinitely; 300 seconds (5 minutes) is the documented ceiling.
 const MAX_TIMEOUT_SECS: u64 = 300;
+/// Lookup authority is accepted only on stdin so bearer material never appears
+/// in process arguments. The public fixture capability is intentionally tiny;
+/// keep a hard ceiling before allocation/parsing.
+const MAX_CAPABILITY_STDIN_BYTES: usize = 4096;
 
 struct Outcome {
     code: i32,
@@ -86,7 +91,7 @@ fn dispatch_affairs_get(args: Vec<String>) -> Outcome {
     let mut causation_id: Option<String> = None;
     let mut idempotency_key: Option<String> = None;
     let mut payload_digest: Option<String> = None;
-    let mut session_id: Option<String> = None;
+
     let mut timeout = DEFAULT_CALL_TIMEOUT;
     let mut non_interactive = false;
     let mut format_json = true;
@@ -142,12 +147,7 @@ fn dispatch_affairs_get(args: Vec<String>) -> Outcome {
                     Err(o) => return o,
                 }
             }
-            "--session-id" => {
-                session_id = match take_value(&mut iter, "--session-id") {
-                    Ok(v) => Some(v),
-                    Err(o) => return o,
-                }
-            }
+
             "--timeout" => {
                 timeout = match parse_timeout(&mut iter, "--timeout") {
                     Ok(v) => v,
@@ -204,30 +204,16 @@ fn dispatch_affairs_get(args: Vec<String>) -> Outcome {
         Err(error) => return usage_err(error.to_string()),
     };
     let as_of = as_of.map(UnixMillis::new);
-    let intent = if let Some(session_id) = session_id {
-        authenticated_affairs_get(
-            request_id,
-            correlation_id,
-            causation_id,
-            idempotency_key,
-            provenance.clone(),
-            payload_digest,
-            procedure_id,
-            as_of,
-            session_id,
-        )
-    } else {
-        public_affairs_get(
-            request_id,
-            correlation_id,
-            causation_id,
-            idempotency_key,
-            provenance.clone(),
-            payload_digest,
-            procedure_id,
-            as_of,
-        )
-    };
+    let intent = public_affairs_get(
+        request_id,
+        correlation_id,
+        causation_id,
+        idempotency_key,
+        provenance.clone(),
+        payload_digest,
+        procedure_id,
+        as_of,
+    );
     let intent = match intent {
         Ok(value) => value,
         Err(error) => return usage_err(error.to_string()),
@@ -236,12 +222,15 @@ fn dispatch_affairs_get(args: Vec<String>) -> Outcome {
 }
 
 fn dispatch_affairs_lookup(args: Vec<String>) -> Outcome {
+    let stdin = io::stdin();
+    let mut reader = stdin.lock();
+    dispatch_affairs_lookup_with_reader(args, &mut reader)
+}
+
+fn dispatch_affairs_lookup_with_reader<R: Read>(args: Vec<String>, reader: &mut R) -> Outcome {
     let mut endpoint: Option<String> = None;
     let mut command_id: Option<String> = None;
-    let mut capability: Option<String> = None;
-    let mut tenant_id: Option<String> = None;
-    let mut user_id: Option<String> = None;
-    let mut grant_id: Option<String> = None;
+    let mut capability_stdin = false;
     let mut timeout = DEFAULT_CALL_TIMEOUT;
     let mut non_interactive = false;
 
@@ -260,29 +249,9 @@ fn dispatch_affairs_lookup(args: Vec<String>) -> Outcome {
                     Err(o) => return o,
                 }
             }
-            "--capability" => {
-                capability = match take_value(&mut iter, "--capability") {
-                    Ok(v) => Some(v),
-                    Err(o) => return o,
-                }
-            }
-            "--tenant-id" => {
-                tenant_id = match take_value(&mut iter, "--tenant-id") {
-                    Ok(v) => Some(v),
-                    Err(o) => return o,
-                }
-            }
-            "--user-id" => {
-                user_id = match take_value(&mut iter, "--user-id") {
-                    Ok(v) => Some(v),
-                    Err(o) => return o,
-                }
-            }
-            "--grant-id" => {
-                grant_id = match take_value(&mut iter, "--grant-id") {
-                    Ok(v) => Some(v),
-                    Err(o) => return o,
-                }
+            "--capability-stdin" if !capability_stdin => capability_stdin = true,
+            "--capability-stdin" => {
+                return usage_err("duplicate flag --capability-stdin".into());
             }
             "--timeout" => {
                 timeout = match parse_timeout(&mut iter, "--timeout") {
@@ -325,27 +294,14 @@ fn dispatch_affairs_lookup(args: Vec<String>) -> Outcome {
         Ok(value) => value,
         Err(error) => return usage_err(error.to_string()),
     };
-    let viewers = [
-        capability.is_some(),
-        tenant_id.is_some() || user_id.is_some(),
-        grant_id.is_some(),
-    ];
-    let selected = viewers.iter().filter(|flag| **flag).count();
-    if selected != 1 {
-        return usage_err(
-            "exactly one of --capability, (--tenant-id and --user-id), or --grant-id is required"
-                .into(),
-        );
+    if !capability_stdin {
+        return usage_err("missing required flag --capability-stdin".into());
     }
-    let intent = if let Some(capability) = capability {
-        lookup_by_capability(command_id, capability)
-    } else if let (Some(tenant_id), Some(user_id)) = (tenant_id, user_id) {
-        lookup_as_owner(command_id, tenant_id, user_id)
-    } else if let Some(grant_id) = grant_id {
-        lookup_as_operator(command_id, grant_id)
-    } else {
-        return usage_err("--tenant-id and --user-id must be supplied together".into());
+    let capability = match read_capability_stdin(reader) {
+        Ok(value) => value,
+        Err(outcome) => return outcome,
     };
+    let intent = lookup_by_capability(command_id, capability);
     let intent = match intent {
         Ok(value) => value,
         Err(error) => return usage_err(error.to_string()),
@@ -419,6 +375,34 @@ fn parse_timeout(iter: &mut std::vec::IntoIter<String>, flag: &str) -> Result<Du
     Ok(Duration::from_secs(secs))
 }
 
+fn read_capability_stdin<R: Read>(reader: &mut R) -> Result<String, Outcome> {
+    let mut bytes = Vec::with_capacity(MAX_CAPABILITY_STDIN_BYTES.min(256));
+    reader
+        .take((MAX_CAPABILITY_STDIN_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|_| usage_err("failed to read --capability-stdin".into()))?;
+    if bytes.len() > MAX_CAPABILITY_STDIN_BYTES {
+        return Err(usage_err(format!(
+            "--capability-stdin exceeds {MAX_CAPABILITY_STDIN_BYTES} bytes"
+        )));
+    }
+    let raw = std::str::from_utf8(&bytes)
+        .map_err(|_| usage_err("--capability-stdin must be UTF-8".into()))?;
+    let capability = raw
+        .strip_suffix("\r\n")
+        .or_else(|| raw.strip_suffix('\n'))
+        .unwrap_or(raw);
+    if capability.is_empty() {
+        return Err(usage_err("--capability-stdin is empty".into()));
+    }
+    if capability.contains(['\r', '\n']) {
+        return Err(usage_err(
+            "--capability-stdin must contain exactly one value".into(),
+        ));
+    }
+    Ok(capability.to_owned())
+}
+
 fn require(value: Option<String>, flag: &str) -> Result<String, Outcome> {
     value.ok_or_else(|| usage_err(format!("missing required flag {flag}")))
 }
@@ -437,18 +421,18 @@ fn help_text() -> String {
          Usage:\n  \
          ustc-agent affairs get --endpoint <loopback-host:port> --procedure-id <id> \\\n    \
          --request-id <id> --correlation-id <id> --payload-digest <hex> \\\n    \
-         [--as-of <unix-millis>] [--session-id <id>] [--causation-id <id>] \\\n    \
+         [--as-of <unix-millis>] [--causation-id <id>] \\\n    \
          [--idempotency-key <key>] [--timeout <1..=300 secs>] [--non-interactive] [--format json]\n  \
          ustc-agent affairs lookup --endpoint <loopback-host:port> --command-id <id> \\\n    \
-         (--capability <cap> | --tenant-id <t> --user-id <u> | --grant-id <g>) \\\n    \
-         [--timeout <1..=300 secs>] [--non-interactive] [--format json]\n  \
+         --capability-stdin [--timeout <1..=300 secs>] [--non-interactive] [--format json]\n  \
          ustc-agent --version\n  \
          ustc-agent --help\n\n\
          Output: one `{schema}` JSON envelope on stdout per request; diagnostics on stderr.\n\
          Exit classes: 0 success, 2 usage, 3 auth, 4 policy, 5 compat, 6 unavailable, \\\
          7 conflict, 8 outcome-unknown, 9 protocol.\n\n\
          Note: --endpoint must be a numeric loopback address (127.0.0.0/8 or [::1]).\n\
-         Note: --payload-digest is caller-supplied; the client propagates it for server-side \\\
+         Note: lookup capability is read as one bounded UTF-8 value from stdin; no user/session/operator \\\n         authority is accepted in argv.\n\
+         Note: --payload-digest is caller-supplied; the client propagates it for server-side \\\n
          idempotency verification and does not authoritatively compute it.\n",
         version = env!("CARGO_PKG_VERSION"),
         schema = RESULT_SCHEMA,
@@ -479,6 +463,10 @@ mod tests {
         let outcome = dispatch(vec!["ustc-agent".into(), "--help".into()]);
         assert_eq!(outcome.code, 0);
         assert!(outcome.stdout.contains("affairs get"));
+        assert!(outcome.stdout.contains("--capability-stdin"));
+        assert!(!outcome.stdout.contains("--session-id"));
+        assert!(!outcome.stdout.contains("--grant-id"));
+        assert!(!outcome.stdout.contains("--tenant-id"));
     }
 
     #[test]
@@ -534,22 +522,21 @@ mod tests {
     }
 
     #[test]
-    fn lookup_requires_exactly_one_viewer() {
-        let outcome = dispatch(vec![
-            "ustc-agent".into(),
-            "affairs".into(),
-            "lookup".into(),
-            "--endpoint".into(),
-            "127.0.0.1:8080".into(),
-            "--command-id".into(),
-            "cmd1".into(),
-            "--capability".into(),
-            "cap1".into(),
-            "--grant-id".into(),
-            "g1".into(),
-        ]);
+    fn lookup_rejects_operator_surface_before_reading_stdin() {
+        let mut reader = std::io::Cursor::new(b"cap1\n");
+        let outcome = dispatch_affairs_lookup_with_reader(
+            vec![
+                "--endpoint".into(),
+                "127.0.0.1:8080".into(),
+                "--command-id".into(),
+                "cmd1".into(),
+                "--grant-id".into(),
+                "g1".into(),
+            ],
+            &mut reader,
+        );
         assert_eq!(outcome.code, 2);
-        assert!(outcome.stderr.contains("exactly one"));
+        assert!(outcome.stderr.contains("unknown flag `--grant-id`"));
     }
 
     #[test]
@@ -633,12 +620,13 @@ mod tests {
     }
 
     #[test]
-    fn missing_session_id_value_is_usage_error() {
+    fn session_id_argv_is_rejected() {
         let mut args = base_get_args();
         args.push("--session-id".into());
+        args.push("session1".into());
         let outcome = dispatch(args);
         assert_eq!(outcome.code, 2);
-        assert!(outcome.stderr.contains("missing value for --session-id"));
+        assert!(outcome.stderr.contains("unknown flag `--session-id`"));
     }
 
     #[test]
@@ -756,7 +744,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_lookup_capability_value_is_usage_error() {
+    fn capability_argv_is_rejected() {
         let outcome = dispatch(vec![
             "ustc-agent".into(),
             "affairs".into(),
@@ -766,9 +754,38 @@ mod tests {
             "--command-id".into(),
             "cmd1".into(),
             "--capability".into(),
+            "cap1".into(),
         ]);
         assert_eq!(outcome.code, 2);
-        assert!(outcome.stderr.contains("missing value for --capability"));
+        assert!(outcome.stderr.contains("unknown flag `--capability`"));
+    }
+
+    #[test]
+    fn capability_stdin_accepts_one_bounded_utf8_value() {
+        let mut reader = std::io::Cursor::new(b"cap1\n");
+        assert_eq!(
+            read_capability_stdin(&mut reader).ok().as_deref(),
+            Some("cap1")
+        );
+    }
+
+    #[test]
+    fn capability_stdin_rejects_empty_multiline_invalid_utf8_and_oversize() {
+        for bytes in [
+            b"".as_slice(),
+            b"\n".as_slice(),
+            b"cap1\ncap2\n".as_slice(),
+            b"\xff".as_slice(),
+        ] {
+            let mut reader = std::io::Cursor::new(bytes);
+            assert!(read_capability_stdin(&mut reader).is_err());
+        }
+        let mut reader = std::io::Cursor::new(vec![b'a'; MAX_CAPABILITY_STDIN_BYTES + 1]);
+        let outcome = match read_capability_stdin(&mut reader) {
+            Ok(_) => panic!("oversized capability must fail"),
+            Err(outcome) => outcome,
+        };
+        assert!(outcome.stderr.contains("exceeds"));
     }
 
     #[test]

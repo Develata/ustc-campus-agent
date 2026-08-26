@@ -63,7 +63,7 @@ The thin peer clients display/serialize server projections and submit intent thr
 | ID | Module | Owns | Current evidence |
 |---|---|---|---|
 | `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity value types only |
-| `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | daemon help/version skeleton |
+| `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | framework-neutral client-protocol/application-ingress carriers plus one fixture-backed loopback Affairs composition; public HTTP/Dioxus/stream host planned |
 | `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | typed catalog/capability + bounded installation/grant/update domains + bounded transaction-current authority assembly + pure resolver/fixtures |
 | `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel |
 | `M40` | Tool Gateway/Execution | exact tool correlation, authorization order, intent/executor/receipt/result | protocol values + fake conformance |
@@ -71,9 +71,9 @@ The thin peer clients display/serialize server projections and submit intent thr
 | `M51` | MCP Binding/Executor | reviewed binding/discovery/schema drift and MCP execution | planned |
 | `M60` | Campus Trust/Source | source policy, immutable revision, provenance, conflict, freshness, baseline | synthetic fixture semantics only |
 | `M70` | ChangeRadar | semantic change review/event/feed | manifest/design only |
-| `M71` | Affairs Navigator | reviewed procedure tree/artifacts/search | manifest/design only |
+| `M71` | Affairs Navigator | reviewed procedure tree/artifacts/search | hardened procedure/artifact/policy/freshness/conflict kernel plus fixture-backed exact stable-ID composition; real source/admin/Web lifecycle planned |
 | `M72` | Opportunity Graph | reviewed opportunities, private profiles, qualification/planning | offline Course Planning spike |
-| `M80` | Client Core and Interaction Shells | framework-neutral client behavior and peer Dioxus Web/Android, `ustc-agent` and public-read-first inbound MCP adapters; later admitted Windows | accepted architecture, Windows not a current required gate, no client-core or peer implementation |
+| `M80` | Client Core and Interaction Shells | framework-neutral client behavior and peer Dioxus Web/Android, `ustc-agent` and public-read-first inbound MCP adapters; later admitted Windows | bounded client-core and real ordinary-user fixture-loopback Affairs CLI evidence; production auth/HTTP/stream, inbound MCP and Dioxus peers planned |
 | `M90` | Infrastructure/Operations | ports for storage/journal/evidence/config/secrets/HTTP/telemetry and Docker Compose deployment | CI/checker only |
 
 “Current evidence” is not module completion. See the module blueprint exit gate and acceptance matrix.

@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current task policy
-- `Version`: `module-work-policy/v1.4`
-- `Last Review`: `2026-07-31`
+- `Version`: `module-work-policy/v1.5`
+- `Last Review`: `2026-08-24`
 - `Owning Constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module Registry`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
 - `Boundary Registry`: [`../contracts/module-boundaries.md`](../contracts/module-boundaries.md)
@@ -22,6 +22,30 @@ A human/agent owner takes one large module or one declared small module inside i
 - not edit another module's private implementation to make integration convenient.
 
 A large-module owner is responsible for interface consistency and final standalone exit gate. Small-module owners are responsible only for their bounded slice and public fit.
+
+### Authority-owned parallel module waves
+
+After public contracts, acceptance bindings and module write ownership are frozen, implementation switches from architecture serialization to a bounded module-milestone wave:
+
+```text
+one Integration Authority Owner
+→ freeze public DTO/error/version/permission/source semantics and fake contracts
+→ two or three isolated module implementation lanes prove standalone behavior against those fakes
+→ one continuous read-only auditor checks scope/contract drift
+→ the Integration Authority Owner selects exact candidates and serially fans in real dependencies
+→ one context-isolated terminal reviewer examines the frozen integrated candidate
+→ the Integration Authority Owner adjudicates findings, runs final gates and owns the only completion verdict
+```
+
+The Integration Authority Owner is the sole owner of public-contract decisions, shared governance/current-truth carriers, the canonical candidate, composition order, acceptance promotion, review adjudication and final commit. It may implement small central protocol/composition carriers directly when that prevents semantic ambiguity; it need not write every module-private implementation.
+
+Each top-level implementation lane has one independently named durable parent process, isolated worktree/run root, exact frozen base and contract digest, bounded write set and typed receipt stream. OMO/ULW/internal subagents are intra-module fan-out only; they do not become additional cross-module owners. Initial writing concurrency defaults to two or three lanes and increases only after measured host/model capacity and disjoint custody justify it.
+
+Module-private code and tests may run concurrently against fake counterparts. Shared DTO/error/version/permission/source semantics, root dependency resolution, composition roots, acceptance matrices, module map, roadmap and contract checker remain serialized under the Integration Authority Owner. A module lane may keep a worktree-local `Cargo.lock` for proof, but only the integration owner regenerates or admits the canonical lockfile.
+
+Module workers stop at `STANDALONE_IMPLEMENTATION_COMPLETE_AWAITING_FANIN` or `BLOCKED:<reason>`. A fake-backed green lane does not prove integration, acceptance, full CI or production readiness. Real dependency binding and status promotion proceed in dependency order through the declared composition surface.
+
+A continuous read-only auditor may inspect taskbooks, scope, fake/real compatibility, projection closure and negative tests while writers run. It cannot mutate producer worktrees, approve acceptance or substitute for the context-isolated terminal review. An internal reviewer sharing the producer's parent session/model is useful audit evidence but is not an independent terminal verdict.
 
 ### M80 frontend design assignment
 
