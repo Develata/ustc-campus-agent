@@ -1,7 +1,7 @@
 # USTC ChangeRadar
 
 - `Package ID`: `ustc.change-radar`
-- `Status`: Planned manifest skeleton; source/revision/diff is the next first-party product mainline
+- `Status`: Partial executable evidence; source/revision/diff foundation is active, while review/feed/platform composition remains planned
 - `Owning plan`: `docs/plan/06-first-party-plugins.md`
 - `Contracts`: `docs/contracts/source-import.md`, `docs/contracts/permissions.md`
 - `Acceptance`: `FP-002`, `RADAR-*`, `SRC-*`
@@ -35,6 +35,8 @@ reviewed source is fetched under policy
 ```
 
 The initial user may consume public per-board feeds without a tenant-private profile. Personalized impact comes only after Opportunity Graph/profile consent semantics exist.
+
+The retained Rust foundation currently proves two honestly labelled, canonical-URL-bound `DemoReviewed` revisions for one policy-pinned source identity, deterministic field-level before/after comparison, duplicate/no-change/out-of-order/stale/conflict/unavailable outcomes, and service-minted atomic updates in an explicitly bounded in-memory baseline/candidate repository. It has no administrator approval, feed, durable repository, real source retrieval, Market/Agent/ToolGateway path or Web board yet; none of the acceptance rows is promoted by this supporting slice.
 
 ## States
 

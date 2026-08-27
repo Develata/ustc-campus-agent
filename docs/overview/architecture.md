@@ -69,8 +69,8 @@ The thin peer clients display/serialize server projections and submit intent thr
 | `M40` | Tool Gateway/Execution | exact tool correlation, authorization order, intent/executor/receipt/result | protocol values + fake conformance |
 | `M50` | Model Provider | typed profiles, provider protocol, stream/final/usage/estimator | planned |
 | `M51` | MCP Binding/Executor | reviewed binding/discovery/schema drift and MCP execution | planned |
-| `M60` | Campus Trust/Source | source policy, immutable revision, provenance, conflict, freshness, baseline | synthetic fixture semantics only |
-| `M70` | ChangeRadar | semantic change review/event/feed | manifest/design only |
+| `M60` | Campus Trust/Source | source policy, immutable revision, provenance, conflict, freshness, baseline | bounded registry plus canonical-URL-bound, deterministic-ID `DemoReviewed` revision values and an M60-owned revision-health type; retrieval/parser/durable baseline remains planned |
+| `M70` | ChangeRadar | semantic change review/event/feed | exact-source-pinned board policy, typed semantic diff, service-minted atomic commits and explicitly bounded in-memory baseline/candidate evidence; review/feed/composition planned |
 | `M71` | Affairs Navigator | reviewed procedure tree/artifacts/search | hardened procedure/artifact/policy/freshness/conflict kernel plus fixture-backed exact stable-ID composition; real source/admin/Web lifecycle planned |
 | `M72` | Opportunity Graph | reviewed opportunities, private profiles, qualification/planning | offline Course Planning spike |
 | `M80` | Client Core and Interaction Shells | framework-neutral client behavior and peer Dioxus Web/Android, `ustc-agent` and public-read-first inbound MCP adapters; later admitted Windows | bounded client-core and real ordinary-user fixture-loopback Affairs CLI evidence; production auth/HTTP/stream, inbound MCP and Dioxus peers planned |

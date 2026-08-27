@@ -1760,6 +1760,7 @@ fn assert_public_surface_is_frozen() {
                 "request_context",
                 "session",
                 "source_registry",
+                "source_revision",
             ] as &[&str],
             &ADMITTED_LIB_ITEMS as &[&str],
             &[] as &[&str],
@@ -4114,10 +4115,11 @@ const MANIFEST_SOURCE: &str = include_str!("../Cargo.toml");
 const LOCKFILE_SOURCE: &str = include_str!("../../../Cargo.lock");
 
 /// Exact dependency specifications, so an admitted NAME cannot be redirected to another crate.
-const ADMITTED_DEPENDENCY_SPECS: [&str; 4] = [
+const ADMITTED_DEPENDENCY_SPECS: [&str; 5] = [
     "semver.workspace = true",
     "serde.workspace = true",
     "serde_json.workspace = true",
+    "sha2.workspace = true",
     "ustc-agent-tool-protocol.workspace = true",
 ];
 const ADMITTED_DEV_DEPENDENCY_SPECS: [&str; 1] = ["hex = \"0.4.3\""];
@@ -4214,13 +4216,14 @@ const ADMITTED_MARKET_ITEMS: [&str; 12] = [
     "type Value = UniqueStringMap;",
 ];
 
-const ADMITTED_LIB_ITEMS: [&str; 8] = [
+const ADMITTED_LIB_ITEMS: [&str; 9] = [
     "pub mod identity;",
     "pub mod invocation;",
     "pub mod market;",
     "pub mod request_context;",
     "pub mod session;",
     "pub mod source_registry;",
+    "pub mod source_revision;",
     "#[cfg(test)] mod tests",
     "use super::*;",
 ];
@@ -4346,8 +4349,13 @@ const ADMITTED_MANIFEST_PACKAGE_KEYS: [&str; 8] = [
     "rust-version",
     "version",
 ];
-const ADMITTED_MANIFEST_DEPENDENCIES: [&str; 4] =
-    ["semver", "serde", "serde_json", "ustc-agent-tool-protocol"];
+const ADMITTED_MANIFEST_DEPENDENCIES: [&str; 5] = [
+    "semver",
+    "serde",
+    "serde_json",
+    "sha2",
+    "ustc-agent-tool-protocol",
+];
 const ADMITTED_MANIFEST_DEV_DEPENDENCIES: [&str; 1] = ["hex"];
 const ADMITTED_MANIFEST_LIB_PATH: &str = "\"src/lib.rs\"";
 

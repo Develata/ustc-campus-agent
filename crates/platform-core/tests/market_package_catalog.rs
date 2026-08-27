@@ -84,8 +84,8 @@ fn current_manifests_load_with_exact_literal_digests() {
         (
             CHANGE_RADAR,
             "ustc.change-radar",
-            ImplementationStatus::Planned,
-            "sha256:4d97dce7f74c992d10b9711566eb431f2602df8a389eaa7d861b1edb6f80c49b",
+            ImplementationStatus::Development,
+            "sha256:d83e3feffccc6a6f1a865c4b470c9691c81981f70d006748209ece9f5ffeaaae",
             "sha256:7fc764a879638e239f51959b73d3c6d18ba99529b556b634bd2cf69cafb8874a",
             "sha256:2678a32807b965b811ade09e3d3b8ab7815ab1b58f37105b357bc62f50e42bc2",
         ),
@@ -485,7 +485,7 @@ fn catalog_read_model_is_exact_ordered_and_duplicate_safe() {
     assert_eq!(model.catalog_revision(), &revision);
     assert_eq!(
         model.catalog_digest().as_str(),
-        "sha256:a5e660136cdc467a0e75a0cba495706460570e8a4f30b19c5e063c8bec8b24da"
+        "sha256:34527231b861a117c1c345ced1e5a68a1b62b06d4340f97ddcfff6e06a4ffffa"
     );
 
     let id = parsed_package_id("ustc.change-radar");

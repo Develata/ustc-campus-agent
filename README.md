@@ -56,6 +56,7 @@ crates/
   agent-tool-protocol/    # provider-neutral canonical tool values and sealed view/call/result envelopes
   adapters/               # replaceable provider/tool/executor adapters; no authority ownership
   course-planning/         # typed fixture validation and deterministic planner core
+  change-radar/            # bounded source-revision semantic diff and baseline/candidate core
 market/                   # plugin catalog authority boundary inside this repo
 plugins/                  # three first-party plugin implementation/doc boundaries
 docs/                     # layered plans, features, contracts, acceptance, tasks, guides and ADRs

@@ -1355,7 +1355,7 @@ def check_market(issues: list[str]) -> None:
 
     expected_first_party_statuses = {
         "ustc.affairs-navigator": "planned",
-        "ustc.change-radar": "planned",
+        "ustc.change-radar": "development",
         "ustc.opportunity-graph": "development",
     }
     expected_first_party_versions = {
@@ -2851,6 +2851,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/request_context.rs',
  'src/session.rs',
  'src/source_registry.rs',
+ 'src/source_revision.rs',
  'tests/invocation_resolution.rs',
  'tests/market_authority_assembly.rs',
  'tests/market_capability_registry.rs',
@@ -2894,7 +2895,7 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
 # introduce a module the scan never reads.
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'invocation.rs': (),
- 'lib.rs': ('identity', 'invocation', 'market', 'request_context', 'session', 'source_registry'),
+ 'lib.rs': ('identity', 'invocation', 'market', 'request_context', 'session', 'source_registry', 'source_revision'),
  'market.rs': ('authority', 'capability', 'grant', 'installation', 'update'),
  'market/authority.rs': (),
  'market/capability.rs': (),
@@ -2903,7 +2904,8 @@ PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'market/update.rs': (),
  'request_context.rs': (),
  'session.rs': (),
- 'source_registry.rs': ()}
+ 'source_registry.rs': (),
+ 'source_revision.rs': ()}
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
 # the spelling `crate::identity` is not the same as accounting for the use tree that contains
 # it. `#[path = "identity_hidden.txt"] pub mod identity;` keeps the admitted name while Cargo
@@ -2942,6 +2944,7 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
             'pub mod request_context;',
             'pub mod session;',
             'pub mod source_registry;',
+            'pub mod source_revision;',
             '#[cfg(test)] mod tests',
             'use super::*;'),
  'market.rs': ('pub mod authority;',
@@ -3084,6 +3087,13 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                         'type Error = SourceValueError;',
                         'type Err = SourceValueError;',
                         '#[cfg(test)] mod tests',
+                        'use super::*;'),
+ 'source_revision.rs': ('use std::error::Error;',
+                        'use std::fmt;',
+                        'use sha2::{Digest, Sha256};',
+                        'use crate::source_registry::{SourceId, SourceReviewEvidenceId, '
+                        'SourceReviewerId, SourceUrl};',
+                        '#[cfg(test)] mod tests',
                         'use super::*;')}
 # A macro is the remaining item category that can add API to a governed type without naming it
 # in a `use`, a `type` or an `impl` header: `macro_rules! m { ($t:ty) => { impl AsRef<str> for
@@ -3100,7 +3110,8 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
  'market/installation.rs': (),
  'market/update.rs': ('parsed',),
  'session.rs': (),
- 'source_registry.rs': ('source_value',)}
+ 'source_registry.rs': ('source_value',),
+ 'source_revision.rs': ('revision_id',)}
 # Macro INVOCATION names are pinned too, not screened for `include!`. A splicing macro can be
 # reached whatever the spelling — `include /* x */ !("f.rs")` contains no `include!` substring —
 # so the admitted name set per governed source is exact. `include_str!` stays admitted in
@@ -3149,7 +3160,8 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_
                         'matches',
                         'source_value',
                         'stringify',
-                        'write')}
+                        'write'),
+ 'source_revision.rs': ('assert', 'format', 'matches', 'revision_id', 'stringify', 'write')}
 PLATFORM_IDENTITY_ADMITTED_TEST_MACRO_INVOCATIONS = (
     "assert",
     "assert_eq",
@@ -3398,6 +3410,17 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
                         'impl fmt::Display for $name',
                         'impl fmt::Display for SourceRegistryError',
                         'impl fmt::Display for SourceValueError',
+                        'impl-arg Into<String>'),
+ 'source_revision.rs': ('impl $name',
+                        'impl EffectiveInterval',
+                        'impl Error for SourceRevisionError',
+                        'impl RevisionSha256',
+                        'impl RevisionTimestamp',
+                        'impl SourceRevision',
+                        'impl fmt::Display for $name',
+                        'impl fmt::Display for RevisionSha256',
+                        'impl fmt::Display for SourceRevisionError',
+                        'impl-arg Into<String>',
                         'impl-arg Into<String>'),
  'update.rs': ('impl AcceptedSnapshotForTest for UpdateCommandOutcome',
                'impl AuthorityCarrierBinding',
@@ -4352,6 +4375,7 @@ PLATFORM_CORE_ADMITTED_MANIFEST_DEPENDENCIES = (
     "semver",
     "serde",
     "serde_json",
+    "sha2",
     "ustc-agent-tool-protocol",
 )
 PLATFORM_CORE_ADMITTED_MANIFEST_DEV_DEPENDENCIES = ("hex",)
@@ -4457,7 +4481,8 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive'
  'market/installation.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'market/update.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'session.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
- 'source_registry.rs': ('$attribute', 'allow', 'cfg', 'derive', 'doc', 'must_use', 'test')}
+ 'source_registry.rs': ('$attribute', 'allow', 'cfg', 'derive', 'doc', 'must_use', 'test'),
+ 'source_revision.rs': ('$attribute', 'allow', 'cfg', 'derive', 'must_use', 'non_exhaustive', 'test')}
 # `market/grant.rs` carries lint-affecting `allow` attributes, so names alone are not enough:
 # freeze the complete normalized attribute-body multiset. Counts are literal reviewed evidence,
 # not a minimum or a projection generated from the governed source at checker runtime.
@@ -4521,6 +4546,7 @@ PLATFORM_CORE_RESOLVED_DEPENDENCIES = {
     "serde": CRATES_IO_SOURCE,
     "hex": CRATES_IO_SOURCE,
     "serde_json": CRATES_IO_SOURCE,
+    "sha2": CRATES_IO_SOURCE,
     "ustc-agent-tool-protocol": None,
 }
 # Exact specification of every platform-core dependency, mirroring the workspace rule.
@@ -4529,6 +4555,7 @@ PLATFORM_CORE_ADMITTED_DEPENDENCY_SPECS = {
         "semver": {"workspace": True},
         "serde": {"workspace": True},
         "serde_json": {"workspace": True},
+        "sha2": {"workspace": True},
         "ustc-agent-tool-protocol": {"workspace": True},
     },
     "dev-dependencies": {
@@ -10240,6 +10267,7 @@ P1_SOURCE_REGISTRY_IDENTITY_MODULE_EXPECTATION = """&[
                 "request_context",
                 "session",
                 "source_registry",
+                "source_revision",
             ] as &[&str],"""
 P1_SOURCE_REGISTRY_IDENTITY_ITEM_EXPECTATION = '    "pub mod source_registry;",'
 
