@@ -290,6 +290,17 @@ id_value! {
     MaterializationReceiptId
 }
 id_value! {
+    /// One deterministic administrator-review receipt identity. It binds one
+    /// exact procedure draft digest, reviewer and review time but grants no
+    /// M00 authorization by itself.
+    ProcedureReviewId
+}
+id_value! {
+    /// One deterministic successful publication receipt identity. It binds the
+    /// exact artifact, review and publication revision.
+    ProcedurePublicationReceiptId
+}
+id_value! {
     /// One opaque actor reference (M00-owned in production; an equal-contract
     /// M71-owned fixture carrier in this spike). Never appears in the public
     /// projection.

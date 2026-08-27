@@ -91,6 +91,18 @@ impl Sha256 {
         Ok(Self { value })
     }
 
+    /// Builds the canonical lowercase digest value from raw SHA-256 bytes.
+    pub(crate) fn from_bytes(bytes: [u8; 32]) -> Self {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let mut value = String::with_capacity(SHA256_PREFIX.len() + SHA256_HEX_LEN);
+        value.push_str(SHA256_PREFIX);
+        for byte in bytes {
+            value.push(char::from(HEX[usize::from(byte >> 4)]));
+            value.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        }
+        Self { value }
+    }
+
     /// Returns the exact canonical digest text.
     #[must_use]
     pub fn as_str(&self) -> &str {

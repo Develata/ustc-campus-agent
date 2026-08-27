@@ -4,10 +4,10 @@
 
 - `Module ID`: `M71`
 - `Package ID`: `ustc.affairs-navigator`
-- `Status`: Accepted blueprint with bounded executable product-kernel, source-grounded fixture-backed exact-query evidence and one loopback thin-Web projection; real source/admin lifecycle and production Web remain planned
+- `Status`: Accepted blueprint with bounded executable query kernel plus exact M60 `DemoReviewed` draft import, one coherent M60-owned publication decision over source health and retained evidence, digest-bound administrator approval and bounded atomic publication evidence; M00 authorization, durable restart and production application/Web composition remain planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m71-affairs-navigator/v0`
-- `Last Review`: `2026-08-24`
+- `Last Review`: `2026-08-27`
 - `Primary code area`: `crates/affairs-navigator/`, `plugins/first-party/affairs-navigator/` and the bounded composition fixture under `apps/ustc-agentd/`
 
 ## 1. Purpose
@@ -18,9 +18,9 @@ Its default truth path is exact/structured lookup over reviewed material, not fr
 
 ### Current bounded evidence
 
-`crates/affairs-navigator` retains checked stable procedure/artifact/source identities, typed drafts and artifacts, board-policy validation, ordered conditions/steps/time/entry projections, freshness/conflict/uncertainty outcomes and deterministic exact lookup. The bounded `ustc-agentd` composition loads one source-grounded noncanonical fixture from a retained public USTC Academic Affairs page and maps an admitted exact stable-ID request to that kernel; integration tests cover found, unavailable/corrupted source, stale/conflicting authority and lineage/provenance outcomes, while the loopback page displays the safe public projection.
+`crates/affairs-navigator` retains checked stable procedure/artifact/source identities, typed drafts and artifacts, board-policy validation, ordered conditions/steps/time/entry projections, freshness/conflict/uncertainty outcomes and deterministic exact lookup. The publication foundation now imports the exact M60-owned immutable `DemoReviewed` revision, binds its canonical URL/revision/digests into the draft identity, rejects mismatched or unpublishable evidence, obtains source health and retained-evidence verification as one coherent M60-owned publication decision, binds administrator review to the exact draft digest and atomically commits deterministic artifact/receipt IDs with CAS, caps and replay tombstones. A committed tombstone owns exact replay after later revision or revocation; an uncommitted retry still requires fresh M60 authority. Separately, the bounded `ustc-agentd` composition still loads one source-grounded noncanonical fixture and maps an admitted exact stable-ID request to the earlier query kernel; the loopback page displays that safe public projection.
 
-The fixture is proof infrastructure, not an approved production source or administrator publication system. Retained source bytes and normalized bytes are hash-accounted, but their fixture verifier is not administrator review/publish authority and the page publication time is not used as `known_at` or `valid_at`. No real M60 retrieval/import, board repository, administrator review/publish/archive receipt, supersession projection, broad structured search, production Web or external campus transaction is claimed. `PROC-011` therefore remains planned until its complete administrator-import → review/publish → application query → thin-Web assertions are bound.
+The fixture is proof infrastructure, not an approved production source. `DemoReviewed` is an honest non-personal demo label, not real-time official data or legal approval. The public approval constructor also proves no M00 role by itself; the M60 publication port owns the coherent source-health/evidence decision, and future M00/M10 composition must own actor authorization. The atomic repository is bounded in-memory evidence only: no durable adapter/restart, real retrieval/source approval, same-repository application query, supersession projection, broad structured search, production Web or external campus transaction is claimed. `PROC-011` therefore remains planned until its complete M00-authorized administrator-import → review/publish → same-state application query → thin-Web and restart assertions are bound.
 
 ## 2. Non-goals
 

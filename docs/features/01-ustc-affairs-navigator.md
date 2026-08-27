@@ -1,12 +1,12 @@
 # USTC Affairs Navigator
 
 - `Package ID`: `ustc.affairs-navigator`
-- `Status`: Bounded executable procedure kernel plus one retained source-grounded noncanonical fixture, exact-query and loopback-only Web demonstration; complete administrator/source-ingestion/production-Web feature remains planned
+- `Status`: Bounded executable query kernel plus exact M60 `DemoReviewed` draft/review/atomic-publication foundation and a separate fixture-backed loopback query/Web demonstration; M00-authorized durable same-state composition remains planned
 - `Owning plan`: `docs/plan/06-first-party-plugins.md`
 - `Contracts`: `docs/contracts/source-import.md`, `docs/contracts/permissions.md`
 - `Acceptance`: `FP-001`, `PROC-*`
 
-Current retained evidence covers checked stable procedure/artifact identities, draft/policy/freshness/conflict semantics and one retained source-grounded noncanonical fixture for the USTC undergraduate transcript/enrollment-certificate procedure. The exact lookup runs through M00→M10→M71 and is exposed both through the loopback `ustc-agentd`/`ustc-agent` product path and a loopback-only thin Web renderer. Retained and normalized source bytes are hash-accounted; this is not administrator review/publication or approved M60 source authority. It does not implement general M60 import, administrator review/publish/archive, supersession, broad structured search, production auth/TLS/remote HTTP, Dioxus, Android, inbound MCP or Agent/Market integration; `PROC-011` therefore remains planned.
+Current retained evidence covers checked stable procedure/artifact identities, policy/freshness/conflict semantics, exact M60 `DemoReviewed` revision import, one coherent M60-owned publication decision over source health and retained evidence, digest-bound administrator review, deterministic artifact/receipt IDs and CAS/idempotent atomic publication into a bounded in-memory repository. Committed receipt/artifact tombstones support exact replay after later revision or source revocation; uncommitted retries still require fresh M60 authority. A separate retained source-grounded noncanonical fixture drives the existing exact M00→M10→M71 loopback `ustc-agentd`/`ustc-agent` query and thin Web renderer. These paths are not yet composed through the same repository and the approval constructor is not M00 authorization. There is no real source approval/retrieval, durable persistence/restart, M00-authorized publication route, supersession, broad search, production Web, Android, inbound MCP or complete Agent/Market integration; `PROC-011` therefore remains planned.
 
 ## Goal
 
@@ -66,4 +66,4 @@ Archived historical artifact
 
 ## First honest acceptance
 
-One administrator-maintained board answers one real procedure with conditions, steps, time, sources and explicit uncertainty. The approved board/source and its data-use evidence must be frozen before implementation claims begin.
+One M00-authorized demo administrator imports a non-personal source-grounded snapshot explicitly labelled `DemoReviewed`, publishes one procedure through the real application boundary, and a user queries the same persisted state through Web with conditions, steps, time, sources and explicit uncertainty. The demo label must not imply real-time official data or legal approval.

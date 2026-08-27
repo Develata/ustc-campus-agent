@@ -1,112 +1,90 @@
-# M71 `affairs.get` query kernel — proposal-only spike
+# M71 Affairs Navigator — bounded query and publication foundation
 
-Status: `READY_TO_DISPATCH_PROPOSAL_ONLY_NOT_ACCEPTED`
+Status: `partial-evidence`; **not** a complete `PROC-011` product path.
 
-This crate is **proposal-only, compile-tested evidence** for the frozen M71
-public algebra (M71-v8n) and the ratified TD-2 retained-evidence seam. It is
-**not retained/accepted implementation**. This spike authorizes no merge or
-status promotion.
+This crate implements the accepted M71 query algebra plus a bounded
+`DemoReviewed` draft → administrator review → atomic publication foundation.
+It is retained supporting code for the three-plugin MVP, but it does not claim
+production persistence, M00 administrator authentication, M10 application
+composition, or a Web journey.
 
-## What is implemented
+## Implemented
 
-1. **Checked M71 value/public DTO types** with NO Serde (§11.1): `ProcedureId`,
-   `ArtifactId`, `BoardId`, `SourceId`, `ContactRef`, `MaterializationReceiptId`,
-   `ActorRef`, `Title`, `AudienceTag`, `PrerequisiteCondition`, `Instruction`,
-   `DeadlineLabel`, `EntryPointLabel`, `ContactName`, `ContactChannel`, `Url`,
-   `BoardPolicyVersion`, `EffectiveInterval`.
-2. **Evidence algebra**: `M60RevisionRef` (equal-contract fake, D8 split),
-   `AffairsAuthority` (4-tier), `AuthoritySubject` (8-variant),
-   `AffairsEvidenceAssessment`, `ProcedureEvidenceContext`,
-   `ValidityHorizon` + `derive_valid_interval()`, conflict/uncertainty states.
-3. **Canonical procedure content**: `ProcedureArtifact` with full cross-field
-   validation, `BoardPolicy`, `Prerequisite`, `ProcedureStep`, `Deadline`,
-   `EntryPoint`, `Contact`, `ProcedurePublicationState`.
-4. **Deterministic six-outcome lookup kernel** (`AffairsGetService`): Found,
-   NotYetKnown, Archived, NotFound, Conflict, CannotVerify — in the frozen
-   lookup order.
-5. **Conflict-before-projection and bounded deterministic public evidence
-   projection**: coalesce by `(authority, source_id, subject)` → mandatory
-   groups (3 clauses) → overflow check (>8 mandatory → CannotVerify) → 8-slot
-   selection → Complete/Truncated metadata. `selection_rule_version = 2`.
-6. **Retained M60 verification port** (`M60ProcedureEvidencePort`) and an
-   in-memory equal-contract M60 fixture adapter (`M60FixtureAdapter`).
-7. **In-memory repository** (`InMemoryAffairsRepository`) seeded through
-   checked fixture constructors.
-8. **Sealed M71 evidence-lineage receipt** (`M71EvidenceLineage`): Verified /
-   Unverified / NotRequired with exhaustive outcome/lineage pairing.
-9. **Tests**: 42 unit tests + 44 integration tests covering all six outcomes,
-   all four CannotVerify reasons, Fresh/Stale bounds, all three ConflictKind
-   variants, 1/8/9/16 projection boundaries, outcome/lineage pairing closure,
-   no-M60-call for NotRequired outcomes, public projection safety (no raw
-   revision/digest/actor bytes in Debug), determinism, and a compile-fail
-   doctest proving no M10/client/storage dependency. The
-   `tests/hardening_counterexamples.rs` suite pins five adversarial
-   fail-closed/determinism invariants: declared `valid_interval` must equal
-   `derive_valid_interval` over the assessments; permuted equivalent evidence
-   must yield byte-identical receipts (canonical retained-reference order);
-   caller-provided `as_of` receipts must not depend on the wall clock;
-   `M60VerificationIdentity` enforces the M71 ID grammar on `verifier_id`; and
-   an incoherent repository pairing fails closed with `InternalInconsistent`.
+1. Checked M71 nominal/value types and canonical `ProcedureArtifact` validation.
+2. Bitemporal evidence, provenance, freshness, conflict and uncertainty algebra.
+3. Deterministic six-outcome `AffairsGetService` lookup with sealed evidence
+   lineage and safe public projection.
+4. `M60ProcedureEvidencePort` query-time retained-evidence verification and
+   `M60ProcedurePublicationPort`, which returns source health plus retained
+   evidence as one coherent M60-owned publication decision.
+5. `ProcedureDraft::from_demo_reviewed`, which imports an exact M60-owned
+   `SourceRevision`, requires `DemoReviewed` provenance, binds every local
+   assessment to that revision and rejects uncertain/conflicting draft evidence.
+6. `ProcedureReviewApproval`, bound to the exact deterministic draft digest.
+   Construction is not authentication or authorization; M00/M10 must authorize
+   the actor before calling the service.
+7. `ProcedurePublicationService`, which requests that coherent M60 decision
+   immediately before persistence, enforces chronology, derives stable
+   artifact/receipt IDs and mints a private atomic repository commit.
+8. `InMemoryPublishedAffairsRepository`, with explicit procedure/artifact caps,
+   CAS publication revisions, immutable receipt/artifact tombstones,
+   idempotent replay after later revisions or source revocation, corruption
+   detection on replay and fail-before-mutation behavior.
+9. The original fixture-seeded `InMemoryAffairsRepository` remains only for the
+   existing query/loopback evidence path.
 
-## No-bypass contract (TD-2)
+## Authority and dependency boundary
 
-This crate depends **only** on `time` and `sha2` (workspace deps). There is no
-dependency on M10, M80, client, storage, or any other product crate. The M71
-application service is the sole caller of `M60ProcedureEvidencePort`; M10
-cannot bypass M71 to reach M60.
+The crate depends on `time`, `sha2`, and the M60-owned immutable source-revision
+value carrier in `ustc-campus-agent-core`. It does **not** depend on M10, M80,
+client, or storage crates. A compile-fail doctest proves the client crate cannot
+be imported.
 
-This is structurally enforced by the Cargo dependency graph: the crate's
-`Cargo.toml` lists only `time` and `sha2`, so no `use` statement can name an
-M10/client/storage type. A `compile_fail` doctest in `src/lib.rs` attempts to
-`use ustc_campus_agent_core` — it MUST fail to compile, and that failure IS the
-no-bypass proof.
+A public enum value such as `SourceRevisionHealth::Current` supplied by a caller
+is not publication authority. `M60ProcedurePublicationPort` must derive health
+and retained revision/digest/revocation verification from one coherent M60 read;
+M71 consumes only the combined decision. After a command is committed, its
+receipt+artifact tombstone owns exact replay even if mutable source authority
+later changes; a failed/uncommitted attempt always obtains a fresh M60 decision.
 
-## Proposal nonclaims
+## Honest nonclaims
 
-- This is **not** retained/accepted implementation.
-- The in-memory M60 fixture adapter is **equal-contract fixture evidence**, not
-  accepted M60 implementation.
-- No publish/supersede/archive command/event journals are implemented beyond
-  the minimal checked fixture seeding needed to exercise already-published /
-  archived states.
-- No M10 wire/reconciliation is implemented.
-- No M80 UI is implemented.
-- No live campus source fetching is implemented.
-- This spike authorizes no merge, status promotion, or remote operations.
+- No live USTC retrieval, parser, source approval or legal permission claim.
+- `DemoReviewed` snapshots are non-personal demo evidence, not real-time official
+  publication.
+- No M00 administrator authentication/authorization composition yet.
+- No durable source/publication/profile store or restart recovery yet.
+- No production M10/Web/Agent/ToolGateway publication route yet.
+- No supersede/archive command journal or structured-search product route yet.
+- The M60 fixture adapter is test evidence, not production M60 authority.
+- `PROC-011` remains non-pass until the real application/query/Web composition
+  and restart evidence exist.
 
 ## Gate commands
 
 ```bash
-export CARGO_TARGET_DIR=/home/pwh/.cache/uca-cargo-target/m71-6e138cf5
-
 cargo fmt --all -- --check
-cargo test -p affairs-navigator --all-features
-cargo clippy -p affairs-navigator --all-targets --all-features -- -D warnings
-cargo check --workspace --all-targets --all-features
+cargo test --locked -p affairs-navigator --all-features
+cargo test --locked -p affairs-navigator --doc
+cargo clippy --locked -p affairs-navigator --all-targets --all-features -- -D warnings
+cargo check --locked --workspace --all-targets --all-features
 ```
 
 ## Crate structure
 
-```
+```text
 src/
-  lib.rs              — module declarations, re-exports, compile-fail no-bypass doctest
-  value.rs            — checked M71 nominal value types (ID grammar, UTF-8 bounds)
-  evidence.rs         — M60RevisionRef, AffairsAuthority, evidence assessments, ValidityHorizon
-  artifact.rs         — ProcedureArtifact with full cross-field validation
-  public_view.rs      — PublicProcedureView, PublicEvidenceView, Freshness, ConflictDetail
-  projection.rs       — coalesce → mandatory → overflow → 8-slot selection (internal)
-  outcome.rs          — six-outcome ladder, CannotVerifyReason, GetProcedureError, AffairsGetQuery
-  m60_port.rs         — M60ProcedureEvidencePort trait + request/outcome/identity types
-  m60_fixture.rs      — in-memory M60 fixture adapter (equal-contract)
-  lineage.rs          — sealed M71EvidenceLineage receipt
-  repository.rs       — in-memory affairs repository
-  clock.rs            — AffairsClock trait + FixedClock
-  service.rs          — AffairsGetService lookup ladder + M71AffairsGetReceipt
-tests/
-  common/mod.rs       — shared fixtures
-  outcome_lineage_pairing.rs — exhaustive pairing table + no-M60-call proofs
-  projection_boundaries.rs   — 1/8/9/16 Complete/Truncated/overflow boundaries
-  no_bypass.rs               — public API no-bypass proof
-  public_projection_safety.rs — no raw bytes in Debug output
-  determinism.rs             — same input → byte-identical receipt
+  value.rs            checked M71 nominal values
+  evidence.rs         revision refs, authority, bitemporal/conflict algebra
+  artifact.rs         procedure content and publication state
+  publication.rs      reviewed draft, approval, atomic publication service/repository
+  m60_port.rs         retained-evidence verification boundary
+  m60_fixture.rs      equal-contract in-memory M60 fixture
+  repository.rs       fixture-seeded query repository
+  service.rs          six-outcome query service
+  application_port.rs query application port
+  public_view.rs      safe public projection
+  lineage.rs          sealed evidence-lineage receipt
+  outcome.rs          query/outcome/error algebra
+  clock.rs            query clock boundary
 ```
