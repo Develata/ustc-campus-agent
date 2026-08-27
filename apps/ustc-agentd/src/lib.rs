@@ -1,9 +1,9 @@
 //! Bounded composition root for the `ustc-agentd` product-path slice.
 //!
 //! Only this crate may simultaneously name M00 fixture ports, application-ingress,
-//! M71 service/repository/application port and the equal-contract M60 fixture.
-//! The M60 fixture is injected only through M71's `M60ProcedureEvidencePort`;
-//! it never enters an M10/client seam and remains explicitly noncanonical.
+//! M71 publication/query services and the equal-contract M60 fixture. The M60
+//! fixture enters only through M71's evidence/publication ports; it never enters
+//! an M10/client seam and remains explicitly noncanonical.
 
 #![forbid(unsafe_code)]
 
@@ -120,6 +120,14 @@ impl AffairsComposition {
         self.fixture
             .m60_call_count
             .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Returns the immutable receipt identity minted while the fixture's exact
+    /// `DemoReviewed` revision was published. The M10 query path below reads
+    /// the same repository state committed by that publication.
+    #[must_use]
+    pub fn publication_receipt_id(&self) -> &str {
+        self.fixture.publication_receipt.receipt_id().as_str()
     }
 
     /// Binds a loopback TCP listener, prints `listening <addr>` to stdout, and

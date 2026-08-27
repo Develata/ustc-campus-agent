@@ -1,12 +1,12 @@
 # USTC Affairs Navigator
 
 - `Package ID`: `ustc.affairs-navigator`
-- `Status`: Bounded executable query kernel plus exact M60 `DemoReviewed` draft/review/atomic-publication foundation and a separate fixture-backed loopback query/Web demonstration; M00-authorized durable same-state composition remains planned
+- `Status`: Bounded executable query kernel plus exact M60 `DemoReviewed` draft/review/atomic-publication foundation composed through one same-repository fixture-backed M10/loopback-Web path; M00-authorized operator publication and durable restart remain planned
 - `Owning plan`: `docs/plan/06-first-party-plugins.md`
 - `Contracts`: `docs/contracts/source-import.md`, `docs/contracts/permissions.md`
 - `Acceptance`: `FP-001`, `PROC-*`
 
-Current retained evidence covers checked stable procedure/artifact identities, policy/freshness/conflict semantics, exact M60 `DemoReviewed` revision import, one coherent M60-owned publication decision over source health and retained evidence, digest-bound administrator review, deterministic artifact/receipt IDs and CAS/idempotent atomic publication into a bounded in-memory repository. Committed receipt/artifact tombstones support exact replay after later revision or source revocation; uncommitted retries still require fresh M60 authority. A separate retained source-grounded noncanonical fixture drives the existing exact M00→M10→M71 loopback `ustc-agentd`/`ustc-agent` query and thin Web renderer. These paths are not yet composed through the same repository and the approval constructor is not M00 authorization. There is no real source approval/retrieval, durable persistence/restart, M00-authorized publication route, supersession, broad search, production Web, Android, inbound MCP or complete Agent/Market integration; `PROC-011` therefore remains planned.
+Current retained evidence covers checked stable procedure/artifact identities, policy/freshness/conflict semantics, exact M60 `DemoReviewed` revision import, one coherent M60-owned publication decision over source health and retained evidence, digest-bound administrator review, deterministic artifact/receipt IDs and CAS/idempotent atomic publication into a bounded in-memory repository. Committed receipt/artifact tombstones support exact replay after later revision or source revocation; uncommitted retries still require fresh M60 authority. The source-grounded noncanonical fixture now drives startup draft/review/publication and the existing exact M00→M10→M71 `ustc-agentd`/`ustc-agent` query plus thin loopback Web renderer from that same repository. The fixture actor and approval constructor are not M00 authorization. There is no real source approval/retrieval, durable persistence/restart, operator publication API, supersession, broad search, production Dioxus Web, Android, inbound MCP or complete Agent/Market integration; `PROC-011` therefore remains planned.
 
 ## Goal
 

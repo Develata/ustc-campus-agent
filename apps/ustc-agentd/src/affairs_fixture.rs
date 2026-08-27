@@ -15,15 +15,16 @@ use std::sync::{Arc, Mutex};
 
 use affairs_navigator::m60_fixture::M60FixtureAdapter;
 use affairs_navigator::{
-    ActorRef, AffairsAuthority, AffairsAuthorityAssessment, AffairsEvidenceAssessment, ArtifactId,
-    AudienceTag, AuthorityComparison, AuthorityDerivation, AuthoritySubject, BoardId, BoardPolicy,
+    ActorRef, AffairsAuthority, AffairsAuthorityAssessment, AffairsEvidenceAssessment, AudienceTag,
+    AuthorityComparison, AuthorityDerivation, AuthoritySubject, BoardId, BoardPolicy,
     BoardPolicyVersion, ConflictKind, Contact as ArtifactContact, ContactChannel, ContactName,
     ContactRef, EntryPoint, EntryPointLabel, EvidenceConflictState, FixedClock,
-    InMemoryAffairsRepository, Instruction, M60EvidencePortError, M60ProcedureEvidencePort,
-    M60RetainedEvidenceOutcome, M60RetainedEvidenceRequest, M60RevisionRef, Prerequisite,
-    PrerequisiteCondition, ProcedureArtifact, ProcedureEvidenceContext, ProcedureId,
-    ProcedurePublicationState, ProcedureStep, Sha256, SourceId, Title, UncertaintyState, Url,
-    ValidityHorizon,
+    InMemoryPublishedAffairsRepository, Instruction, M60EvidencePortError,
+    M60ProcedureEvidencePort, M60RetainedEvidenceOutcome, M60RetainedEvidenceRequest, Prerequisite,
+    PrerequisiteCondition, ProcedureDraft, ProcedureEvidenceContext, ProcedureId,
+    ProcedurePublicationReceipt, ProcedurePublicationService, ProcedureReviewApproval,
+    ProcedureStep, SourceId, Title, UncertaintyState, Url, ValidityHorizon,
+    m60_ref_from_source_revision,
 };
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -43,6 +44,13 @@ use ustc_campus_agent_core::session::{
     AuthAdapterId, CredentialEvidenceDigest, OpenSession, SessionCommand,
     SessionCredentialEvidence, SessionDuration, SessionInstant, SessionPolicy, SessionSnapshot,
     decide, evolve,
+};
+use ustc_campus_agent_core::source_registry::{
+    SourceId as M60SourceId, SourceReviewEvidenceId, SourceReviewerId, SourceUrl as M60SourceUrl,
+};
+use ustc_campus_agent_core::source_revision::{
+    EffectiveInterval as M60EffectiveInterval, NormalizedSnapshotId, ParserIdentity, RawSnapshotId,
+    RevisionSha256, RevisionTimestamp, SourceRevision,
 };
 
 // ---------------------------------------------------------------------------
@@ -95,7 +103,6 @@ struct FixtureContactDto {
 #[serde(deny_unknown_fields)]
 struct AffairsFixtureDto {
     procedure_id: String,
-    artifact_id: String,
     title: String,
     #[serde(default)]
     audience_tags: Vec<String>,
@@ -108,15 +115,23 @@ struct AffairsFixtureDto {
     #[serde(default)]
     contacts: Vec<FixtureContactDto>,
     known_at_secs: i64,
-    observed_at_secs: Option<i64>,
-    reviewed_at_secs: Option<i64>,
+    observed_at_secs: i64,
+    reviewed_at_secs: i64,
+    published_at_secs: i64,
     last_verified_at_secs: i64,
     max_fresh_seconds: u32,
     max_presentable_seconds: u32,
     source_id: String,
-    revision_id: String,
+    source_url: String,
+    raw_snapshot_id: String,
     raw_digest: String,
+    normalized_snapshot_id: String,
     normalized_digest: String,
+    parser_identity: String,
+    source_published_at_secs: Option<i64>,
+    source_reviewer: String,
+    source_review_evidence: String,
+    publication_reviewer: String,
     verifier_id: String,
     evidence_contract_version: u16,
     clock_unix_seconds: i64,
@@ -142,7 +157,6 @@ struct AffairsFixtureDto {
     conflict_state: Option<String>,
     authority_comparison: Option<String>,
     conflict_kind: Option<String>,
-    archived_at_secs: Option<i64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +164,8 @@ struct AffairsFixtureDto {
 // ---------------------------------------------------------------------------
 
 pub(crate) struct AffairsFixture {
-    pub(crate) repo: InMemoryAffairsRepository,
+    pub(crate) repo: InMemoryPublishedAffairsRepository,
+    pub(crate) publication_receipt: ProcedurePublicationReceipt,
     pub(crate) m60: CountingM60Port,
     pub(crate) m60_call_count: Arc<AtomicU64>,
     pub(crate) clock: FixedClock,
@@ -174,47 +189,57 @@ impl AffairsFixture {
     fn build(dto: AffairsFixtureDto) -> Result<Self, String> {
         let known_at = OffsetDateTime::from_unix_timestamp(dto.known_at_secs)
             .map_err(|e| format!("known_at_secs invalid: {e}"))?;
-        let observed_at = OffsetDateTime::from_unix_timestamp(dto.observed_at_secs.unwrap_or(0))
+        let observed_at = OffsetDateTime::from_unix_timestamp(dto.observed_at_secs)
             .map_err(|e| format!("observed_at_secs invalid: {e}"))?;
-        let reviewed_at = OffsetDateTime::from_unix_timestamp(dto.reviewed_at_secs.unwrap_or(0))
+        let reviewed_at = OffsetDateTime::from_unix_timestamp(dto.reviewed_at_secs)
             .map_err(|e| format!("reviewed_at_secs invalid: {e}"))?;
+        let published_at = OffsetDateTime::from_unix_timestamp(dto.published_at_secs)
+            .map_err(|e| format!("published_at_secs invalid: {e}"))?;
         let last_verified_at = OffsetDateTime::from_unix_timestamp(dto.last_verified_at_secs)
             .map_err(|e| format!("last_verified_at_secs invalid: {e}"))?;
 
-        // -- M60 revision ref --
-        let raw_digest =
-            Sha256::new(&dto.raw_digest).map_err(|e| format!("raw_digest invalid: {e}"))?;
-        let normalized_digest = Sha256::new(&dto.normalized_digest)
-            .map_err(|e| format!("normalized_digest invalid: {e}"))?;
-        let source_id =
-            SourceId::parse(&dto.source_id).map_err(|e| format!("source_id invalid: {e}"))?;
-        let revision_ref = M60RevisionRef::new(
-            source_id.clone(),
-            dto.revision_id.clone(),
-            observed_at,
-            None,
-            None,
-            None,
-            raw_digest,
-            normalized_digest,
-        )
-        .map_err(|e| format!("revision_ref invalid: {e}"))?;
+        // -- Exact M60-owned DemoReviewed revision and equal-contract ref --
+        let source_revision = SourceRevision::demo_reviewed(
+            M60SourceId::parse(&dto.source_id)
+                .map_err(|e| format!("M60 source_id invalid: {e}"))?,
+            M60SourceUrl::parse(&dto.source_url).map_err(|e| format!("source_url invalid: {e}"))?,
+            RawSnapshotId::parse(&dto.raw_snapshot_id)
+                .map_err(|e| format!("raw_snapshot_id invalid: {e}"))?,
+            RevisionSha256::parse(&dto.raw_digest)
+                .map_err(|e| format!("raw_digest invalid: {e}"))?,
+            NormalizedSnapshotId::parse(&dto.normalized_snapshot_id)
+                .map_err(|e| format!("normalized_snapshot_id invalid: {e}"))?,
+            RevisionSha256::parse(&dto.normalized_digest)
+                .map_err(|e| format!("normalized_digest invalid: {e}"))?,
+            ParserIdentity::parse(&dto.parser_identity)
+                .map_err(|e| format!("parser_identity invalid: {e}"))?,
+            RevisionTimestamp::from_unix_seconds(dto.observed_at_secs),
+            dto.source_published_at_secs
+                .map(RevisionTimestamp::from_unix_seconds),
+            M60EffectiveInterval::new(None, None)
+                .map_err(|e| format!("source effective interval invalid: {e}"))?,
+            SourceReviewerId::parse(&dto.source_reviewer)
+                .map_err(|e| format!("source_reviewer invalid: {e}"))?,
+            SourceReviewEvidenceId::parse(&dto.source_review_evidence)
+                .map_err(|e| format!("source_review_evidence invalid: {e}"))?,
+        );
+        let revision_ref = m60_ref_from_source_revision(&source_revision)
+            .map_err(|e| format!("source revision projection invalid: {e}"))?;
 
-        // -- M60 fixture adapter --
+        // Publication uses a healthy M60 port. Query-only failure injection is
+        // applied only after the reviewed artifact has committed.
+        let query_failure_mode = dto
+            .m60_failure_mode
+            .as_deref()
+            .map(|mode| match mode {
+                "store_unavailable" => Ok(M60EvidencePortError::StoreUnavailable),
+                "store_corrupted" => Ok(M60EvidencePortError::StoreCorrupted),
+                other => Err(format!("unknown m60_failure_mode: {other}")),
+            })
+            .transpose()?;
         let mut m60 = M60FixtureAdapter::new(&dto.verifier_id, dto.evidence_contract_version)
             .map_err(|e| format!("m60 adapter invalid: {e}"))?;
         m60.store(revision_ref.clone());
-        if let Some(mode) = &dto.m60_failure_mode {
-            let error = match mode.as_str() {
-                "store_unavailable" => M60EvidencePortError::StoreUnavailable,
-                "store_corrupted" => M60EvidencePortError::StoreCorrupted,
-                other => return Err(format!("unknown m60_failure_mode: {other}")),
-            };
-            m60.set_failure_mode(Some(error));
-        }
-        if let Some(require) = dto.m60_require_effective_interval {
-            m60.require_effective_interval(require);
-        }
 
         // -- Evidence assessment --
         let prerequisite_revision_ref = revision_ref.clone();
@@ -274,9 +299,7 @@ impl AffairsFixture {
         )
         .map_err(|e| format!("board_policy invalid: {e}"))?;
 
-        // -- Artifact --
-        let artifact_id =
-            ArtifactId::parse(&dto.artifact_id).map_err(|e| format!("artifact_id invalid: {e}"))?;
+        // -- Structured publication candidate --
         let procedure_id = ProcedureId::parse(&dto.procedure_id)
             .map_err(|e| format!("procedure_id invalid: {e}"))?;
         let title = Title::new(&dto.title).map_err(|e| format!("title invalid: {e}"))?;
@@ -375,9 +398,9 @@ impl AffairsFixture {
                 })
                 .collect::<Result<Vec<_>, String>>()?
         };
-        let artifact = ProcedureArtifact::new(
-            artifact_id.clone(),
-            procedure_id.clone(),
+        let draft = ProcedureDraft::from_demo_reviewed(
+            source_revision,
+            procedure_id,
             title,
             audience_tags,
             board_policy,
@@ -388,23 +411,25 @@ impl AffairsFixture {
             entry_points,
             contacts,
             evidence,
-            known_at,
         )
-        .map_err(|e| format!("artifact invalid: {e}"))?;
+        .map_err(|e| format!("procedure draft invalid: {e:?}"))?;
+        let approval = ProcedureReviewApproval::new(
+            draft.draft_digest().clone(),
+            ActorRef::parse(&dto.publication_reviewer)
+                .map_err(|e| format!("publication_reviewer invalid: {e}"))?,
+            reviewed_at,
+        );
+        let mut repo = InMemoryPublishedAffairsRepository::new();
+        let publication_receipt = ProcedurePublicationService::new(&mut repo, &m60)
+            .publish(draft, approval, published_at, None)
+            .map_err(|e| format!("reviewed publication failed: {e:?}"))?;
 
-        // -- Repository --
-        let mut repo = InMemoryAffairsRepository::new();
-        let state = if let Some(archived_at) = dto.archived_at_secs {
-            ProcedurePublicationState::archived(
-                procedure_id.clone(),
-                OffsetDateTime::from_unix_timestamp(archived_at)
-                    .map_err(|e| format!("archived_at_secs invalid: {e}"))?,
-            )
-        } else {
-            ProcedurePublicationState::current(procedure_id.clone(), artifact_id)
-        };
-        repo.seed(artifact, state)
-            .map_err(|e| format!("repository seed failed: {e:?}"))?;
+        if let Some(error) = query_failure_mode {
+            m60.set_failure_mode(Some(error));
+        }
+        if let Some(require) = dto.m60_require_effective_interval {
+            m60.require_effective_interval(require);
+        }
 
         // -- Clock --
         let clock = FixedClock::new(
@@ -501,6 +526,7 @@ impl AffairsFixture {
 
         Ok(Self {
             repo,
+            publication_receipt,
             m60,
             m60_call_count,
             clock,

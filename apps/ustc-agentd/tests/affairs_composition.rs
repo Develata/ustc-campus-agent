@@ -25,16 +25,25 @@ fn temp_dir() -> PathBuf {
 fn base_fixture() -> Value {
     json!({
         "procedure_id": "proc:fixture",
-        "artifact_id": "artifact:fixture:v1",
         "title": "Fixture procedure",
         "known_at_secs": 50,
+        "observed_at_secs": 40,
+        "reviewed_at_secs": 160,
+        "published_at_secs": 170,
         "last_verified_at_secs": 150,
         "max_fresh_seconds": 100,
         "max_presentable_seconds": 200,
         "source_id": "src:fixture",
-        "revision_id": "rev:fixture:0",
+        "source_url": "https://demo.example/affairs/fixture",
+        "raw_snapshot_id": "raw:affairs:fixture:1",
         "raw_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "normalized_snapshot_id": "normalized:affairs:fixture:1",
         "normalized_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser:affairs:fixture:v1",
+        "source_published_at_secs": 30,
+        "source_reviewer": "reviewer:demo:source",
+        "source_review_evidence": "evidence:demo:source",
+        "publication_reviewer": "actor:demo:administrator",
         "verifier_id": "verifier:fixture",
         "evidence_contract_version": 1,
         "clock_unix_seconds": 200,
@@ -164,6 +173,16 @@ fn extract_accepted(
 fn authenticated_found_one_m71_call() {
     let env = TestEnv::new();
     let comp = env.open();
+    assert!(
+        comp.publication_receipt_id()
+            .starts_with("publication:sha256:"),
+        "composition must mint a reviewed publication receipt before serving queries"
+    );
+    assert_eq!(
+        comp.m60_call_count(),
+        0,
+        "publication verification is a separate M60 authority call, not an M71 query call"
+    );
 
     let request = submit_request("proc:fixture", authenticated_actor(), Some("idem:auth"));
     let response = comp.handle_submit(&request);
@@ -442,6 +461,43 @@ fn m60_store_corrupted_maps_to_infrastructure_error() {
         }
         _ => panic!("expected Infrastructure error, got {response:?}"),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Publication bootstrap identity and fail-closed admission
+// ---------------------------------------------------------------------------
+
+#[test]
+fn source_url_changes_publication_receipt_identity() {
+    let first_env = TestEnv::with_fixture(base_fixture());
+    let first = first_env.open();
+    let mut changed_fixture = base_fixture();
+    changed_fixture["source_url"] = json!("https://demo.example/affairs/fixture-v2");
+    let changed_env = TestEnv::with_fixture(changed_fixture);
+    let changed = changed_env.open();
+
+    assert_ne!(
+        first.publication_receipt_id(),
+        changed.publication_receipt_id(),
+        "canonical source URL must remain bound into draft/review/publication identity"
+    );
+}
+
+#[test]
+fn unresolved_conflict_cannot_bootstrap_reviewed_publication() {
+    let mut fixture = base_fixture();
+    fixture["conflict_state"] = json!("unresolved_conflict");
+    fixture["authority_comparison"] = json!("incomparable");
+    fixture["conflict_kind"] = json!("direct_contradiction");
+    let env = TestEnv::with_fixture(fixture);
+    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let Err(error) = result else {
+        panic!("unresolved evidence must fail before repository publication");
+    };
+    assert!(
+        error.contains("procedure draft invalid"),
+        "unexpected publication rejection: {error}"
+    );
 }
 
 // ---------------------------------------------------------------------------

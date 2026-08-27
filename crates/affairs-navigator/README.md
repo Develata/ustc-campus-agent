@@ -5,8 +5,9 @@ Status: `partial-evidence`; **not** a complete `PROC-011` product path.
 This crate implements the accepted M71 query algebra plus a bounded
 `DemoReviewed` draft → administrator review → atomic publication foundation.
 It is retained supporting code for the three-plugin MVP, but it does not claim
-production persistence, M00 administrator authentication, M10 application
-composition, or a Web journey.
+production persistence or M00 administrator authentication. The sibling
+`ustc-agentd` composition now publishes a controlled fixture through this
+foundation and queries the same in-memory repository through M10/Web.
 
 ## Implemented
 
@@ -30,8 +31,9 @@ composition, or a Web journey.
    CAS publication revisions, immutable receipt/artifact tombstones,
    idempotent replay after later revisions or source revocation, corruption
    detection on replay and fail-before-mutation behavior.
-9. The original fixture-seeded `InMemoryAffairsRepository` remains only for the
-   existing query/loopback evidence path.
+9. The original fixture-seeded `InMemoryAffairsRepository` remains only for
+   query-kernel tests; the retained `ustc-agentd` path uses the publication
+   repository for both startup publication and subsequent lookup.
 
 ## Authority and dependency boundary
 
@@ -54,11 +56,13 @@ later changes; a failed/uncommitted attempt always obtains a fresh M60 decision.
   publication.
 - No M00 administrator authentication/authorization composition yet.
 - No durable source/publication/profile store or restart recovery yet.
-- No production M10/Web/Agent/ToolGateway publication route yet.
+- No M00-authorized operator publication command/API or Agent/ToolGateway route;
+  current application/Web composition publishes only during controlled fixture
+  bootstrap.
 - No supersede/archive command journal or structured-search product route yet.
 - The M60 fixture adapter is test evidence, not production M60 authority.
-- `PROC-011` remains non-pass until the real application/query/Web composition
-  and restart evidence exist.
+- `PROC-011` remains non-pass until M00-authorized publication, durable restart
+  and the remaining temporal/failure assertions exist.
 
 ## Gate commands
 

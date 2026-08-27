@@ -31,7 +31,7 @@
           <button id="lookup-button" type="submit">查看流程</button>
         </div>
         <output id="procedure-id-preview" class="input-preview" for="procedure-id">完整流程 ID：proc:ustc:undergraduate:transcript-certificate</output>
-        <p id="lookup-hint">当前演示绑定一个中国科大教务处公开页面的 source-grounded fixture；它不是管理员发布记录。</p>
+        <p id="lookup-hint">当前演示绑定一个中国科大教务处公开页面的 source-grounded fixture，并在启动时经过 DemoReviewed review/publication path；它不是 M00 身份认证过的管理员操作。</p>
       </form>
       <p id="status" class="status" role="status" aria-live="polite">正在读取可验证结果…</p>
     </section>
@@ -151,7 +151,7 @@
     <section class="notice" aria-labelledby="boundary-title">
       <p class="eyebrow">BOUNDARY</p>
       <h2 id="boundary-title">这是可验证的演示纵切，不是自动审批系统。</h2>
-      <p>当前页面只读、仅绑定本机 loopback，并使用保留且校验过字节摘要的公开来源 fixture。它不代表管理员审批、正式发布或实时 M60 导入；最终办理要求仍以中国科学技术大学官方页面和现场通知为准。</p>
+      <p>当前页面只读、仅绑定本机 loopback；启动 fixture 会经 DemoReviewed review/publication path 物化为同仓库查询记录。它不代表 M00 身份认证过的管理员审批、生产持久化发布或实时 M60 导入；最终办理要求仍以中国科学技术大学官方页面和现场通知为准。</p>
     </section>
   </main>
 

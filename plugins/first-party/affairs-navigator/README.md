@@ -7,11 +7,12 @@
 
 The package-owned Rust crate at `crates/affairs-navigator` now contains bounded
 query/freshness/conflict behavior and an exact M60 `DemoReviewed` draft →
-administrator review → atomic in-memory publication foundation. It does **not**
-yet form the production package journey: M00 administrator authorization,
-Market-controlled activation, durable persistence/restart, M10 application
-composition and the same-state Web query remain missing. `PROC-011` is therefore
-still non-pass.
+administrator review → atomic in-memory publication foundation. The bounded
+`ustc-agentd` fixture now publishes and queries that same repository through
+M10/CLI/loopback Web, but this does **not** form the production package journey:
+M00 administrator authorization, Market-controlled activation, durable
+persistence/restart and a production operator publication API remain missing.
+`PROC-011` is therefore still non-pass.
 
 Canonical documentation:
 

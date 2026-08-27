@@ -831,7 +831,11 @@ impl From<ProcedurePublicationRepositoryError> for ProcedurePublicationError {
     }
 }
 
-fn m60_ref_from_source_revision(
+/// Projects one exact M60-owned [`SourceRevision`] into the bounded retained
+/// evidence reference consumed by M71. This conversion is shared by the draft
+/// validator and composition adapters so canonical revision identity and time
+/// range checks cannot drift.
+pub fn m60_ref_from_source_revision(
     revision: &SourceRevision,
 ) -> Result<M60RevisionRef, AffairsValueError> {
     M60RevisionRef::new(

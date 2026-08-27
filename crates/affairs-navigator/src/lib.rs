@@ -28,9 +28,10 @@
 //!
 //! This is retained partial evidence, not a complete `PROC-011` product path.
 //! The in-memory M60 fixture adapter is equal-contract test evidence, not
-//! production M60 authority. M00 administrator auth, durable persistence,
-//! M10/Web composition and restart recovery remain outside this slice. See
-//! `README.md` for the complete nonclaim list.
+//! production M60 authority. M00 administrator auth and durable persistence/
+//! restart recovery remain outside this slice. The current fixture-backed
+//! M10/Web composition lives in `ustc-agentd` and consumes only this public API.
+//! See `README.md` for the complete nonclaim list.
 
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![forbid(unsafe_code)]

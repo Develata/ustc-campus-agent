@@ -228,7 +228,7 @@ function renderFound(terminal) {
 
   errorPanel.hidden = true;
   result.hidden = false;
-  status.textContent = "已载入当前 source-grounded fixture 结果。";
+  status.textContent = "已载入当前 source-grounded published fixture 结果。";
 }
 
 function renderResponse(payload) {
