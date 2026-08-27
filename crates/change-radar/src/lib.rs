@@ -1,11 +1,16 @@
-//! Deterministic ChangeRadar source-revision/semantic-diff foundation.
+//! Deterministic ChangeRadar semantic-diff and reviewed-feed kernel.
 //!
 //! The crate consumes immutable M60 `SourceRevision` values. It owns one board
 //! policy, typed normalized facts, deterministic semantic comparison and an
-//! atomic baseline/candidate repository boundary. It performs no retrieval,
-//! parsing, administrator publication, feed rendering, model call, or Web I/O.
+//! atomic baseline/candidate/review/publication repository boundary. It also
+//! renders deterministic Atom from approved events. It performs no retrieval,
+//! parsing, M00 authorization, durable storage, model call, or Web I/O.
 
 #![forbid(unsafe_code)]
+
+mod publication;
+
+pub use publication::*;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -457,10 +462,15 @@ pub trait ChangeRadarRepository {
 #[derive(Debug)]
 pub struct InMemoryChangeRadarRepository {
     baselines: BTreeMap<SourceId, AcceptedObservation>,
-    candidates: BTreeMap<ChangeEventId, SemanticChangeCandidate>,
+    pub(crate) candidates: BTreeMap<ChangeEventId, SemanticChangeCandidate>,
+    pub(crate) reviews: BTreeMap<ChangeEventId, ChangeReviewReceipt>,
+    pub(crate) publications: BTreeMap<ChangeEventId, PublishedChangeEvent>,
+    pub(crate) feed_guids: BTreeMap<StableFeedGuid, ChangeEventId>,
     max_baselines: usize,
-    max_candidates: usize,
+    pub(crate) max_candidates: usize,
     fail_next_apply: bool,
+    pub(crate) fail_next_review: bool,
+    pub(crate) fail_next_publication: bool,
 }
 
 impl Default for InMemoryChangeRadarRepository {
@@ -475,9 +485,14 @@ impl InMemoryChangeRadarRepository {
         Self {
             baselines: BTreeMap::new(),
             candidates: BTreeMap::new(),
+            reviews: BTreeMap::new(),
+            publications: BTreeMap::new(),
+            feed_guids: BTreeMap::new(),
             max_baselines: DEFAULT_MAX_BASELINES,
             max_candidates: DEFAULT_MAX_CANDIDATES,
             fail_next_apply: false,
+            fail_next_review: false,
+            fail_next_publication: false,
         }
     }
 
@@ -492,9 +507,14 @@ impl InMemoryChangeRadarRepository {
         Ok(Self {
             baselines: BTreeMap::new(),
             candidates: BTreeMap::new(),
+            reviews: BTreeMap::new(),
+            publications: BTreeMap::new(),
+            feed_guids: BTreeMap::new(),
             max_baselines,
             max_candidates,
             fail_next_apply: false,
+            fail_next_review: false,
+            fail_next_publication: false,
         })
     }
 

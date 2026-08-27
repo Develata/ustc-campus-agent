@@ -4,13 +4,13 @@
 
 - `Module ID`: `M70`
 - `Package ID`: `ustc.change-radar`
-- `Status`: Accepted blueprint; bounded source-revision/semantic-diff evidence
+- `Status`: Accepted blueprint; bounded semantic-diff/review/feed evidence
 - `Implementation State`: `partial-evidence`
 - `Version`: `m70-change-radar/v0`
 - `Last Review`: `2026-08-27`
 - `Primary code area`: `crates/change-radar/`, with M60-owned immutable revision values in `crates/platform-core/src/source_revision.rs`; package resources remain under `plugins/first-party/change-radar/`
 
-Current retained evidence covers exact-source-pinned board-policy validation, deterministic typed field comparison, M60-owned source-health denial outcomes, complete-policy-bound candidate identity, service-minted repository commits, and explicitly bounded atomic in-memory candidate/baseline publication. It deliberately does not claim administrator approval/publication, durable storage, a feed, an approved live source, Market/Agent/ToolGateway invocation, M10/M80 composition, or the module exit gate.
+Current retained evidence covers exact-source-pinned board-policy validation, deterministic typed field comparison, M60-owned source-health denial outcomes, complete-policy-bound candidate identity, explicit administrator approve/reject receipts, one coherent transaction-current M60 publication decision, exactly-once in-memory publication, stable event GUIDs and deterministic Atom rendering with before/after, effective/observed time, source evidence, freshness and provenance. It deliberately does not claim M00-authorized administration, durable storage/restart, an approved live source, Market/Agent/ToolGateway invocation, M10/M80/Web composition, or the module exit gate.
 
 ## 1. Purpose
 

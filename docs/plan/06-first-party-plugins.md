@@ -194,9 +194,9 @@ Future research, competition, lecture and scholarship slices reuse the same trus
 
 ### 4.2 ChangeRadar bounded foundation
 
-Current `crates/change-radar` consumes M60-owned immutable `DemoReviewed` revision values and proves bounded board-policy validation, deterministic typed field comparison, stable candidate identity, explicit stale/conflict/unavailable outcomes, and atomic in-memory candidate/baseline updates. Duplicate, no-change and out-of-order revisions create no false semantic event; an injected repository failure advances neither candidate nor baseline.
+Current `crates/change-radar` consumes M60-owned immutable `DemoReviewed` revision values and proves bounded board-policy validation, deterministic typed field comparison, stable candidate identity, explicit stale/conflict/unavailable outcomes, digest-bound administrator approve/reject receipts, coherent transaction-current M60 verification, atomic in-memory publication and deterministic Atom rendering. Duplicate, no-change and out-of-order revisions create no false semantic event; injected candidate/review/publication repository failures expose typed errors without partial durable-domain state.
 
-This is supporting `partial-evidence`, not the ChangeRadar product journey. It has no source retrieval/parser, durable accepted baseline, administrator review/publication, board/feed, Market/Agent/ToolGateway invocation, M10/M80 projection or acceptance promotion.
+This is supporting `partial-evidence`, not the ChangeRadar product journey. It has no source retrieval/parser, durable accepted baseline/restart, M00-authorized administration, Market/Agent/ToolGateway invocation, M10/M80/Web board projection or acceptance promotion.
 
 ## 5. Frozen implementation order
 

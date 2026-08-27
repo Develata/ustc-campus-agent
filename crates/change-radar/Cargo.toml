@@ -10,7 +10,11 @@ homepage.workspace = true
 
 [dependencies]
 sha2.workspace = true
+time.workspace = true
 ustc-campus-agent-core = { path = "../platform-core" }
+
+[dev-dependencies]
+quick-xml = "0.42.0"
 
 [lib]
 path = "src/lib.rs"
