@@ -611,6 +611,8 @@ dependencies = [
  "ustc-campus-agent-change-radar",
  "ustc-campus-agent-client-protocol",
  "ustc-campus-agent-core",
+ "ustc-campus-agent-course-planning",
+ "ustc-campus-agent-opportunity-graph",
  "ustc-campus-agent-runtime",
 ]
 
@@ -635,6 +637,8 @@ dependencies = [
  "ustc-campus-agent-change-radar",
  "ustc-campus-agent-client-protocol",
  "ustc-campus-agent-core",
+ "ustc-campus-agent-course-planning",
+ "ustc-campus-agent-opportunity-graph",
 ]
 
 [[package]]

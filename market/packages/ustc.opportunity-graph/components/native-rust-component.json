@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "native-rust-component/v1",
+  "packageId": "ustc.opportunity-graph",
+  "packageVersion": "0.1.0",
+  "cratePath": "crates/opportunity-graph",
+  "compositionOwner": "apps/ustc-agentd",
+  "operations": [
+    "profile.academic.create",
+    "profile.academic.view",
+    "planner.generate",
+    "profile.academic.revoke_delete"
+  ]
+}

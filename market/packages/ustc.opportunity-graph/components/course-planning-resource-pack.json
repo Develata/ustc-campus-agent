@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "declarative-resource-pack/v1",
+  "packageId": "ustc.opportunity-graph",
+  "packageVersion": "0.1.0",
+  "resourcePath": "market/fixtures/course-planning/minimal-v0.json",
+  "resourceSha256": "407cb93f54c4f9438fec776cfc7968674243d793c84b3a47244e677aea4bbe21",
+  "reviewClass": "DemoReviewed",
+  "notice": "Synthetic, non-personal course catalog snapshot for the bounded MVP path; not live USTC data."
+}

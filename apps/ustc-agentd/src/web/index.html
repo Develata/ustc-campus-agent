@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="USTC Campus Agent 两插件演示：从保留并校验过的公开来源呈现办事流程与语义变更。">
-  <title>科大办事与变更 · USTC Campus Agent</title>
+  <meta name="description" content="USTC Campus Agent 三插件演示：办事流程、语义变更与 consent-bound 课程机会规划。">
+  <title>科大校园助手 · USTC Campus Agent</title>
   <link rel="stylesheet" href="/assets/styles.css">
   <script src="/assets/app.js" defer></script>
 </head>
@@ -185,10 +185,73 @@
       </div>
     </section>
 
+    <section class="opportunity-board" aria-labelledby="opportunity-title">
+      <div class="radar-heading">
+        <div>
+          <p class="eyebrow">OPPORTUNITY GRAPH · CONSENT-BOUND 课程规划</p>
+          <h2 id="opportunity-title">先同意，再规划；撤回后即不再读取。</h2>
+          <p>使用不含真实个人数据的 synthetic academic profile 和 DemoReviewed catalog。服务端从 authenticated demo session 推导 tenant/user；浏览器只保存不具 authority 的 profile ID hint。</p>
+        </div>
+      </div>
+
+      <div class="opportunity-consent">
+        <div>
+          <strong>Synthetic profile</strong>
+          <p>已修：MATH1001、MATH1002、CS1001、PHYS1001 · 9–12 学分 · 7 项 synthetic preference weights</p>
+        </div>
+        <label class="consent-check" for="opportunity-consent">
+          <input id="opportunity-consent" type="checkbox">
+          <span>我明确同意仅将以上字段用于本次 Opportunity Planning demo。</span>
+        </label>
+        <div class="opportunity-actions">
+          <button id="opportunity-create" type="button">同意并创建档案</button>
+          <button id="opportunity-view" type="button" disabled>读取私有档案</button>
+          <button id="opportunity-plan" type="button" disabled>生成课程计划</button>
+          <button id="opportunity-delete" class="danger-action" type="button" disabled>撤回同意并删除</button>
+        </div>
+      </div>
+
+      <p id="opportunity-status" class="status" role="status" aria-live="polite">等待明确 consent…</p>
+      <section id="opportunity-profile" class="opportunity-result" aria-labelledby="opportunity-profile-title" hidden>
+        <h3 id="opportunity-profile-title">Tenant-private profile receipt</h3>
+        <dl class="radar-evidence">
+          <div><dt>Profile snapshot</dt><dd id="opportunity-profile-id"></dd></div>
+          <div><dt>Consent receipt</dt><dd id="opportunity-consent-id"></dd></div>
+          <div><dt>Consent fields</dt><dd id="opportunity-consent-fields"></dd></div>
+          <div><dt>Profile bounds</dt><dd id="opportunity-profile-bounds"></dd></div>
+        </dl>
+      </section>
+
+      <section id="opportunity-plan-result" class="opportunity-result" aria-labelledby="opportunity-plan-title" hidden>
+        <h3 id="opportunity-plan-title">Source-grounded qualification &amp; plan</h3>
+        <dl class="radar-evidence">
+          <div><dt>Planning receipt</dt><dd id="opportunity-plan-receipt"></dd></div>
+          <div><dt>Source revision</dt><dd id="opportunity-source-revision"></dd></div>
+          <div><dt>Profile / consent</dt><dd id="opportunity-plan-binding"></dd></div>
+          <div><dt>Decision</dt><dd id="opportunity-plan-decision"></dd></div>
+        </dl>
+        <div class="opportunity-grid">
+          <div>
+            <h4>资格判定</h4>
+            <div id="opportunity-qualifications" class="qualification-list"></div>
+          </div>
+          <div>
+            <h4>候选计划</h4>
+            <div id="opportunity-candidates" class="candidate-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="opportunity-deleted" class="notice notice-error" aria-labelledby="opportunity-deleted-title" hidden>
+        <h3 id="opportunity-deleted-title">Private payload 已删除</h3>
+        <p id="opportunity-delete-receipt"></p>
+      </section>
+    </section>
+
     <section class="notice" aria-labelledby="boundary-title">
       <p class="eyebrow">BOUNDARY</p>
-      <h2 id="boundary-title">这是可验证的两插件演示纵切，不是自动审批系统。</h2>
-      <p>当前页面只读、仅绑定本机 loopback；启动 fixtures 会经各自的 DemoReviewed review/publication path 物化为 Affairs 查询记录和 ChangeRadar feed event。它们不代表 M00 身份认证过的管理员审批、生产持久化发布或实时 M60 导入；最终办理要求仍以中国科学技术大学官方页面和现场通知为准。</p>
+      <h2 id="boundary-title">这是可验证的三插件演示纵切，不是自动审批或选课系统。</h2>
+      <p>页面仅绑定本机 loopback。Affairs 与 ChangeRadar 使用显著标识的 DemoReviewed source snapshots；Opportunity Graph 使用 synthetic private profile，并将 active payload 与不含原始 profile 的 deletion tombstone 写入本机 durable store。它们不代表正式 USTC SSO、实时官方 M60 导入、自动审批或自动选课；最终要求仍以中国科学技术大学官方页面和现场通知为准。</p>
     </section>
   </main>
 

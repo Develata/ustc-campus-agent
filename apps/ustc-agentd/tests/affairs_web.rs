@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -24,14 +24,14 @@ struct WebServer {
 
 impl WebServer {
     fn start() -> Self {
-        Self::start_with_change(true)
+        Self::start_with_plugins(true, true)
     }
 
     fn start_affairs_only() -> Self {
-        Self::start_with_change(false)
+        Self::start_with_plugins(false, false)
     }
 
-    fn start_with_change(include_change: bool) -> Self {
+    fn start_with_plugins(include_change: bool, include_opportunity: bool) -> Self {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(|path| path.parent())
@@ -40,10 +40,21 @@ impl WebServer {
         let fixture = workspace.join("fixtures/affairs/proc-011-reviewed.json");
         let change_fixture =
             workspace.join("fixtures/change-radar/academic-calendar-demo-reviewed.json");
+        let opportunity_fixture =
+            workspace.join("fixtures/opportunity-graph/course-planning-demo-reviewed.json");
+        let opportunity_catalog = workspace.join("market/fixtures/course-planning/minimal-v0.json");
         assert!(fixture.is_file(), "reviewed fixture must exist");
         assert!(
             change_fixture.is_file(),
             "reviewed change fixture must exist"
+        );
+        assert!(
+            opportunity_fixture.is_file(),
+            "reviewed opportunity fixture must exist"
+        );
+        assert!(
+            opportunity_catalog.is_file(),
+            "opportunity catalog must exist"
         );
 
         let suffix = COUNTER.fetch_add(1, Ordering::SeqCst);
@@ -52,6 +63,7 @@ impl WebServer {
         fs::create_dir_all(&temp_dir).expect("create web test directory");
         let store = temp_dir.join("records.json");
         let idempotency = temp_dir.join("idempotency.json");
+        let opportunity_profile_store = temp_dir.join("opportunity-profiles.json");
 
         let mut command = Command::new(env!("CARGO_BIN_EXE_ustc-agentd"));
         command.args([
@@ -65,6 +77,22 @@ impl WebServer {
             command.args([
                 "--change-fixture",
                 change_fixture.to_str().expect("change fixture path utf8"),
+            ]);
+        }
+        if include_opportunity {
+            command.args([
+                "--opportunity-fixture",
+                opportunity_fixture
+                    .to_str()
+                    .expect("opportunity fixture path utf8"),
+                "--opportunity-catalog",
+                opportunity_catalog
+                    .to_str()
+                    .expect("opportunity catalog path utf8"),
+                "--opportunity-profile-store",
+                opportunity_profile_store
+                    .to_str()
+                    .expect("opportunity profile store path utf8"),
             ]);
         }
         let mut child = command
@@ -121,6 +149,26 @@ impl WebServer {
             stream,
             "GET {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json,text/html,*/*\r\nConnection: close\r\n\r\n",
             self.endpoint
+        )
+        .expect("write HTTP request");
+        stream.flush().expect("flush HTTP request");
+        let mut bytes = Vec::new();
+        stream.read_to_end(&mut bytes).expect("read HTTP response");
+        HttpResponse::parse(&bytes)
+    }
+
+    fn post_json(&self, path: &str, body: &Value) -> HttpResponse {
+        let body = body.to_string();
+        let mut stream = TcpStream::connect(&self.endpoint).expect("connect web server");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .expect("set read timeout");
+        write!(
+            stream,
+            "POST {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            self.endpoint,
+            body.len(),
+            body
         )
         .expect("write HTTP request");
         stream.flush().expect("flush HTTP request");
@@ -258,6 +306,16 @@ fn affairs_only_web_mode_keeps_affairs_available_and_change_fail_closed() {
     assert!(atom.status.contains(" 503 "), "{}", atom.status);
     let atom_value: Value = serde_json::from_str(&atom.body).expect("atom error JSON");
     assert_eq!(atom_value["error"], "change_feed_unavailable");
+
+    let opportunity = server.get("/api/v1/opportunity/profiles/profile-snapshot%3Aopportunity%3Asha256%3Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    assert!(
+        opportunity.status.contains(" 503 "),
+        "{}",
+        opportunity.status
+    );
+    let opportunity_value: Value =
+        serde_json::from_str(&opportunity.body).expect("opportunity error JSON");
+    assert_eq!(opportunity_value["kind"], "unavailable");
 }
 
 #[test]
@@ -358,6 +416,131 @@ fn unknown_change_board_has_stable_json_and_atom_results() {
 }
 
 #[test]
+fn opportunity_http_journey_requires_consent_plans_and_deletes_private_payload() {
+    let server = WebServer::start();
+    let profile_body = json!({
+        "consent": true,
+        "completed_courses": ["MATH1001", "MATH1002", "CS1001", "PHYS1001"],
+        "min_credits": 9,
+        "max_credits": 12,
+        "preference_weights": [
+            {"course_code": "MATH2001", "weight": 9},
+            {"course_code": "MATH2003", "weight": 8},
+            {"course_code": "CS2006", "weight": 7},
+            {"course_code": "PHYS2003", "weight": 5},
+            {"course_code": "HUM2001", "weight": 4},
+            {"course_code": "GEN2001", "weight": 3},
+            {"course_code": "LANG2001", "weight": 2}
+        ]
+    });
+
+    let denied = server.post_json(
+        "/api/v1/opportunity/profiles",
+        &json!({
+            "consent": false,
+            "completed_courses": ["MATH101"],
+            "min_credits": 6,
+            "max_credits": 8,
+            "preference_weights": []
+        }),
+    );
+    assert!(denied.status.contains(" 400 "), "{}", denied.status);
+    let denied_value: Value = serde_json::from_str(&denied.body).expect("consent error JSON");
+    assert_eq!(denied_value["error"], "explicit_consent_required");
+
+    let created = server.post_json("/api/v1/opportunity/profiles", &profile_body);
+    assert!(created.status.contains(" 201 "), "{}", created.status);
+    assert!(created.headers.contains("cache-control: no-store"));
+    let created_value: Value = serde_json::from_str(&created.body).expect("create JSON");
+    assert_eq!(created_value["kind"], "opportunity_accepted");
+    assert_eq!(created_value["terminal"]["kind"], "profile_created");
+    let profile_id = created_value["terminal"]["profile"]["profile_snapshot_id"]
+        .as_str()
+        .expect("profile id")
+        .to_owned();
+    assert_eq!(
+        created_value["terminal"]["profile"]["completed_course_count"],
+        4
+    );
+    assert_eq!(created_value["terminal"]["profile"]["preference_count"], 7);
+    assert!(!created.body.contains("MATH1001"));
+    assert!(!created.body.contains("\"weight\":"));
+
+    let encoded_profile = profile_id.replace(':', "%3A");
+    let viewed = server.get(&format!("/api/v1/opportunity/profiles/{encoded_profile}"));
+    assert!(viewed.status.contains(" 200 "), "{}", viewed.status);
+    let viewed_value: Value = serde_json::from_str(&viewed.body).expect("view JSON");
+    assert_eq!(viewed_value["terminal"]["kind"], "profile_found");
+
+    let planned = server.post_json(
+        "/api/v1/opportunity/plans",
+        &json!({
+            "profile_snapshot_id": profile_id,
+            "max_results": 3,
+            "beam_width": 1024
+        }),
+    );
+    assert!(planned.status.contains(" 200 "), "{}", planned.status);
+    let planned_value: Value = serde_json::from_str(&planned.body).expect("plan JSON");
+    assert_eq!(planned_value["terminal"]["kind"], "plan_generated");
+    assert_eq!(
+        planned_value["terminal"]["plan"]["decision"]["kind"],
+        "planned"
+    );
+    assert_eq!(
+        planned_value["terminal"]["plan"]["decision"]["hard_constraint_violations"],
+        0
+    );
+    assert!(
+        !planned_value["terminal"]["plan"]["decision"]["candidates"]
+            .as_array()
+            .expect("candidates")
+            .is_empty()
+    );
+    assert!(
+        planned_value["terminal"]["plan"]["source_revision_id"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("revision:sha256:"))
+    );
+    assert!(
+        !planned_value["terminal"]["plan"]["qualifications"]
+            .as_array()
+            .expect("qualifications")
+            .is_empty()
+    );
+    assert!(planned.body.contains("source_revision_id"));
+    assert!(planned.body.contains("conflict_status"));
+
+    let deleted = server.post_json(
+        &format!("/api/v1/opportunity/profiles/{encoded_profile}/revoke-delete"),
+        &json!({"confirm_delete": true}),
+    );
+    assert!(deleted.status.contains(" 200 "), "{}", deleted.status);
+    let deleted_value: Value = serde_json::from_str(&deleted.body).expect("delete JSON");
+    assert_eq!(deleted_value["terminal"]["kind"], "profile_deleted");
+    assert!(!deleted.body.contains("MATH1001"));
+    assert!(!deleted.body.contains("\"weight\":"));
+
+    let after_delete = server.post_json(
+        "/api/v1/opportunity/plans",
+        &json!({
+            "profile_snapshot_id": profile_id,
+            "max_results": 3,
+            "beam_width": 1024
+        }),
+    );
+    assert!(
+        after_delete.status.contains(" 410 "),
+        "{}",
+        after_delete.status
+    );
+    let after_delete_value: Value =
+        serde_json::from_str(&after_delete.body).expect("deleted-plan JSON");
+    assert_eq!(after_delete_value["kind"], "opportunity_rejected");
+    assert_eq!(after_delete_value["rejection"]["kind"], "profile_deleted");
+}
+
+#[test]
 fn retained_source_fixture_hashes_match_declared_evidence() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -402,6 +585,11 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(page.body.contains("CHANGE RADAR"));
     assert!(page.body.contains("radar-fields"));
     assert!(page.body.contains("Atom feed"));
+    assert!(page.body.contains("OPPORTUNITY GRAPH"));
+    assert!(page.body.contains("opportunity-consent"));
+    assert!(page.body.contains("opportunity-create"));
+    assert!(page.body.contains("opportunity-plan"));
+    assert!(page.body.contains("opportunity-delete"));
     for id in [
         "radar-effective",
         "radar-published",
@@ -426,6 +614,9 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(script.body.contains("syncProcedurePreview"));
     assert!(script.body.contains("renderChangeFeed"));
     assert!(script.body.contains("loadChangeFeed"));
+    assert!(script.body.contains("createOpportunityProfile"));
+    assert!(script.body.contains("renderOpportunityPlan"));
+    assert!(script.body.contains("deleteOpportunityProfile"));
 
     let health = server.get("/healthz");
     assert!(health.status.contains(" 200 "), "{}", health.status);

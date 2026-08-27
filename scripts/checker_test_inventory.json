@@ -1,6 +1,6 @@
 {
   "schema_version": "checker-test-inventory/v1",
-  "expected_count": 693,
+  "expected_count": 694,
   "test_ids": [
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_count_mismatch",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_duplicates",
@@ -225,6 +225,7 @@
     "test_check_repo_contracts.MarketContractTests.test_capability_registry_rejects_legacy_fields_and_schema_drift",
     "test_check_repo_contracts.MarketContractTests.test_capability_registry_schema_carriers_are_pinned",
     "test_check_repo_contracts.MarketContractTests.test_component_symlink_cannot_escape_repository",
+    "test_check_repo_contracts.MarketContractTests.test_course_catalog_three_way_digest_binding_fails_closed",
     "test_check_repo_contracts.MarketContractTests.test_default_package_cannot_auto_grant_private_capability",
     "test_check_repo_contracts.MarketContractTests.test_default_package_capabilities_are_exact",
     "test_check_repo_contracts.MarketContractTests.test_default_package_must_state_personal_data_scope",

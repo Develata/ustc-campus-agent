@@ -8,16 +8,19 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use axum::extract::{Path as AxumPath, State};
+use axum::extract::rejection::JsonRejection;
+use axum::extract::{DefaultBodyLimit, Path as AxumPath, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ustc_campus_agent_client_protocol::{
-    ActorIntentDto, ClientErrorDto, ClientProvenanceDto, ClientResponseDto, RedactionDto,
-    SubmitAffairsGetDto, SubmitChangeFeedDto, ViewerAuthorizationDto, WireErrorClassDto, WireText,
-    affairs_get_payload_digest, change_feed_payload_digest,
+    ActorIntentDto, ClientErrorDto, ClientProvenanceDto, ClientResponseDto, OpportunityCommandDto,
+    OpportunityConsentFieldDto, OpportunityPreferenceDto, OpportunityRejectionDto, RedactionDto,
+    SubmitAffairsGetDto, SubmitChangeFeedDto, SubmitOpportunityDto, UnixMillis,
+    ViewerAuthorizationDto, WireErrorClassDto, WireText, affairs_get_payload_digest,
+    change_feed_payload_digest, opportunity_payload_digest,
 };
 
 use super::{AffairsComposition, parse_loopback_socket_addr};
@@ -107,6 +110,57 @@ impl WebState {
         Ok(self.composition.handle_change_submit(&request))
     }
 
+    fn submit_opportunity(
+        &self,
+        command: OpportunityCommandDto,
+    ) -> Result<ClientResponseDto, WebRequestError> {
+        command
+            .validate()
+            .map_err(|_| WebRequestError::InvalidOpportunityRequest)?;
+        let sequence = self
+            .next_request
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                current.checked_add(1)
+            })
+            .map_err(|_| WebRequestError::CounterExhausted)?;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| WebRequestError::InternalIdentity)?;
+        let request_nonce = now.as_nanos();
+        let payload_digest =
+            opportunity_payload_digest(&command).map_err(|_| WebRequestError::InternalIdentity)?;
+        let request = SubmitOpportunityDto {
+            request_id: checked_text(format!("req:web:opportunity:{request_nonce}:{sequence}"))?,
+            correlation_id: checked_text(format!(
+                "corr:web:opportunity:{request_nonce}:{sequence}"
+            ))?,
+            causation_id: None,
+            idempotency_key: Some(checked_text(format!(
+                "idem:web:opportunity:{request_nonce}:{sequence}"
+            ))?),
+            actor: ActorIntentDto::Authenticated {
+                session_id: checked_text(self.composition.fixture.session.session_id().as_str())?,
+            },
+            provenance: ClientProvenanceDto {
+                build: checked_text(concat!("ustc-agentd/", env!("CARGO_PKG_VERSION")))?,
+                target: checked_text("web-loopback-private-demo")?,
+                protocol: checked_text("http-json-v1")?,
+            },
+            payload_digest,
+            command,
+        };
+        Ok(self.composition.handle_opportunity_submit(&request))
+    }
+
+    fn now_millis() -> Result<UnixMillis, WebRequestError> {
+        let millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| WebRequestError::InternalIdentity)?
+            .as_millis();
+        let millis = i64::try_from(millis).map_err(|_| WebRequestError::InternalIdentity)?;
+        Ok(UnixMillis::new(millis))
+    }
+
     fn resolve_public_available(
         &self,
         submitted: ClientResponseDto,
@@ -146,6 +200,7 @@ impl WebState {
 enum WebRequestError {
     InvalidProcedureId,
     InvalidBoardId,
+    InvalidOpportunityRequest,
     CounterExhausted,
     InternalIdentity,
     MissingPublicCapability,
@@ -169,6 +224,37 @@ struct HealthEnvelope {
     status: &'static str,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreateOpportunityProfileBody {
+    consent: bool,
+    completed_courses: Vec<String>,
+    min_credits: u16,
+    max_credits: u16,
+    preference_weights: Vec<OpportunityPreferenceBody>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OpportunityPreferenceBody {
+    course_code: String,
+    weight: i32,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GenerateOpportunityPlanBody {
+    profile_snapshot_id: String,
+    max_results: u16,
+    beam_width: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DeleteOpportunityProfileBody {
+    confirm_delete: bool,
+}
+
 /// Builds the bounded same-origin Web router over one composition.
 pub fn web_router(composition: Arc<AffairsComposition>) -> Router {
     Router::new()
@@ -179,6 +265,20 @@ pub fn web_router(composition: Arc<AffairsComposition>) -> Router {
         .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
         .route("/api/v1/changes/{board_id}", get(change_feed_get))
         .route("/api/v1/changes/{board_id}/atom", get(change_feed_atom))
+        .route(
+            "/api/v1/opportunity/profiles",
+            post(opportunity_profile_create),
+        )
+        .route(
+            "/api/v1/opportunity/profiles/{profile_id}",
+            get(opportunity_profile_view),
+        )
+        .route("/api/v1/opportunity/plans", post(opportunity_plan_generate))
+        .route(
+            "/api/v1/opportunity/profiles/{profile_id}/revoke-delete",
+            post(opportunity_profile_delete),
+        )
+        .layer(DefaultBodyLimit::max(16 * 1024))
         .with_state(WebState::new(composition))
 }
 
@@ -249,6 +349,9 @@ async fn affairs_get(
         ) => web_error(StatusCode::BAD_GATEWAY, "public_lookup_unavailable"),
         Err(WebRequestError::InvalidBoardId) => {
             web_error(StatusCode::BAD_REQUEST, "invalid_board_id")
+        }
+        Err(WebRequestError::InvalidOpportunityRequest) => {
+            web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error")
         }
     }
 }
@@ -322,6 +425,175 @@ async fn change_feed_atom(
             web_error(StatusCode::NOT_FOUND, "change_board_not_found")
         }
     }
+}
+
+async fn opportunity_profile_create(
+    State(state): State<WebState>,
+    body: Result<Json<CreateOpportunityProfileBody>, JsonRejection>,
+) -> Response {
+    let Json(body) = match body {
+        Ok(body) => body,
+        Err(error) => return web_error(error.status(), "invalid_opportunity_json"),
+    };
+    if !body.consent {
+        return web_error(StatusCode::BAD_REQUEST, "explicit_consent_required");
+    }
+    let completed_courses = match body
+        .completed_courses
+        .into_iter()
+        .map(checked_text)
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(courses) => courses,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_profile"),
+    };
+    let preference_weights = match body
+        .preference_weights
+        .into_iter()
+        .map(|preference| {
+            checked_text(preference.course_code).map(|course_code| OpportunityPreferenceDto {
+                course_code,
+                weight: preference.weight,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(preferences) => preferences,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_profile"),
+    };
+    let consented_at = match WebState::now_millis() {
+        Ok(value) => value,
+        Err(_) => return web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error"),
+    };
+    opportunity_response(
+        state.submit_opportunity(OpportunityCommandDto::CreateProfile {
+            consent_purpose: match checked_text("opportunity_planning") {
+                Ok(value) => value,
+                Err(_) => {
+                    return web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error");
+                }
+            },
+            consent_fields: vec![
+                OpportunityConsentFieldDto::CompletedCourses,
+                OpportunityConsentFieldDto::CreditBounds,
+                OpportunityConsentFieldDto::PreferenceWeights,
+            ],
+            consented_at,
+            completed_courses,
+            min_credits: body.min_credits,
+            max_credits: body.max_credits,
+            preference_weights,
+        }),
+    )
+}
+
+async fn opportunity_profile_view(
+    AxumPath(profile_id): AxumPath<String>,
+    State(state): State<WebState>,
+) -> Response {
+    let profile_snapshot_id = match checked_text(profile_id) {
+        Ok(value) => value,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_profile_snapshot_id"),
+    };
+    opportunity_response(
+        state.submit_opportunity(OpportunityCommandDto::ViewProfile {
+            profile_snapshot_id,
+        }),
+    )
+}
+
+async fn opportunity_plan_generate(
+    State(state): State<WebState>,
+    body: Result<Json<GenerateOpportunityPlanBody>, JsonRejection>,
+) -> Response {
+    let Json(body) = match body {
+        Ok(body) => body,
+        Err(error) => return web_error(error.status(), "invalid_opportunity_json"),
+    };
+    let profile_snapshot_id = match checked_text(body.profile_snapshot_id) {
+        Ok(value) => value,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_profile_snapshot_id"),
+    };
+    opportunity_response(
+        state.submit_opportunity(OpportunityCommandDto::GeneratePlan {
+            profile_snapshot_id,
+            max_results: body.max_results,
+            beam_width: body.beam_width,
+        }),
+    )
+}
+
+async fn opportunity_profile_delete(
+    AxumPath(profile_id): AxumPath<String>,
+    State(state): State<WebState>,
+    body: Result<Json<DeleteOpportunityProfileBody>, JsonRejection>,
+) -> Response {
+    let Json(body) = match body {
+        Ok(body) => body,
+        Err(error) => return web_error(error.status(), "invalid_opportunity_json"),
+    };
+    if !body.confirm_delete {
+        return web_error(
+            StatusCode::BAD_REQUEST,
+            "explicit_delete_confirmation_required",
+        );
+    }
+    let profile_snapshot_id = match checked_text(profile_id) {
+        Ok(value) => value,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_profile_snapshot_id"),
+    };
+    let revoked_at = match WebState::now_millis() {
+        Ok(value) => value,
+        Err(_) => return web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error"),
+    };
+    opportunity_response(state.submit_opportunity(
+        OpportunityCommandDto::RevokeConsentAndDeleteProfile {
+            profile_snapshot_id,
+            revoked_at,
+        },
+    ))
+}
+
+fn opportunity_response(response: Result<ClientResponseDto, WebRequestError>) -> Response {
+    let response = match response {
+        Ok(response) => response,
+        Err(WebRequestError::InvalidOpportunityRequest) => {
+            return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_request");
+        }
+        Err(_) => return web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error"),
+    };
+    let status = match &response {
+        ClientResponseDto::OpportunityAccepted { terminal, .. } => match terminal.as_ref() {
+            ustc_campus_agent_client_protocol::M72OpportunityTerminalDto::ProfileCreated {
+                ..
+            } => StatusCode::CREATED,
+            _ => StatusCode::OK,
+        },
+        ClientResponseDto::OpportunityRejected { rejection, .. } => match rejection {
+            OpportunityRejectionDto::AuthenticationRequired => StatusCode::UNAUTHORIZED,
+            OpportunityRejectionDto::AccessDenied => StatusCode::FORBIDDEN,
+            OpportunityRejectionDto::MissingProfile => StatusCode::NOT_FOUND,
+            OpportunityRejectionDto::ProfileDeleted => StatusCode::GONE,
+            OpportunityRejectionDto::ProfileAlreadyExists => StatusCode::CONFLICT,
+            OpportunityRejectionDto::DeleteBeforeConsent => StatusCode::UNPROCESSABLE_ENTITY,
+            OpportunityRejectionDto::InvalidProfileFacts => StatusCode::UNPROCESSABLE_ENTITY,
+            OpportunityRejectionDto::SourceNotCurrent { .. } => StatusCode::CONFLICT,
+            OpportunityRejectionDto::SourceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+        },
+        ClientResponseDto::Incomplete { .. } => StatusCode::ACCEPTED,
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } if error.class == WireErrorClassDto::PolicyDenied => StatusCode::FORBIDDEN,
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } if error.class == WireErrorClassDto::MalformedCommand => StatusCode::BAD_REQUEST,
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Infrastructure { .. },
+        }
+        | ClientResponseDto::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+        _ => StatusCode::BAD_GATEWAY,
+    };
+    typed_json_response(status, response)
 }
 
 fn typed_json_response(status: StatusCode, response: ClientResponseDto) -> Response {

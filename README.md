@@ -28,7 +28,7 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | Product name | USTC Campus Agent |
 | Default first-party Plugins | `ustc.affairs-navigator`, `ustc.change-radar`, `ustc.opportunity-graph` |
 | Implementation order | ChangeRadar foundation → Affairs Navigator → ChangeRadar feed → Opportunity Graph integration |
-| Course Planning | Retained bounded offline spike inside Opportunity Graph; not Market/runtime completion |
+| Course Planning | Retained deterministic pack inside the active consent/profile/Market/Web Opportunity Graph composition candidate; production SSO/live-source completion is not claimed |
 | Chinese name | TBD；首版使用中文描述“面向科大学生的插件化校园智能体” |
 | GitHub organization | Deferred |
 | Market repository | Deferred；当前为 monorepo 内 `market/` logical authority boundary |

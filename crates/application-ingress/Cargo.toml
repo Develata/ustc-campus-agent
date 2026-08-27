@@ -17,6 +17,8 @@ sha2.workspace = true
 time.workspace = true
 affairs-navigator = { path = "../affairs-navigator" }
 ustc-campus-agent-change-radar = { path = "../change-radar" }
+ustc-campus-agent-course-planning = { path = "../course-planning" }
+ustc-campus-agent-opportunity-graph = { path = "../opportunity-graph" }
 ustc-campus-agent-client-protocol = { path = "../client-protocol" }
 ustc-campus-agent-core = { path = "../platform-core" }
 

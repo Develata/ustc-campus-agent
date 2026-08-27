@@ -272,7 +272,9 @@ pub fn reduce_response(response: ClientResponseDto) -> ClientState {
                 terminal: Some(terminal),
             }
         }
-        ClientResponseDto::ChangeFeedAccepted { .. } => ClientState::Error {
+        ClientResponseDto::ChangeFeedAccepted { .. }
+        | ClientResponseDto::OpportunityAccepted { .. }
+        | ClientResponseDto::OpportunityRejected { .. } => ClientState::Error {
             error_class: ErrorClass::Protocol,
             wire_code: static_text(UNEXPECTED_PRODUCT_RESPONSE_CODE),
             retryability: RetryabilityDto::NotRetryable,

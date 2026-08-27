@@ -12,6 +12,8 @@ pub mod m00_projection;
 pub mod m70_projection;
 pub mod m70_service;
 pub mod m71_projection;
+pub mod m72_projection;
+pub mod m72_service;
 pub mod persistence;
 pub mod service;
 
@@ -19,6 +21,10 @@ pub use capability::{CapabilityError, CapabilityIssuer, StoredPublicAuthorizatio
 pub use m70_service::{
     ChangeFeedInvocationError, ChangeFeedInvocationOutcome, ChangeFeedInvocationPort,
     M10ChangeFeedService,
+};
+pub use m72_service::{
+    M10OpportunityService, OpportunityInvocationError, OpportunityInvocationOutcome,
+    OpportunityInvocationPort,
 };
 pub use persistence::{
     FileRecordStore, RecordState, StoreError, StoredReadPolicy, StoredRecord, capsule_digest,

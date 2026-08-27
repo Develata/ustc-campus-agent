@@ -145,7 +145,9 @@ pub enum OpportunityPlanningError {
     ProfileDeleted,
     SourceNotCurrent(SourceRevisionHealth),
     SourceUnavailable(OpportunitySourcePortError),
-    PlanningFailed(String),
+    InvalidPlanningBounds,
+    InvalidProfileFacts,
+    PlanningFailed,
     ResultSerializationFailed,
 }
 
@@ -238,6 +240,9 @@ impl OpportunityPlanReceipt {
     }
 }
 
+pub const MAX_OPPORTUNITY_PLAN_RESULTS: usize = 8;
+pub const MAX_OPPORTUNITY_BEAM_WIDTH: usize = 4_096;
+
 pub struct OpportunityPlanningService<'a, R: OpportunityProfileRepository, S: M60OpportunityPort> {
     repository: &'a R,
     source: &'a S,
@@ -261,6 +266,13 @@ impl<'a, R: OpportunityProfileRepository, S: M60OpportunityPort>
         profile_snapshot_id: &ProfileSnapshotId,
         config: PlanningConfig,
     ) -> Result<OpportunityPlanReceipt, OpportunityPlanningError> {
+        if config.max_results == 0
+            || config.max_results > MAX_OPPORTUNITY_PLAN_RESULTS
+            || config.beam_width == 0
+            || config.beam_width > MAX_OPPORTUNITY_BEAM_WIDTH
+        {
+            return Err(OpportunityPlanningError::InvalidPlanningBounds);
+        }
         let record = match self
             .repository
             .lookup(principal, profile_snapshot_id)
@@ -283,13 +295,19 @@ impl<'a, R: OpportunityProfileRepository, S: M60OpportunityPort>
             health => return Err(OpportunityPlanningError::SourceNotCurrent(health)),
         }
 
+        if !self.catalog.profile_facts_are_known(record.profile()) {
+            return Err(OpportunityPlanningError::InvalidProfileFacts);
+        }
         let qualifications = self.catalog.qualifications(record.profile());
         let fixture = self.catalog.planning_fixture(record.profile());
         let decision = match plan_fixture(&fixture, config) {
             Ok(result) => OpportunityPlanDecision::Planned { result },
             Err(PlanningError::NoFeasiblePlan) => OpportunityPlanDecision::NoFeasiblePlan,
-            Err(error) => {
-                return Err(OpportunityPlanningError::PlanningFailed(error.to_string()));
+            Err(PlanningError::InvalidFixture { .. }) => {
+                return Err(OpportunityPlanningError::InvalidProfileFacts);
+            }
+            Err(PlanningError::ReadFixture { .. } | PlanningError::DecodeFixture { .. }) => {
+                return Err(OpportunityPlanningError::PlanningFailed);
             }
         };
         let decision_bytes = serde_json::to_vec(&decision)

@@ -12,6 +12,9 @@ mod affairs_fixture;
 mod affairs_invocation;
 mod change_fixture;
 mod change_invocation;
+mod opportunity_fixture;
+mod opportunity_invocation;
+mod opportunity_persistence;
 mod web;
 
 pub use web::web_router;
@@ -19,7 +22,7 @@ pub use web::web_router;
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use affairs_fixture::{AffairsFixture, DurableIdempotencyStore, FixturePorts};
@@ -27,10 +30,15 @@ use affairs_invocation::AffairsInvocationSpine;
 use affairs_navigator::AffairsGetService;
 use change_fixture::ChangeRadarFixture;
 use change_invocation::ChangeInvocationSpine;
-use ustc_campus_agent_application_ingress::{FileRecordStore, M10ChangeFeedService, M10Service};
+use opportunity_fixture::OpportunityFixture;
+use opportunity_invocation::{OpportunityAuthorityStore, OpportunityInvocationSpine};
+use opportunity_persistence::DurableOpportunityProfileRepository;
+use ustc_campus_agent_application_ingress::{
+    FileRecordStore, M10ChangeFeedService, M10OpportunityService, M10Service,
+};
 use ustc_campus_agent_client_protocol::{
     ClientIntentDto, ClientResponseDto, SubmitAffairsGetDto, SubmitChangeFeedDto,
-    ViewerAuthorizationDto, read_frame, write_frame,
+    SubmitOpportunityDto, ViewerAuthorizationDto, read_frame, write_frame,
 };
 
 const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
@@ -45,8 +53,15 @@ const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct AffairsComposition {
     fixture: AffairsFixture,
     change: Option<ChangeRadarFixture>,
+    opportunity: Option<OpportunityComposition>,
     store: FileRecordStore,
     idempotency: DurableIdempotencyStore,
+}
+
+struct OpportunityComposition {
+    fixture: OpportunityFixture,
+    authority: OpportunityAuthorityStore,
+    profiles: Mutex<DurableOpportunityProfileRepository>,
 }
 
 impl AffairsComposition {
@@ -73,6 +88,7 @@ impl AffairsComposition {
         Ok(Self {
             fixture,
             change: None,
+            opportunity: None,
             store,
             idempotency,
         })
@@ -89,6 +105,75 @@ impl AffairsComposition {
         let mut composition = Self::open(fixture_path, store_path, idempotency_path)?;
         composition.change = Some(ChangeRadarFixture::load(change_fixture_path)?);
         Ok(composition)
+    }
+
+    /// Opens the shared Affairs + Opportunity Graph composition. This remains
+    /// independent of ChangeRadar so one Plugin may be disabled without
+    /// breaking the other product projections.
+    pub fn open_with_opportunity(
+        fixture_path: &Path,
+        opportunity_fixture_path: &Path,
+        opportunity_catalog_path: &Path,
+        opportunity_profile_store_path: &Path,
+        store_path: &Path,
+        idempotency_path: &Path,
+    ) -> Result<Self, String> {
+        let mut composition = Self::open(fixture_path, store_path, idempotency_path)?;
+        composition.attach_opportunity(
+            opportunity_fixture_path,
+            opportunity_catalog_path,
+            opportunity_profile_store_path,
+        )?;
+        Ok(composition)
+    }
+
+    /// Opens all three first-party Plugin product paths in one composition.
+    pub fn open_with_change_and_opportunity(
+        fixture_path: &Path,
+        change_fixture_path: &Path,
+        opportunity_fixture_path: &Path,
+        opportunity_catalog_path: &Path,
+        opportunity_profile_store_path: &Path,
+        store_path: &Path,
+        idempotency_path: &Path,
+    ) -> Result<Self, String> {
+        let mut composition = Self::open_with_change(
+            fixture_path,
+            change_fixture_path,
+            store_path,
+            idempotency_path,
+        )?;
+        composition.attach_opportunity(
+            opportunity_fixture_path,
+            opportunity_catalog_path,
+            opportunity_profile_store_path,
+        )?;
+        Ok(composition)
+    }
+
+    fn attach_opportunity(
+        &mut self,
+        fixture_path: &Path,
+        catalog_path: &Path,
+        profile_store_path: &Path,
+    ) -> Result<(), String> {
+        let fixture = OpportunityFixture::load(fixture_path, catalog_path)?;
+        let authority = OpportunityAuthorityStore::new(
+            self.fixture.session.tenant_id().clone(),
+            self.fixture.session.user_id().clone(),
+            fixture.market_enabled,
+            fixture.market_grant_active,
+            &fixture.source_evidence_digest,
+            fixture.authority_mutation,
+        )
+        .map_err(|error| format!("opportunity Market authority open failed: {error:?}"))?;
+        let profiles = DurableOpportunityProfileRepository::open(profile_store_path, 64, 256)?;
+        self.opportunity = Some(OpportunityComposition {
+            fixture,
+            authority,
+            profiles: Mutex::new(profiles),
+        });
+        Ok(())
     }
 
     /// Handles one `SubmitAffairsGet` intent through the real M00 admission
@@ -148,6 +233,36 @@ impl AffairsComposition {
         m10.submit(request, &mut ports)
     }
 
+    /// Handles one consent-bound tenant-private Opportunity operation through
+    /// M00, M10, current Market authority, Harness/ToolGateway and M72.
+    #[must_use]
+    pub fn handle_opportunity_submit(&self, request: &SubmitOpportunityDto) -> ClientResponseDto {
+        let Some(opportunity) = &self.opportunity else {
+            return ClientResponseDto::Unavailable;
+        };
+        let descriptor = match opportunity.fixture.descriptor(&request.command) {
+            Ok(descriptor) => descriptor,
+            Err(_) => return ClientResponseDto::Unavailable,
+        };
+        let invocation = OpportunityInvocationSpine::new(
+            &opportunity.profiles,
+            &opportunity.fixture.source,
+            &opportunity.fixture.catalog,
+            &opportunity.authority,
+            opportunity.fixture.tool_failure,
+            opportunity.fixture.invocation_counters.clone(),
+        );
+        let m10 = M10OpportunityService::new(&invocation);
+        let mut ports = FixturePorts::new(
+            self.idempotency.clone(),
+            descriptor,
+            self.fixture.now,
+            self.fixture.policy_snapshot_id.clone(),
+            Some(self.fixture.session.clone()),
+        );
+        m10.submit(request, &mut ports)
+    }
+
     /// Returns ChangeRadar `(effect_intents, plugin_executions,
     /// effect_receipts)` observed by the bounded invocation spine.
     #[must_use]
@@ -158,6 +273,39 @@ impl AffairsComposition {
                 change.invocation_counters.executions(),
                 change.invocation_counters.receipts(),
             )
+        })
+    }
+
+    /// Returns Opportunity `(effect_intents, plugin_executions,
+    /// effect_receipts)` observed by the bounded invocation spine.
+    #[must_use]
+    pub fn opportunity_invocation_counts(&self) -> (u64, u64, u64) {
+        self.opportunity.as_ref().map_or((0, 0, 0), |opportunity| {
+            (
+                opportunity.fixture.invocation_counters.intents(),
+                opportunity.fixture.invocation_counters.executions(),
+                opportunity.fixture.invocation_counters.receipts(),
+            )
+        })
+    }
+
+    /// Returns Opportunity M60 source-currentness checks.
+    #[must_use]
+    pub fn opportunity_m60_call_count(&self) -> u64 {
+        self.opportunity
+            .as_ref()
+            .map_or(0, |opportunity| opportunity.fixture.source.calls())
+    }
+
+    /// Returns `(active_private_payloads, durable_tombstones)` without exposing
+    /// tenant-private profile values.
+    #[must_use]
+    pub fn opportunity_private_state_counts(&self) -> (usize, usize) {
+        let Some(opportunity) = &self.opportunity else {
+            return (0, 0);
+        };
+        opportunity.profiles.lock().map_or((0, 0), |profiles| {
+            (profiles.private_payload_count(), profiles.tombstone_count())
         })
     }
 
@@ -254,6 +402,9 @@ impl AffairsComposition {
         let response = match intent {
             ClientIntentDto::SubmitAffairsGet { request } => self.handle_submit(&request),
             ClientIntentDto::SubmitChangeFeed { request } => self.handle_change_submit(&request),
+            ClientIntentDto::SubmitOpportunity { request } => {
+                self.handle_opportunity_submit(&request)
+            }
             ClientIntentDto::Lookup { command_id, viewer } => {
                 self.handle_lookup(command_id.as_str(), &viewer)
             }

@@ -33,6 +33,10 @@ class MarketContractTests(unittest.TestCase):
         shutil.copytree(REPO_ROOT / "market", self.root / "market")
         shutil.copytree(REPO_ROOT / "plugins", self.root / "plugins")
         shutil.copytree(REPO_ROOT / "docs/contracts", self.root / "docs/contracts")
+        shutil.copytree(
+            REPO_ROOT / "fixtures/opportunity-graph",
+            self.root / "fixtures/opportunity-graph",
+        )
         self.original_root = cast(Path, getattr(checker, "ROOT"))
         setattr(checker, "ROOT", self.root)
 
@@ -43,6 +47,11 @@ class MarketContractTests(unittest.TestCase):
     def check_market(self) -> list[str]:
         issues: list[str] = []
         checker.check_market(issues)
+        return issues
+
+    def check_course_fixture(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_course_fixture(issues)
         return issues
 
     def manifest_path(self, package_id: str) -> Path:
@@ -75,6 +84,35 @@ class MarketContractTests(unittest.TestCase):
     def test_three_default_first_party_manifests_pass(self) -> None:
         self.assertEqual(self.check_market(), [])
 
+    def test_course_catalog_three_way_digest_binding_fails_closed(self) -> None:
+        self.assertEqual(self.check_course_fixture(), [])
+        resource_path = (
+            self.root
+            / "market/packages/ustc.opportunity-graph/components/course-planning-resource-pack.json"
+        )
+        resource = json.loads(resource_path.read_text(encoding="utf-8"))
+        resource["resourceSha256"] = "0" * 64
+        resource_path.write_text(json.dumps(resource) + "\n", encoding="utf-8")
+        self.assertTrue(
+            any(
+                "Course Planning catalog digest binding drift" in issue
+                for issue in self.check_course_fixture()
+            )
+        )
+        native_path = (
+            self.root
+            / "market/packages/ustc.opportunity-graph/components/native-rust-component.json"
+        )
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+        native["operations"] = native["operations"][:-1]
+        native_path.write_text(json.dumps(native) + "\n", encoding="utf-8")
+        self.assertTrue(
+            any(
+                "Opportunity native-component identity/operation drift" in issue
+                for issue in self.check_course_fixture()
+            )
+        )
+
     def test_missing_default_package_fails_closed(self) -> None:
         shutil.rmtree(self.root / "market/packages/ustc.change-radar")
         self.assertTrue(
@@ -96,13 +134,20 @@ class MarketContractTests(unittest.TestCase):
         )
 
     def test_default_package_cannot_auto_grant_private_capability(self) -> None:
-        package_id = "ustc.opportunity-graph"
-        manifest = self.load_manifest(package_id)
-        capabilities = cast(list[str], manifest["capabilities"])
-        capabilities.append("user.own_academic_snapshot.read")
-        self.write_manifest(package_id, manifest)
+        registry = self.load_registry()
+        rows = cast(list[dict[str, object]], registry["capabilities"])
+        private = next(
+            row
+            for row in rows
+            if row.get("id") == "user.own_academic_snapshot.read"
+        )
+        private["autoGrant"] = "FirstPartyDefaultOnly"
+        private["confirmationDefault"] = "Allow"
+        self.write_registry(registry)
+        issues = self.check_market()
+        self.assertTrue(any("capability registry axes drifted" in issue for issue in issues))
         self.assertTrue(
-            any("capability is not auto-grant-eligible" in issue for issue in self.check_market())
+            any("capability registry unsafe auto-grant tuple" in issue for issue in issues)
         )
 
     def test_capability_registry_rejects_legacy_fields_and_schema_drift(self) -> None:

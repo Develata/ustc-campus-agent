@@ -78,6 +78,8 @@ fn current_manifests_load_with_exact_literal_digests() {
             "ustc.affairs-navigator",
             ImplementationStatus::Planned,
             "sha256:49900ac159dc1a8b381554005ed0cddffa76ebc323d81d6bdbf204f72fd1a018",
+            0,
+            "sha256:ce03a5bf0a3675afa2477fadebce78fb07009f54d440991b6bfcf010ecb1c388",
             "sha256:4db8de62654354ec7ae17c4cae255b371a6b4681cfc5786cc0622b1607e31e05",
             "sha256:940df79a35cd98c66810e6c73ed046927f277fe814ce81dc1cbc313cf437d242",
         ),
@@ -86,6 +88,8 @@ fn current_manifests_load_with_exact_literal_digests() {
             "ustc.change-radar",
             ImplementationStatus::Development,
             "sha256:d83e3feffccc6a6f1a865c4b470c9691c81981f70d006748209ece9f5ffeaaae",
+            0,
+            "sha256:ce03a5bf0a3675afa2477fadebce78fb07009f54d440991b6bfcf010ecb1c388",
             "sha256:7fc764a879638e239f51959b73d3c6d18ba99529b556b634bd2cf69cafb8874a",
             "sha256:2678a32807b965b811ade09e3d3b8ab7815ab1b58f37105b357bc62f50e42bc2",
         ),
@@ -93,24 +97,36 @@ fn current_manifests_load_with_exact_literal_digests() {
             OPPORTUNITY,
             "ustc.opportunity-graph",
             ImplementationStatus::Development,
-            "sha256:90cfaefae8e3e04059b0aaf416bb410e5ddc8ab91f5d7e1083e0c957c8c341a3",
-            "sha256:2a51dfa8222213eef541e2adfcc79ffcb893c5fcabf92c946bffa71ea10061b6",
-            "sha256:77295dfc45113992601b436b4613cc34fbc5f88f74f11aecebc8b6587852e102",
+            "sha256:a3c66f29cf2344f4add13026f53c9a4ca64117f156e2353a2a1c3d554c527177",
+            2,
+            "sha256:b5db7ca1f13da4dd8282c998657d5661a41a0d4a6bc6d7cafc1656d19ea0bd8b",
+            "sha256:0327438c481dce6d3957d6c13d6f2a483003847c43da8c99fc58b9166ef8090c",
+            "sha256:fc80396957b6f6df93d46513e7e0d0ba3eaf1c0ba68fcb0d15c54cd26486e407",
         ),
     ];
 
-    for (source, id, status, package_digest, capability_digest, source_policy_digest) in cases {
+    for (
+        source,
+        id,
+        status,
+        package_digest,
+        component_count,
+        component_digest,
+        capability_digest,
+        source_policy_digest,
+    ) in cases
+    {
         let manifest = load(source);
 
         assert_eq!(manifest.package_id().as_str(), id);
         assert_eq!(manifest.package_version().as_str(), "0.1.0");
         assert_eq!(manifest.publisher(), "first-party");
         assert_eq!(manifest.implementation_status(), status);
-        assert!(manifest.components().is_empty());
+        assert_eq!(manifest.components().len(), component_count);
         assert_eq!(manifest.package_digest().as_str(), package_digest);
         assert_eq!(
             manifest.component_declaration_set_digest().as_str(),
-            "sha256:ce03a5bf0a3675afa2477fadebce78fb07009f54d440991b6bfcf010ecb1c388"
+            component_digest
         );
         assert_eq!(
             manifest.capability_manifest_digest().as_str(),
@@ -485,7 +501,7 @@ fn catalog_read_model_is_exact_ordered_and_duplicate_safe() {
     assert_eq!(model.catalog_revision(), &revision);
     assert_eq!(
         model.catalog_digest().as_str(),
-        "sha256:34527231b861a117c1c345ced1e5a68a1b62b06d4340f97ddcfff6e06a4ffffa"
+        "sha256:ae2b36fcb2c74c448f8b32c6cc9c725c7a09d6f0bb77de3288924c12b5fc9b36"
     );
 
     let id = parsed_package_id("ustc.change-radar");
@@ -516,9 +532,14 @@ fn catalog_read_model_is_exact_ordered_and_duplicate_safe() {
 }
 
 #[test]
-fn catalog_metadata_does_not_claim_runtime_readiness() {
-    for manifest in [load(AFFAIRS), load(CHANGE_RADAR), load(OPPORTUNITY)] {
-        assert!(manifest.components().is_empty());
+fn catalog_metadata_does_not_claim_all_package_runtime_readiness() {
+    let cases = [
+        (load(AFFAIRS), 0),
+        (load(CHANGE_RADAR), 0),
+        (load(OPPORTUNITY), 2),
+    ];
+    for (manifest, component_count) in cases {
+        assert_eq!(manifest.components().len(), component_count);
         assert!(matches!(
             manifest.implementation_status(),
             ImplementationStatus::Planned | ImplementationStatus::Development

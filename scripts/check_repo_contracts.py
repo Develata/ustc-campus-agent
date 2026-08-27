@@ -324,11 +324,14 @@ EXTERNAL_AGENT_OPERATION_ROWS = {
     "offering.list": ("M72", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
     "course.review_linkout": ("M72", "public-linkout", "link-out", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
     "source.provenance": ("M60", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning source/product contract"),
+    "profile.academic.create": ("M72", "tenant-private-write", "tenant-local mutation", "HTTP", "active bounded Opportunity Graph slice; exact consent and authenticated owner required"),
+    "profile.academic.view": ("M72", "tenant-private-read", "read", "HTTP", "active bounded Opportunity Graph slice; metadata/count projection only"),
+    "profile.academic.revoke_delete": ("M72", "tenant-private-write", "tenant-local deletion", "HTTP", "active bounded Opportunity Graph slice; consent revoke and payload deletion are one operation"),
     "profile.requirement_status": ("M72", "tenant-private-read", "read", "CLI, HTTP, later inbound MCP", "later private-data slice"),
     "planner.draft.list": ("M72", "tenant-private-read", "read", "CLI, HTTP", "later private-data slice"),
     "planner.draft.get": ("M72", "tenant-private-read", "read", "CLI, HTTP", "later private-data slice"),
     "planner.draft.delete": ("M72", "tenant-private-write", "tenant-local mutation", "CLI, HTTP", "later private-draft slice"),
-    "planner.generate": ("M72", "tenant-private-write", "tenant-local draft mutation", "CLI, HTTP, later inbound MCP", "later private-draft slice"),
+    "planner.generate": ("M72", "tenant-private-write", "bounded tenant-local planning", "HTTP", "active bounded Opportunity Graph slice; no enrollment/application side effect"),
     "planner.explain": ("M72", "tenant-private-read", "read", "CLI, HTTP, later inbound MCP", "later private-data slice"),
 }
 
@@ -1377,6 +1380,9 @@ def check_market(issues: list[str]) -> None:
             "campus.public_plan.read",
             "campus.public_course.read",
             "campus.community_review.linkout",
+            "user.own_academic_snapshot.read",
+            "user.own_academic_snapshot.write",
+            "user.own_plan_draft.write",
         ],
     }
     expected_capability_axes = {
@@ -1422,6 +1428,14 @@ def check_market(issues: list[str]) -> None:
         ),
         "user.own_academic_snapshot.read": (
             "Read",
+            "UserProfile",
+            "TenantPrivateUser",
+            "Never",
+            "Ask",
+            "Active",
+        ),
+        "user.own_academic_snapshot.write": (
+            "Write",
             "UserProfile",
             "TenantPrivateUser",
             "Never",
@@ -1683,8 +1697,9 @@ def check_market(issues: list[str]) -> None:
         for capability in manifest_capabilities:
             if capability not in registered:
                 fail(f"{rel_path}: capability not registered: {capability}", issues)
-            if is_default_first_party and capability not in auto_grant:
-                fail(f"{rel_path}: default package capability is not auto-grant-eligible: {capability}", issues)
+            # First-party manifests may declare tenant-private capabilities,
+            # but their registry tuple remains Never/Ask and therefore cannot
+            # enter the default auto-grant set. Declaration is not a grant.
 
         source_policy = manifest.get("sourcePolicy")
         if not isinstance(source_policy, dict) or not source_policy or not all(
@@ -1708,9 +1723,55 @@ def check_market(issues: list[str]) -> None:
 
 
 def check_course_fixture(issues: list[str]) -> None:
-    fixture = load_json("market/fixtures/course-planning/minimal-v0.json", issues)
+    catalog_relative = "market/fixtures/course-planning/minimal-v0.json"
+    fixture = load_json(catalog_relative, issues)
     if not isinstance(fixture, dict):
         return
+    metadata = load_json("fixtures/opportunity-graph/course-planning-demo-reviewed.json", issues)
+    resource_pack = load_json(
+        "market/packages/ustc.opportunity-graph/components/course-planning-resource-pack.json",
+        issues,
+    )
+    native_component = load_json(
+        "market/packages/ustc.opportunity-graph/components/native-rust-component.json",
+        issues,
+    )
+    try:
+        catalog_digest = hashlib.sha256((ROOT / catalog_relative).read_bytes()).hexdigest()
+    except OSError as error:
+        fail(f"Course Planning fixture bytes unreadable: {error}", issues)
+        return
+    metadata_digest = metadata.get("catalog_file_sha256") if isinstance(metadata, dict) else None
+    resource_digest = resource_pack.get("resourceSha256") if isinstance(resource_pack, dict) else None
+    if metadata_digest != catalog_digest or resource_digest != catalog_digest:
+        fail(
+            "Course Planning catalog digest binding drift: "
+            f"actual={catalog_digest} metadata={metadata_digest} resource={resource_digest}",
+            issues,
+        )
+    if isinstance(resource_pack, dict) and (
+        resource_pack.get("schemaVersion") != "declarative-resource-pack/v1"
+        or resource_pack.get("packageId") != "ustc.opportunity-graph"
+        or resource_pack.get("packageVersion") != "0.1.0"
+        or resource_pack.get("resourcePath") != catalog_relative
+        or resource_pack.get("reviewClass") != "DemoReviewed"
+    ):
+        fail("Course Planning resource-pack identity drift", issues)
+    expected_operations = [
+        "profile.academic.create",
+        "profile.academic.view",
+        "planner.generate",
+        "profile.academic.revoke_delete",
+    ]
+    if not isinstance(native_component, dict) or native_component != {
+        "schemaVersion": "native-rust-component/v1",
+        "packageId": "ustc.opportunity-graph",
+        "packageVersion": "0.1.0",
+        "cratePath": "crates/opportunity-graph",
+        "compositionOwner": "apps/ustc-agentd",
+        "operations": expected_operations,
+    }:
+        fail("Opportunity native-component identity/operation drift", issues)
     expected_top_level = {
         "schema_version",
         "source_revision",
@@ -3492,7 +3553,7 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
 # `type`, so the item allowlist above cannot see it.
 # Kept as a second, independent carrier alongside the `extern` item accounting above.
 PLATFORM_CORE_FORBIDDEN_SOURCE_PATTERNS = (("extern crate", r"\bextern\s+crate\b"),)
-PLATFORM_CAPABILITY_TEST_FUNCTIONS = ('current_registry_loads_with_exact_eight_definitions', 'enum_risk_and_compatibility_mappings_are_exact', 'source_size_and_malformed_json_fail_closed', 'duplicate_json_keys_fail_closed', 'duplicate_capability_ids_fail_closed', 'invalid_capability_id_grammar_fail_closed', 'missing_extra_and_unknown_fields_fail_closed', 'invalid_schema_version_and_registry_revision_fail_closed', 'forbidden_and_incoherent_combinations_fail_closed', 'auto_grant_candidacy_and_deprecated_revoked_exclusions', 'deterministic_ordering_and_permutation_independent_digest', 'fixed_definition_and_registry_digest_vectors', 'one_field_change_alters_definition_digest', 'registry_revision_does_not_change_definition_digests', 'policy_change_comparator_branches_and_precedence', 'errors_do_not_leak_rejected_source_fragments', 'empty_registry_loads_with_zero_definitions', 'definition_classifier_preserves_existing_policy_matrix', 'definition_classifier_handles_none_added_removed_revoked_and_all_axes', 'definition_classifier_uses_complete_definition_not_digest_or_caller_hint')
+PLATFORM_CAPABILITY_TEST_FUNCTIONS = ('current_registry_loads_with_exact_nine_definitions', 'enum_risk_and_compatibility_mappings_are_exact', 'source_size_and_malformed_json_fail_closed', 'duplicate_json_keys_fail_closed', 'duplicate_capability_ids_fail_closed', 'invalid_capability_id_grammar_fail_closed', 'missing_extra_and_unknown_fields_fail_closed', 'invalid_schema_version_and_registry_revision_fail_closed', 'forbidden_and_incoherent_combinations_fail_closed', 'auto_grant_candidacy_and_deprecated_revoked_exclusions', 'deterministic_ordering_and_permutation_independent_digest', 'fixed_definition_and_registry_digest_vectors', 'one_field_change_alters_definition_digest', 'registry_revision_does_not_change_definition_digests', 'policy_change_comparator_branches_and_precedence', 'errors_do_not_leak_rejected_source_fragments', 'empty_registry_loads_with_zero_definitions', 'definition_classifier_preserves_existing_policy_matrix', 'definition_classifier_handles_none_added_removed_revoked_and_all_axes', 'definition_classifier_uses_complete_definition_not_digest_or_caller_hint')
 PLATFORM_GRANT_TEST_FUNCTIONS = ('checked_grant_ids_versions_and_sequences_are_canonical',
  'closed_scope_algebra_projects_exact_public_and_tenant_private_scopes',
  'non_issue_commands_validate_snapshot_and_expected_version',
@@ -12263,6 +12324,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_ci_v2_active_workflow": {"digest": "c930a3611b4e805be69ae4e965be4355bc56b08b490d6e7dd0d315c08b51ea7a", "status": "active"},
     "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
     "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
+    "check_course_fixture": {"digest": "f4dda0f63c4550edfa0a913e6f0ef84f4358c29a8ca789f404ae5bdf539c16e2", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
     "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},

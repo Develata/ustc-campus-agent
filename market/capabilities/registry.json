@@ -1,6 +1,6 @@
 {
   "schemaVersion": "capability-registry/v1",
-  "registryRevision": "capability-registry:2026-07-29-01",
+  "registryRevision": "capability-registry:2026-08-28-01",
   "capabilities": [
     {
       "id": "campus.public_rules.read",
@@ -50,6 +50,15 @@
     {
       "id": "user.own_academic_snapshot.read",
       "effectClass": "Read",
+      "dataClass": "UserProfile",
+      "scopeKind": "TenantPrivateUser",
+      "autoGrant": "Never",
+      "confirmationDefault": "Ask",
+      "status": "Active"
+    },
+    {
+      "id": "user.own_academic_snapshot.write",
+      "effectClass": "Write",
       "dataClass": "UserProfile",
       "scopeKind": "TenantPrivateUser",
       "autoGrant": "Never",

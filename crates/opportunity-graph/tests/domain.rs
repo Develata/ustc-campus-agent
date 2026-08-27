@@ -343,3 +343,51 @@ fn exact_consent_field_set_is_required_and_no_feasible_plan_still_returns_qualif
             .any(|item| !item.eligible() && !item.blockers().is_empty())
     );
 }
+
+#[test]
+fn planning_bounds_and_debug_redaction_fail_closed_before_source_access() {
+    let (catalog, profile) = catalog_and_profile();
+    let owner = principal("tenant:private-sentinel", "user:private-sentinel");
+    let principal_debug = format!("{owner:?}");
+    assert!(!principal_debug.contains("tenant:private-sentinel"));
+    assert!(!principal_debug.contains("user:private-sentinel"));
+    let profile_debug = format!("{profile:?}");
+    assert!(!profile_debug.contains("min_credits"));
+    assert!(!profile_debug.contains("max_credits"));
+    assert!(!profile_debug.contains("MATH1001"));
+
+    let mut repository = InMemoryOpportunityProfileRepository::new(4, 8).unwrap();
+    let record = OpportunityProfileService::new(&mut repository)
+        .create_profile(owner.clone(), consent(), profile.clone())
+        .unwrap();
+    let replay = OpportunityProfileService::new(&mut repository)
+        .create_profile(owner.clone(), consent(), profile)
+        .unwrap();
+    assert_eq!(replay, record);
+    assert_eq!(repository.private_payload_count(), 1);
+
+    let source = SourcePort::current();
+    assert!(matches!(
+        OpportunityPlanningService::new(&repository, &source, &catalog).plan(
+            &owner,
+            record.profile_snapshot_id(),
+            PlanningConfig {
+                max_results: MAX_OPPORTUNITY_PLAN_RESULTS + 1,
+                beam_width: MAX_OPPORTUNITY_BEAM_WIDTH,
+            }
+        ),
+        Err(OpportunityPlanningError::InvalidPlanningBounds)
+    ));
+    assert!(matches!(
+        OpportunityPlanningService::new(&repository, &source, &catalog).plan(
+            &owner,
+            record.profile_snapshot_id(),
+            PlanningConfig {
+                max_results: MAX_OPPORTUNITY_PLAN_RESULTS,
+                beam_width: MAX_OPPORTUNITY_BEAM_WIDTH + 1,
+            }
+        ),
+        Err(OpportunityPlanningError::InvalidPlanningBounds)
+    ));
+    assert_eq!(source.calls.load(Ordering::SeqCst), 0);
+}

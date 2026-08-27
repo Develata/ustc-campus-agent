@@ -90,8 +90,8 @@ impl fmt::Debug for AuthenticatedPrincipal {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("AuthenticatedPrincipal")
-            .field("tenant_id", &self.tenant_id.as_str())
-            .field("user_id", &self.user_id.as_str())
+            .field("tenant_id", &"[REDACTED]")
+            .field("user_id", &"[REDACTED]")
             .finish()
     }
 }
@@ -206,8 +206,7 @@ impl fmt::Debug for AcademicProfileInput {
                 "completed_course_count",
                 &self.snapshot.completed_courses.len(),
             )
-            .field("min_credits", &self.snapshot.min_credits)
-            .field("max_credits", &self.snapshot.max_credits)
+            .field("credit_bounds", &"[REDACTED]")
             .field("preference_count", &self.snapshot.preference_weights.len())
             .finish()
     }
@@ -219,6 +218,7 @@ pub struct DeletionReceipt {
     profile_snapshot_id: ProfileSnapshotId,
     consent_id: ConsentId,
     deleted_at_unix_seconds: i64,
+    deleted_at_unix_nanos: i128,
 }
 
 impl DeletionReceipt {
@@ -246,7 +246,19 @@ impl DeletionReceipt {
             profile_snapshot_id,
             consent_id,
             deleted_at_unix_seconds: deleted_at.unix_timestamp(),
+            deleted_at_unix_nanos: deleted_at.unix_timestamp_nanos(),
         })
+    }
+
+    /// Reconstructs a deletion receipt by recomputing its deterministic identity.
+    /// Persistence adapters cannot inject an arbitrary receipt ID.
+    pub fn restore(
+        principal: &AuthenticatedPrincipal,
+        profile_snapshot_id: ProfileSnapshotId,
+        consent_id: ConsentId,
+        deleted_at: OffsetDateTime,
+    ) -> Result<Self, OpportunityValueError> {
+        Self::mint(principal, profile_snapshot_id, consent_id, deleted_at)
     }
 
     #[must_use]
@@ -267,6 +279,11 @@ impl DeletionReceipt {
     #[must_use]
     pub const fn deleted_at_unix_seconds(&self) -> i64 {
         self.deleted_at_unix_seconds
+    }
+
+    #[must_use]
+    pub const fn deleted_at_unix_nanos(&self) -> i128 {
+        self.deleted_at_unix_nanos
     }
 }
 
@@ -290,6 +307,18 @@ impl ProfileTombstone {
             consent_id,
             deletion_receipt,
         }
+    }
+
+    /// Reconstructs a tombstone only from a recomputed deletion receipt.
+    pub fn restore(
+        principal: &AuthenticatedPrincipal,
+        consent_id: ConsentId,
+        deletion_receipt: DeletionReceipt,
+    ) -> Result<Self, OpportunityValueError> {
+        if deletion_receipt.consent_id() != &consent_id {
+            return Err(OpportunityValueError::InvalidId);
+        }
+        Ok(Self::new(principal, consent_id, deletion_receipt))
     }
 
     #[must_use]

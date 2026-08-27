@@ -9,6 +9,17 @@ const errorMessage = document.querySelector("#error-message");
 const radarButton = document.querySelector("#radar-load");
 const radarStatus = document.querySelector("#radar-status");
 const radarResult = document.querySelector("#radar-result");
+const opportunityConsent = document.querySelector("#opportunity-consent");
+const opportunityCreate = document.querySelector("#opportunity-create");
+const opportunityView = document.querySelector("#opportunity-view");
+const opportunityPlan = document.querySelector("#opportunity-plan");
+const opportunityDelete = document.querySelector("#opportunity-delete");
+const opportunityStatus = document.querySelector("#opportunity-status");
+const opportunityProfile = document.querySelector("#opportunity-profile");
+const opportunityPlanResult = document.querySelector("#opportunity-plan-result");
+const opportunityDeleted = document.querySelector("#opportunity-deleted");
+const OPPORTUNITY_PROFILE_HINT = "ustc-campus-agent/opportunity-profile-id/v1";
+let opportunityProfileId = null;
 
 function clear(element) {
   while (element.firstChild) {
@@ -374,6 +385,285 @@ async function loadChangeFeed() {
   }
 }
 
+function setOpportunityHint(value) {
+  opportunityProfileId = value;
+  try {
+    if (value) {
+      window.localStorage.setItem(OPPORTUNITY_PROFILE_HINT, value);
+    } else {
+      window.localStorage.removeItem(OPPORTUNITY_PROFILE_HINT);
+    }
+  } catch (_error) {
+    // The server remains authoritative; storage is only a best-effort UI hint.
+  }
+  const enabled = Boolean(value);
+  opportunityView.disabled = !enabled;
+  opportunityPlan.disabled = !enabled;
+  opportunityDelete.disabled = !enabled;
+}
+
+function readOpportunityHint() {
+  try {
+    return window.localStorage.getItem(OPPORTUNITY_PROFILE_HINT);
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function requestOpportunity(url, options) {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: { "Accept": "application/json", "Content-Type": "application/json" },
+    ...options
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    const rejection = payload?.rejection?.kind;
+    const error = payload?.error?.error?.wire_code ?? payload?.error?.wire_code ?? payload?.error;
+    throw new Error(rejection ?? error ?? `HTTP ${response.status}`);
+  }
+  if (payload?.kind === "incomplete") {
+    throw new Error("操作可能已执行，但 outcome receipt 尚未确认；请稍后按同一请求重试。");
+  }
+  if (payload?.kind !== "opportunity_accepted") {
+    throw new Error("服务器没有返回 Opportunity terminal result");
+  }
+  return payload.terminal;
+}
+
+function renderOpportunityProfileTerminal(terminal) {
+  if (terminal?.kind !== "profile_created" && terminal?.kind !== "profile_found") {
+    throw new Error("Opportunity profile terminal 无法呈现");
+  }
+  const profile = terminal.profile;
+  setOpportunityHint(profile.profile_snapshot_id);
+  text(document.querySelector("#opportunity-profile-id"), profile.profile_snapshot_id);
+  text(document.querySelector("#opportunity-consent-id"), profile.consent_id);
+  text(
+    document.querySelector("#opportunity-consent-fields"),
+    (profile.consent_fields ?? []).join(" · ")
+  );
+  text(
+    document.querySelector("#opportunity-profile-bounds"),
+    `${profile.completed_course_count} 门已修 · ${profile.min_credits}–${profile.max_credits} 学分 · ${profile.preference_count} 项偏好`
+  );
+  opportunityProfile.hidden = false;
+  opportunityDeleted.hidden = true;
+  opportunityStatus.textContent = terminal.kind === "profile_created"
+    ? "已通过 consent-bound private write 创建档案；raw profile 不进入公共 projection。"
+    : "已通过 authenticated owner read 从 durable store 读取档案 metadata。";
+}
+
+function blockerLabel(blocker) {
+  if (blocker?.kind === "missing_prerequisite") {
+    return `缺少先修 ${blocker.course_code ?? "未知课程"}`;
+  }
+  const labels = {
+    unavailable: "课程事实不可用",
+    unresolved_identity: "课程身份尚未解析",
+    conflicting_fact: "来源事实冲突",
+    cycle_affected: "依赖图受环影响",
+    unmet_rule: "未满足规则",
+    unknown_course: "课程事实未知",
+    requirement_unmet: "培养要求未满足"
+  };
+  return labels[blocker?.kind] ?? String(blocker?.kind ?? "未知阻塞");
+}
+
+function renderQualifications(values) {
+  const container = document.querySelector("#opportunity-qualifications");
+  clear(container);
+  for (const qualification of values ?? []) {
+    const item = document.createElement("article");
+    const title = document.createElement("strong");
+    title.textContent = `${qualification.course_code} · ${qualification.eligible ? "满足条件" : "仍缺条件"}`;
+    const blockers = document.createElement("p");
+    blockers.textContent = qualification.eligible
+      ? "当前 profile 与 reviewed facts 未发现资格阻塞。"
+      : (qualification.blockers ?? []).map(blockerLabel).join("；");
+    const source = document.createElement("small");
+    source.textContent = `来源 ${qualification.source_id} · revision ${qualification.source_revision_id}`;
+    item.append(title, blockers, source);
+    container.appendChild(item);
+  }
+}
+
+function renderCandidates(decision) {
+  const container = document.querySelector("#opportunity-candidates");
+  clear(container);
+  if (decision?.kind !== "planned") {
+    const empty = document.createElement("p");
+    empty.textContent = "在当前 hard constraints 下没有可行计划；系统没有把推断冒充结果。";
+    container.appendChild(empty);
+    return;
+  }
+  for (const candidate of decision.candidates ?? []) {
+    const item = document.createElement("article");
+    const title = document.createElement("strong");
+    title.textContent = (candidate.course_codes ?? []).join(" + ");
+    const score = document.createElement("p");
+    score.textContent = `${candidate.total_credits} 学分 · soft score ${candidate.soft_score} · hard violations ${(candidate.hard_constraint_violations ?? []).length}`;
+    const rationale = document.createElement("p");
+    rationale.textContent = (candidate.rationale ?? []).join("；") || "无额外解释";
+    const evidence = document.createElement("small");
+    evidence.textContent = (candidate.provenance ?? [])
+      .map((fact) => `${fact.fact} @ ${fact.revision} [${fact.conflict_status}]`)
+      .join("；");
+    item.append(title, score, rationale, evidence);
+    container.appendChild(item);
+  }
+}
+
+function renderOpportunityPlan(terminal) {
+  if (terminal?.kind !== "plan_generated") {
+    throw new Error("Opportunity plan terminal 无法呈现");
+  }
+  const plan = terminal.plan;
+  text(document.querySelector("#opportunity-plan-receipt"), plan.receipt_id);
+  text(document.querySelector("#opportunity-source-revision"), plan.source_revision_id);
+  text(
+    document.querySelector("#opportunity-plan-binding"),
+    `${plan.profile_snapshot_id} · ${plan.consent_id}`
+  );
+  const decisionSummary = plan.decision?.kind === "planned"
+    ? `planned · hard violations ${plan.decision.hard_constraint_violations}`
+    : plan.decision?.kind;
+  text(document.querySelector("#opportunity-plan-decision"), decisionSummary);
+  renderQualifications(plan.qualifications);
+  renderCandidates(plan.decision);
+  opportunityPlanResult.hidden = false;
+  opportunityDeleted.hidden = true;
+  opportunityStatus.textContent = "已通过 M00 → M10 → bounded Harness → Market current authorization → ToolGateway → Opportunity Graph → M60 current source 生成计划。";
+}
+
+async function createOpportunityProfile() {
+  if (!opportunityConsent.checked) {
+    opportunityStatus.textContent = "必须先明确勾选 consent；未同意时不会发出 private write。";
+    return;
+  }
+  opportunityCreate.disabled = true;
+  opportunityStatus.textContent = "正在创建 tenant-private synthetic profile…";
+  try {
+    const terminal = await requestOpportunity("/api/v1/opportunity/profiles", {
+      method: "POST",
+      body: JSON.stringify({
+        consent: true,
+        completed_courses: ["MATH1001", "MATH1002", "CS1001", "PHYS1001"],
+        min_credits: 9,
+        max_credits: 12,
+        preference_weights: [
+          { course_code: "MATH2001", weight: 9 },
+          { course_code: "MATH2003", weight: 8 },
+          { course_code: "CS2006", weight: 7 },
+          { course_code: "PHYS2003", weight: 5 },
+          { course_code: "HUM2001", weight: 4 },
+          { course_code: "GEN2001", weight: 3 },
+          { course_code: "LANG2001", weight: 2 }
+        ]
+      })
+    });
+    renderOpportunityProfileTerminal(terminal);
+  } catch (error) {
+    opportunityStatus.textContent = `档案创建失败：${error instanceof Error ? error.message : "未知错误"}`;
+  } finally {
+    opportunityCreate.disabled = false;
+  }
+}
+
+async function viewOpportunityProfile() {
+  if (!opportunityProfileId) {
+    opportunityStatus.textContent = "没有可读取的 profile ID hint。";
+    return;
+  }
+  opportunityView.disabled = true;
+  opportunityStatus.textContent = "正在以 authenticated owner 读取 private profile metadata…";
+  try {
+    const terminal = await requestOpportunity(
+      `/api/v1/opportunity/profiles/${encodeURIComponent(opportunityProfileId)}`,
+      { method: "GET", headers: { "Accept": "application/json" } }
+    );
+    renderOpportunityProfileTerminal(terminal);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "未知错误";
+    opportunityStatus.textContent = `档案读取失败：${message}`;
+    if (message === "profile_deleted" || message === "missing_profile") {
+      setOpportunityHint(null);
+    }
+  } finally {
+    opportunityView.disabled = !opportunityProfileId;
+  }
+}
+
+async function generateOpportunityPlan() {
+  if (!opportunityProfileId) {
+    opportunityStatus.textContent = "请先创建或恢复 private profile。";
+    return;
+  }
+  opportunityPlan.disabled = true;
+  opportunityStatus.textContent = "正在校验 current source、资格条件、依赖与 hard constraints…";
+  try {
+    const terminal = await requestOpportunity("/api/v1/opportunity/plans", {
+      method: "POST",
+      body: JSON.stringify({
+        profile_snapshot_id: opportunityProfileId,
+        max_results: 3,
+        beam_width: 1024
+      })
+    });
+    renderOpportunityPlan(terminal);
+  } catch (error) {
+    opportunityPlanResult.hidden = true;
+    opportunityStatus.textContent = `计划生成失败：${error instanceof Error ? error.message : "未知错误"}`;
+  } finally {
+    opportunityPlan.disabled = !opportunityProfileId;
+  }
+}
+
+async function deleteOpportunityProfile() {
+  if (!opportunityProfileId) {
+    opportunityStatus.textContent = "没有可删除的 private profile。";
+    return;
+  }
+  opportunityDelete.disabled = true;
+  opportunityStatus.textContent = "正在撤回 consent 并原子删除 private payload…";
+  try {
+    const deletedProfileId = opportunityProfileId;
+    const terminal = await requestOpportunity(
+      `/api/v1/opportunity/profiles/${encodeURIComponent(deletedProfileId)}/revoke-delete`,
+      { method: "POST", body: JSON.stringify({ confirm_delete: true }) }
+    );
+    if (terminal?.kind !== "profile_deleted") {
+      throw new Error("Opportunity delete terminal 无法呈现");
+    }
+    const deletion = terminal.deletion;
+    setOpportunityHint(null);
+    opportunityProfile.hidden = true;
+    opportunityPlanResult.hidden = true;
+    opportunityDeleted.hidden = false;
+    text(
+      document.querySelector("#opportunity-delete-receipt"),
+      `${deletion.deletion_receipt_id} · profile ${deletion.profile_snapshot_id} · deleted ${formatTime(deletion.deleted_at)}`
+    );
+    opportunityStatus.textContent = "删除收据已持久化；tombstone 不含 completed courses 或 preference weights。";
+  } catch (error) {
+    opportunityStatus.textContent = `撤回/删除失败：${error instanceof Error ? error.message : "未知错误"}`;
+    opportunityDelete.disabled = !opportunityProfileId;
+  }
+}
+
+opportunityCreate.addEventListener("click", () => {
+  void createOpportunityProfile();
+});
+opportunityView.addEventListener("click", () => {
+  void viewOpportunityProfile();
+});
+opportunityPlan.addEventListener("click", () => {
+  void generateOpportunityPlan();
+});
+opportunityDelete.addEventListener("click", () => {
+  void deleteOpportunityProfile();
+});
+
 radarButton.addEventListener("click", () => {
   void loadChangeFeed();
 });
@@ -391,6 +681,10 @@ procedureInput.addEventListener("keydown", (event) => {
   }
 });
 syncProcedurePreview();
+setOpportunityHint(readOpportunityHint());
+if (opportunityProfileId) {
+  void viewOpportunityProfile();
+}
 
 void lookup();
 void loadChangeFeed();

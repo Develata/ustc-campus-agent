@@ -145,6 +145,7 @@ pub trait OpportunityProfileRepository: Send + Sync {
     ) -> Result<DeletionReceipt, OpportunityRepositoryError>;
 }
 
+#[derive(Clone)]
 pub struct InMemoryOpportunityProfileRepository {
     profiles: BTreeMap<ProfileSnapshotId, TenantProfileRecord>,
     current_by_principal: BTreeMap<(TenantId, UserId), ProfileSnapshotId>,
@@ -193,15 +194,20 @@ impl OpportunityProfileRepository for InMemoryOpportunityProfileRepository {
         if self.failure_mode == RepositoryFailureMode::WriteUnavailable {
             return Err(OpportunityRepositoryError::Unavailable);
         }
-        if self.profiles.len() >= self.max_profiles {
-            return Err(OpportunityRepositoryError::CapacityExceeded);
-        }
         let principal_key = (
             record.principal().tenant_id().clone(),
             record.principal().user_id().clone(),
         );
-        if self.current_by_principal.contains_key(&principal_key) {
+        if let Some(current_id) = self.current_by_principal.get(&principal_key) {
+            if current_id == record.profile_snapshot_id()
+                && self.profiles.get(current_id) == Some(&record)
+            {
+                return Ok(());
+            }
             return Err(OpportunityRepositoryError::PrincipalAlreadyHasProfile);
+        }
+        if self.profiles.len() >= self.max_profiles {
+            return Err(OpportunityRepositoryError::CapacityExceeded);
         }
         if self.profiles.contains_key(record.profile_snapshot_id())
             || self.tombstones.contains_key(record.profile_snapshot_id())

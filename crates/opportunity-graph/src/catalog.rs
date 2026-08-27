@@ -136,6 +136,30 @@ impl ReviewedOpportunityCatalog {
         }
     }
 
+    pub(crate) fn profile_facts_are_known(&self, profile: &AcademicProfileInput) -> bool {
+        let offered_courses: BTreeSet<&str> = self
+            .courses
+            .iter()
+            .map(|course| course.code.as_str())
+            .collect();
+        let mut known_completed = offered_courses.clone();
+        known_completed.extend(
+            self.courses
+                .iter()
+                .flat_map(|course| course.prerequisites.iter().map(String::as_str)),
+        );
+        profile
+            .snapshot()
+            .completed_courses
+            .iter()
+            .all(|course| known_completed.contains(course.as_str()))
+            && profile
+                .snapshot()
+                .preference_weights
+                .keys()
+                .all(|course| offered_courses.contains(course.as_str()))
+    }
+
     #[must_use]
     pub fn qualifications(&self, profile: &AcademicProfileInput) -> Vec<CourseQualification> {
         let completed: BTreeSet<_> = profile

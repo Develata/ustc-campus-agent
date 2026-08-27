@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use crate::affairs::M71TerminalDto;
 use crate::change::M70ChangeFeedTerminalDto;
 use crate::error::ClientErrorDto;
+use crate::opportunity::{
+    M72OpportunityTerminalDto, OpportunityCommandDto, OpportunityRejectionDto,
+};
 use crate::value::{UnixMillis, WireText};
 
 pub const MAX_FRAME_BYTES: usize = 1_048_576;
@@ -68,6 +71,30 @@ pub struct SubmitChangeFeedDto {
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubmitOpportunityDto {
+    pub request_id: WireText,
+    pub correlation_id: WireText,
+    pub causation_id: Option<WireText>,
+    pub idempotency_key: Option<WireText>,
+    pub actor: ActorIntentDto,
+    pub provenance: ClientProvenanceDto,
+    pub payload_digest: WireText,
+    pub command: OpportunityCommandDto,
+}
+
+impl std::fmt::Debug for SubmitOpportunityDto {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SubmitOpportunityDto")
+            .field("operation_id", &self.command.operation_id())
+            .field("actor", &"[REDACTED]")
+            .field("request", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ViewerAuthorizationDto {
     PublicCapability {
@@ -114,6 +141,9 @@ pub enum ClientIntentDto {
     SubmitChangeFeed {
         request: SubmitChangeFeedDto,
     },
+    SubmitOpportunity {
+        request: SubmitOpportunityDto,
+    },
     Lookup {
         command_id: WireText,
         viewer: ViewerAuthorizationDto,
@@ -131,6 +161,12 @@ impl std::fmt::Debug for ClientIntentDto {
             Self::SubmitChangeFeed { .. } => formatter
                 .debug_struct("ClientIntentDto")
                 .field("kind", &"submit_change_feed")
+                .field("request", &"[REDACTED]")
+                .finish(),
+            Self::SubmitOpportunity { request } => formatter
+                .debug_struct("ClientIntentDto")
+                .field("kind", &"submit_opportunity")
+                .field("operation_id", &request.command.operation_id())
                 .field("request", &"[REDACTED]")
                 .finish(),
             Self::Lookup { .. } => formatter
@@ -154,6 +190,15 @@ pub enum ClientResponseDto {
     ChangeFeedAccepted {
         command_id: WireText,
         terminal: Box<M70ChangeFeedTerminalDto>,
+    },
+    OpportunityAccepted {
+        command_id: WireText,
+        terminal: Box<M72OpportunityTerminalDto>,
+    },
+    OpportunityRejected {
+        command_id: WireText,
+        operation_id: WireText,
+        rejection: OpportunityRejectionDto,
     },
     Available {
         command_id: WireText,
@@ -185,6 +230,19 @@ impl std::fmt::Debug for ClientResponseDto {
                 .field("kind", &"change_feed_accepted")
                 .field("command_id", &"[REDACTED]")
                 .field("terminal", &"[REDACTED]")
+                .finish(),
+            Self::OpportunityAccepted { .. } => formatter
+                .debug_struct("ClientResponseDto")
+                .field("kind", &"opportunity_accepted")
+                .field("command_id", &"[REDACTED]")
+                .field("terminal", &"[REDACTED]")
+                .finish(),
+            Self::OpportunityRejected { rejection, .. } => formatter
+                .debug_struct("ClientResponseDto")
+                .field("kind", &"opportunity_rejected")
+                .field("command_id", &"[REDACTED]")
+                .field("operation_id", &"[REDACTED]")
+                .field("rejection", rejection)
                 .finish(),
             Self::Available { redaction, .. } => formatter
                 .debug_struct("ClientResponseDto")

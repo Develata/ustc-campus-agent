@@ -19,7 +19,8 @@ pub use repository::{
     ProfileLookup, RepositoryFailureMode, TenantProfileRecord,
 };
 pub use service::{
-    M60OpportunityPort, OpportunityPlanDecision, OpportunityPlanReceipt, OpportunityPlanningError,
+    M60OpportunityPort, MAX_OPPORTUNITY_BEAM_WIDTH, MAX_OPPORTUNITY_PLAN_RESULTS,
+    OpportunityPlanDecision, OpportunityPlanReceipt, OpportunityPlanningError,
     OpportunityPlanningService, OpportunityProfileError, OpportunityProfileService,
     OpportunitySourcePortError, PlanStaleness,
 };
