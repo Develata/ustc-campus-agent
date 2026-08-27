@@ -14,6 +14,7 @@ enum ServeMode {
 struct ServeOptions {
     bind: String,
     fixture: PathBuf,
+    change_fixture: Option<PathBuf>,
     store: PathBuf,
     idempotency: PathBuf,
 }
@@ -41,6 +42,7 @@ fn main() -> ExitCode {
 fn run_serve(mut args: std::iter::Skip<std::env::Args>, mode: ServeMode) -> ExitCode {
     let mut bind: Option<String> = None;
     let mut fixture: Option<String> = None;
+    let mut change_fixture: Option<String> = None;
     let mut store: Option<String> = None;
     let mut idempotency: Option<String> = None;
     while let Some(flag) = args.next() {
@@ -51,6 +53,10 @@ fn run_serve(mut args: std::iter::Skip<std::env::Args>, mode: ServeMode) -> Exit
             },
             "--fixture" => match take_value(&mut args, "--fixture") {
                 Ok(value) => fixture = Some(value),
+                Err(code) => return code,
+            },
+            "--change-fixture" => match take_value(&mut args, "--change-fixture") {
+                Ok(value) => change_fixture = Some(value),
                 Err(code) => return code,
             },
             "--store" => match take_value(&mut args, "--store") {
@@ -67,18 +73,26 @@ fn run_serve(mut args: std::iter::Skip<std::env::Args>, mode: ServeMode) -> Exit
             }
         }
     }
-    let options = match collect_options(bind, fixture, store, idempotency) {
+    let options = match collect_options(bind, fixture, change_fixture, store, idempotency) {
         Ok(options) => options,
         Err(code) => return code,
     };
-    let composition =
-        match AffairsComposition::open(&options.fixture, &options.store, &options.idempotency) {
-            Ok(composition) => composition,
-            Err(error) => {
-                eprintln!("composition open failed: {error}");
-                return ExitCode::from(1);
-            }
-        };
+    let composition_result = match options.change_fixture.as_deref() {
+        Some(change_fixture) => AffairsComposition::open_with_change(
+            &options.fixture,
+            change_fixture,
+            &options.store,
+            &options.idempotency,
+        ),
+        None => AffairsComposition::open(&options.fixture, &options.store, &options.idempotency),
+    };
+    let composition = match composition_result {
+        Ok(composition) => composition,
+        Err(error) => {
+            eprintln!("composition open failed: {error}");
+            return ExitCode::from(1);
+        }
+    };
 
     let result = match mode {
         ServeMode::Framed => composition.serve(&options.bind),
@@ -106,12 +120,14 @@ fn run_serve(mut args: std::iter::Skip<std::env::Args>, mode: ServeMode) -> Exit
 fn collect_options(
     bind: Option<String>,
     fixture: Option<String>,
+    change_fixture: Option<String>,
     store: Option<String>,
     idempotency: Option<String>,
 ) -> Result<ServeOptions, ExitCode> {
     Ok(ServeOptions {
         bind: require(bind, "--bind")?,
         fixture: PathBuf::from(require(fixture, "--fixture")?),
+        change_fixture: change_fixture.map(PathBuf::from),
         store: PathBuf::from(require(store, "--store")?),
         idempotency: PathBuf::from(require(idempotency, "--idempotency")?),
     })
@@ -127,10 +143,10 @@ fn print_help() {
         );
     }
     println!(
-        "\nCommands:\n  --help      show this message\n  --version   show binary version\n  serve       run the bounded affairs composition over loopback framed TCP\n  serve-web   run the bounded affairs HTTP/Web demo over loopback"
+        "\nCommands:\n  --help      show this message\n  --version   show binary version\n  serve       run bounded Affairs, with optional ChangeRadar, over loopback framed TCP\n  serve-web   run the loopback Affairs Web demo, with optional ChangeRadar"
     );
     println!(
-        "\nserver flags:\n  --bind <addr>         loopback bind address (e.g. 127.0.0.1:0)\n  --fixture <path>      durable fixture JSON path\n  --store <path>        durable record store path\n  --idempotency <path>  durable idempotency store path"
+        "\nserver flags:\n  --bind <addr>            loopback bind address (e.g. 127.0.0.1:0)\n  --fixture <path>         reviewed Affairs fixture JSON path\n  --change-fixture <path> optional reviewed ChangeRadar fixture JSON path\n  --store <path>           durable record store path\n  --idempotency <path>     durable idempotency store path"
     );
 }
 

@@ -1,6 +1,6 @@
 {
   "schema_version": "checker-test-inventory/v1",
-  "expected_count": 692,
+  "expected_count": 693,
   "test_ids": [
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_count_mismatch",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_duplicates",
@@ -146,6 +146,7 @@
     "test_check_repo_contracts.DocsTopologyContractTests.test_unknown_extra_docs_directory_fails_closed",
     "test_check_repo_contracts.DocsTopologyContractTests.test_unregistered_current_contract_fails_closed",
     "test_check_repo_contracts.ExternalAgentAccessContractTests.test_ambiguous_plan_alias_fails_closed",
+    "test_check_repo_contracts.ExternalAgentAccessContractTests.test_change_list_bounded_projection_removal_fails_closed",
     "test_check_repo_contracts.ExternalAgentAccessContractTests.test_client_009_windows_binary_requirement_fails_closed",
     "test_check_repo_contracts.ExternalAgentAccessContractTests.test_client_010_implemented_claim_fails_closed",
     "test_check_repo_contracts.ExternalAgentAccessContractTests.test_current_external_agent_access_contract_passes",

@@ -1,0 +1,60 @@
+{
+  "board_id": "board:ustc:academic-calendar",
+  "board_policy_revision": 1,
+  "feed_title": "USTC Academic Calendar Changes",
+  "feed_author": "USTC Campus Agent DemoReviewed",
+  "feed_public_base_url": "https://campus.example.test/change-radar",
+  "source_id": "src:ustc:academic-calendar:2026-fall",
+  "source_url": "https://www.teach.ustc.edu.cn/calendar/2026-fall",
+  "parser_identity": "parser:change-radar:academic-calendar:v1",
+  "source_reviewer": "reviewer:demo:change-source",
+  "old_revision": {
+    "raw_path": "evidence/academic-calendar-r1.reviewed.txt",
+    "raw_snapshot_id": "raw:change:academic-calendar:r1",
+    "raw_file_sha256": "1a0b6f50296678645de3fa27a3409b2f1971ca6441385b7c940ca914176221eb",
+    "raw_digest": "sha256:1a0b6f50296678645de3fa27a3409b2f1971ca6441385b7c940ca914176221eb",
+    "normalized_path": "evidence/academic-calendar-r1.normalized.json",
+    "normalized_snapshot_id": "normalized:change:academic-calendar:r1",
+    "normalized_file_sha256": "329b670cf0eb386b5abaf0162af304c16c584bdbb2345421a02210e261f0b23a",
+    "normalized_digest": "sha256:0e352e45cd4705f76fc9fceca5fe78c54e73b1bcc08e25d3451e13824260d3d5",
+    "source_published_at_secs": 1787184000,
+    "observed_at_secs": 1787616000,
+    "source_review_evidence": "evidence:demo:change:r1",
+    "facts": {
+      "location": "西区教务处",
+      "registration.deadline": "2026-09-01T17:00:00+08:00",
+      "registration.opens": "2026-08-24T09:00:00+08:00",
+      "scope": "2026 秋季本科生选课"
+    }
+  },
+  "new_revision": {
+    "raw_path": "evidence/academic-calendar-r2.reviewed.txt",
+    "raw_snapshot_id": "raw:change:academic-calendar:r2",
+    "raw_file_sha256": "6c3309a904194b27744956ed8f97f0f50a8c864829b42b979947c00cb1f851d1",
+    "raw_digest": "sha256:6c3309a904194b27744956ed8f97f0f50a8c864829b42b979947c00cb1f851d1",
+    "normalized_path": "evidence/academic-calendar-r2.normalized.json",
+    "normalized_snapshot_id": "normalized:change:academic-calendar:r2",
+    "normalized_file_sha256": "d1001203f613e3533162dcefbe00cf33bda201bf78c766cf0de7faf64cb6edee",
+    "normalized_digest": "sha256:bf3703bb63341d2863a630d2ef8ac15fb73a61391a437b942319b6e46597b7b4",
+    "source_published_at_secs": 1787616000,
+    "observed_at_secs": 1787706000,
+    "source_review_evidence": "evidence:demo:change:r2",
+    "facts": {
+      "location": "东区学生服务中心",
+      "registration.deadline": "2026-09-03T17:00:00+08:00",
+      "registration.opens": "2026-08-24T09:00:00+08:00",
+      "scope": "2026 秋季本科生选课"
+    }
+  },
+  "tracked_fields": ["location", "registration.deadline", "registration.opens", "scope"],
+  "affected_scope": "2026 秋季本科生选课",
+  "effective_from_secs": 1787533200,
+  "effective_to_secs": 1788426000,
+  "publication_reviewer": "user:demo:change-administrator",
+  "reviewed_at_secs": 1787792400,
+  "published_at_secs": 1787792400,
+  "market_enabled": true,
+  "market_grant_active": true,
+  "schema_digest": "ea357aebafc48a19961b0c97048f43b50f83977beae21f1dcb37889bf0b4e5cb",
+  "descriptor_snapshot_version": 1
+}

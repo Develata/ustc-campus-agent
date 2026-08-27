@@ -6,6 +6,9 @@ const status = document.querySelector("#status");
 const result = document.querySelector("#result");
 const errorPanel = document.querySelector("#error-panel");
 const errorMessage = document.querySelector("#error-message");
+const radarButton = document.querySelector("#radar-load");
+const radarStatus = document.querySelector("#radar-status");
+const radarResult = document.querySelector("#radar-result");
 
 function clear(element) {
   while (element.firstChild) {
@@ -277,6 +280,104 @@ async function lookup() {
   }
 }
 
+function renderChangeFeed(payload) {
+  if (payload?.kind === "error") {
+    const code = payload.error?.error?.wire_code ?? payload.error?.wire_code ?? "change_feed_denied";
+    throw new Error(`ChangeRadar 拒绝了本次读取：${code}`);
+  }
+  if (payload?.kind !== "change_feed_accepted") {
+    throw new Error("服务器没有返回 ChangeRadar terminal result");
+  }
+  const outcome = payload.terminal?.outcome;
+  if (outcome?.kind === "not_found") {
+    radarResult.hidden = true;
+    radarStatus.textContent = `未找到变更板：${outcome.board_id ?? "未知 board"}`;
+    return;
+  }
+  if (outcome?.kind !== "found") {
+    throw new Error("ChangeRadar outcome 无法呈现");
+  }
+  const view = outcome.view;
+  const entry = view?.entries?.[0];
+  if (!entry) {
+    radarResult.hidden = true;
+    radarStatus.textContent = "当前变更板没有已发布事件。";
+    return;
+  }
+  text(document.querySelector("#radar-board-id"), view.board_id);
+  text(document.querySelector("#radar-health"), `source ${entry.source_health}`);
+  text(document.querySelector("#radar-observed"), `观测于 ${formatTime(entry.observed_at)}`);
+  text(
+    document.querySelector("#radar-effective"),
+    `生效 ${formatTime(entry.effective_from)} → ${formatTime(entry.effective_to)}`
+  );
+  text(document.querySelector("#radar-published"), `发布于 ${formatTime(entry.published_at)}`);
+  text(document.querySelector("#radar-source"), `${entry.source_id} · ${entry.source_url}`);
+  text(document.querySelector("#radar-old-revision"), entry.old_revision_id);
+  text(document.querySelector("#radar-old-raw-digest"), entry.old_raw_sha256);
+  text(document.querySelector("#radar-old-normalized-digest"), entry.old_normalized_sha256);
+  text(
+    document.querySelector("#radar-old-review"),
+    `${entry.old_source_reviewer} · ${entry.old_source_review_evidence}`
+  );
+  text(document.querySelector("#radar-new-revision"), entry.new_revision_id);
+  text(document.querySelector("#radar-new-raw-digest"), entry.new_raw_sha256);
+  text(document.querySelector("#radar-new-normalized-digest"), entry.new_normalized_sha256);
+  text(
+    document.querySelector("#radar-new-review"),
+    `${entry.new_source_reviewer} · ${entry.new_source_review_evidence}`
+  );
+  text(document.querySelector("#radar-evidence-digest"), entry.evidence_set_digest);
+
+  const fields = document.querySelector("#radar-fields");
+  clear(fields);
+  for (const change of entry.changed_fields ?? []) {
+    const card = document.createElement("article");
+    const name = document.createElement("h3");
+    name.textContent = change.field ?? "未命名字段";
+    const values = document.createElement("div");
+    values.className = "radar-values";
+    const before = document.createElement("span");
+    before.textContent = change.before ?? "∅";
+    const arrow = document.createElement("b");
+    arrow.textContent = "→";
+    const after = document.createElement("span");
+    after.textContent = change.after ?? "∅";
+    values.append(before, arrow, after);
+    card.append(name, values);
+    fields.appendChild(card);
+  }
+  radarResult.hidden = false;
+  radarStatus.textContent = "已通过 M00 → M10 → bounded Harness → Market current authorization → ToolGateway → ChangeRadar Plugin 读取。";
+}
+
+async function loadChangeFeed() {
+  radarButton.disabled = true;
+  radarButton.textContent = "读取中…";
+  radarStatus.textContent = "正在读取确定性 semantic change…";
+  try {
+    const response = await fetch(
+      "/api/v1/changes/board%3Austc%3Aacademic-calendar",
+      { method: "GET", headers: { "Accept": "application/json" }, cache: "no-store" }
+    );
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error ?? `HTTP ${response.status}`);
+    }
+    renderChangeFeed(payload);
+  } catch (error) {
+    radarResult.hidden = true;
+    radarStatus.textContent = `变更板读取失败：${error instanceof Error ? error.message : "未知错误"}`;
+  } finally {
+    radarButton.disabled = false;
+    radarButton.textContent = "重新读取";
+  }
+}
+
+radarButton.addEventListener("click", () => {
+  void loadChangeFeed();
+});
+
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   void lookup();
@@ -292,3 +393,4 @@ procedureInput.addEventListener("keydown", (event) => {
 syncProcedurePreview();
 
 void lookup();
+void loadChangeFeed();

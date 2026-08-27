@@ -3,7 +3,9 @@ use sha2::{Digest, Sha256};
 use crate::value::{UnixMillis, WireText};
 
 const AFFAIRS_GET_DOMAIN: &[u8] = b"m10/affairs.get/payload-digest/v1\0";
+const CHANGE_FEED_DOMAIN: &[u8] = b"m10/change.list/payload-digest/v1\0";
 const PROCEDURE_ID_TAG: &[u8] = b"procedure_id\0";
+const BOARD_ID_TAG: &[u8] = b"board_id\0";
 const AS_OF_TAG_ABSENT: &[u8] = b"as_of:absent\0";
 const AS_OF_TAG_PRESENT: &[u8] = b"as_of:present\0";
 
@@ -32,6 +34,20 @@ pub fn affairs_get_payload_digest(
     WireText::parse(hex).map_err(|_| AffairsGetDigestError::Encoding)
 }
 
+pub fn change_feed_payload_digest(board_id: &WireText) -> Result<WireText, ChangeFeedDigestError> {
+    let mut hasher = Sha256::new();
+    hasher.update(CHANGE_FEED_DOMAIN);
+    hasher.update(BOARD_ID_TAG);
+    let board_bytes = board_id.as_str().as_bytes();
+    hasher.update(
+        (u32::try_from(board_bytes.len()).map_err(|_| ChangeFeedDigestError::Length)?)
+            .to_be_bytes(),
+    );
+    hasher.update(board_bytes);
+    let digest = hasher.finalize();
+    WireText::parse(hex_lower(&digest)).map_err(|_| ChangeFeedDigestError::Encoding)
+}
+
 fn hex_lower(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len() * 2);
@@ -58,6 +74,23 @@ impl std::fmt::Display for AffairsGetDigestError {
 }
 
 impl std::error::Error for AffairsGetDigestError {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChangeFeedDigestError {
+    Length,
+    Encoding,
+}
+
+impl std::fmt::Display for ChangeFeedDigestError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Length => "change.list payload digest input length overflow",
+            Self::Encoding => "change.list payload digest encoding failed",
+        })
+    }
+}
+
+impl std::error::Error for ChangeFeedDigestError {}
 
 #[cfg(test)]
 mod tests {
@@ -137,5 +170,16 @@ mod tests {
         assert_ne!(left, right);
         let combined = affairs_get_payload_digest(&proc_id("a:b"), None).unwrap();
         assert_ne!(left, combined);
+    }
+
+    #[test]
+    fn change_feed_digest_is_stable_and_domain_separated() {
+        let board = WireText::parse("board:fixture").unwrap();
+        let left = change_feed_payload_digest(&board).unwrap();
+        let right = change_feed_payload_digest(&board).unwrap();
+        assert_eq!(left, right);
+        assert_eq!(left.as_str().len(), 64);
+        let affairs = affairs_get_payload_digest(&board, None).unwrap();
+        assert_ne!(left, affairs);
     }
 }

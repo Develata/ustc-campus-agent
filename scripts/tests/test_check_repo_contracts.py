@@ -6521,6 +6521,15 @@ class ExternalAgentAccessContractTests(unittest.TestCase):
     def test_current_external_agent_access_contract_passes(self) -> None:
         self.assertEqual(self.check_contract(), [])
 
+    def test_change_list_bounded_projection_removal_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/contracts/interfaces.md",
+            "Bounded loopback-only `affairs.get` and `change.list` proofs",
+            "A bounded loopback-only `affairs.get` proof",
+        )
+        issues = self.check_contract()
+        self.assertTrue(any("external-Agent semantic projection" in issue for issue in issues), issues)
+
     def test_operation_registry_row_removal_fails_closed(self) -> None:
         path = self.root / "docs/contracts/interfaces.md"
         lines = path.read_text(encoding="utf-8").splitlines()

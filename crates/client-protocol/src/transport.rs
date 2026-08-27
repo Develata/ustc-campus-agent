@@ -3,6 +3,7 @@ use std::io::{self, Read, Write};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::affairs::M71TerminalDto;
+use crate::change::M70ChangeFeedTerminalDto;
 use crate::error::ClientErrorDto;
 use crate::value::{UnixMillis, WireText};
 
@@ -53,6 +54,19 @@ pub struct SubmitAffairsGetDto {
     pub as_of: Option<UnixMillis>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubmitChangeFeedDto {
+    pub request_id: WireText,
+    pub correlation_id: WireText,
+    pub causation_id: Option<WireText>,
+    pub idempotency_key: Option<WireText>,
+    pub actor: ActorIntentDto,
+    pub provenance: ClientProvenanceDto,
+    pub payload_digest: WireText,
+    pub board_id: WireText,
+}
+
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ViewerAuthorizationDto {
@@ -97,6 +111,9 @@ pub enum ClientIntentDto {
     SubmitAffairsGet {
         request: SubmitAffairsGetDto,
     },
+    SubmitChangeFeed {
+        request: SubmitChangeFeedDto,
+    },
     Lookup {
         command_id: WireText,
         viewer: ViewerAuthorizationDto,
@@ -109,6 +126,11 @@ impl std::fmt::Debug for ClientIntentDto {
             Self::SubmitAffairsGet { .. } => formatter
                 .debug_struct("ClientIntentDto")
                 .field("kind", &"submit_affairs_get")
+                .field("request", &"[REDACTED]")
+                .finish(),
+            Self::SubmitChangeFeed { .. } => formatter
+                .debug_struct("ClientIntentDto")
+                .field("kind", &"submit_change_feed")
                 .field("request", &"[REDACTED]")
                 .finish(),
             Self::Lookup { .. } => formatter
@@ -128,6 +150,10 @@ pub enum ClientResponseDto {
         command_id: WireText,
         terminal: Box<M71TerminalDto>,
         public_capability: Option<WireText>,
+    },
+    ChangeFeedAccepted {
+        command_id: WireText,
+        terminal: Box<M70ChangeFeedTerminalDto>,
     },
     Available {
         command_id: WireText,
@@ -153,6 +179,12 @@ impl std::fmt::Debug for ClientResponseDto {
                 .field("command_id", &"[REDACTED]")
                 .field("terminal", &"[REDACTED]")
                 .field("public_capability", &"[REDACTED]")
+                .finish(),
+            Self::ChangeFeedAccepted { .. } => formatter
+                .debug_struct("ClientResponseDto")
+                .field("kind", &"change_feed_accepted")
+                .field("command_id", &"[REDACTED]")
+                .field("terminal", &"[REDACTED]")
                 .finish(),
             Self::Available { redaction, .. } => formatter
                 .debug_struct("ClientResponseDto")

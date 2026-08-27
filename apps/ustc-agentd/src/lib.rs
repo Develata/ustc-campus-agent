@@ -2,14 +2,16 @@
 //!
 //! Only this crate may simultaneously name M00 fixture ports, M10 ingress, M20
 //! current invocation authority, the M30 deterministic harness path, the bounded
-//! ToolGateway adapter, and M71 publication/query services. The M60 fixture
-//! enters only through M71's evidence/publication ports; it never enters an
-//! M10/client seam and remains explicitly noncanonical.
+//! ToolGateway adapters, and M70/M71 publication/query services. M60 fixture
+//! decisions enter only through the owning product ports; they never enter an
+//! M10/client seam and remain explicitly noncanonical.
 
 #![forbid(unsafe_code)]
 
 mod affairs_fixture;
 mod affairs_invocation;
+mod change_fixture;
+mod change_invocation;
 mod web;
 
 pub use web::web_router;
@@ -23,10 +25,12 @@ use std::time::{Duration, Instant};
 use affairs_fixture::{AffairsFixture, DurableIdempotencyStore, FixturePorts};
 use affairs_invocation::AffairsInvocationSpine;
 use affairs_navigator::AffairsGetService;
-use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service};
+use change_fixture::ChangeRadarFixture;
+use change_invocation::ChangeInvocationSpine;
+use ustc_campus_agent_application_ingress::{FileRecordStore, M10ChangeFeedService, M10Service};
 use ustc_campus_agent_client_protocol::{
-    ClientIntentDto, ClientResponseDto, SubmitAffairsGetDto, ViewerAuthorizationDto, read_frame,
-    write_frame,
+    ClientIntentDto, ClientResponseDto, SubmitAffairsGetDto, SubmitChangeFeedDto,
+    ViewerAuthorizationDto, read_frame, write_frame,
 };
 
 const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
@@ -40,6 +44,7 @@ const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// `AffairsGetService`. Both borrows are scoped to a single request.
 pub struct AffairsComposition {
     fixture: AffairsFixture,
+    change: Option<ChangeRadarFixture>,
     store: FileRecordStore,
     idempotency: DurableIdempotencyStore,
 }
@@ -67,9 +72,23 @@ impl AffairsComposition {
         )?;
         Ok(Self {
             fixture,
+            change: None,
             store,
             idempotency,
         })
+    }
+
+    /// Opens the shared Affairs + ChangeRadar composition from two reviewed
+    /// fixture inputs and the common M10 stores.
+    pub fn open_with_change(
+        fixture_path: &Path,
+        change_fixture_path: &Path,
+        store_path: &Path,
+        idempotency_path: &Path,
+    ) -> Result<Self, String> {
+        let mut composition = Self::open(fixture_path, store_path, idempotency_path)?;
+        composition.change = Some(ChangeRadarFixture::load(change_fixture_path)?);
+        Ok(composition)
     }
 
     /// Handles one `SubmitAffairsGet` intent through the real M00 admission
@@ -101,6 +120,45 @@ impl AffairsComposition {
         );
         let now_ms = i64::try_from(self.fixture.now.as_unix_millis()).unwrap_or(i64::MAX);
         m10.submit(request, &mut ports, now_ms)
+    }
+
+    /// Handles one public ChangeRadar board query through M00, M10 and the
+    /// bounded Market/Agent/ToolGateway/owning-plugin spine.
+    #[must_use]
+    pub fn handle_change_submit(&self, request: &SubmitChangeFeedDto) -> ClientResponseDto {
+        let Some(change) = &self.change else {
+            return ClientResponseDto::Unavailable;
+        };
+        let invocation = ChangeInvocationSpine::new(
+            &change.repository,
+            &change.feed_policy,
+            change.market_enabled,
+            change.market_grant_active,
+            &change.source_evidence_digest,
+            change.invocation_counters.clone(),
+        );
+        let m10 = M10ChangeFeedService::new(&invocation);
+        let mut ports = FixturePorts::new(
+            self.idempotency.clone(),
+            Arc::clone(&change.descriptor),
+            self.fixture.now,
+            self.fixture.policy_snapshot_id.clone(),
+            Some(self.fixture.session.clone()),
+        );
+        m10.submit(request, &mut ports)
+    }
+
+    /// Returns ChangeRadar `(effect_intents, plugin_executions,
+    /// effect_receipts)` observed by the bounded invocation spine.
+    #[must_use]
+    pub fn change_invocation_counts(&self) -> (u64, u64, u64) {
+        self.change.as_ref().map_or((0, 0, 0), |change| {
+            (
+                change.invocation_counters.intents(),
+                change.invocation_counters.executions(),
+                change.invocation_counters.receipts(),
+            )
+        })
     }
 
     /// Handles one `Lookup` intent through the M10 record store. The M71
@@ -195,6 +253,7 @@ impl AffairsComposition {
         let intent = read_intent_with_timeout(&stream, FRAMED_CONNECTION_READ_TIMEOUT)?;
         let response = match intent {
             ClientIntentDto::SubmitAffairsGet { request } => self.handle_submit(&request),
+            ClientIntentDto::SubmitChangeFeed { request } => self.handle_change_submit(&request),
             ClientIntentDto::Lookup { command_id, viewer } => {
                 self.handle_lookup(command_id.as_str(), &viewer)
             }

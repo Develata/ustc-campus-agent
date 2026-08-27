@@ -598,6 +598,7 @@ fn authenticated_intent_carries_session() {
             }
             ActorIntentDto::Public => panic!("expected authenticated actor"),
         },
+        ClientIntentDto::SubmitChangeFeed { .. } => panic!("expected affairs submit intent"),
         ClientIntentDto::Lookup { .. } => panic!("expected submit intent"),
     }
 }

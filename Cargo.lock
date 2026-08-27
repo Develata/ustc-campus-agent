@@ -608,6 +608,7 @@ dependencies = [
  "tokio",
  "ustc-agent-tool-protocol",
  "ustc-campus-agent-application-ingress",
+ "ustc-campus-agent-change-radar",
  "ustc-campus-agent-client-protocol",
  "ustc-campus-agent-core",
  "ustc-campus-agent-runtime",
@@ -631,6 +632,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "time",
+ "ustc-campus-agent-change-radar",
  "ustc-campus-agent-client-protocol",
  "ustc-campus-agent-core",
 ]

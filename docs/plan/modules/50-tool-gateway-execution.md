@@ -3,12 +3,12 @@
 ## Metadata
 
 - `Module ID`: `M40`
-- `Status`: Accepted blueprint; protocol/fake conformance plus one bounded Affairs fixed-adapter composition implemented
+- `Status`: Accepted blueprint; protocol/fake conformance plus bounded Affairs and ChangeRadar fixed-adapter compositions implemented
 - `Implementation State`: `partial-evidence`
 - `Version`: `m40-tool-gateway/v0`
 - `Last Review`: `2026-07-25`
 - `Owning Contract`: [`../../contracts/agent-plugin-boundary.md`](../../contracts/agent-plugin-boundary.md)
-- `Primary code areas`: `crates/agent-tool-protocol/`, `apps/ustc-agentd/src/affairs_invocation.rs`, future generic gateway/executor modules, composition tests in `apps/ustc-agentd/tests/`
+- `Primary code areas`: `crates/agent-tool-protocol/`, `apps/ustc-agentd/src/{affairs,change}_invocation.rs`, future generic gateway/executor modules, composition tests in `apps/ustc-agentd/tests/`
 
 ## 1. Purpose
 

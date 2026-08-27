@@ -1,8 +1,8 @@
-//! Loopback-only HTTP/Web adapter for the bounded Affairs demonstration.
+//! Loopback-only HTTP/Web adapter for bounded Affairs and ChangeRadar journeys.
 //!
-//! The adapter owns no procedure, source, freshness, conflict, authorization or
-//! eligibility decisions. It constructs one bounded public M10 request and
-//! admits only a public-redacted `ClientResponseDto::Available` as JSON.
+//! The adapter owns no procedure, change event, source, freshness, conflict,
+//! authorization or eligibility decisions. It constructs bounded public M10
+//! requests and admits only the matching typed public result as JSON or Atom.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -15,8 +15,9 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
 use ustc_campus_agent_client_protocol::{
-    ActorIntentDto, ClientProvenanceDto, ClientResponseDto, RedactionDto, SubmitAffairsGetDto,
-    ViewerAuthorizationDto, WireText, affairs_get_payload_digest,
+    ActorIntentDto, ClientErrorDto, ClientProvenanceDto, ClientResponseDto, RedactionDto,
+    SubmitAffairsGetDto, SubmitChangeFeedDto, ViewerAuthorizationDto, WireErrorClassDto, WireText,
+    affairs_get_payload_digest, change_feed_payload_digest,
 };
 
 use super::{AffairsComposition, parse_loopback_socket_addr};
@@ -75,6 +76,37 @@ impl WebState {
         self.resolve_public_available(submitted)
     }
 
+    fn submit_change(&self, board_id: String) -> Result<ClientResponseDto, WebRequestError> {
+        let board_id = WireText::parse(board_id).map_err(|_| WebRequestError::InvalidBoardId)?;
+        let sequence = self
+            .next_request
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                current.checked_add(1)
+            })
+            .map_err(|_| WebRequestError::CounterExhausted)?;
+        let request_nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| WebRequestError::InternalIdentity)?
+            .as_nanos();
+        let payload_digest =
+            change_feed_payload_digest(&board_id).map_err(|_| WebRequestError::InternalIdentity)?;
+        let request = SubmitChangeFeedDto {
+            request_id: checked_text(format!("req:web:change:{request_nonce}:{sequence}"))?,
+            correlation_id: checked_text(format!("corr:web:change:{request_nonce}:{sequence}"))?,
+            causation_id: None,
+            idempotency_key: None,
+            actor: ActorIntentDto::Public,
+            provenance: ClientProvenanceDto {
+                build: checked_text(concat!("ustc-agentd/", env!("CARGO_PKG_VERSION")))?,
+                target: checked_text("web-loopback")?,
+                protocol: checked_text("http-json-v1")?,
+            },
+            payload_digest,
+            board_id,
+        };
+        Ok(self.composition.handle_change_submit(&request))
+    }
+
     fn resolve_public_available(
         &self,
         submitted: ClientResponseDto,
@@ -113,6 +145,7 @@ impl WebState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WebRequestError {
     InvalidProcedureId,
+    InvalidBoardId,
     CounterExhausted,
     InternalIdentity,
     MissingPublicCapability,
@@ -144,11 +177,13 @@ pub fn web_router(composition: Arc<AffairsComposition>) -> Router {
         .route("/assets/styles.css", get(styles_css))
         .route("/healthz", get(healthz))
         .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
+        .route("/api/v1/changes/{board_id}", get(change_feed_get))
+        .route("/api/v1/changes/{board_id}/atom", get(change_feed_atom))
         .with_state(WebState::new(composition))
 }
 
 impl AffairsComposition {
-    /// Serves the bounded Affairs HTTP/Web demonstration on a loopback address.
+    /// Serves the bounded two-plugin HTTP/Web demonstration on a loopback address.
     ///
     /// # Errors
     ///
@@ -212,7 +247,87 @@ async fn affairs_get(
         Err(
             WebRequestError::MissingPublicCapability | WebRequestError::UnexpectedLookupResponse,
         ) => web_error(StatusCode::BAD_GATEWAY, "public_lookup_unavailable"),
+        Err(WebRequestError::InvalidBoardId) => {
+            web_error(StatusCode::BAD_REQUEST, "invalid_board_id")
+        }
     }
+}
+
+async fn change_feed_get(
+    AxumPath(board_id): AxumPath<String>,
+    State(state): State<WebState>,
+) -> Response {
+    match state.submit_change(board_id) {
+        Ok(response) => {
+            let status = match &response {
+                ClientResponseDto::ChangeFeedAccepted { .. } => StatusCode::OK,
+                ClientResponseDto::Error {
+                    error: ClientErrorDto::Admission { error },
+                } if error.class == WireErrorClassDto::PolicyDenied => StatusCode::FORBIDDEN,
+                ClientResponseDto::Error {
+                    error: ClientErrorDto::Admission { error },
+                } if error.class == WireErrorClassDto::MalformedCommand => StatusCode::BAD_REQUEST,
+                ClientResponseDto::Error {
+                    error: ClientErrorDto::Infrastructure { .. },
+                }
+                | ClientResponseDto::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+                _ => StatusCode::BAD_GATEWAY,
+            };
+            typed_json_response(status, response)
+        }
+        Err(WebRequestError::InvalidBoardId) => {
+            web_error(StatusCode::BAD_REQUEST, "invalid_board_id")
+        }
+        Err(WebRequestError::CounterExhausted | WebRequestError::InternalIdentity) => {
+            web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error")
+        }
+        Err(_) => web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error"),
+    }
+}
+
+async fn change_feed_atom(
+    AxumPath(board_id): AxumPath<String>,
+    State(state): State<WebState>,
+) -> Response {
+    let response = match state.submit_change(board_id) {
+        Ok(value) => value,
+        Err(WebRequestError::InvalidBoardId) => {
+            return web_error(StatusCode::BAD_REQUEST, "invalid_board_id");
+        }
+        Err(_) => return web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error"),
+    };
+    let terminal = match response {
+        ClientResponseDto::ChangeFeedAccepted { terminal, .. } => terminal,
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } if error.class == WireErrorClassDto::PolicyDenied => {
+            return web_error(StatusCode::FORBIDDEN, "change_feed_policy_denied");
+        }
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Infrastructure { .. },
+        }
+        | ClientResponseDto::Unavailable => {
+            return web_error(StatusCode::SERVICE_UNAVAILABLE, "change_feed_unavailable");
+        }
+        _ => return web_error(StatusCode::BAD_GATEWAY, "change_feed_unavailable"),
+    };
+    match terminal.outcome() {
+        ustc_campus_agent_client_protocol::M70ChangeFeedOutcomeDto::Found { view } => {
+            dynamic_response(
+                view.atom().to_owned(),
+                "application/atom+xml; charset=utf-8",
+            )
+        }
+        ustc_campus_agent_client_protocol::M70ChangeFeedOutcomeDto::NotFound { .. } => {
+            web_error(StatusCode::NOT_FOUND, "change_board_not_found")
+        }
+    }
+}
+
+fn typed_json_response(status: StatusCode, response: ClientResponseDto) -> Response {
+    let mut response = Json(response).into_response();
+    *response.status_mut() = status;
+    hardened(response)
 }
 
 fn web_error(status: StatusCode, error: &'static str) -> Response {
@@ -229,6 +344,10 @@ fn web_error(status: StatusCode, error: &'static str) -> Response {
 }
 
 fn static_response(body: &'static str, content_type: &'static str) -> Response {
+    dynamic_response(body.to_owned(), content_type)
+}
+
+fn dynamic_response(body: String, content_type: &'static str) -> Response {
     let mut response = body.into_response();
     response
         .headers_mut()

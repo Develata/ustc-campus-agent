@@ -70,7 +70,7 @@ The thin peer clients display/serialize server projections and submit intent thr
 | `M50` | Model Provider | typed profiles, provider protocol, stream/final/usage/estimator | planned |
 | `M51` | MCP Binding/Executor | reviewed binding/discovery/schema drift and MCP execution | planned |
 | `M60` | Campus Trust/Source | source policy, immutable revision, provenance, conflict, freshness, baseline | bounded registry plus canonical-URL-bound, deterministic-ID `DemoReviewed` revision values and an M60-owned revision-health type; retrieval/parser/durable baseline remains planned |
-| `M70` | ChangeRadar | semantic change review/event/feed | exact-source-pinned board policy, typed semantic diff, administrator approve/reject receipts, coherent M60 publication verification, exactly-once in-memory publication and deterministic Atom evidence; durable platform/Web composition planned |
+| `M70` | ChangeRadar | semantic change review/event/feed | exact-source-pinned board policy, typed semantic diff, administrator approve/reject receipts, coherent M60 verification, exactly-once in-memory publication and deterministic Atom now have one fixture-backed current-Market/Harness/ToolGateway/M10/loopback-Web path; M00-authorized administration and durable restart remain planned |
 | `M71` | Affairs Navigator | reviewed procedure tree/artifacts/search | hardened procedure/artifact/policy/freshness/conflict kernel plus fixture-backed exact stable-ID composition; real source/admin/Web lifecycle planned |
 | `M72` | Opportunity Graph | reviewed opportunities, private profiles, qualification/planning | offline Course Planning spike |
 | `M80` | Client Core and Interaction Shells | framework-neutral client behavior and peer Dioxus Web/Android, `ustc-agent` and public-read-first inbound MCP adapters; later admitted Windows | bounded client-core and real ordinary-user fixture-loopback Affairs CLI evidence; production auth/HTTP/stream, inbound MCP and Dioxus peers planned |
@@ -189,19 +189,23 @@ Implemented evidence:
 - `crates/platform-core/src/market/authority.rs`: one semantic carrier-by-carrier authority read transaction, service-owned resolver/recheck assembly and post-success precondition evidence without durable adapters, effect intents or I/O;
 - `crates/platform-core/src/market/update.rs`: bounded pure update/rollback aggregate and atomic in-memory semantic package-update repository with exact approval/readiness/confirmation/rollback evidence, complete-current grant staling and receipt-prefix rebuild, without durable persistence, crash recovery, artifact switching, API/UI or B7 composition;
 - `crates/agent-tool-protocol`: Plugin-neutral tool values;
-- `apps/ustc-agentd/tests`: fake resolver/gateway/executor composition proof;
+- `crates/client-protocol` + `crates/application-ingress`: bounded `affairs.get` and `change.list` M10 wire/admission/projection carriers;
+- `apps/ustc-agentd`: fixture-backed Affairs and ChangeRadar current-Market/Harness/ToolGateway/owning-Plugin compositions plus loopback Web JSON/Atom presentation;
+- `crates/change-radar`: deterministic semantic diff, review/publication/query and Atom kernel;
+- `crates/affairs-navigator`: reviewed procedure publication/query kernel;
+- `crates/client-core` + `apps/ustc-agent`: bounded Affairs loopback CLI semantics;
 - `crates/course-planning` + CLI: deterministic offline Course Planning spike;
 - repository/CI contract checks.
 
 Not implemented:
 
-- framework-neutral client-core, `ustc-agent` user/automation CLI or inbound MCP adapter;
-- Dioxus Fullstack app or dependency, Compose Fullstack server profile, Web journey or Android artifact;
+- inbound MCP adapter;
+- Dioxus Fullstack app or dependency, Compose Fullstack server profile, peer Web journey or Android artifact;
 - Fullstack/public ingress, typed stream or auth/session service;
 - production durable Market installations/grants/updates/authority adapters, crash recovery, artifact switching and lifecycle/effect-intent/B7 composition;
 - finite HarnessRun/TaskGraph/context/review supervisor;
-- real model provider/MCP/Plugin executor;
-- real source pipeline and first-party product integrations;
+- real model provider/MCP executor and package-portable/out-of-process Plugin executor host;
+- real retrieval/parser source pipeline and durable first-party product integrations;
 - production database/evidence/secret/deployment profile.
 
 ## 10. Reading order

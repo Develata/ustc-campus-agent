@@ -24,13 +24,27 @@ struct WebServer {
 
 impl WebServer {
     fn start() -> Self {
+        Self::start_with_change(true)
+    }
+
+    fn start_affairs_only() -> Self {
+        Self::start_with_change(false)
+    }
+
+    fn start_with_change(include_change: bool) -> Self {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(|path| path.parent())
             .expect("workspace root")
             .to_path_buf();
         let fixture = workspace.join("fixtures/affairs/proc-011-reviewed.json");
+        let change_fixture =
+            workspace.join("fixtures/change-radar/academic-calendar-demo-reviewed.json");
         assert!(fixture.is_file(), "reviewed fixture must exist");
+        assert!(
+            change_fixture.is_file(),
+            "reviewed change fixture must exist"
+        );
 
         let suffix = COUNTER.fetch_add(1, Ordering::SeqCst);
         let temp_dir =
@@ -39,13 +53,22 @@ impl WebServer {
         let store = temp_dir.join("records.json");
         let idempotency = temp_dir.join("idempotency.json");
 
-        let mut child = Command::new(env!("CARGO_BIN_EXE_ustc-agentd"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_ustc-agentd"));
+        command.args([
+            "serve-web",
+            "--bind",
+            "127.0.0.1:0",
+            "--fixture",
+            fixture.to_str().expect("fixture path utf8"),
+        ]);
+        if include_change {
+            command.args([
+                "--change-fixture",
+                change_fixture.to_str().expect("change fixture path utf8"),
+            ]);
+        }
+        let mut child = command
             .args([
-                "serve-web",
-                "--bind",
-                "127.0.0.1:0",
-                "--fixture",
-                fixture.to_str().expect("fixture path utf8"),
                 "--store",
                 store.to_str().expect("store path utf8"),
                 "--idempotency",
@@ -217,6 +240,27 @@ fn reviewed_affairs_http_path_returns_typed_found_result() {
 }
 
 #[test]
+fn affairs_only_web_mode_keeps_affairs_available_and_change_fail_closed() {
+    let server = WebServer::start_affairs_only();
+
+    let affairs =
+        server.get("/api/v1/affairs/proc%3Austc%3Aundergraduate%3Atranscript-certificate");
+    assert!(affairs.status.contains(" 200 "), "{}", affairs.status);
+    let affairs_value: Value = serde_json::from_str(&affairs.body).expect("affairs JSON");
+    assert_eq!(affairs_value["terminal"]["outcome"]["kind"], "found");
+
+    let change = server.get("/api/v1/changes/board%3Austc%3Aacademic-calendar");
+    assert!(change.status.contains(" 503 "), "{}", change.status);
+    let change_value: Value = serde_json::from_str(&change.body).expect("change JSON");
+    assert_eq!(change_value["kind"], "unavailable");
+
+    let atom = server.get("/api/v1/changes/board%3Austc%3Aacademic-calendar/atom");
+    assert!(atom.status.contains(" 503 "), "{}", atom.status);
+    let atom_value: Value = serde_json::from_str(&atom.body).expect("atom error JSON");
+    assert_eq!(atom_value["error"], "change_feed_unavailable");
+}
+
+#[test]
 fn unknown_affairs_http_path_returns_public_not_found_without_bearer() {
     let server = WebServer::start();
     let response = server.get("/api/v1/affairs/proc%3Austc%3Astudent%3Aunknown");
@@ -233,6 +277,84 @@ fn unknown_affairs_http_path_returns_public_not_found_without_bearer() {
     assert_eq!(value["terminal"]["lineage"]["kind"], "not_required");
     assert!(!response.body.contains("public_capability"));
     assert!(!response.body.contains("cap:fixture-public"));
+}
+
+#[test]
+fn reviewed_change_radar_http_and_atom_paths_are_source_grounded() {
+    let server = WebServer::start();
+    let response = server.get("/api/v1/changes/board%3Austc%3Aacademic-calendar");
+    assert!(response.status.contains(" 200 "), "{}", response.status);
+    assert!(response.headers.contains("content-type: application/json"));
+    assert!(response.headers.contains("cache-control: no-store"));
+    let value: Value = serde_json::from_str(&response.body).expect("change JSON response");
+    assert_eq!(value["kind"], "change_feed_accepted");
+    assert_eq!(value["terminal"]["outcome"]["kind"], "found");
+    assert_eq!(
+        value["terminal"]["outcome"]["view"]["board_id"],
+        "board:ustc:academic-calendar"
+    );
+    let entry = &value["terminal"]["outcome"]["view"]["entries"][0];
+    assert_eq!(entry["source_health"], "current");
+    assert_eq!(entry["source_id"], "src:ustc:academic-calendar:2026-fall");
+    assert_eq!(
+        entry["changed_fields"]
+            .as_array()
+            .expect("changed fields")
+            .len(),
+        2
+    );
+    assert!(entry["old_raw_sha256"].as_str().is_some());
+    assert!(entry["new_raw_sha256"].as_str().is_some());
+    assert!(entry["old_normalized_sha256"].as_str().is_some());
+    assert!(entry["new_normalized_sha256"].as_str().is_some());
+    assert!(entry["effective_from"].as_i64().is_some());
+    assert!(entry["effective_to"].as_i64().is_some());
+    assert!(entry["observed_at"].as_i64().is_some());
+    assert!(entry["published_at"].as_i64().is_some());
+    assert_eq!(entry["old_source_reviewer"], "reviewer:demo:change-source");
+    assert_eq!(entry["new_source_reviewer"], "reviewer:demo:change-source");
+    assert_eq!(
+        entry["old_source_review_evidence"],
+        "evidence:demo:change:r1"
+    );
+    assert_eq!(
+        entry["new_source_review_evidence"],
+        "evidence:demo:change:r2"
+    );
+    assert!(entry["evidence_set_digest"].as_str().is_some());
+    assert!(!response.body.contains("public_capability"));
+
+    let atom = server.get("/api/v1/changes/board%3Austc%3Aacademic-calendar/atom");
+    assert!(atom.status.contains(" 200 "), "{}", atom.status);
+    assert!(
+        atom.headers
+            .contains("content-type: application/atom+xml; charset=utf-8")
+    );
+    assert!(
+        atom.body
+            .contains("<feed xmlns=\"http://www.w3.org/2005/Atom\">")
+    );
+    assert!(atom.body.contains("<author>"));
+    assert!(atom.body.contains("registration.deadline"));
+    assert!(atom.body.contains("old_raw_sha256="));
+}
+
+#[test]
+fn unknown_change_board_has_stable_json_and_atom_results() {
+    let server = WebServer::start();
+    let response = server.get("/api/v1/changes/board%3Austc%3Aunknown");
+    assert!(response.status.contains(" 200 "), "{}", response.status);
+    let value: Value = serde_json::from_str(&response.body).expect("change JSON response");
+    assert_eq!(value["terminal"]["outcome"]["kind"], "not_found");
+    assert_eq!(
+        value["terminal"]["outcome"]["board_id"],
+        "board:ustc:unknown"
+    );
+
+    let atom = server.get("/api/v1/changes/board%3Austc%3Aunknown/atom");
+    assert!(atom.status.contains(" 404 "), "{}", atom.status);
+    let value: Value = serde_json::from_str(&atom.body).expect("Atom error JSON");
+    assert_eq!(value["error"], "change_board_not_found");
 }
 
 #[test]
@@ -277,6 +399,24 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(page.body.contains("时间边界"));
     assert!(page.body.contains("证据集摘要"));
     assert!(page.body.contains("procedure-id-preview"));
+    assert!(page.body.contains("CHANGE RADAR"));
+    assert!(page.body.contains("radar-fields"));
+    assert!(page.body.contains("Atom feed"));
+    for id in [
+        "radar-effective",
+        "radar-published",
+        "radar-old-raw-digest",
+        "radar-old-normalized-digest",
+        "radar-old-review",
+        "radar-new-raw-digest",
+        "radar-new-normalized-digest",
+        "radar-new-review",
+    ] {
+        assert!(
+            page.body.contains(id),
+            "missing browser evidence field {id}"
+        );
+    }
 
     let script = server.get("/assets/app.js");
     assert!(script.status.contains(" 200 "), "{}", script.status);
@@ -284,6 +424,8 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(!script.body.contains("innerHTML"));
     assert!(script.body.contains("textContent"));
     assert!(script.body.contains("syncProcedurePreview"));
+    assert!(script.body.contains("renderChangeFeed"));
+    assert!(script.body.contains("loadChangeFeed"));
 
     let health = server.get("/healthz");
     assert!(health.status.contains(" 200 "), "{}", health.status);

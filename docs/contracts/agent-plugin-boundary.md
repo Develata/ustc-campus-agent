@@ -2,13 +2,13 @@
 
 ## Metadata
 
-- `Status`: Accepted target architecture; protocol values/conformance plus one bounded Affairs fixed-adapter ToolGateway composition implemented, generic/package-portable production ToolGateway planned
+- `Status`: Accepted target architecture; protocol values/conformance plus bounded Affairs and ChangeRadar fixed-adapter ToolGateway compositions implemented, generic/package-portable production ToolGateway planned
 - `Version`: `agent-plugin-boundary/v0`
 - `Last Review`: `2026-07-24`
 - `Owning Plans`: [`04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) owns package lifecycle; [`07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md) owns Agent/tool execution
 - `Decisions`: [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md)
 - `Acceptance`: implemented `AGENT-017`, `AGENT-019`; planned `AGENT-018`, `PKG-019`, `PKG-020`
-- `Primary Code`: `crates/agent-tool-protocol/`, `crates/agent-runtime/`, `crates/platform-core/src/invocation.rs`, `apps/ustc-agentd/tests/tool_gateway_conformance.rs`
+- `Primary Code`: `crates/agent-tool-protocol/`, `crates/agent-runtime/`, `crates/platform-core/src/invocation.rs`, `apps/ustc-agentd/src/{affairs,change}_invocation.rs`, `apps/ustc-agentd/tests/`
 
 ## 1. Purpose
 

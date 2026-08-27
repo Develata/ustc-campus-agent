@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="USTC Campus Agent 办事导航：从保留并校验过的校内公开来源呈现条件、步骤、入口与证据。">
-  <title>科大办事导航 · USTC Campus Agent</title>
+  <meta name="description" content="USTC Campus Agent 两插件演示：从保留并校验过的公开来源呈现办事流程与语义变更。">
+  <title>科大办事与变更 · USTC Campus Agent</title>
   <link rel="stylesheet" href="/assets/styles.css">
   <script src="/assets/app.js" defer></script>
 </head>
@@ -148,10 +148,47 @@
       </div>
     </article>
 
+    <section class="radar-board" aria-labelledby="radar-title">
+      <div class="radar-heading">
+        <div>
+          <p class="eyebrow">CHANGE RADAR · 语义变更</p>
+          <h2 id="radar-title">只看真正改变了什么。</h2>
+          <p>同一 source identity 的两个 immutable DemoReviewed revisions，经管理员审阅后形成确定性语义变更；不是原始文本 diff。</p>
+        </div>
+        <div class="radar-actions">
+          <button id="radar-load" type="button">读取变更板</button>
+          <a href="/api/v1/changes/board%3Austc%3Aacademic-calendar/atom">Atom feed ↗</a>
+        </div>
+      </div>
+      <p id="radar-status" class="status" role="status" aria-live="polite">等待读取 source-grounded feed…</p>
+      <div id="radar-result" class="radar-result" hidden>
+        <div class="radar-meta">
+          <span id="radar-board-id"></span>
+          <span id="radar-health"></span>
+          <span id="radar-observed"></span>
+          <span id="radar-effective"></span>
+          <span id="radar-published"></span>
+        </div>
+        <div id="radar-fields" class="radar-fields"></div>
+        <dl class="radar-evidence">
+          <div><dt>来源</dt><dd id="radar-source"></dd></div>
+          <div><dt>旧 revision</dt><dd id="radar-old-revision"></dd></div>
+          <div><dt>旧 raw digest</dt><dd id="radar-old-raw-digest"></dd></div>
+          <div><dt>旧 normalized digest</dt><dd id="radar-old-normalized-digest"></dd></div>
+          <div><dt>旧 review provenance</dt><dd id="radar-old-review"></dd></div>
+          <div><dt>新 revision</dt><dd id="radar-new-revision"></dd></div>
+          <div><dt>新 raw digest</dt><dd id="radar-new-raw-digest"></dd></div>
+          <div><dt>新 normalized digest</dt><dd id="radar-new-normalized-digest"></dd></div>
+          <div><dt>新 review provenance</dt><dd id="radar-new-review"></dd></div>
+          <div><dt>证据集</dt><dd id="radar-evidence-digest"></dd></div>
+        </dl>
+      </div>
+    </section>
+
     <section class="notice" aria-labelledby="boundary-title">
       <p class="eyebrow">BOUNDARY</p>
-      <h2 id="boundary-title">这是可验证的演示纵切，不是自动审批系统。</h2>
-      <p>当前页面只读、仅绑定本机 loopback；启动 fixture 会经 DemoReviewed review/publication path 物化为同仓库查询记录。它不代表 M00 身份认证过的管理员审批、生产持久化发布或实时 M60 导入；最终办理要求仍以中国科学技术大学官方页面和现场通知为准。</p>
+      <h2 id="boundary-title">这是可验证的两插件演示纵切，不是自动审批系统。</h2>
+      <p>当前页面只读、仅绑定本机 loopback；启动 fixtures 会经各自的 DemoReviewed review/publication path 物化为 Affairs 查询记录和 ChangeRadar feed event。它们不代表 M00 身份认证过的管理员审批、生产持久化发布或实时 M60 导入；最终办理要求仍以中国科学技术大学官方页面和现场通知为准。</p>
     </section>
   </main>
 

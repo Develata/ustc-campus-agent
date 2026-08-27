@@ -591,16 +591,16 @@ fn hex_digit(byte: u8) -> Result<u8, String> {
 // Fixture descriptor — fixed OperationDescriptorProjection
 // ---------------------------------------------------------------------------
 
-struct FixtureDescriptor {
-    operation_id: OperationId,
-    schema_identity: SchemaIdentity,
-    schema_digest: SchemaDigest,
-    permission_class: PermissionClass,
-    effect_class: EffectClass,
-    decoder_identity: DecoderIdentity,
-    dispatcher_identity: DispatcherIdentity,
-    adapter_allowlist: AdapterAllowlist,
-    snapshot_identity: DescriptorSnapshotId,
+pub(crate) struct FixtureDescriptor {
+    pub(crate) operation_id: OperationId,
+    pub(crate) schema_identity: SchemaIdentity,
+    pub(crate) schema_digest: SchemaDigest,
+    pub(crate) permission_class: PermissionClass,
+    pub(crate) effect_class: EffectClass,
+    pub(crate) decoder_identity: DecoderIdentity,
+    pub(crate) dispatcher_identity: DispatcherIdentity,
+    pub(crate) adapter_allowlist: AdapterAllowlist,
+    pub(crate) snapshot_identity: DescriptorSnapshotId,
 }
 
 impl OperationDescriptorProjection for FixtureDescriptor {

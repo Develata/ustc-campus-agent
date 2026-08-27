@@ -9,8 +9,10 @@
 #![forbid(unsafe_code)]
 
 mod publication;
+mod query;
 
 pub use publication::*;
+pub use query::*;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
