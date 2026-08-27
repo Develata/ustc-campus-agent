@@ -25,12 +25,14 @@ use common::{
     seed_repo, submit_request, submit_request_authenticated, t, temp_path,
 };
 
-fn make_service(m71: &dyn affairs_navigator::M71AffairsGetPort) -> M10Service<'_> {
+fn make_service(
+    affairs: &dyn ustc_campus_agent_application_ingress::AffairsInvocationPort,
+) -> M10Service<'_> {
     let store = FileRecordStore::open(temp_path()).unwrap();
     M10Service::new(
         store,
         cap_issuer(),
-        m71,
+        affairs,
         WireText::parse("operator:fixture").unwrap(),
     )
 }

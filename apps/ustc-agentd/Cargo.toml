@@ -11,6 +11,7 @@ homepage.workspace = true
 [dependencies]
 axum.workspace = true
 ustc-campus-agent-runtime = { path = "../../crates/agent-runtime" }
+ustc-agent-tool-protocol.workspace = true
 ustc-campus-agent-core = { path = "../../crates/platform-core" }
 ustc-campus-agent-application-ingress = { path = "../../crates/application-ingress" }
 ustc-campus-agent-client-protocol = { path = "../../crates/client-protocol" }
@@ -21,7 +22,6 @@ time.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
-ustc-agent-tool-protocol.workspace = true
 sha2.workspace = true
 
 [lints]

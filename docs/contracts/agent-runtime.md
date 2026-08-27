@@ -53,11 +53,11 @@ Phases are:
 ```text
 Created
 → Preparing
-→ ModelTurn
+→ ModelTurn | HarnessTurn
 → AwaitingToolApproval
 → ExecutingTools
 → Preparing
-→ ModelTurn
+→ ModelTurn | HarnessTurn
 → Completed
 
 terminal alternatives: Failed | Cancelled | Expired
@@ -69,12 +69,14 @@ Only the following non-terminal transitions are legal:
 |---|---|---|
 | `Created` | prepare | `Preparing` |
 | `Preparing` | start model turn | `ModelTurn` |
+| `Preparing` | start deterministic provider-free harness turn | `HarnessTurn` |
 | `ModelTurn` | persist exact provider usage | `ModelTurn` |
 | `ModelTurn` | propose tool call | `AwaitingToolApproval` |
+| `HarnessTurn` | propose deterministic tool call without model usage | `AwaitingToolApproval` |
 | `AwaitingToolApproval` | approve and persist effect intent | `ExecutingTools` |
 | `ExecutingTools` | persist successful/failed effect receipt | `Preparing` |
-| `ModelTurn` | complete | `Completed` |
-| `Preparing` or `ModelTurn` | persist retry accounting | `Preparing` |
+| `ModelTurn` or `HarnessTurn` | complete | `Completed` |
+| `Preparing`, `ModelTurn` or `HarnessTurn` | persist retry accounting | `Preparing` |
 | any non-terminal phase | persist a strictly newer elapsed-time observation | same phase |
 
 A non-executing phase may transition to `Failed`, `Cancelled` or `Expired`. Cancellation while an effect is in flight is intentionally rejected in R0; later orchestration must distinguish queued, in-flight and post-receipt cancellation rather than guessing.
@@ -117,7 +119,7 @@ ToolCallProposed event
 → EffectIntentPersisted event
 → bounded adapter execution (future orchestrator)
 → EffectReceiptPersisted event
-→ next ModelTurn
+→ next ModelTurn or deterministic HarnessTurn
 ```
 
 A receipt must match the pending effect and idempotency ID. The first committed receipt wins. Re-submitting an identical receipt is an explicit idempotent no-op; a conflicting receipt for the same effect fails closed.

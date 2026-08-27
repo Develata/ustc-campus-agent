@@ -10710,7 +10710,7 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
 
     required_fragments = {
         "docs/contracts/interfaces.md": (
-            "A bounded loopback-only `affairs.get` proof now exists earlier as vertical-slice evidence for the M10→M71 typed path and one operation-specific presentation surface",
+            "A bounded loopback-only `affairs.get` proof now exists earlier as vertical-slice evidence for `M10 → deterministic Harness → current Market authorization → ToolGateway → fixed first-party Affairs adapter → M71` and one operation-specific presentation surface",
             "The first remote profile uses reviewed MCP Streamable HTTP.",
             "`planner.generate` creates only a tenant-local draft. It does not enroll, register, pay or submit a transaction to any external campus system.",
         ),
@@ -12258,7 +12258,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
     "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
-    "check_external_agent_access_contract": {"digest": "0895a4b944369629f088134365ddb128cfde0da3ed40b70aab4e12cee8cdf0d2", "status": "active"},
+    "check_external_agent_access_contract": {"digest": "ab9bfa7205129d223503e8dae72110ec253fee13f2c4a80d0bb4310549cbb4c3", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},

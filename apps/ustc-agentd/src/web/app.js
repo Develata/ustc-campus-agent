@@ -254,7 +254,7 @@ async function lookup() {
 
   submitButton.disabled = true;
   submitButton.textContent = "读取中…";
-  status.textContent = "正在通过 M00 → M10 → M71 读取可验证结果…";
+  status.textContent = "正在通过 M00 → M10 → bounded Harness → Market current authorization → ToolGateway → Affairs Plugin 读取可验证结果…";
   errorPanel.hidden = true;
 
   try {

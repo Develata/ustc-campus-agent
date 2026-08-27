@@ -199,6 +199,67 @@ fn authenticated_found_one_m71_call() {
         1,
         "exactly one M60 verify_retained call"
     );
+    assert_eq!(
+        comp.invocation_counts(),
+        (1, 1, 1),
+        "intent must precede one owning-plugin execution and one receipt"
+    );
+}
+
+#[test]
+fn disabled_market_installation_denies_without_plugin_execution_or_direct_fallback() {
+    let mut fixture = base_fixture();
+    fixture["market_enabled"] = json!(false);
+    let env = TestEnv::with_fixture(fixture);
+    let comp = env.open();
+    let request = submit_request(
+        "proc:fixture",
+        authenticated_actor(),
+        Some("idem:market-deny"),
+    );
+
+    let response = comp.handle_submit(&request);
+
+    match response {
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } => assert_eq!(error.class, WireErrorClassDto::PolicyDenied),
+        _ => panic!("expected stable Market denial, got {response:?}"),
+    }
+    assert_eq!(comp.invocation_counts(), (0, 0, 0));
+    assert_eq!(
+        comp.m60_call_count(),
+        0,
+        "denial must not fall back to direct M71"
+    );
+}
+
+#[test]
+fn revoked_market_grant_denies_without_plugin_execution_or_direct_fallback() {
+    let mut fixture = base_fixture();
+    fixture["market_grant_active"] = json!(false);
+    let env = TestEnv::with_fixture(fixture);
+    let comp = env.open();
+    let request = submit_request(
+        "proc:fixture",
+        authenticated_actor(),
+        Some("idem:grant-deny"),
+    );
+
+    let response = comp.handle_submit(&request);
+
+    match response {
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } => assert_eq!(error.class, WireErrorClassDto::PolicyDenied),
+        _ => panic!("expected stable Market grant denial, got {response:?}"),
+    }
+    assert_eq!(comp.invocation_counts(), (0, 0, 0));
+    assert_eq!(
+        comp.m60_call_count(),
+        0,
+        "revoked grant must not fall back to direct M71"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -441,6 +502,11 @@ fn m60_store_unavailable_maps_to_infrastructure_error() {
         }
         _ => panic!("expected Infrastructure error, got {response:?}"),
     }
+    assert_eq!(
+        comp.invocation_counts(),
+        (1, 1, 1),
+        "an attempted failing Plugin call must still persist intent and failure receipt"
+    );
 }
 
 #[test]
@@ -461,6 +527,11 @@ fn m60_store_corrupted_maps_to_infrastructure_error() {
         }
         _ => panic!("expected Infrastructure error, got {response:?}"),
     }
+    assert_eq!(
+        comp.invocation_counts(),
+        (1, 1, 1),
+        "a corrupted-source failure still requires one exact failure receipt"
+    );
 }
 
 // ---------------------------------------------------------------------------

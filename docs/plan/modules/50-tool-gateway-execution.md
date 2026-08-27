@@ -3,12 +3,12 @@
 ## Metadata
 
 - `Module ID`: `M40`
-- `Status`: Accepted blueprint; protocol values and fake gateway/executor conformance implemented
+- `Status`: Accepted blueprint; protocol/fake conformance plus one bounded Affairs fixed-adapter composition implemented
 - `Implementation State`: `partial-evidence`
 - `Version`: `m40-tool-gateway/v0`
 - `Last Review`: `2026-07-25`
 - `Owning Contract`: [`../../contracts/agent-plugin-boundary.md`](../../contracts/agent-plugin-boundary.md)
-- `Primary code areas`: `crates/agent-tool-protocol/`, future gateway/executor modules, composition tests in `apps/ustc-agentd/tests/`
+- `Primary code areas`: `crates/agent-tool-protocol/`, `apps/ustc-agentd/src/affairs_invocation.rs`, future generic gateway/executor modules, composition tests in `apps/ustc-agentd/tests/`
 
 ## 1. Purpose
 
@@ -91,8 +91,8 @@ Forbidden dependencies:
 
 ```text
 M20 freezes projection + private routes
-→ M30/provider sees AgentToolsetView
-→ M30 records provider-selected proposal
+→ M30/provider or deterministic Harness sees AgentToolsetView
+→ M30 records the exact selected proposal
 → composition asks M40 to normalize/recheck and return PreparedToolExecution
 → composition commands M30 to persist EffectIntent
 → composition asks M40 to call the admitted executor

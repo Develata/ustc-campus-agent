@@ -1,4 +1,4 @@
-use affairs_navigator::{AffairsGetQuery, GetProcedureError, M71AffairsGetPort, ProcedureId};
+use affairs_navigator::{AffairsGetQuery, GetProcedureError, M71AffairsGetReceipt, ProcedureId};
 use time::OffsetDateTime;
 use ustc_campus_agent_client_protocol::{
     ActorIntentDto, AdmittedActorDto, AffairsGetPayloadDto, ClientErrorDto, ClientResponseDto,
@@ -24,10 +24,31 @@ pub trait M10AdmissionPorts: AdmissionPorts {
     fn staged_operation(&self) -> OperationSnapshot;
 }
 
+/// M10-owned application seam for an admitted Affairs invocation.
+///
+/// The caller must pass the exact M00-admitted actor. Implementations may
+/// narrow authority through Market/Agent/ToolGateway before delegating to M71;
+/// M10 never fabricates a direct M71 fallback after this port denies or fails.
+pub trait AffairsInvocationPort: Send + Sync {
+    fn invoke(
+        &self,
+        actor: &M00AdmittedActor,
+        query: &AffairsGetQuery,
+    ) -> Result<M71AffairsGetReceipt, AffairsInvocationError>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AffairsInvocationError {
+    Downstream(GetProcedureError),
+    Denied,
+    Unavailable,
+    Internal,
+}
+
 pub struct M10Service<'a> {
     store: FileRecordStore,
     capabilities: CapabilityIssuer,
-    m71: &'a dyn M71AffairsGetPort,
+    affairs: &'a dyn AffairsInvocationPort,
     operator_grant_id: WireText,
 }
 
@@ -35,13 +56,13 @@ impl<'a> M10Service<'a> {
     pub fn new(
         store: FileRecordStore,
         capabilities: CapabilityIssuer,
-        m71: &'a dyn M71AffairsGetPort,
+        affairs: &'a dyn AffairsInvocationPort,
         operator_grant_id: WireText,
     ) -> Self {
         Self {
             store,
             capabilities,
-            m71,
+            affairs,
             operator_grant_id,
         }
     }
@@ -256,13 +277,13 @@ impl<'a> M10Service<'a> {
             None => None,
         };
         let query = AffairsGetQuery::new(procedure_id, as_of);
-        let receipt = match self.m71.affairs_get(&query) {
+        let receipt = match self.affairs.invoke(disposition.admitted_actor(), &query) {
             Ok(value) => value,
             Err(error) => {
                 if self.store.abandon(&token).is_err() {
                     return infrastructure_error("m10_store_unavailable");
                 }
-                return map_m71_error(error);
+                return map_invocation_error(error);
             }
         };
         let terminal = match project_receipt(&receipt) {
@@ -425,6 +446,35 @@ fn reproduce_bearer(
 
 fn wire(value: &str) -> WireText {
     WireText::parse(value).unwrap_or_else(|_| WireText::fallback())
+}
+
+fn map_invocation_error(error: AffairsInvocationError) -> ClientResponseDto {
+    match error {
+        AffairsInvocationError::Downstream(error) => map_m71_error(error),
+        AffairsInvocationError::Denied => invocation_denied_error(),
+        AffairsInvocationError::Unavailable => {
+            infrastructure_error("affairs_invocation_unavailable")
+        }
+        AffairsInvocationError::Internal => internal_error("affairs_invocation_internal"),
+    }
+}
+
+fn invocation_denied_error() -> ClientResponseDto {
+    let error = match M10WireErrorDto::try_new(
+        WireErrorClassDto::PolicyDenied,
+        RetryabilityDto::NotRetryable,
+        wire("policy_denied"),
+        EchoPayloadDto::PolicyDenied {
+            operation_id: wire("affairs.get"),
+            permission_class: wire("public_read"),
+        },
+    ) {
+        Ok(value) => value,
+        Err(_) => return internal_error("m10_invocation_denial_projection"),
+    };
+    ClientResponseDto::Error {
+        error: ClientErrorDto::Admission { error },
+    }
 }
 
 fn map_m71_error(error: GetProcedureError) -> ClientResponseDto {

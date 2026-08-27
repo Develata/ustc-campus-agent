@@ -348,6 +348,24 @@ impl<'a> affairs_navigator::M71AffairsGetPort for CountingM71Port<'a> {
     }
 }
 
+impl ustc_campus_agent_application_ingress::AffairsInvocationPort for CountingM71Port<'_> {
+    fn invoke(
+        &self,
+        actor: &ustc_campus_agent_core::request_context::M00AdmittedActor,
+        query: &affairs_navigator::AffairsGetQuery,
+    ) -> Result<
+        affairs_navigator::M71AffairsGetReceipt,
+        ustc_campus_agent_application_ingress::AffairsInvocationError,
+    > {
+        self.count.fetch_add(1, Ordering::SeqCst);
+        ustc_campus_agent_application_ingress::AffairsInvocationPort::invoke(
+            &self.inner,
+            actor,
+            query,
+        )
+    }
+}
+
 #[test]
 fn s2_response_loss_recovery_retries_to_identical_terminal_with_one_m71_call() {
     let path = temp_path();

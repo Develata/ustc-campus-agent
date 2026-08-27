@@ -1,13 +1,15 @@
 //! Bounded composition root for the `ustc-agentd` product-path slice.
 //!
-//! Only this crate may simultaneously name M00 fixture ports, application-ingress,
-//! M71 publication/query services and the equal-contract M60 fixture. The M60
-//! fixture enters only through M71's evidence/publication ports; it never enters
-//! an M10/client seam and remains explicitly noncanonical.
+//! Only this crate may simultaneously name M00 fixture ports, M10 ingress, M20
+//! current invocation authority, the M30 deterministic harness path, the bounded
+//! ToolGateway adapter, and M71 publication/query services. The M60 fixture
+//! enters only through M71's evidence/publication ports; it never enters an
+//! M10/client seam and remains explicitly noncanonical.
 
 #![forbid(unsafe_code)]
 
 mod affairs_fixture;
+mod affairs_invocation;
 mod web;
 
 pub use web::web_router;
@@ -19,6 +21,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use affairs_fixture::{AffairsFixture, DurableIdempotencyStore, FixturePorts};
+use affairs_invocation::AffairsInvocationSpine;
 use affairs_navigator::AffairsGetService;
 use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service};
 use ustc_campus_agent_client_protocol::{
@@ -70,15 +73,23 @@ impl AffairsComposition {
     }
 
     /// Handles one `SubmitAffairsGet` intent through the real M00 admission
-    /// coordinator, M10 service, M71 application service and M60 fixture port.
+    /// coordinator, M10 service, bounded Market/Agent/ToolGateway spine, owning
+    /// M71 application service and M60 fixture port.
     #[must_use]
     pub fn handle_submit(&self, request: &SubmitAffairsGetDto) -> ClientResponseDto {
         let m71 =
             AffairsGetService::new(&self.fixture.repo, &self.fixture.m60, &self.fixture.clock);
+        let affairs = AffairsInvocationSpine::new(
+            m71,
+            self.fixture.market_enabled,
+            self.fixture.market_grant_active,
+            self.fixture.source_evidence_digest.clone(),
+            self.fixture.invocation_counters.clone(),
+        );
         let m10 = M10Service::new(
             self.store.clone(),
             self.fixture.capabilities.clone(),
-            &m71,
+            &affairs,
             self.fixture.operator_grant_id.clone(),
         );
         let mut ports = FixturePorts::new(
@@ -103,10 +114,17 @@ impl AffairsComposition {
     ) -> ClientResponseDto {
         let m71 =
             AffairsGetService::new(&self.fixture.repo, &self.fixture.m60, &self.fixture.clock);
+        let affairs = AffairsInvocationSpine::new(
+            m71,
+            self.fixture.market_enabled,
+            self.fixture.market_grant_active,
+            self.fixture.source_evidence_digest.clone(),
+            self.fixture.invocation_counters.clone(),
+        );
         let m10 = M10Service::new(
             self.store.clone(),
             self.fixture.capabilities.clone(),
-            &m71,
+            &affairs,
             self.fixture.operator_grant_id.clone(),
         );
         m10.lookup(command_id, viewer)
@@ -120,6 +138,17 @@ impl AffairsComposition {
         self.fixture
             .m60_call_count
             .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Returns `(effect_intents, plugin_executions, effect_receipts)` observed
+    /// by the bounded invocation spine.
+    #[must_use]
+    pub fn invocation_counts(&self) -> (u64, u64, u64) {
+        (
+            self.fixture.invocation_counters.intents(),
+            self.fixture.invocation_counters.executions(),
+            self.fixture.invocation_counters.receipts(),
+        )
     }
 
     /// Returns the immutable receipt identity minted while the fixture's exact

@@ -53,6 +53,8 @@ use ustc_campus_agent_core::source_revision::{
     RevisionSha256, RevisionTimestamp, SourceRevision,
 };
 
+use crate::affairs_invocation::AffairsInvocationCounters;
+
 // ---------------------------------------------------------------------------
 // Counting M60 port (owner-private call-count instrumentation)
 // ---------------------------------------------------------------------------
@@ -132,6 +134,8 @@ struct AffairsFixtureDto {
     source_reviewer: String,
     source_review_evidence: String,
     publication_reviewer: String,
+    market_enabled: Option<bool>,
+    market_grant_active: Option<bool>,
     verifier_id: String,
     evidence_contract_version: u16,
     clock_unix_seconds: i64,
@@ -166,6 +170,10 @@ struct AffairsFixtureDto {
 pub(crate) struct AffairsFixture {
     pub(crate) repo: InMemoryPublishedAffairsRepository,
     pub(crate) publication_receipt: ProcedurePublicationReceipt,
+    pub(crate) source_evidence_digest: String,
+    pub(crate) market_enabled: bool,
+    pub(crate) market_grant_active: bool,
+    pub(crate) invocation_counters: AffairsInvocationCounters,
     pub(crate) m60: CountingM60Port,
     pub(crate) m60_call_count: Arc<AtomicU64>,
     pub(crate) clock: FixedClock,
@@ -423,6 +431,10 @@ impl AffairsFixture {
         let publication_receipt = ProcedurePublicationService::new(&mut repo, &m60)
             .publish(draft, approval, published_at, None)
             .map_err(|e| format!("reviewed publication failed: {e:?}"))?;
+        let source_evidence_digest = publication_receipt
+            .m60_evidence_set_digest()
+            .as_str()
+            .to_owned();
 
         if let Some(error) = query_failure_mode {
             m60.set_failure_mode(Some(error));
@@ -527,6 +539,10 @@ impl AffairsFixture {
         Ok(Self {
             repo,
             publication_receipt,
+            source_evidence_digest,
+            market_enabled: dto.market_enabled.unwrap_or(true),
+            market_grant_active: dto.market_grant_active.unwrap_or(true),
+            invocation_counters: AffairsInvocationCounters::default(),
             m60,
             m60_call_count,
             clock,

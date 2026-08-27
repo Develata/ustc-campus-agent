@@ -629,6 +629,20 @@ impl affairs_navigator::M71AffairsGetPort for FailingM71Port {
     }
 }
 
+impl ustc_campus_agent_application_ingress::AffairsInvocationPort for FailingM71Port {
+    fn invoke(
+        &self,
+        _actor: &ustc_campus_agent_core::request_context::M00AdmittedActor,
+        query: &AffairsGetQuery,
+    ) -> Result<
+        affairs_navigator::M71AffairsGetReceipt,
+        ustc_campus_agent_application_ingress::AffairsInvocationError,
+    > {
+        affairs_navigator::M71AffairsGetPort::affairs_get(self, query)
+            .map_err(ustc_campus_agent_application_ingress::AffairsInvocationError::Downstream)
+    }
+}
+
 pub struct M71FixturePort<'a> {
     service: AffairsGetService<'a>,
 }
@@ -651,6 +665,20 @@ impl<'a> affairs_navigator::M71AffairsGetPort for M71FixturePort<'a> {
         query: &AffairsGetQuery,
     ) -> Result<affairs_navigator::M71AffairsGetReceipt, affairs_navigator::GetProcedureError> {
         self.service.execute(query)
+    }
+}
+
+impl ustc_campus_agent_application_ingress::AffairsInvocationPort for M71FixturePort<'_> {
+    fn invoke(
+        &self,
+        _actor: &ustc_campus_agent_core::request_context::M00AdmittedActor,
+        query: &AffairsGetQuery,
+    ) -> Result<
+        affairs_navigator::M71AffairsGetReceipt,
+        ustc_campus_agent_application_ingress::AffairsInvocationError,
+    > {
+        affairs_navigator::M71AffairsGetPort::affairs_get(self, query)
+            .map_err(ustc_campus_agent_application_ingress::AffairsInvocationError::Downstream)
     }
 }
 
