@@ -8,6 +8,7 @@ members = [
   "crates/agent-tool-protocol",
   "crates/adapters",
   "crates/course-planning",
+  "crates/opportunity-graph",
   "crates/change-radar",
   "crates/affairs-navigator",
   "crates/client-core",

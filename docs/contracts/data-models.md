@@ -1,6 +1,6 @@
 # Course Planning data model contract
 
-Status: implemented v0 in `crates/course-planning`.
+Status: Course Planning v0 implemented; bounded Opportunity consent/profile wrapper implemented.
 
 ## Boundary
 
@@ -64,6 +64,25 @@ All v0 input objects reject unknown JSON fields, and every course must explicitl
 - per-course soft preference weights.
 
 It is user-owned data, not campus-source authority.
+
+### Consent-bound Opportunity profile wrapper
+
+`crates/opportunity-graph` does not retain the fixture's profile inside the
+public catalog. It splits one exact `DemoReviewed` `SourceRevision` plus public
+course facts from one private `AcademicProfileInput`. Profile creation requires
+an authenticated tenant/user principal and explicit consent to exactly:
+
+- completed courses;
+- credit bounds;
+- preference weights.
+
+The in-memory repository allows one active profile snapshot per principal.
+Planning takes an exact profile snapshot ID, denies a mismatched principal
+before calling the M60 health port, and binds the receipt to source revision,
+profile snapshot and consent IDs. Revocation and profile deletion are one
+atomic repository operation; the tombstone retains identities and deletion
+receipt but not the academic payload. This is bounded domain evidence, not a
+durable deletion/backup-erasure or M00/M10/Market composition claim.
 
 ### Course identity and scheduling
 

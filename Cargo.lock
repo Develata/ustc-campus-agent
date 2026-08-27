@@ -675,6 +675,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ustc-campus-agent-opportunity-graph"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "time",
+ "ustc-campus-agent-core",
+ "ustc-campus-agent-course-planning",
+]
+
+[[package]]
 name = "ustc-campus-agent-runtime"
 version = "0.1.0"
 dependencies = [
