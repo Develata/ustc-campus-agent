@@ -7,8 +7,9 @@
 #![allow(clippy::too_many_arguments)]
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::io::Write;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Write};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -28,6 +29,8 @@ use affairs_navigator::{
 };
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
+
+const MAX_IDEMPOTENCY_STORE_BYTES: u64 = 16 * 1024 * 1024;
 use ustc_campus_agent_application_ingress::{CapabilityIssuer, M10AdmissionPorts};
 use ustc_campus_agent_client_protocol::WireText;
 use ustc_campus_agent_core::identity::{CommandId, SessionId, TenantId, UserId};
@@ -705,6 +708,50 @@ fn validate_idempotency_state(state: &IdempotencyState) -> Result<(), String> {
     Ok(())
 }
 
+fn read_existing_idempotency_state(path: &Path) -> Result<Option<Vec<u8>>, String> {
+    let path_metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("idempotency metadata failed: {error}")),
+    };
+    if !path_metadata.file_type().is_file() {
+        return Err("idempotency state path is not a regular file".to_owned());
+    }
+    if path_metadata.permissions().mode() & 0o777 != 0o600 {
+        return Err("idempotency state mode must be 0600".to_owned());
+    }
+    if path_metadata.len() > MAX_IDEMPOTENCY_STORE_BYTES {
+        return Err("idempotency state exceeds byte cap".to_owned());
+    }
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|error| format!("idempotency open failed: {error}"))?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|error| format!("idempotency opened metadata failed: {error}"))?;
+    if !opened_metadata.file_type().is_file()
+        || opened_metadata.dev() != path_metadata.dev()
+        || opened_metadata.ino() != path_metadata.ino()
+        || opened_metadata.permissions().mode() & 0o777 != 0o600
+        || opened_metadata.len() > MAX_IDEMPOTENCY_STORE_BYTES
+    {
+        return Err("idempotency state identity or mode changed during open".to_owned());
+    }
+
+    let mut bytes = Vec::new();
+    std::io::Read::by_ref(&mut file)
+        .take(MAX_IDEMPOTENCY_STORE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("idempotency read failed: {error}"))?;
+    if bytes.len() as u64 > MAX_IDEMPOTENCY_STORE_BYTES {
+        return Err("idempotency state exceeds byte cap".to_owned());
+    }
+    Ok(Some(bytes))
+}
+
 #[derive(Clone)]
 pub(crate) struct DurableIdempotencyStore {
     path: PathBuf,
@@ -722,8 +769,7 @@ impl DurableIdempotencyStore {
         if deadline_duration_ms == 0 {
             return Err("idempotency_deadline_ms must be nonzero".to_owned());
         }
-        let state = if path.exists() {
-            let bytes = fs::read(path).map_err(|e| format!("idempotency read failed: {e}"))?;
+        let state = if let Some(bytes) = read_existing_idempotency_state(path)? {
             let state: IdempotencyState = serde_json::from_slice(&bytes)
                 .map_err(|e| format!("idempotency parse failed: {e}"))?;
             if state.schema_version != 1 {
@@ -746,21 +792,47 @@ impl DurableIdempotencyStore {
     }
 
     fn persist(&self, state: &IdempotencyState) -> Result<(), String> {
-        if let Some(parent) = self.path.parent() {
+        if let Some(parent) = self
+            .path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             fs::create_dir_all(parent).map_err(|e| format!("idempotency mkdir failed: {e}"))?;
         }
         let bytes =
             serde_json::to_vec(state).map_err(|e| format!("idempotency encode failed: {e}"))?;
+        if bytes.len() as u64 > MAX_IDEMPOTENCY_STORE_BYTES {
+            return Err("idempotency state exceeds byte cap".to_owned());
+        }
         let temporary = self.path.with_extension("tmp");
-        let mut file = fs::File::create(&temporary)
-            .map_err(|e| format!("idempotency temp create failed: {e}"))?;
-        file.write_all(&bytes)
-            .map_err(|e| format!("idempotency write failed: {e}"))?;
-        file.sync_all()
-            .map_err(|e| format!("idempotency sync failed: {e}"))?;
-        fs::rename(&temporary, &self.path)
-            .map_err(|e| format!("idempotency rename failed: {e}"))?;
-        Ok(())
+        let result = (|| {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&temporary)
+                .map_err(|e| format!("idempotency temp create failed: {e}"))?;
+            file.write_all(&bytes)
+                .map_err(|e| format!("idempotency write failed: {e}"))?;
+            file.sync_all()
+                .map_err(|e| format!("idempotency sync failed: {e}"))?;
+            fs::rename(&temporary, &self.path)
+                .map_err(|e| format!("idempotency rename failed: {e}"))?;
+            if let Some(parent) = self
+                .path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+            {
+                File::open(parent)
+                    .and_then(|directory| directory.sync_all())
+                    .map_err(|e| format!("idempotency parent sync failed: {e}"))?;
+            }
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temporary);
+        }
+        result
     }
 
     pub(crate) fn reserve_or_retrieve(
@@ -1044,6 +1116,8 @@ mod tests {
 
     use super::*;
     use std::fs;
+    use std::io;
+    use std::os::unix::fs::{PermissionsExt, symlink};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -1085,20 +1159,94 @@ mod tests {
         .to_string()
     }
 
+    fn write_secure(path: &Path, bytes: impl AsRef<[u8]>) -> io::Result<()> {
+        fs::write(path, bytes)?;
+        let mut permissions = fs::metadata(path)?.permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(path, permissions)
+    }
+
     #[test]
     fn valid_persisted_state_reopens() {
         let dir = test_dir("valid-reopen");
         let path = dir.join("store.json");
-        fs::write(&path, valid_state_json()).unwrap();
+        write_secure(&path, valid_state_json()).unwrap();
         let store = DurableIdempotencyStore::open(&path, 1000000001000, 30000);
         assert!(store.is_ok(), "valid state must reopen");
+    }
+
+    #[test]
+    fn private_idempotency_store_rejects_unsafe_primary_and_temporary_files() {
+        let dir = test_dir("secure-idempotency-store");
+        let path = dir.join("store.json");
+        let store = DurableIdempotencyStore::open(&path, 1000000001000, 30000)
+            .expect("open absent idempotency store");
+        store
+            .persist(&IdempotencyState::default())
+            .expect("persist secure idempotency store");
+        assert_eq!(
+            fs::metadata(&path)
+                .expect("persisted idempotency metadata")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+        DurableIdempotencyStore::open(&path, 1000000001000, 30000)
+            .expect("reopen secure idempotency store");
+
+        let insecure = test_dir("insecure-idempotency-mode").join("store.json");
+        write_secure(&insecure, valid_state_json()).expect("write valid insecure fixture");
+        let mut permissions = fs::metadata(&insecure)
+            .expect("insecure idempotency metadata")
+            .permissions();
+        permissions.set_mode(0o644);
+        fs::set_permissions(&insecure, permissions).expect("set insecure idempotency mode");
+        assert!(DurableIdempotencyStore::open(&insecure, 1000000001000, 30000).is_err());
+
+        let symlink_dir = test_dir("idempotency-primary-symlink");
+        let symlink_path = symlink_dir.join("store.json");
+        let sentinel = symlink_dir.join("sentinel.json");
+        write_secure(&sentinel, valid_state_json()).expect("write idempotency sentinel");
+        symlink(&sentinel, &symlink_path).expect("create idempotency primary symlink");
+        assert!(DurableIdempotencyStore::open(&symlink_path, 1000000001000, 30000).is_err());
+
+        let temporary_dir = test_dir("idempotency-temporary-symlink");
+        let temporary_path = temporary_dir.join("store.json");
+        let temporary_sentinel = temporary_dir.join("sentinel");
+        fs::write(&temporary_sentinel, b"do-not-overwrite").expect("write temp sentinel");
+        symlink(&temporary_sentinel, temporary_path.with_extension("tmp"))
+            .expect("create idempotency temporary symlink");
+        let temporary_store = DurableIdempotencyStore::open(&temporary_path, 1000000001000, 30000)
+            .expect("open absent idempotency store");
+        assert!(
+            temporary_store
+                .persist(&IdempotencyState::default())
+                .is_err()
+        );
+        assert_eq!(
+            fs::read(&temporary_sentinel).expect("read idempotency temp sentinel"),
+            b"do-not-overwrite"
+        );
+
+        let oversized = test_dir("oversized-idempotency-store").join("store.json");
+        let oversized_file = File::create(&oversized).expect("create oversized idempotency store");
+        oversized_file
+            .set_len(MAX_IDEMPOTENCY_STORE_BYTES + 1)
+            .expect("size oversized idempotency store");
+        let mut permissions = fs::metadata(&oversized)
+            .expect("oversized idempotency metadata")
+            .permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(&oversized, permissions).expect("secure oversized idempotency mode");
+        assert!(DurableIdempotencyStore::open(&oversized, 1000000001000, 30000).is_err());
     }
 
     #[test]
     fn malformed_json_fails_closed() {
         let dir = test_dir("malformed-json");
         let path = dir.join("store.json");
-        fs::write(&path, b"not json").unwrap();
+        write_secure(&path, b"not json").unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1108,7 +1256,7 @@ mod tests {
         let path = dir.join("store.json");
         let mut json = serde_json::from_str::<serde_json::Value>(&valid_state_json()).unwrap();
         json["schema_version"] = serde_json::json!(2);
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1118,7 +1266,7 @@ mod tests {
         let path = dir.join("store.json");
         let mut json = serde_json::from_str::<serde_json::Value>(&valid_state_json()).unwrap();
         json["bogus_field"] = serde_json::json!(42);
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1137,7 +1285,7 @@ mod tests {
         json["entries"]["UPPERCASE INVALID"] = json["entries"][&old_key].clone();
         json["entries"].as_object_mut().unwrap().remove(&old_key);
         json["key_index"].as_object_mut().unwrap().clear();
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1156,7 +1304,7 @@ mod tests {
         let val = json["key_index"][&old_key].clone();
         json["key_index"].as_object_mut().unwrap().remove(&old_key);
         json["key_index"]["UPPERCASE INVALID KEY"] = val;
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1175,7 +1323,7 @@ mod tests {
         json["entries"][&key]["reservation_version"] = serde_json::json!(0);
         json["entries"][&key]["in_flight"] = serde_json::json!(true);
         json["entries"][&key]["disposition"] = serde_json::Value::Null;
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1194,7 +1342,7 @@ mod tests {
         json["entries"][&key]["fencing_token"] = serde_json::json!(0);
         json["entries"][&key]["in_flight"] = serde_json::json!(true);
         json["entries"][&key]["disposition"] = serde_json::Value::Null;
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1213,7 +1361,7 @@ mod tests {
         json["entries"][&key]["deadline_ms"] = serde_json::json!(0);
         json["entries"][&key]["in_flight"] = serde_json::json!(true);
         json["entries"][&key]["disposition"] = serde_json::Value::Null;
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1230,7 +1378,7 @@ mod tests {
             .unwrap()
             .clone();
         json["entries"][&key]["in_flight"] = serde_json::json!(true);
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1248,7 +1396,7 @@ mod tests {
             .clone();
         json["entries"][&key]["in_flight"] = serde_json::json!(false);
         json["entries"][&key]["disposition"] = serde_json::Value::Null;
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1259,7 +1407,7 @@ mod tests {
         let mut json = serde_json::from_str::<serde_json::Value>(&valid_state_json()).unwrap();
         let cmd = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         json["key_index"]["idem:dangling"] = serde_json::json!(cmd);
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1296,7 +1444,7 @@ mod tests {
 
         let dir = test_dir("persist-fail-finalize");
         let store_path = dir.join("store.json");
-        fs::write(&store_path, in_flight_state_json()).unwrap();
+        write_secure(&store_path, in_flight_state_json()).unwrap();
 
         let store = DurableIdempotencyStore::open(&store_path, 1000000001000, 30000).unwrap();
 

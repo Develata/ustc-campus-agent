@@ -2,6 +2,7 @@
 #![allow(clippy::expect_used)]
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -20,6 +21,11 @@ fn temp_dir() -> PathBuf {
     let dir = std::env::temp_dir().join(format!("agentd-comp-{}-{id}", std::process::id()));
     fs::create_dir_all(&dir).expect("create temp dir");
     dir
+}
+
+fn write_private_state(path: &std::path::Path, bytes: impl AsRef<[u8]>) {
+    fs::write(path, bytes).expect("write private state");
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).expect("set private state mode");
 }
 
 fn base_fixture() -> Value {
@@ -1053,14 +1059,14 @@ fn empty_bearer_rejected_at_wire_text_parse() {
 
 fn write_idempotency(json: &str) -> TestEnv {
     let env = TestEnv::with_fixture(base_fixture());
-    fs::write(&env.idempotency, json).expect("write idempotency");
+    write_private_state(&env.idempotency, json);
     env
 }
 
 #[test]
 fn idempotency_malformed_json_fails_closed() {
     let env = TestEnv::with_fixture(base_fixture());
-    fs::write(&env.idempotency, "not valid json").expect("write idempotency");
+    write_private_state(&env.idempotency, "not valid json");
     let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
     assert!(
         result.is_err(),

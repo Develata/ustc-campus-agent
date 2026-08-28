@@ -637,6 +637,7 @@ async function deleteOpportunityProfile() {
     }
     const deletion = terminal.deletion;
     setOpportunityHint(null);
+    opportunityConsent.checked = false;
     opportunityProfile.hidden = true;
     opportunityPlanResult.hidden = true;
     opportunityDeleted.hidden = false;
@@ -644,7 +645,7 @@ async function deleteOpportunityProfile() {
       document.querySelector("#opportunity-delete-receipt"),
       `${deletion.deletion_receipt_id} · profile ${deletion.profile_snapshot_id} · deleted ${formatTime(deletion.deleted_at)}`
     );
-    opportunityStatus.textContent = "删除收据已持久化；tombstone 不含 completed courses 或 preference weights。";
+    opportunityStatus.textContent = "删除收据已持久化；tombstone 不含 completed courses 或 preference weights。下方 Synthetic profile 只是可再次 consent 的公开 demo 模板，不是已删除档案。";
   } catch (error) {
     opportunityStatus.textContent = `撤回/删除失败：${error instanceof Error ? error.message : "未知错误"}`;
     opportunityDelete.disabled = !opportunityProfileId;

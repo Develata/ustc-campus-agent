@@ -4592,6 +4592,7 @@ WORKSPACE_ADMITTED_DEPENDENCIES = {
     },
     "base64": "0.22.1",
     "hmac": "0.12.1",
+    "libc": "0.2.183",
     "serde": {"version": "1.0.229", "features": ["derive"]},
     "serde_json": "1.0.151",
     "semver": "1.0.27",

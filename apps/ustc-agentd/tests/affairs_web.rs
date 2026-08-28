@@ -22,16 +22,94 @@ struct WebServer {
     temp_dir: PathBuf,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum MarketState {
+    Active,
+    Disabled,
+    Revoked,
+    Omitted,
+}
+
+#[derive(Clone, Copy)]
+enum PluginTarget {
+    Affairs,
+    Change,
+    Opportunity,
+}
+
+impl MarketState {
+    fn enabled(self) -> bool {
+        !matches!(self, Self::Disabled | Self::Omitted)
+    }
+
+    fn grant_active(self) -> bool {
+        !matches!(self, Self::Revoked | Self::Omitted)
+    }
+}
+
+fn fixture_with_market_state(
+    source: &std::path::Path,
+    destination: &std::path::Path,
+    state: MarketState,
+    copy_change_evidence: bool,
+) -> PathBuf {
+    if matches!(state, MarketState::Active) {
+        return source.to_path_buf();
+    }
+    assert!(!matches!(state, MarketState::Omitted));
+
+    let mut value: Value = serde_json::from_slice(&fs::read(source).expect("read fixture"))
+        .expect("parse fixture JSON");
+    value["market_enabled"] = Value::Bool(state.enabled());
+    value["market_grant_active"] = Value::Bool(state.grant_active());
+
+    if copy_change_evidence {
+        let source_parent = source.parent().expect("change fixture parent");
+        let destination_parent = destination.parent().expect("temporary fixture parent");
+        for revision in ["old_revision", "new_revision"] {
+            for field in ["raw_path", "normalized_path"] {
+                let relative = value[revision][field]
+                    .as_str()
+                    .expect("change evidence path");
+                let target = destination_parent.join(relative);
+                fs::create_dir_all(target.parent().expect("change evidence target parent"))
+                    .expect("create change evidence target parent");
+                fs::copy(source_parent.join(relative), &target)
+                    .expect("copy change evidence into isolated fixture tree");
+            }
+        }
+    }
+
+    fs::write(
+        destination,
+        serde_json::to_vec_pretty(&value).expect("encode fixture JSON"),
+    )
+    .expect("write market-state fixture");
+    destination.to_path_buf()
+}
+
 impl WebServer {
     fn start() -> Self {
-        Self::start_with_plugins(true, true)
+        Self::start_with_market_states(
+            MarketState::Active,
+            MarketState::Active,
+            MarketState::Active,
+        )
     }
 
     fn start_affairs_only() -> Self {
-        Self::start_with_plugins(false, false)
+        Self::start_with_market_states(
+            MarketState::Active,
+            MarketState::Omitted,
+            MarketState::Omitted,
+        )
     }
 
-    fn start_with_plugins(include_change: bool, include_opportunity: bool) -> Self {
+    fn start_with_market_states(
+        affairs_state: MarketState,
+        change_state: MarketState,
+        opportunity_state: MarketState,
+    ) -> Self {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(|path| path.parent())
@@ -61,6 +139,28 @@ impl WebServer {
         let temp_dir =
             std::env::temp_dir().join(format!("ustc-agentd-web-{}-{suffix}", std::process::id()));
         fs::create_dir_all(&temp_dir).expect("create web test directory");
+        let fixture = fixture_with_market_state(
+            &fixture,
+            &temp_dir.join("affairs-fixture.json"),
+            affairs_state,
+            false,
+        );
+        let change_fixture = (!matches!(change_state, MarketState::Omitted)).then(|| {
+            fixture_with_market_state(
+                &change_fixture,
+                &temp_dir.join("change-fixture.json"),
+                change_state,
+                true,
+            )
+        });
+        let opportunity_fixture = (!matches!(opportunity_state, MarketState::Omitted)).then(|| {
+            fixture_with_market_state(
+                &opportunity_fixture,
+                &temp_dir.join("opportunity-fixture.json"),
+                opportunity_state,
+                false,
+            )
+        });
         let store = temp_dir.join("records.json");
         let idempotency = temp_dir.join("idempotency.json");
         let opportunity_profile_store = temp_dir.join("opportunity-profiles.json");
@@ -73,13 +173,13 @@ impl WebServer {
             "--fixture",
             fixture.to_str().expect("fixture path utf8"),
         ]);
-        if include_change {
+        if let Some(change_fixture) = &change_fixture {
             command.args([
                 "--change-fixture",
                 change_fixture.to_str().expect("change fixture path utf8"),
             ]);
         }
-        if include_opportunity {
+        if let Some(opportunity_fixture) = &opportunity_fixture {
             command.args([
                 "--opportunity-fixture",
                 opportunity_fixture
@@ -132,7 +232,17 @@ impl WebServer {
                 Err(_) => break,
             }
         }
-        let endpoint = endpoint.expect("web server did not publish endpoint");
+        let endpoint = endpoint.unwrap_or_else(|| {
+            let _ = child.kill();
+            let _ = child.wait();
+            let mut stderr = String::new();
+            if let Some(mut pipe) = child.stderr.take() {
+                let _ = pipe.read_to_string(&mut stderr);
+            }
+            panic!(
+                "web server did not publish endpoint for affairs={affairs_state:?}, change={change_state:?}, opportunity={opportunity_state:?}: {stderr}"
+            );
+        });
         Self {
             child,
             endpoint,
@@ -159,13 +269,17 @@ impl WebServer {
 
     fn post_json(&self, path: &str, body: &Value) -> HttpResponse {
         let body = body.to_string();
+        self.post_raw(path, "application/json", &body)
+    }
+
+    fn post_raw(&self, path: &str, content_type: &str, body: &str) -> HttpResponse {
         let mut stream = TcpStream::connect(&self.endpoint).expect("connect web server");
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
             .expect("set read timeout");
         write!(
             stream,
-            "POST {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "POST {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             self.endpoint,
             body.len(),
             body
@@ -204,6 +318,24 @@ impl HttpResponse {
             body: body.to_owned(),
         }
     }
+}
+
+fn valid_opportunity_profile_body() -> Value {
+    json!({
+        "consent": true,
+        "completed_courses": ["MATH1001", "MATH1002", "CS1001", "PHYS1001"],
+        "min_credits": 9,
+        "max_credits": 12,
+        "preference_weights": [
+            {"course_code": "MATH2001", "weight": 9},
+            {"course_code": "MATH2003", "weight": 8},
+            {"course_code": "CS2006", "weight": 7},
+            {"course_code": "PHYS2003", "weight": 5},
+            {"course_code": "HUM2001", "weight": 4},
+            {"course_code": "GEN2001", "weight": 3},
+            {"course_code": "LANG2001", "weight": 2}
+        ]
+    })
 }
 
 #[test]
@@ -319,6 +451,137 @@ fn affairs_only_web_mode_keeps_affairs_available_and_change_fail_closed() {
 }
 
 #[test]
+fn every_plugin_disable_and_revoke_fails_closed_without_harming_peers() {
+    for (label, affairs_state, change_state, opportunity_state, blocked) in [
+        (
+            "affairs-disabled",
+            MarketState::Disabled,
+            MarketState::Active,
+            MarketState::Active,
+            PluginTarget::Affairs,
+        ),
+        (
+            "affairs-revoked",
+            MarketState::Revoked,
+            MarketState::Active,
+            MarketState::Active,
+            PluginTarget::Affairs,
+        ),
+        (
+            "change-disabled",
+            MarketState::Active,
+            MarketState::Disabled,
+            MarketState::Active,
+            PluginTarget::Change,
+        ),
+        (
+            "change-revoked",
+            MarketState::Active,
+            MarketState::Revoked,
+            MarketState::Active,
+            PluginTarget::Change,
+        ),
+        (
+            "opportunity-disabled",
+            MarketState::Active,
+            MarketState::Active,
+            MarketState::Disabled,
+            PluginTarget::Opportunity,
+        ),
+        (
+            "opportunity-revoked",
+            MarketState::Active,
+            MarketState::Active,
+            MarketState::Revoked,
+            PluginTarget::Opportunity,
+        ),
+    ] {
+        let server =
+            WebServer::start_with_market_states(affairs_state, change_state, opportunity_state);
+        let affairs =
+            server.get("/api/v1/affairs/proc%3Austc%3Aundergraduate%3Atranscript-certificate");
+        let change = server.get("/api/v1/changes/board%3Austc%3Aacademic-calendar");
+        let opportunity = server.post_json(
+            "/api/v1/opportunity/profiles",
+            &valid_opportunity_profile_body(),
+        );
+
+        for (target, response, success_status) in [
+            (PluginTarget::Affairs, &affairs, " 200 "),
+            (PluginTarget::Change, &change, " 200 "),
+            (PluginTarget::Opportunity, &opportunity, " 201 "),
+        ] {
+            let is_blocked = matches!(
+                (blocked, target),
+                (PluginTarget::Affairs, PluginTarget::Affairs)
+                    | (PluginTarget::Change, PluginTarget::Change)
+                    | (PluginTarget::Opportunity, PluginTarget::Opportunity)
+            );
+            if is_blocked {
+                assert!(
+                    response.status.contains(" 403 "),
+                    "{label}: blocked plugin returned {}: {}",
+                    response.status,
+                    response.body
+                );
+                assert!(
+                    response.body.contains("policy_denied"),
+                    "{label}: denial was not typed: {}",
+                    response.body
+                );
+            } else {
+                assert!(
+                    response.status.contains(success_status),
+                    "{label}: peer plugin returned {}: {}",
+                    response.status,
+                    response.body
+                );
+            }
+        }
+
+        if matches!(blocked, PluginTarget::Opportunity) {
+            let profile_id = "profile-snapshot%3Aopportunity%3Asha256%3Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+            let view = server.get(&format!("/api/v1/opportunity/profiles/{profile_id}"));
+            let plan = server.post_json(
+                "/api/v1/opportunity/plans",
+                &json!({
+                    "profile_snapshot_id": "profile-snapshot:opportunity:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "max_results": 3,
+                    "beam_width": 1024,
+                }),
+            );
+            for response in [&view, &plan] {
+                assert!(
+                    response.status.contains(" 403 "),
+                    "{label}: denied Opportunity operation returned {}: {}",
+                    response.status,
+                    response.body
+                );
+                assert!(response.body.contains("policy_denied"));
+            }
+
+            let state_path = server.temp_dir.join("opportunity-profiles.json");
+            if state_path.exists() {
+                let state: Value = serde_json::from_slice(
+                    &fs::read(&state_path).expect("read denied Opportunity state"),
+                )
+                .expect("decode denied Opportunity state");
+                assert_eq!(
+                    state["active"].as_array().map_or(0, Vec::len),
+                    0,
+                    "{label}: denied create persisted active private payload"
+                );
+                assert_eq!(
+                    state["tombstones"].as_array().map_or(0, Vec::len),
+                    0,
+                    "{label}: denied create persisted a tombstone"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn unknown_affairs_http_path_returns_public_not_found_without_bearer() {
     let server = WebServer::start();
     let response = server.get("/api/v1/affairs/proc%3Austc%3Astudent%3Aunknown");
@@ -418,21 +681,29 @@ fn unknown_change_board_has_stable_json_and_atom_results() {
 #[test]
 fn opportunity_http_journey_requires_consent_plans_and_deletes_private_payload() {
     let server = WebServer::start();
-    let profile_body = json!({
-        "consent": true,
-        "completed_courses": ["MATH1001", "MATH1002", "CS1001", "PHYS1001"],
-        "min_credits": 9,
-        "max_credits": 12,
-        "preference_weights": [
-            {"course_code": "MATH2001", "weight": 9},
-            {"course_code": "MATH2003", "weight": 8},
-            {"course_code": "CS2006", "weight": 7},
-            {"course_code": "PHYS2003", "weight": 5},
-            {"course_code": "HUM2001", "weight": 4},
-            {"course_code": "GEN2001", "weight": 3},
-            {"course_code": "LANG2001", "weight": 2}
-        ]
-    });
+    let profile_body = valid_opportunity_profile_body();
+
+    for response in [
+        server.post_raw(
+            "/api/v1/opportunity/profiles",
+            "application/json",
+            "{ not valid json",
+        ),
+        server.post_json(
+            "/api/v1/opportunity/plans",
+            &json!({"max_results": 3, "beam_width": 1024}),
+        ),
+        server.post_raw(
+            "/api/v1/opportunity/profiles/profile%3Afixture/revoke-delete",
+            "text/plain",
+            r#"{"confirm_delete":true}"#,
+        ),
+    ] {
+        assert!(response.status.contains(" 400 "), "{}", response.status);
+        let value: Value =
+            serde_json::from_str(&response.body).expect("malformed Opportunity error JSON");
+        assert_eq!(value["error"], "invalid_opportunity_json");
+    }
 
     let denied = server.post_json(
         "/api/v1/opportunity/profiles",

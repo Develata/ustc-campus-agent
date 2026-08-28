@@ -94,6 +94,7 @@ fn read_existing_private_state(path: &Path) -> Result<Option<Vec<u8>>, String> {
 
     let mut file = OpenOptions::new()
         .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
         .open(path)
         .map_err(|error| format!("profile state open: {error}"))?;
     let opened_metadata = file

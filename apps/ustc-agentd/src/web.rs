@@ -1,4 +1,4 @@
-//! Loopback-only HTTP/Web adapter for bounded Affairs and ChangeRadar journeys.
+//! Loopback-only HTTP/Web adapter for bounded Affairs, ChangeRadar and Opportunity journeys.
 //!
 //! The adapter owns no procedure, change event, source, freshness, conflict,
 //! authorization or eligibility decisions. It constructs bounded public M10
@@ -179,6 +179,9 @@ impl WebState {
                 public_capability: None,
                 ..
             } => Err(WebRequestError::MissingPublicCapability),
+            response @ (ClientResponseDto::Error { .. } | ClientResponseDto::Unavailable) => {
+                Ok(response)
+            }
             _ => Err(WebRequestError::UnexpectedSubmitResponse),
         }
     }
@@ -283,7 +286,7 @@ pub fn web_router(composition: Arc<AffairsComposition>) -> Router {
 }
 
 impl AffairsComposition {
-    /// Serves the bounded two-plugin HTTP/Web demonstration on a loopback address.
+    /// Serves the bounded three-plugin HTTP/Web demonstration on a loopback address.
     ///
     /// # Errors
     ///
@@ -334,7 +337,7 @@ async fn affairs_get(
     State(state): State<WebState>,
 ) -> Response {
     match state.submit(procedure_id) {
-        Ok(response) => hardened(Json(response).into_response()),
+        Ok(response) => typed_json_response(affairs_response_status(&response), response),
         Err(WebRequestError::InvalidProcedureId) => {
             web_error(StatusCode::BAD_REQUEST, "invalid_procedure_id")
         }
@@ -353,6 +356,23 @@ async fn affairs_get(
         Err(WebRequestError::InvalidOpportunityRequest) => {
             web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error")
         }
+    }
+}
+
+fn affairs_response_status(response: &ClientResponseDto) -> StatusCode {
+    match response {
+        ClientResponseDto::Available { .. } => StatusCode::OK,
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } if error.class == WireErrorClassDto::PolicyDenied => StatusCode::FORBIDDEN,
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } if error.class == WireErrorClassDto::MalformedCommand => StatusCode::BAD_REQUEST,
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Infrastructure { .. },
+        }
+        | ClientResponseDto::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+        _ => StatusCode::BAD_GATEWAY,
     }
 }
 
@@ -407,6 +427,11 @@ async fn change_feed_atom(
             return web_error(StatusCode::FORBIDDEN, "change_feed_policy_denied");
         }
         ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } if error.class == WireErrorClassDto::MalformedCommand => {
+            return web_error(StatusCode::BAD_REQUEST, "change_feed_malformed");
+        }
+        ClientResponseDto::Error {
             error: ClientErrorDto::Infrastructure { .. },
         }
         | ClientResponseDto::Unavailable => {
@@ -433,7 +458,7 @@ async fn opportunity_profile_create(
 ) -> Response {
     let Json(body) = match body {
         Ok(body) => body,
-        Err(error) => return web_error(error.status(), "invalid_opportunity_json"),
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_json"),
     };
     if !body.consent {
         return web_error(StatusCode::BAD_REQUEST, "explicit_consent_required");
@@ -508,7 +533,7 @@ async fn opportunity_plan_generate(
 ) -> Response {
     let Json(body) = match body {
         Ok(body) => body,
-        Err(error) => return web_error(error.status(), "invalid_opportunity_json"),
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_json"),
     };
     let profile_snapshot_id = match checked_text(body.profile_snapshot_id) {
         Ok(value) => value,
@@ -530,7 +555,7 @@ async fn opportunity_profile_delete(
 ) -> Response {
     let Json(body) = match body {
         Ok(body) => body,
-        Err(error) => return web_error(error.status(), "invalid_opportunity_json"),
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_json"),
     };
     if !body.confirm_delete {
         return web_error(
@@ -651,9 +676,19 @@ fn hardened(mut response: Response) -> Response {
 
 #[cfg(test)]
 mod tests {
-    use super::{CONTENT_SECURITY_POLICY, WebRequestError, WebState, static_response};
-    use axum::http::header;
-    use ustc_campus_agent_client_protocol::ClientResponseDto;
+    use super::{
+        CONTENT_SECURITY_POLICY, WebRequestError, WebState, affairs_response_status,
+        static_response,
+    };
+    use axum::http::{StatusCode, header};
+    use ustc_campus_agent_client_protocol::{
+        ClientErrorDto, ClientResponseDto, EchoPayloadDto, M10WireErrorDto, RetryabilityDto,
+        WireErrorClassDto, WireText,
+    };
+
+    fn wire(value: &str) -> WireText {
+        WireText::parse(value).expect("valid wire text")
+    }
 
     #[test]
     fn web_boundary_rejects_every_non_available_lookup_result() {
@@ -662,6 +697,46 @@ mod tests {
             result,
             Err(WebRequestError::UnexpectedLookupResponse)
         ));
+    }
+
+    #[test]
+    fn affairs_http_status_mapping_covers_malformed_unavailable_and_unexpected() {
+        let malformed = ClientResponseDto::Error {
+            error: ClientErrorDto::Admission {
+                error: M10WireErrorDto::try_new(
+                    WireErrorClassDto::MalformedCommand,
+                    RetryabilityDto::RetryableAfterChange,
+                    wire("malformed_command"),
+                    EchoPayloadDto::None,
+                )
+                .expect("valid malformed-command relation"),
+            },
+        };
+        let infrastructure = ClientResponseDto::Error {
+            error: ClientErrorDto::Infrastructure {
+                retryable: true,
+                wire_code: wire("fixture_unavailable"),
+            },
+        };
+        let unexpected = ClientResponseDto::Error {
+            error: ClientErrorDto::InternalInvariant {
+                wire_code: wire("fixture_internal"),
+            },
+        };
+
+        assert_eq!(affairs_response_status(&malformed), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            affairs_response_status(&ClientResponseDto::Unavailable),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            affairs_response_status(&infrastructure),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            affairs_response_status(&unexpected),
+            StatusCode::BAD_GATEWAY
+        );
     }
 
     #[test]

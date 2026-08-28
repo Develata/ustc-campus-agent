@@ -706,6 +706,8 @@ fn oversized_state_and_preexisting_temporary_symlink_fail_closed() {
         .expect("create oversized state")
         .set_len(1_048_577)
         .expect("size oversized state");
+    fs::set_permissions(&oversized.profiles, fs::Permissions::from_mode(0o600))
+        .expect("set oversized state mode");
     let opened = AffairsComposition::open_with_opportunity(
         &oversized.affairs_fixture,
         &oversized.opportunity_fixture,

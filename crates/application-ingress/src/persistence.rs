@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
-use std::fs::{self, File};
-use std::io::{self, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Read, Write};
 use std::num::NonZeroU64;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -10,6 +11,8 @@ use sha2::{Digest, Sha256};
 use ustc_campus_agent_client_protocol::{AdmittedActorDto, DispatchCapsuleBodyV2, M71TerminalDto};
 
 use crate::capability::StoredPublicAuthorization;
+
+const MAX_STORE_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -195,8 +198,7 @@ pub struct FileRecordStore {
 impl FileRecordStore {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self, StoreError> {
         let path = path.into();
-        let state = if path.exists() {
-            let bytes = fs::read(&path).map_err(StoreError::Io)?;
+        let state = if let Some(bytes) = read_existing_private_state(&path)? {
             let state: StoreState =
                 serde_json::from_slice(&bytes).map_err(StoreError::Corrupted)?;
             validate_state(&state)?;
@@ -460,16 +462,81 @@ impl FileRecordStore {
     }
 }
 
+fn read_existing_private_state(path: &Path) -> Result<Option<Vec<u8>>, StoreError> {
+    let path_metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(StoreError::Io(error)),
+    };
+    if !path_metadata.file_type().is_file()
+        || path_metadata.permissions().mode() & 0o777 != 0o600
+        || path_metadata.len() > MAX_STORE_BYTES
+    {
+        return Err(StoreError::Invariant);
+    }
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(StoreError::Io)?;
+    let opened_metadata = file.metadata().map_err(StoreError::Io)?;
+    if !opened_metadata.file_type().is_file()
+        || opened_metadata.dev() != path_metadata.dev()
+        || opened_metadata.ino() != path_metadata.ino()
+        || opened_metadata.permissions().mode() & 0o777 != 0o600
+        || opened_metadata.len() > MAX_STORE_BYTES
+    {
+        return Err(StoreError::Invariant);
+    }
+
+    let mut bytes = Vec::new();
+    std::io::Read::by_ref(&mut file)
+        .take(MAX_STORE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(StoreError::Io)?;
+    if bytes.len() as u64 > MAX_STORE_BYTES {
+        return Err(StoreError::Invariant);
+    }
+    Ok(Some(bytes))
+}
+
 fn persist(path: &Path, state: &StoreState) -> Result<(), StoreError> {
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         fs::create_dir_all(parent).map_err(StoreError::Io)?;
     }
     let bytes = serde_json::to_vec(state).map_err(StoreError::Corrupted)?;
+    if bytes.len() as u64 > MAX_STORE_BYTES {
+        return Err(StoreError::Invariant);
+    }
     let temporary = path.with_extension("tmp");
-    let mut file = File::create(&temporary).map_err(StoreError::Io)?;
-    file.write_all(&bytes).map_err(StoreError::Io)?;
-    file.sync_all().map_err(StoreError::Io)?;
-    fs::rename(&temporary, path).map_err(StoreError::Io)
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)
+            .map_err(StoreError::Io)?;
+        file.write_all(&bytes).map_err(StoreError::Io)?;
+        file.sync_all().map_err(StoreError::Io)?;
+        fs::rename(&temporary, path).map_err(StoreError::Io)?;
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            File::open(parent)
+                .and_then(|directory| directory.sync_all())
+                .map_err(StoreError::Io)?;
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
 }
 
 fn validate_state(state: &StoreState) -> Result<(), StoreError> {
@@ -601,6 +668,7 @@ mod tests {
     use super::*;
     use crate::capability::CapabilityIssuer;
     use std::collections::BTreeMap;
+    use std::os::unix::fs::{PermissionsExt, symlink};
     use std::sync::atomic::{AtomicU64, Ordering};
     use ustc_campus_agent_client_protocol::{
         AdmittedActorDto, AffairsGetPayloadDto, FrozenPrerequisitesDto, M71LineageDto,
@@ -715,6 +783,87 @@ mod tests {
             tenant_id: "tenant:fixture".to_owned(),
             user_id: "user:fixture".to_owned(),
         }
+    }
+
+    #[test]
+    fn private_store_rejects_unsafe_primary_and_temporary_files() {
+        let path = temp_path();
+        let store = FileRecordStore::open(&path).expect("open empty store");
+        assert!(matches!(
+            store
+                .insert_admitted_once("cmd:001", public_capsule("cmd:001"), public_policy())
+                .expect("persist first record"),
+            InsertOutcome::Created
+        ));
+        assert_eq!(
+            fs::metadata(&path)
+                .expect("persisted store metadata")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+        drop(store);
+        FileRecordStore::open(&path).expect("reopen secure store");
+
+        let insecure = temp_path();
+        fs::write(&insecure, br#"{"schema_version":1,"records":{}}"#)
+            .expect("write insecure store");
+        let mut permissions = fs::metadata(&insecure)
+            .expect("insecure metadata")
+            .permissions();
+        permissions.set_mode(0o644);
+        fs::set_permissions(&insecure, permissions).expect("set insecure mode");
+        assert!(matches!(
+            FileRecordStore::open(&insecure),
+            Err(StoreError::Invariant)
+        ));
+
+        let symlink_path = temp_path();
+        let sentinel = symlink_path.with_extension("sentinel");
+        fs::write(&sentinel, br#"{"schema_version":1,"records":{}}"#)
+            .expect("write symlink sentinel");
+        let mut permissions = fs::metadata(&sentinel)
+            .expect("sentinel metadata")
+            .permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(&sentinel, permissions).expect("secure sentinel mode");
+        symlink(&sentinel, &symlink_path).expect("create primary symlink");
+        assert!(matches!(
+            FileRecordStore::open(&symlink_path),
+            Err(StoreError::Invariant)
+        ));
+
+        let temporary_path = temp_path();
+        let temporary_sentinel = temporary_path.with_extension("sentinel");
+        fs::write(&temporary_sentinel, b"do-not-overwrite").expect("write temp sentinel");
+        symlink(&temporary_sentinel, temporary_path.with_extension("tmp"))
+            .expect("create temporary symlink");
+        let temporary_store = FileRecordStore::open(&temporary_path).expect("open absent store");
+        assert!(
+            temporary_store
+                .insert_admitted_once("cmd:002", public_capsule("cmd:002"), public_policy())
+                .is_err()
+        );
+        assert_eq!(
+            fs::read(&temporary_sentinel).expect("read temp sentinel"),
+            b"do-not-overwrite"
+        );
+
+        let oversized = temp_path();
+        let oversized_file = File::create(&oversized).expect("create oversized store");
+        oversized_file
+            .set_len(MAX_STORE_BYTES + 1)
+            .expect("size oversized store");
+        let mut permissions = fs::metadata(&oversized)
+            .expect("oversized metadata")
+            .permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(&oversized, permissions).expect("secure oversized mode");
+        assert!(matches!(
+            FileRecordStore::open(&oversized),
+            Err(StoreError::Invariant)
+        ));
     }
 
     #[test]

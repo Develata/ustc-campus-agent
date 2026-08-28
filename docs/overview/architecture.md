@@ -63,7 +63,7 @@ The thin peer clients display/serialize server projections and submit intent thr
 | ID | Module | Owns | Current evidence |
 |---|---|---|---|
 | `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity value types only |
-| `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | framework-neutral client-protocol/application-ingress carriers plus one fixture-backed loopback Affairs composition; public HTTP/Dioxus/stream host planned |
+| `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | framework-neutral client-protocol/application-ingress carriers plus one loopback three-plugin JSON/Web composition; public HTTP/Dioxus/stream host planned |
 | `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | typed catalog/capability + bounded installation/grant/update domains + bounded transaction-current authority assembly + pure resolver/fixtures |
 | `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel |
 | `M40` | Tool Gateway/Execution | exact tool correlation, authorization order, intent/executor/receipt/result | protocol values + fake conformance |
