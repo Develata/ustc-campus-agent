@@ -112,7 +112,7 @@ Revoke blocks new request contexts immediately. It does not erase already commit
 
 ### Bounded `M00-B3 request-context` evidence
 
-[`platform-request-context/v0`](../../contracts/platform-request-context.md) now owns the bounded platform-core admission kernel. It freezes the Public/Authenticated actor sum, immutable request-scoped descriptor projection, current policy/session/capability observations, fenced idempotency results, fourteen rejection classes, complete scalar dispositions, and validating persistence promotion. `AUTH-013` is implemented only for that exact 64-test kernel boundary. It does **not** claim a production B4 database/auth/policy adapter or the B5 M10 composition path; those remain planned.
+[`platform-request-context/v0`](../../contracts/platform-request-context.md) now owns the bounded platform-core admission kernel. It freezes the Public/Authenticated actor sum, immutable request-scoped descriptor projection, exact closed permission/effect surfaces and fail-closed coherence, current policy/session/capability observations, fenced idempotency results, fourteen rejection classes, complete scalar dispositions, and validating persistence promotion. `AUTH-013` is implemented only for that exact 65-test kernel boundary. It does **not** claim a production B4 database/auth/policy adapter or the B5 M10 composition path; those remain planned.
 
 ## 7. Failure and recovery
 

@@ -395,10 +395,12 @@ impl Descriptor {
             schema_identity: SchemaIdentity::parse("schema:fixture").expect("fixture"),
             schema_digest: schema_digest(),
             permission_class,
-            effect_class: if matches!(permission_class, PermissionClass::PublicLinkout) {
-                EffectClass::LinkOut
-            } else {
-                EffectClass::Read
+            effect_class: match permission_class {
+                PermissionClass::PublicRead | PermissionClass::TenantPrivateRead => {
+                    EffectClass::Read
+                }
+                PermissionClass::PublicLinkout => EffectClass::LinkOut,
+                PermissionClass::TenantPrivateWrite => EffectClass::TenantLocalMutation,
             },
             decoder_identity: DecoderIdentity::parse("decoder:fixture").expect("fixture"),
             dispatcher_identity: DispatcherIdentity::parse("dispatcher:fixture").expect("fixture"),

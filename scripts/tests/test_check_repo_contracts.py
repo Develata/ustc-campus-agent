@@ -4483,8 +4483,8 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def test_market_capability_registry_missing_bound_test_fails_closed(self) -> None:
         self.rewrite(
             self.capability_test_path(),
-            "#[test]\nfn current_registry_loads_with_exact_eight_definitions()",
-            "fn current_registry_loads_with_exact_eight_definitions()",
+            "#[test]\nfn current_registry_loads_with_exact_nine_definitions()",
+            "fn current_registry_loads_with_exact_nine_definitions()",
         )
         self.assert_rejected(
             self.check_identity(),
@@ -9725,11 +9725,178 @@ class PlatformRequestContextContractTests(unittest.TestCase):
         self.assertTrue(
             any(
                 issue.startswith(
-                    "platform request context exact 64-test inventory drift"
+                    "platform request context exact 65-test inventory drift"
                 )
                 for issue in issues
             ),
             issues,
         )
+
+    def test_request_context_permission_effect_v0_surface_drift_fails_closed(self) -> None:
+        contract_rel = self.CONTRACT_REL
+        source_rel = "crates/platform-core/src/request_context.rs"
+        test_rel = "crates/platform-core/tests/platform_request_context.rs"
+
+        def restore_all() -> None:
+            for rel in (contract_rel, source_rel, test_rel):
+                (self.root / rel).write_bytes((REPO_ROOT / rel).read_bytes())
+
+        # 1. Reintroducing PrivilegedExternalEffect into the permission-class
+        #    list fails with a contract permission block drift diagnostic.
+        with self.subTest("contract_permission_privileged_external_effect"):
+            restore_all()
+            path = self.root / contract_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "TenantPrivateWrite\n```",
+                    "TenantPrivateWrite\nPrivilegedExternalEffect\n```",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("contract permission block drift" in i for i in issues),
+                issues,
+            )
+
+        # 2. Reordering a Rust PermissionClass unit variant fails.
+        with self.subTest("rust_permission_class_variant_order"):
+            restore_all()
+            path = self.root / source_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "    PublicRead,\n    PublicLinkout,",
+                    "    PublicLinkout,\n    PublicRead,",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("Rust PermissionClass unit-variant drift" in i for i in issues),
+                issues,
+            )
+
+        # 3. Reordering a Rust EffectClass unit variant fails.
+        with self.subTest("rust_effect_class_variant_order"):
+            restore_all()
+            path = self.root / source_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "    Read,\n    LinkOut,",
+                    "    LinkOut,\n    Read,",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("Rust EffectClass unit-variant drift" in i for i in issues),
+                issues,
+            )
+
+        # 4. Changing the contract EffectClass block fails.
+        with self.subTest("contract_effect_block_drift"):
+            restore_all()
+            path = self.root / contract_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "TenantLocalMutation\n```",
+                    "TenantLocalMutation\nExternalEffect\n```",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("contract effect block drift" in i for i in issues),
+                issues,
+            )
+
+        # 5. Reordering the exact contract coherence matrix fails closed.
+        with self.subTest("contract_permission_effect_coherence_order"):
+            restore_all()
+            path = self.root / contract_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "PublicRead -> Read\nPublicLinkout -> LinkOut",
+                    "PublicLinkout -> LinkOut\nPublicRead -> Read",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("contract coherence block drift" in i for i in issues),
+                issues,
+            )
+
+        # 6. Removing the private production helper fails closed.
+        with self.subTest("rust_permission_effect_coherence_helper_removed"):
+            restore_all()
+            path = self.root / source_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "const fn permission_effect_coherent_v0(",
+                    "const fn permission_effect_coherent_v0_removed(",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("permission/effect coherence enforcement drift" in i for i in issues),
+                issues,
+            )
+
+        # 7. Removing the coordinator call site fails closed independently.
+        with self.subTest("rust_permission_effect_coherence_call_removed"):
+            restore_all()
+            path = self.root / source_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "if !permission_effect_coherent_v0(permission, effect) {",
+                    "if !permission_effect_coherent_v0_removed(permission, effect) {",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("permission/effect coherence enforcement drift" in i for i in issues),
+                issues,
+            )
+
+        # 8. Deleting the new Rust evidence test fails the exact 65-test inventory.
+        with self.subTest("rust_evidence_test_removed"):
+            restore_all()
+            path = self.root / test_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "fn request_context_permission_and_effect_v0_surface_is_exact(",
+                    "fn request_context_permission_and_effect_v0_surface_is_exact_mutated(",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any(
+                    i.startswith(
+                        "platform request context exact 65-test inventory drift"
+                    )
+                    for i in issues
+                ),
+                issues,
+            )
 if __name__ == "__main__":
     unittest.main()

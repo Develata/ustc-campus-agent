@@ -76,16 +76,27 @@ mod request_context {
 
     impl Descriptor {
         fn new(operation_name: &str, permission_class: PermissionClass) -> Self {
+            let effect_class = match permission_class {
+                PermissionClass::PublicRead | PermissionClass::TenantPrivateRead => {
+                    EffectClass::Read
+                }
+                PermissionClass::PublicLinkout => EffectClass::LinkOut,
+                PermissionClass::TenantPrivateWrite => EffectClass::TenantLocalMutation,
+            };
+            Self::with_effect(operation_name, permission_class, effect_class)
+        }
+
+        fn with_effect(
+            operation_name: &str,
+            permission_class: PermissionClass,
+            effect_class: EffectClass,
+        ) -> Self {
             Self {
                 operation_id: operation(operation_name),
                 schema_identity: SchemaIdentity::parse("schema:fixture").expect("fixture"),
                 schema_digest: schema_digest(),
                 permission_class,
-                effect_class: if matches!(permission_class, PermissionClass::PublicLinkout) {
-                    EffectClass::LinkOut
-                } else {
-                    EffectClass::Read
-                },
+                effect_class,
                 decoder_identity: DecoderIdentity::parse("decoder:fixture").expect("fixture"),
                 dispatcher_identity: DispatcherIdentity::parse("dispatcher:fixture")
                     .expect("fixture"),
@@ -1305,5 +1316,139 @@ mod request_context {
         );
         assert!(serde_json::from_str::<SchemaDigest>("\"abcd\"").is_err());
         assert!(serde_json::from_str::<SchemaDigest>(&format!("\"{}g\"", &DIGEST[..63])).is_err());
+    }
+
+    #[test]
+    fn request_context_permission_and_effect_v0_surface_is_exact() {
+        // `PermissionClass` is closed over exactly four variants. The
+        // exhaustive match carries no wildcard, so adding or removing a variant
+        // fails to compile, and each canonical snake-case serde tag is asserted.
+        let permission_variants = [
+            PermissionClass::PublicRead,
+            PermissionClass::PublicLinkout,
+            PermissionClass::TenantPrivateRead,
+            PermissionClass::TenantPrivateWrite,
+        ];
+        assert_eq!(permission_variants.len(), 4);
+        for variant in permission_variants {
+            let tag = match variant {
+                PermissionClass::PublicRead => "public_read",
+                PermissionClass::PublicLinkout => "public_linkout",
+                PermissionClass::TenantPrivateRead => "tenant_private_read",
+                PermissionClass::TenantPrivateWrite => "tenant_private_write",
+            };
+            assert_eq!(
+                serde_json::to_string(&variant).expect("permission class serde"),
+                format!("\"{tag}\"")
+            );
+        }
+
+        // `EffectClass` is closed over exactly three variants, with the same
+        // exhaustive-match discipline and canonical snake-case serde assertion.
+        let effect_variants = [
+            EffectClass::Read,
+            EffectClass::LinkOut,
+            EffectClass::TenantLocalMutation,
+        ];
+        assert_eq!(effect_variants.len(), 3);
+        for variant in effect_variants {
+            let tag = match variant {
+                EffectClass::Read => "read",
+                EffectClass::LinkOut => "link_out",
+                EffectClass::TenantLocalMutation => "tenant_local_mutation",
+            };
+            assert_eq!(
+                serde_json::to_string(&variant).expect("effect class serde"),
+                format!("\"{tag}\"")
+            );
+        }
+
+        // Every pair outside the closed 4 x 3 coherence matrix is rejected
+        // before the clock or any authority lookup. Public-permission pairs use
+        // an anonymous actor; private-permission pairs use an authenticated one
+        // so the result cannot be confused with public/private permission denial.
+        let incoherent_pairs = [
+            (PermissionClass::PublicRead, EffectClass::LinkOut, false),
+            (
+                PermissionClass::PublicRead,
+                EffectClass::TenantLocalMutation,
+                false,
+            ),
+            (PermissionClass::PublicLinkout, EffectClass::Read, false),
+            (
+                PermissionClass::PublicLinkout,
+                EffectClass::TenantLocalMutation,
+                false,
+            ),
+            (
+                PermissionClass::TenantPrivateRead,
+                EffectClass::LinkOut,
+                true,
+            ),
+            (
+                PermissionClass::TenantPrivateRead,
+                EffectClass::TenantLocalMutation,
+                true,
+            ),
+            (PermissionClass::TenantPrivateWrite, EffectClass::Read, true),
+            (
+                PermissionClass::TenantPrivateWrite,
+                EffectClass::LinkOut,
+                true,
+            ),
+        ];
+        for (permission, effect, authenticated) in incoherent_pairs {
+            let mut ports = FakePorts::public();
+            ports.descriptor = Ok(Arc::new(Descriptor::with_effect(
+                "affairs.get",
+                permission,
+                effect,
+            )));
+            let command = if authenticated {
+                authenticated_command(session("session:coherence"))
+            } else {
+                public_command(true)
+            };
+            let result = admit(&command, &mut ports);
+            let M00AdmissionResult::Rejected(value) = result else {
+                panic!("expected incoherent descriptor rejection, got {result:?}");
+            };
+            assert_eq!(
+                value.projection(),
+                &AdmissionRejectionProjection::MalformedCommand {
+                    operation_id: Some(operation("affairs.get")),
+                }
+            );
+            assert_eq!(ports.clock_calls, 0);
+            assert_eq!(ports.policy_calls, 0);
+            assert_eq!(ports.session_calls, 0);
+            assert_eq!(ports.capability_calls, 0);
+        }
+
+        // Public callers remain denied for both coherent private classes through
+        // the existing admission semantics, after one clock observation and
+        // before any session, policy, or capability lookup.
+        for (permission, effect) in [
+            (PermissionClass::TenantPrivateRead, EffectClass::Read),
+            (
+                PermissionClass::TenantPrivateWrite,
+                EffectClass::TenantLocalMutation,
+            ),
+        ] {
+            let mut ports = FakePorts::public();
+            ports.descriptor = Ok(Arc::new(Descriptor::with_effect(
+                "affairs.get",
+                permission,
+                effect,
+            )));
+            expect_rejection(
+                admit(&public_command(true), &mut ports),
+                AdmissionRejectionClass::PolicyDenied,
+            );
+            assert_eq!(ports.clock_calls, 1);
+            assert_eq!(ports.session_calls, 0);
+            assert_eq!(ports.policy_calls, 0);
+            assert_eq!(ports.capability_calls, 0);
+        }
     }
 }

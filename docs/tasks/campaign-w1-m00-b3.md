@@ -25,10 +25,11 @@
 - exact authenticated session binding through the production session predicate;
 - immutable request-scoped descriptor projection;
 - current policy/session/capability checks;
+- exact closed `PermissionClass` / `EffectClass` surfaces and fail-closed pair coherence;
 - fenced idempotency reserve/retrieve/finalize outcomes;
 - complete scalar admitted dispositions and validating persistence promotion;
 - fourteen payload-preserving rejection classes and closed five-way result;
-- exactly 64 integration tests plus nonzero compile-fail doctests;
+- exactly 65 integration tests plus nonzero compile-fail doctests;
 - fail-closed checker registration and mutation evidence.
 
 ## Honest non-goals

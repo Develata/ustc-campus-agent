@@ -12031,6 +12031,7 @@ REQUEST_CONTEXT_TESTS = (
     "request_context_persisted_leaf_serde_round_trips_checked_values",
     "request_context_persisted_leaf_invalid_deserialize_rejected",
     "request_context_schema_digest_persisted_lower_hex_exact",
+    "request_context_permission_and_effect_v0_surface_is_exact",
 )
 REQUEST_CONTEXT_REQUIRED_PUBLIC_ITEMS = {
     "ActorReference",
@@ -12071,6 +12072,48 @@ REQUEST_CONTEXT_DOC_FRAGMENTS = {
 }
 
 
+def _extract_closed_text_block(text: str, header: str) -> list[str] | None:
+    """Return the stripped non-empty lines of the ```text fenced block that
+    immediately follows the unique ``header`` line in ``text``, or ``None``
+    when the header or its fence is absent. Mechanically extracts the closed
+    ``PermissionClass`` and ``EffectClass`` contract blocks without parsing
+    surrounding prose.
+    """
+    idx = text.find(header)
+    if idx < 0:
+        return None
+    rest = text[idx + len(header):]
+    fence = rest.find("```text")
+    if fence < 0:
+        return None
+    body = rest[fence + len("```text"):]
+    close = body.find("```")
+    if close < 0:
+        return None
+    return [line.strip() for line in body[:close].splitlines() if line.strip()]
+
+
+def _extract_unit_variants(source: str, enum_header: str) -> list[str] | None:
+    """Return the ordered unit-variant identifiers of the ``pub enum`` whose
+    declaration begins with ``enum_header`` in ``source`` (comments and string
+    literals must already be stripped), or ``None`` when the enum is absent.
+    Only bare identifier variants are collected, so a struct/tuple variant is
+    detected as drift relative to the closed unit-variant surface.
+    """
+    idx = source.find(enum_header)
+    if idx < 0:
+        return None
+    body = source[idx + len(enum_header):]
+    close = body.find("}")
+    if close < 0:
+        return None
+    return re.findall(
+        r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*,?[ \t]*$",
+        body[:close],
+        re.MULTILINE,
+    )
+
+
 def check_platform_request_context(issues: list[str]) -> None:
     """Fail closed over the accepted bounded M00 request-context implementation."""
     required = (
@@ -12107,7 +12150,7 @@ def check_platform_request_context(issues: list[str]) -> None:
     for fragment in (
         "Contract ID: `platform-request-context/v0`",
         "Status: **implemented bounded platform-core kernel**",
-        "exactly 64 named request-context tests",
+        "exactly 65 named request-context tests",
         REQUEST_CONTEXT_TEST_COMMAND,
     ):
         if contract.count(fragment) != 1:
@@ -12197,7 +12240,7 @@ def check_platform_request_context(issues: list[str]) -> None:
         missing = sorted(set(REQUEST_CONTEXT_TESTS) - set(actual_tests))
         extra = sorted(set(actual_tests) - set(REQUEST_CONTEXT_TESTS))
         fail(
-            "platform request context exact 64-test inventory drift "
+            "platform request context exact 65-test inventory drift "
             f"(count={len(actual_tests)} missing={missing} extra={extra})",
             issues,
         )
@@ -12221,7 +12264,7 @@ def check_platform_request_context(issues: list[str]) -> None:
 
     baseline = texts["docs/acceptance/platform-baseline.md"]
     auth13 = [line for line in baseline.splitlines() if line.startswith("| `AUTH-013` |")]
-    if len(auth13) != 1 or "Public/Authenticated" not in auth13[0] or "64" not in auth13[0]:
+    if len(auth13) != 1 or "Public/Authenticated" not in auth13[0] or "65" not in auth13[0]:
         fail("platform request context long-horizon AUTH-013 projection drift", issues)
 
     for rel, fragments in REQUEST_CONTEXT_DOC_FRAGMENTS.items():
@@ -12231,6 +12274,95 @@ def check_platform_request_context(issues: list[str]) -> None:
                     f"platform request context projection missing in {rel}: {fragment!r}",
                     issues,
                 )
+
+    # Mechanically bind the post-AR-001 closed PermissionClass / EffectClass
+    # surface: the contract closed blocks and the Rust unit-variant order must
+    # each agree with the accepted four/three-value v0 authority.
+    expected_permission_variants = [
+        "PublicRead",
+        "PublicLinkout",
+        "TenantPrivateRead",
+        "TenantPrivateWrite",
+    ]
+    expected_effect_variants = ["Read", "LinkOut", "TenantLocalMutation"]
+    coherence_header = "`PermissionClass` / `EffectClass` coherence is closed:"
+    expected_coherence_rows = [
+        "PublicRead -> Read",
+        "PublicLinkout -> LinkOut",
+        "TenantPrivateRead -> Read",
+        "TenantPrivateWrite -> TenantLocalMutation",
+    ]
+    permission_block = _extract_closed_text_block(
+        contract, "`PermissionClass` is closed:"
+    )
+    if permission_block is None:
+        fail("platform request context contract permission block missing", issues)
+    elif permission_block != expected_permission_variants:
+        fail(
+            "platform request context contract permission block drift "
+            f"(expected {expected_permission_variants} got {permission_block})",
+            issues,
+        )
+    effect_block = _extract_closed_text_block(contract, "`EffectClass` is closed:")
+    if effect_block is None:
+        fail("platform request context contract effect block missing", issues)
+    elif effect_block != expected_effect_variants:
+        fail(
+            "platform request context contract effect block drift "
+            f"(expected {expected_effect_variants} got {effect_block})",
+            issues,
+        )
+    if contract.count(coherence_header) != 1:
+        fail(
+            "platform request context contract coherence header must appear exactly once",
+            issues,
+        )
+    coherence_block = _extract_closed_text_block(contract, coherence_header)
+    if coherence_block is None:
+        fail("platform request context contract coherence block missing", issues)
+    elif coherence_block != expected_coherence_rows:
+        fail(
+            "platform request context contract coherence block drift "
+            f"(expected {expected_coherence_rows} got {coherence_block})",
+            issues,
+        )
+    permission_variants = _extract_unit_variants(
+        source_code, "pub enum PermissionClass {"
+    )
+    if permission_variants is None:
+        fail("platform request context Rust PermissionClass enum missing", issues)
+    elif permission_variants != expected_permission_variants:
+        fail(
+            "platform request context Rust PermissionClass unit-variant drift "
+            f"(expected {expected_permission_variants} got {permission_variants})",
+            issues,
+        )
+    effect_variants = _extract_unit_variants(source_code, "pub enum EffectClass {")
+    if effect_variants is None:
+        fail("platform request context Rust EffectClass enum missing", issues)
+    elif effect_variants != expected_effect_variants:
+        fail(
+            "platform request context Rust EffectClass unit-variant drift "
+            f"(expected {expected_effect_variants} got {effect_variants})",
+            issues,
+        )
+    production_anchors = (
+        "const fn permission_effect_coherent_v0(",
+        "if !permission_effect_coherent_v0(permission, effect) {",
+        "AdmissionRejectionProjection::MalformedCommand {\n"
+        "                        operation_id: Some(command.operation_id().clone()),\n"
+        "                    },\n"
+        "                    RequestContextDiagnosticSource::Coordinator,",
+        "AdmittedOperation::from_snapshot(snapshot.as_ref(), permission, effect)",
+    )
+    for anchor in production_anchors:
+        if source_code.count(anchor) != 1:
+            fail(
+                "platform request context permission/effect coherence enforcement drift "
+                f"for anchor {anchor!r}",
+                issues,
+            )
+
 
 EXPECTED_MAIN_CALLS = (
     "check_key_files_present_and_nonempty(issues)",
@@ -12340,7 +12472,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_platform_authority_implementation": {"digest": "64b767f09d0d29268af33e15bdf60d6fd879b61365abd45c1be2caa2319b92f4", "status": "active"},
     "check_platform_core_manifest": {"digest": "3082cf7fedfaf39080d287a036c8875f762751bb8832121ca2d7cd81d5947d62", "status": "active"},
     "check_platform_identity_implementation": {"digest": "b30158e2721bb04582b6dced31eb4328b493ba13d0f9153347388ad1ccd91c29", "status": "active"},
-    "check_platform_request_context": {"digest": "bfadbc26ce42b040412dab1e7d7ac4402c43eec31c6b85bd6fa62799b044ae83", "status": "active"},
+    "check_platform_request_context": {"digest": "716b2414ce325537cd03c1c1abdee12a12fcf61f43773a894ebf021d9a6c3fbc", "status": "active"},
     "check_platform_session_contract": {"digest": "e3a2e5ef5ca953bdf2739ac3072df8bcfed0ebece4a893f52980fb7ca3b15c1b", "status": "active"},
     "check_platform_session_implementation": {"digest": "f1a25036ae6940b332c258af80f2e23815071ca19cb1d5db79d7a4f8b844be8f", "status": "active"},
     "check_rust_doctest_gate": {"digest": "372200f9ce289b3af148b7e7001408498b3d817098d7013692f016b766d2ec58", "status": "active"},
