@@ -5,6 +5,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Barrier};
 
 use serde_json::{Value, json};
 use ustc_agentd::AffairsComposition;
@@ -33,6 +34,7 @@ fn temp_dir(label: &str) -> PathBuf {
         std::process::id()
     ));
     fs::create_dir_all(&path).expect("create test directory");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).expect("secure test directory");
     path
 }
 
@@ -48,6 +50,7 @@ struct TestEnv {
     store: PathBuf,
     idempotency: PathBuf,
     profiles: PathBuf,
+    sessions: PathBuf,
 }
 
 impl TestEnv {
@@ -70,6 +73,7 @@ impl TestEnv {
             store: dir.join("records.json"),
             idempotency: dir.join("idempotency.json"),
             profiles: dir.join("opportunity-profiles.json"),
+            sessions: dir.join("sessions.json"),
             dir,
             affairs_fixture,
             opportunity_fixture,
@@ -104,18 +108,7 @@ impl TestEnv {
             &self.profiles,
             &self.store,
             &self.idempotency,
-        )
-        .expect("open Opportunity composition")
-    }
-
-    fn open_with_idempotency(&self, idempotency: &Path) -> AffairsComposition {
-        AffairsComposition::open_with_opportunity(
-            &self.affairs_fixture,
-            &self.opportunity_fixture,
-            &self.catalog,
-            &self.profiles,
-            &self.store,
-            idempotency,
+            &self.sessions,
         )
         .expect("open Opportunity composition")
     }
@@ -411,7 +404,17 @@ fn different_tenant_cannot_read_profile_or_reach_m60() {
         "user:opportunity-other",
     );
     let other_idempotency = env.dir.join("other-idempotency.json");
-    let other = env.open_with_idempotency(&other_idempotency);
+    let other_sessions = env.dir.join("other-sessions.json");
+    let other = AffairsComposition::open_with_opportunity(
+        &env.affairs_fixture,
+        &env.opportunity_fixture,
+        &env.catalog,
+        &env.profiles,
+        &env.store,
+        &other_idempotency,
+        &other_sessions,
+    )
+    .expect("open other-tenant composition");
     let response = other.handle_opportunity_submit(&request(
         plan_command(&profile_id),
         "cross-tenant-plan",
@@ -452,6 +455,97 @@ fn market_disable_and_grant_revoke_deny_before_intent_executor_and_m60() {
         assert_eq!(composition.opportunity_m60_call_count(), 0);
         assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
     }
+}
+
+#[test]
+fn concurrent_retained_session_reads_are_peer_isolated() {
+    let env = TestEnv::new("concurrent-session-reads");
+    let composition = Arc::new(env.open());
+    let profile_id = create_profile(&composition, "concurrent-create");
+    let retained_before = fs::read(&env.sessions).expect("read retained sessions");
+    let barrier = Arc::new(Barrier::new(3));
+    let mut joins = Vec::new();
+    for (suffix, command) in [
+        ("peer-view", view_command(&profile_id)),
+        ("peer-plan", plan_command(&profile_id)),
+    ] {
+        let composition = Arc::clone(&composition);
+        let barrier = Arc::clone(&barrier);
+        joins.push(std::thread::spawn(move || {
+            barrier.wait();
+            composition.handle_opportunity_submit(&request(
+                command,
+                suffix,
+                authenticated_actor("session:proc011-web-demo"),
+            ))
+        }));
+    }
+    barrier.wait();
+    for join in joins {
+        let response = join.join().expect("peer request joins");
+        assert!(
+            matches!(response, ClientResponseDto::OpportunityAccepted { .. }),
+            "peer request failed: {response:?}"
+        );
+    }
+    assert_eq!(composition.opportunity_invocation_counts(), (3, 3, 3));
+    assert_eq!(
+        fs::read(&env.sessions).expect("read retained sessions after peers"),
+        retained_before
+    );
+}
+
+#[test]
+fn retained_session_restart_scope_and_changed_bootstrap_fail_closed() {
+    let env = TestEnv::new("retained-session-scope");
+    drop(env.open());
+    let retained = fs::read(&env.sessions).expect("read retained sessions");
+
+    env.set_actor("session:proc011-web-demo", "tenant:changed", "user:changed");
+    let scope_mismatch = AffairsComposition::open_with_opportunity(
+        &env.affairs_fixture,
+        &env.opportunity_fixture,
+        &env.catalog,
+        &env.profiles,
+        &env.store,
+        &env.idempotency,
+        &env.sessions,
+    );
+    assert!(matches!(
+        scope_mismatch,
+        Err(error) if error == "session_store_current_session_scope_mismatch"
+    ));
+    assert_eq!(
+        fs::read(&env.sessions).expect("scope mismatch bytes"),
+        retained
+    );
+
+    env.set_actor(
+        "session:changed-bootstrap",
+        "tenant:public-demo",
+        "user:public-demo",
+    );
+    let missing = AffairsComposition::open_with_opportunity(
+        &env.affairs_fixture,
+        &env.opportunity_fixture,
+        &env.catalog,
+        &env.profiles,
+        &env.store,
+        &env.idempotency,
+        &env.sessions,
+    );
+    assert!(matches!(
+        missing,
+        Err(error) if error == "session_store_current_session_absent"
+    ));
+    assert_eq!(fs::read(&env.sessions).expect("missing bytes"), retained);
+
+    env.set_actor(
+        "session:proc011-web-demo",
+        "tenant:public-demo",
+        "user:public-demo",
+    );
+    assert!(env.open().opportunity_private_state_counts() == (0, 0));
 }
 
 #[test]
@@ -715,6 +809,7 @@ fn oversized_state_and_preexisting_temporary_symlink_fail_closed() {
         &oversized.profiles,
         &oversized.store,
         &oversized.idempotency,
+        &oversized.sessions,
     );
     assert!(opened.is_err());
 
@@ -733,6 +828,7 @@ fn oversized_state_and_preexisting_temporary_symlink_fail_closed() {
         &insecure.profiles,
         &insecure.store,
         &insecure.idempotency,
+        &insecure.sessions,
     );
     assert!(opened.is_err(), "0644 private state must fail closed");
 
@@ -748,6 +844,7 @@ fn oversized_state_and_preexisting_temporary_symlink_fail_closed() {
         &primary_symlink.profiles,
         &primary_symlink.store,
         &primary_symlink.idempotency,
+        &primary_symlink.sessions,
     );
     assert!(opened.is_err(), "primary-state symlink must fail closed");
     assert_eq!(
@@ -794,6 +891,7 @@ fn retained_catalog_tamper_blocks_startup() {
         &env.profiles,
         &env.store,
         &env.idempotency,
+        &env.sessions,
     );
     assert!(result.is_err(), "retained catalog tamper must fail startup");
 }

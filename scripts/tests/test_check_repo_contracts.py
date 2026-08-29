@@ -7125,9 +7125,12 @@ class PlatformSessionImplementationTests(unittest.TestCase):
             checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS
         ):
             self.assertRegex(admitted_file, r"\Acrates/platform-core/src/[a-z_/]+\.rs\Z")
-            self.assertRegex(admitted_text, r"\A(?:pub )?use crate::identity::\{[^}]*\};\Z")
+            self.assertRegex(
+                admitted_text,
+                r"\A(?:pub )?use crate::identity::(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]*\});\Z",
+            )
             self.assertNotIn(" as ", admitted_text)
-        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 6)
+        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 7)
 
     def test_forbidden_dependency_carrier_fails_closed(self) -> None:
         # A path-qualified call inside a function body declares no item, so the item allowlist
@@ -7380,6 +7383,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_platform_session_contract(issues)",
         "check_platform_session_implementation(issues)",
         "check_platform_request_context(issues)",
+        "check_platform_session_port(issues)",
         "check_p1_source_revision_contract(issues)",
         "check_p1_source_registry_implementation(issues)",
         "check_m60_b2_packet_digest(issues)",
@@ -9898,5 +9902,172 @@ class PlatformRequestContextContractTests(unittest.TestCase):
                 ),
                 issues,
             )
+
+
+class PlatformSessionPortContractTests(unittest.TestCase):
+    """Mutation-proves the bounded M00-B4a checker and durable authority projection."""
+
+    CONTRACT_REL = "docs/contracts/platform-session-port.md"
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        shutil.copytree(
+            REPO_ROOT / "crates/platform-core",
+            self.root / "crates/platform-core",
+            ignore=shutil.ignore_patterns("target"),
+        )
+        shutil.copytree(
+            REPO_ROOT / "apps/ustc-agentd",
+            self.root / "apps/ustc-agentd",
+            ignore=shutil.ignore_patterns("target"),
+        )
+        cli_product_test = self.root / checker.APP_CLI_PRODUCT_TEST
+        cli_product_test.parent.mkdir(parents=True)
+        shutil.copy2(REPO_ROOT / checker.APP_CLI_PRODUCT_TEST, cli_product_test)
+        (self.root / "scripts").mkdir()
+        for rel in (
+            "run_three_plugin_mvp.sh",
+            "run_affairs_web_demo.sh",
+        ):
+            shutil.copy2(REPO_ROOT / "scripts" / rel, self.root / "scripts" / rel)
+        shutil.copy2(REPO_ROOT / "README.md", self.root / "README.md")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        self.original_key_files = list(checker.KEY_FILES)
+        setattr(checker, "ROOT", self.root)
+        self.assertEqual(self.check_session_port(), [])
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        checker.KEY_FILES[:] = self.original_key_files
+        self.temporary_directory.cleanup()
+
+    def check_session_port(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_platform_session_port(issues)
+        return issues
+
+    def replace_once(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, (rel, old))
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def assert_issue(self, fragment: str) -> None:
+        issues = self.check_session_port()
+        self.assertTrue(any(fragment in issue for issue in issues), issues)
+
+    def test_session_port_contract_missing_empty_and_unregistered_fail_closed(self) -> None:
+        with self.subTest("missing"):
+            path = self.root / self.CONTRACT_REL
+            original = path.read_bytes()
+            path.unlink()
+            self.assert_issue("platform session port required carrier missing")
+            path.write_bytes(original)
+        with self.subTest("empty"):
+            path = self.root / self.CONTRACT_REL
+            original = path.read_bytes()
+            path.write_text(" \n", encoding="utf-8")
+            self.assert_issue("platform session port required carrier empty")
+            path.write_bytes(original)
+        with self.subTest("unregistered"):
+            checker.KEY_FILES.remove(self.CONTRACT_REL)
+            self.assert_issue("platform session port authority carrier unregistered")
+
+    def test_session_port_public_item_widening_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_SESSION_PORT_SOURCE,
+            "pub trait SessionClockPort {",
+            "pub struct ForgedSessionAuthority;\n\npub trait SessionClockPort {",
+        )
+        self.assert_issue("exact public item inventory drift")
+
+    def test_session_port_public_function_widening_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_SESSION_PORT_SOURCE,
+            "    pub const fn revision(&self) -> u64 {",
+            "    pub fn unchecked_snapshot(&self) -> &SessionSnapshot { &self.snapshot }\n\n    pub const fn revision(&self) -> u64 {",
+        )
+        self.assert_issue("exact public function inventory drift")
+
+    def test_session_port_compile_fail_inventory_drift_fails_closed(self) -> None:
+        path = self.root / checker.PLATFORM_SESSION_PORT_SOURCE
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count("```compile_fail"), 4)
+        path.write_text(text.replace("```compile_fail", "```ignore", 1), encoding="utf-8")
+        self.assert_issue("exact four compile-fail proofs drift")
+
+    def test_session_port_core_test_inventory_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_SESSION_PORT_TEST,
+            "fn session_append_fake_is_exactly_fenced_and_atomic()",
+            "fn session_append_fake_is_exactly_fenced_and_atomic_mutated()",
+        )
+        self.assert_issue("exact six core-test inventory drift")
+
+    def test_session_port_durable_test_inventory_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.APP_M00_SESSION_SOURCE,
+            "fn bootstrap_is_atomic_bounded_and_leaves_no_temporary_residue()",
+            "fn bootstrap_is_atomic_bounded_and_leaves_no_temporary_residue_mutated()",
+        )
+        self.assert_issue("exact six durable-vendor test inventory drift")
+
+    def test_session_port_durable_vendor_append_authority_fails_closed(self) -> None:
+        path = self.root / checker.APP_M00_SESSION_SOURCE
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\nimpl SessionHistoryAppendPort for DurableCurrentSessionStore {}\n"
+            )
+        self.assert_issue("app-private vendor exact impl inventory drift")
+
+    def test_session_port_durable_invariant_removal_fails_closed(self) -> None:
+        self.replace_once(
+            checker.APP_M00_SESSION_SOURCE,
+            "std::fs::hard_link(&temporary, path)",
+            "std::fs::rename(&temporary, path)",
+        )
+        self.assert_issue("durable invariant carrier missing")
+
+    def test_session_port_composition_static_error_mapping_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "apps/ustc-agentd/src/lib.rs",
+            'SessionRepositoryError::Corrupt => "session_store_corrupt"',
+            'SessionRepositoryError::Corrupt => "session_store_corrupt_detail"',
+        )
+        self.assert_issue("composition projection drift")
+
+    def test_session_port_launcher_chmod_repair_fails_closed(self) -> None:
+        path = self.root / "scripts/run_three_plugin_mvp.sh"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\nchmod 0700 \"$STATE_DIR\"\n")
+        self.assert_issue("launcher must not chmod-repair state root")
+
+    def test_session_port_client_e2e_wiring_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.APP_CLI_PRODUCT_TEST,
+            '            "--session-store",',
+            '            "--missing-session-store",',
+        )
+        self.assert_issue("client E2E wiring drift")
+
+    def test_session_port_acceptance_status_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/acceptance/matrix.tsv",
+            "\tpr\timplemented\tbackend\nMARKET-001",
+            "\tpr\tplanned\tbackend\nMARKET-001",
+        )
+        self.assert_issue("acceptance row AUTH-021 drift")
+
+    def test_session_port_status_projection_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/overview/architecture.md",
+            "B4b/B5/SSO remain planned",
+            "B4b/B5/SSO are implemented",
+        )
+        self.assert_issue("projection missing")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -35,9 +35,9 @@ use ustc_campus_agent_application_ingress::{CapabilityIssuer, M10AdmissionPorts}
 use ustc_campus_agent_client_protocol::WireText;
 use ustc_campus_agent_core::identity::{CommandId, SessionId, TenantId, UserId};
 use ustc_campus_agent_core::request_context::{
-    ActorKind, AdapterAllowlist, AdapterIdentity, AdmissionPortError, AdmissionPorts,
-    CapabilityDisposition, DecoderIdentity, DescriptorSnapshotError, DescriptorSnapshotId,
-    DispatcherIdentity, EffectClass, EnvelopeHash, FinalAdmissionDisposition,
+    ActorKind, AdapterAllowlist, AdapterIdentity, AdmissionPortError, AdmissionPortKind,
+    AdmissionPorts, CapabilityDisposition, DecoderIdentity, DescriptorSnapshotError,
+    DescriptorSnapshotId, DispatcherIdentity, EffectClass, EnvelopeHash, FinalAdmissionDisposition,
     FinalizeIdempotencyOutcome, IdempotencyError, IdempotencyKey, IdempotencyReservation,
     IdempotencyReservationToken, OperationDescriptorProjection, OperationId, OperationSnapshot,
     PermissionClass, PersistedPriorDispositionDto, PlatformPolicySnapshotId, PolicyCurrentnessFact,
@@ -45,9 +45,10 @@ use ustc_campus_agent_core::request_context::{
 };
 use ustc_campus_agent_core::session::{
     AuthAdapterId, CredentialEvidenceDigest, OpenSession, SessionCommand,
-    SessionCredentialEvidence, SessionDuration, SessionInstant, SessionPolicy, SessionSnapshot,
-    decide, evolve,
+    SessionCredentialEvidence, SessionDuration, SessionEvent, SessionInstant, SessionPolicy,
+    SessionSnapshot, decide, evolve,
 };
+use ustc_campus_agent_core::session_port::SessionHistoryReadPort;
 use ustc_campus_agent_core::source_registry::{
     SourceId as M60SourceId, SourceReviewEvidenceId, SourceReviewerId, SourceUrl as M60SourceUrl,
 };
@@ -57,6 +58,7 @@ use ustc_campus_agent_core::source_revision::{
 };
 
 use crate::affairs_invocation::AffairsInvocationCounters;
+use crate::m00_session::DurableCurrentSessionStore;
 
 // ---------------------------------------------------------------------------
 // Counting M60 port (owner-private call-count instrumentation)
@@ -181,6 +183,7 @@ pub(crate) struct AffairsFixture {
     pub(crate) m60_call_count: Arc<AtomicU64>,
     pub(crate) clock: FixedClock,
     pub(crate) session: SessionSnapshot,
+    pub(crate) session_events: Vec<SessionEvent>,
     pub(crate) capabilities: CapabilityIssuer,
     pub(crate) descriptor: OperationSnapshot,
     pub(crate) policy_snapshot_id: PlatformPolicySnapshotId,
@@ -489,6 +492,7 @@ impl AffairsFixture {
             decide(None, &open_command).map_err(|e| format!("session decide failed: {e}"))?;
         let session =
             evolve(None, &open_event).map_err(|e| format!("session evolve failed: {e}"))?;
+        let session_events = vec![open_event];
 
         // -- Capability issuer --
         let key_bytes = decode_hex_key(&dto.capability_key_hex)?;
@@ -550,6 +554,7 @@ impl AffairsFixture {
             m60_call_count,
             clock,
             session,
+            session_events,
             capabilities,
             descriptor: descriptor_snapshot,
             policy_snapshot_id,
@@ -1030,7 +1035,7 @@ pub(crate) struct FixturePorts {
     descriptor: OperationSnapshot,
     now: SessionInstant,
     policy_snapshot_id: PlatformPolicySnapshotId,
-    session: Option<SessionSnapshot>,
+    sessions: DurableCurrentSessionStore,
 }
 
 impl FixturePorts {
@@ -1039,14 +1044,14 @@ impl FixturePorts {
         descriptor: OperationSnapshot,
         now: SessionInstant,
         policy_snapshot_id: PlatformPolicySnapshotId,
-        session: Option<SessionSnapshot>,
+        sessions: DurableCurrentSessionStore,
     ) -> Self {
         Self {
             store,
             descriptor,
             now,
             policy_snapshot_id,
-            session,
+            sessions,
         }
     }
 }
@@ -1081,9 +1086,12 @@ impl AdmissionPorts for FixturePorts {
 
     fn load_session(
         &mut self,
-        _session_id: &SessionId,
+        session_id: &SessionId,
     ) -> Result<Option<SessionSnapshot>, AdmissionPortError> {
-        Ok(self.session.clone())
+        self.sessions
+            .load_history(session_id)
+            .map(|history| history.map(|retained| retained.snapshot().clone()))
+            .map_err(|_| AdmissionPortError::Unavailable(AdmissionPortKind::Session))
     }
 
     fn check_capability(

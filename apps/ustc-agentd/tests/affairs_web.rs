@@ -5,6 +5,7 @@
 use std::fs;
 use std::io::{BufRead, Read, Write};
 use std::net::TcpStream;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -139,6 +140,8 @@ impl WebServer {
         let temp_dir =
             std::env::temp_dir().join(format!("ustc-agentd-web-{}-{suffix}", std::process::id()));
         fs::create_dir_all(&temp_dir).expect("create web test directory");
+        fs::set_permissions(&temp_dir, fs::Permissions::from_mode(0o700))
+            .expect("secure web test directory");
         let fixture = fixture_with_market_state(
             &fixture,
             &temp_dir.join("affairs-fixture.json"),
@@ -163,6 +166,7 @@ impl WebServer {
         });
         let store = temp_dir.join("records.json");
         let idempotency = temp_dir.join("idempotency.json");
+        let sessions = temp_dir.join("m00-sessions.json");
         let opportunity_profile_store = temp_dir.join("opportunity-profiles.json");
 
         let mut command = Command::new(env!("CARGO_BIN_EXE_ustc-agentd"));
@@ -201,6 +205,8 @@ impl WebServer {
                 store.to_str().expect("store path utf8"),
                 "--idempotency",
                 idempotency.to_str().expect("idempotency path utf8"),
+                "--session-store",
+                sessions.to_str().expect("session store path utf8"),
             ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

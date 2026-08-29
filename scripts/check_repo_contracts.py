@@ -268,6 +268,7 @@ KEY_FILES = [
     "docs/tasks/01-execution-roadmap.md",
     "docs/tasks/02-s0-architecture-review.md",
     "docs/tasks/campaign-w1-m00-b3.md",
+    "docs/tasks/campaign-w1-m00-b4a.md",
     "docs/tasks/campaign-w1-m20-b6.md",
     "docs/tasks/campaign-w1-m30-b0.md",
     "docs/tasks/campaign-w1-m40-b0.md",
@@ -288,6 +289,7 @@ KEY_FILES = [
     "docs/contracts/platform-identity.md",
     "docs/contracts/platform-request-context.md",
     "docs/contracts/platform-session.md",
+    "docs/contracts/platform-session-port.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",
     "docs/contracts/source-retrieval.md",
@@ -2637,6 +2639,13 @@ PLATFORM_AUTHORITY_SOURCE = "crates/platform-core/src/market/authority.rs"
 PLATFORM_AUTHORITY_TEST = "crates/platform-core/tests/market_authority_assembly.rs"
 PLATFORM_SESSION_SOURCE = "crates/platform-core/src/session.rs"
 PLATFORM_SESSION_TEST = "crates/platform-core/tests/platform_session.rs"
+PLATFORM_SESSION_PORT_SOURCE = "crates/platform-core/src/session_port.rs"
+PLATFORM_SESSION_PORT_TEST = "crates/platform-core/tests/platform_session_port.rs"
+APP_M00_SESSION_SOURCE = "apps/ustc-agentd/src/m00_session.rs"
+APP_OPPORTUNITY_TEST = "apps/ustc-agentd/tests/opportunity_composition.rs"
+APP_CLI_PRODUCT_TEST = "apps/ustc-agent/tests/affairs_get_product_path.rs"
+PLATFORM_SESSION_PORT_CONTRACT = "docs/contracts/platform-session-port.md"
+PLATFORM_SESSION_PORT_TASK = "docs/tasks/campaign-w1-m00-b4a.md"
 PLATFORM_CAPABILITY_TEST = "crates/platform-core/tests/market_capability_registry.rs"
 PLATFORM_INSTALLATION_TEST = 'crates/platform-core/tests/market_installation_lifecycle.rs'
 PLATFORM_INSTALLATION_SOURCE = 'crates/platform-core/src/market/installation.rs'
@@ -2917,6 +2926,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/market/update.rs',
  'src/request_context.rs',
  'src/session.rs',
+ 'src/session_port.rs',
  'src/source_registry.rs',
  'src/source_revision.rs',
  'tests/invocation_resolution.rs',
@@ -2929,6 +2939,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'tests/platform_identity.rs',
  'tests/platform_request_context.rs',
  'tests/platform_session.rs',
+ 'tests/platform_session_port.rs',
  'tests/source_registry.rs',
  'tests/support/invocation_fixture.rs',
  'tests/support/invocation_fixture_executor.rs')
@@ -2940,6 +2951,7 @@ PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, U
 PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT = (
     "use crate::identity::{SessionId, TenantId, UserId};"
 )
+PLATFORM_SESSION_PORT_ADMITTED_IDENTITY_IMPORT = "use crate::identity::SessionId;"
 # Cross-file bindings of an admitted kind are admitted by ENUMERATION, never by pattern, and
 # each entry is keyed by exact repository-relative file together with exact normalized text.
 # Relaxing this into a prefix, regex or predicate over `crate::identity::` would re-open
@@ -2955,6 +2967,7 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
     (PLATFORM_UPDATE_SOURCE, PLATFORM_UPDATE_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_AUTHORITY_SOURCE, PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT),
+    (PLATFORM_SESSION_PORT_SOURCE, PLATFORM_SESSION_PORT_ADMITTED_IDENTITY_IMPORT),
 )
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
 # a file extension. Pinning the declarations pins the compiled set semantically, so no
@@ -2962,7 +2975,7 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
 # introduce a module the scan never reads.
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'invocation.rs': (),
- 'lib.rs': ('identity', 'invocation', 'market', 'request_context', 'session', 'source_registry', 'source_revision'),
+ 'lib.rs': ('identity', 'invocation', 'market', 'request_context', 'session', 'session_port', 'source_registry', 'source_revision'),
  'market.rs': ('authority', 'capability', 'grant', 'installation', 'update'),
  'market/authority.rs': (),
  'market/capability.rs': (),
@@ -2971,6 +2984,7 @@ PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'market/update.rs': (),
  'request_context.rs': (),
  'session.rs': (),
+ 'session_port.rs': (),
  'source_registry.rs': (),
  'source_revision.rs': ()}
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
@@ -3010,6 +3024,7 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
             'pub mod market;',
             'pub mod request_context;',
             'pub mod session;',
+            'pub mod session_port;',
             'pub mod source_registry;',
             'pub mod source_revision;',
             '#[cfg(test)] mod tests',
@@ -3143,6 +3158,11 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                 'use crate::identity::{SessionId, TenantId, UserId};',
                 '#[cfg(test)] mod tests',
                 'use super::*;'),
+ 'session_port.rs': ('use std::fmt;',
+                     'use serde::{Deserialize, Deserializer, Serialize, Serializer, de};',
+                     'use crate::identity::SessionId;',
+                     'use crate::session::{ AuthAdapterId, CredentialEvidenceDigest, SessionEvent, '
+                     'SessionInstant, SessionSnapshot, evolve, };'),
  'source_registry.rs': ('use std::collections::BTreeMap;',
                         'use std::error::Error;',
                         'use std::fmt;',
@@ -3177,6 +3197,7 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
  'market/installation.rs': (),
  'market/update.rs': ('parsed',),
  'session.rs': (),
+ 'session_port.rs': (),
  'source_registry.rs': ('source_value',),
  'source_revision.rs': ('revision_id',)}
 # Macro INVOCATION names are pinned too, not screened for `include!`. A splicing macro can be
@@ -3221,6 +3242,7 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_
                       'vec',
                       'write'),
  'session.rs': ('assert', 'assert_eq', 'matches', 'panic', 'write'),
+ 'session_port.rs': (),
  'source_registry.rs': ('assert',
                         'assert_eq',
                         'concat',
@@ -3461,6 +3483,12 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
                 'impl fmt::Display for SessionValueError',
                  'impl-arg Into<String>',
                  'impl-arg Into<String>'),
+ 'session_port.rs': ("impl Deserialize<'de> for SecretRef",
+                     'impl SecretRef',
+                     'impl Serialize for SecretRef',
+                     'impl SessionHistory',
+                     'impl fmt::Debug for SecretRef',
+                     'impl-arg Into<String>'),
  'source_registry.rs': ('impl $name',
                         "impl Deserialize<'de> for $name",
                         'impl Error for SourceRegistryError',
@@ -4548,6 +4576,7 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive'
  'market/installation.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'market/update.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'session.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
+ 'session_port.rs': ('derive', 'must_use'),
  'source_registry.rs': ('$attribute', 'allow', 'cfg', 'derive', 'doc', 'must_use', 'test'),
  'source_revision.rs': ('$attribute', 'allow', 'cfg', 'derive', 'must_use', 'non_exhaustive', 'test')}
 # `market/grant.rs` carries lint-affecting `allow` attributes, so names alone are not enough:
@@ -10334,6 +10363,7 @@ P1_SOURCE_REGISTRY_IDENTITY_MODULE_EXPECTATION = """&[
                 "market",
                 "request_context",
                 "session",
+                "session_port",
                 "source_registry",
                 "source_revision",
             ] as &[&str],"""
@@ -12364,6 +12394,357 @@ def check_platform_request_context(issues: list[str]) -> None:
             )
 
 
+PLATFORM_SESSION_PORT_TEST_COMMAND = (
+    "python3 scripts/check_repo_contracts.py && cargo test --locked "
+    "-p ustc-campus-agent-core --test platform_session_port && cargo test --locked "
+    "-p ustc-campus-agent-core --doc session_port && cargo test --locked "
+    "-p ustc-agentd --lib m00_session::tests && cargo test --locked "
+    "-p ustc-agentd --test opportunity_composition"
+)
+PLATFORM_SESSION_PORT_PUBLIC_ITEMS = {
+    "CredentialEvidencePort",
+    "CredentialEvidencePortError",
+    "SecretRef",
+    "SessionAppendOutcome",
+    "SessionClockError",
+    "SessionClockPort",
+    "SessionHistory",
+    "SessionHistoryAppendPort",
+    "SessionHistoryReadPort",
+    "SessionRepositoryError",
+}
+PLATFORM_SESSION_PORT_PUBLIC_FUNCTIONS = {
+    "as_str",
+    "events",
+    "parse",
+    "revision",
+    "session_id",
+    "snapshot",
+    "try_from_events",
+}
+PLATFORM_SESSION_PORT_CORE_TESTS = (
+    "session_history_replays_only_complete_valid_event_sequences",
+    "session_read_port_distinguishes_absent_unavailable_and_corrupt",
+    "session_append_fake_is_exactly_fenced_and_atomic",
+    "session_append_fake_rejects_historical_retry_after_later_events",
+    "session_clock_fake_is_deterministic_and_fail_closed",
+    "credential_evidence_port_uses_only_logical_secret_refs_and_redacts",
+)
+PLATFORM_SESSION_PORT_APP_TESTS = (
+    "bootstrap_absent_store_then_restart_reads_equal_history",
+    "retained_store_wins_over_changed_bootstrap_and_missing_session_stays_absent",
+    "malformed_unknown_version_duplicate_cross_session_and_forged_event_fail_closed",
+    "noncanonical_order_empty_history_and_limit_fail_closed",
+    "unsafe_file_type_symlink_parent_mode_identity_and_oversize_fail_closed",
+    "bootstrap_is_atomic_bounded_and_leaves_no_temporary_residue",
+)
+PLATFORM_SESSION_PORT_OPPORTUNITY_TESTS = (
+    "concurrent_retained_session_reads_are_peer_isolated",
+    "retained_session_restart_scope_and_changed_bootstrap_fail_closed",
+)
+PLATFORM_SESSION_PORT_DOC_FRAGMENTS = {
+    "docs/contracts/platform-session.md": ("platform-session-port/v0", "B4a"),
+    "docs/contracts/module-boundaries.md": ("platform-session-port/v0", "AUTH-021"),
+    "docs/plan/modules/00-module-map.md": ("platform-session-port/v0", "AUTH-021"),
+    "docs/plan/modules/10-platform-control-identity.md": (
+        "platform-session-port/v0",
+        "AUTH-021",
+        "B4b control-evidence",
+    ),
+    "docs/coverage-matrix.md": ("platform-session-port.md", "active:AUTH-021"),
+    "docs/overview/architecture.md": ("B4a session-port", "B4b/B5/SSO remain planned"),
+    "docs/tasks/01-execution-roadmap.md": ("platform-session-port/v0", "AUTH-021"),
+    "README.md": ("m00-sessions.json", "event-history-only"),
+}
+
+
+def check_platform_session_port(issues: list[str]) -> None:
+    """Bind the bounded B4a session-port, durable read vendor and status projections."""
+    carriers = (
+        PLATFORM_SESSION_PORT_CONTRACT,
+        PLATFORM_SESSION_PORT_TASK,
+        PLATFORM_SESSION_PORT_SOURCE,
+        PLATFORM_SESSION_PORT_TEST,
+        APP_M00_SESSION_SOURCE,
+        APP_OPPORTUNITY_TEST,
+        APP_CLI_PRODUCT_TEST,
+        "crates/platform-core/src/lib.rs",
+        "apps/ustc-agentd/src/lib.rs",
+        "apps/ustc-agentd/src/affairs_fixture.rs",
+        "scripts/run_three_plugin_mvp.sh",
+        "scripts/run_affairs_web_demo.sh",
+        "docs/acceptance/matrix.tsv",
+        "docs/acceptance/platform-baseline.md",
+        *PLATFORM_SESSION_PORT_DOC_FRAGMENTS,
+    )
+    texts: dict[str, str] = {}
+    for rel in dict.fromkeys(carriers):
+        path = ROOT / rel
+        if not path.is_file():
+            fail(f"platform session port required carrier missing: {rel}", issues)
+            continue
+        text = path.read_text(encoding="utf-8")
+        if not text.strip():
+            fail(f"platform session port required carrier empty: {rel}", issues)
+            continue
+        texts[rel] = text
+    if len(texts) != len(set(carriers)):
+        return
+
+    for rel in (PLATFORM_SESSION_PORT_CONTRACT, PLATFORM_SESSION_PORT_TASK):
+        if rel not in KEY_FILES:
+            fail(f"platform session port authority carrier unregistered: {rel}", issues)
+
+    contract = texts[PLATFORM_SESSION_PORT_CONTRACT]
+    for fragment in (
+        "`Version`: `platform-session-port/v0`",
+        "`Acceptance`: `AUTH-021`, `implemented`",
+        "The app-private vendor implements only `SessionHistoryReadPort`, never `SessionHistoryAppendPort`.",
+        "now surfaces `SessionNotFound` rather than the retired fixture-clone `SessionIdMismatch`.",
+        "exactly six contract tests",
+        "exactly six Unix-gated unit tests",
+        PLATFORM_SESSION_PORT_TEST_COMMAND,
+    ):
+        if contract.count(fragment) != 1:
+            fail(f"platform session port contract drift: missing/duplicate {fragment!r}", issues)
+
+    task = texts[PLATFORM_SESSION_PORT_TASK]
+    for fragment in (
+        "`implemented-bounded-b4a`",
+        "Base commit: `1266ea63f36e44c3f4077749e94329c20933e6c6`",
+        "no durable lifecycle append vendor",
+        "B4 remains incomplete until B4b `control-evidence`",
+    ):
+        if task.count(fragment) != 1:
+            fail(f"platform session port task receipt drift: missing/duplicate {fragment!r}", issues)
+
+    lib_code = strip_rust_comments_and_literals(texts["crates/platform-core/src/lib.rs"])
+    lib_items, unresolved_lib_items = rust_item_declarations(lib_code)
+    if unresolved_lib_items:
+        fail(f"platform session port lib item inventory unresolved: {unresolved_lib_items}", issues)
+    if lib_items.count("pub mod session_port;") != 1:
+        fail("platform session port module declaration must appear exactly once", issues)
+
+    source = texts[PLATFORM_SESSION_PORT_SOURCE]
+    source_code = strip_rust_comments_and_literals(source)
+    for carrier, pattern in PLATFORM_CORE_FORBIDDEN_SPLICE_PATTERNS:
+        if re.search(pattern, source_code):
+            fail(f"platform session port must not splice external source: {carrier!r}", issues)
+    if re.search(RUST_INNER_ATTRIBUTE_PATTERN, source_code) or re.search(
+        r"\bcfg_attr\b", source_code
+    ):
+        fail("platform session port carries a conditional/inner source attribute", issues)
+
+    public_items = set(
+        re.findall(
+            r"\bpub\s+(?:struct|enum|trait)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            source_code,
+            flags=re.ASCII,
+        )
+    )
+    if public_items != PLATFORM_SESSION_PORT_PUBLIC_ITEMS:
+        fail(
+            "platform session port exact public item inventory drift "
+            f"(missing={sorted(PLATFORM_SESSION_PORT_PUBLIC_ITEMS - public_items)} "
+            f"extra={sorted(public_items - PLATFORM_SESSION_PORT_PUBLIC_ITEMS)})",
+            issues,
+        )
+    public_functions = set(
+        re.findall(
+            r"\bpub\s+(?:const\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)",
+            source_code,
+            flags=re.ASCII,
+        )
+    )
+    if public_functions != PLATFORM_SESSION_PORT_PUBLIC_FUNCTIONS:
+        fail(
+            "platform session port exact public function inventory drift "
+            f"(missing={sorted(PLATFORM_SESSION_PORT_PUBLIC_FUNCTIONS - public_functions)} "
+            f"extra={sorted(public_functions - PLATFORM_SESSION_PORT_PUBLIC_FUNCTIONS)})",
+            issues,
+        )
+    if source.count("```compile_fail") != 4:
+        fail("platform session port exact four compile-fail proofs drift", issues)
+
+    normalized_source = re.sub(r"\s+", " ", source_code).strip()
+    required_shapes = (
+        "pub struct SecretRef(String);",
+        "pub struct SessionHistory { events: Vec<SessionEvent>, snapshot: SessionSnapshot, }",
+        "pub enum SessionAppendOutcome { Appended(SessionHistory), AlreadySame(SessionHistory), Conflict { current_revision: Option<u64> }, }",
+        "pub trait SessionHistoryReadPort { fn load_history( &mut self, session_id: &SessionId, ) -> Result<Option<SessionHistory>, SessionRepositoryError>; }",
+        "pub trait SessionHistoryAppendPort: SessionHistoryReadPort { fn compare_and_append( &mut self, session_id: &SessionId, expected_revision: Option<u64>, event: &SessionEvent, ) -> Result<SessionAppendOutcome, SessionRepositoryError>; }",
+        "pub trait SessionClockPort { fn now(&mut self) -> Result<SessionInstant, SessionClockError>; }",
+        "pub trait CredentialEvidencePort { fn fingerprint_adapter_evidence( &mut self, auth_adapter_id: &AuthAdapterId, secret_ref: &SecretRef, ) -> Result<CredentialEvidenceDigest, CredentialEvidencePortError>; }",
+    )
+    for shape in required_shapes:
+        if normalized_source.count(shape) != 1:
+            fail(f"platform session port exact Rust shape drift: {shape!r}", issues)
+
+    for enum_header, expected in (
+        (
+            "pub enum SessionRepositoryError {",
+            ["Unavailable", "Corrupt", "InvalidEvent", "LimitExceeded", "InternalInvariant"],
+        ),
+        ("pub enum SessionClockError {", ["Unavailable"]),
+        (
+            "pub enum CredentialEvidencePortError {",
+            ["Unavailable", "UnknownSecretRef", "InternalInvariant"],
+        ),
+    ):
+        if _extract_unit_variants(source_code, enum_header) != expected:
+            fail(f"platform session port closed enum drift: {enum_header}", issues)
+    for forbidden in (
+        "impl Default for SecretRef",
+        "impl fmt::Display for SecretRef",
+        "impl Default for SessionHistory",
+        "impl fmt::Debug for SessionHistory",
+        "impl Serialize for SessionHistory",
+        "impl<'de> Deserialize<'de> for SessionHistory",
+        "pub fn events_mut",
+        "pub fn snapshot_mut",
+    ):
+        if forbidden in source_code:
+            fail(f"platform session port forbidden public/authority surface present: {forbidden}", issues)
+
+    core_test_code = strip_rust_comments_and_literals(texts[PLATFORM_SESSION_PORT_TEST])
+    core_tests = tuple(re.findall(r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)", core_test_code))
+    if core_tests != PLATFORM_SESSION_PORT_CORE_TESTS:
+        fail(
+            "platform session port exact six core-test inventory drift "
+            f"(actual={list(core_tests)})",
+            issues,
+        )
+
+    app_source = texts[APP_M00_SESSION_SOURCE]
+    app_code = strip_rust_comments_and_literals(app_source)
+    app_tests = tuple(re.findall(r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)", app_code))
+    if app_tests != PLATFORM_SESSION_PORT_APP_TESTS:
+        fail(
+            "platform session port exact six durable-vendor test inventory drift "
+            f"(actual={list(app_tests)})",
+            issues,
+        )
+    for fragment in (
+        "const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;",
+        "const MAX_SESSIONS: usize = 64;",
+        "const MAX_EVENTS_PER_SESSION: usize = 1_024;",
+        "#[serde(deny_unknown_fields)]",
+        ".custom_flags(libc::O_NOFOLLOW)",
+        "std::fs::hard_link(&temporary, path)",
+        ".take(MAX_FILE_BYTES + 1)",
+        "canonical != bytes",
+        "if file.write_all(&bytes).is_err()",
+        "if file.sync_all().is_err()",
+    ):
+        if app_source.count(fragment) < 1:
+            fail(f"platform session port durable invariant carrier missing: {fragment!r}", issues)
+    if app_source.count("return cleanup_before_publish(&temporary);") != 2:
+        fail("platform session port write/sync failure cleanup binding drift", issues)
+    if app_source.count("permissions().mode() & 0o7777 != 0o600") != 2:
+        fail("platform session port exact file mode mask drift", issues)
+    if app_source.count("permissions().mode() & 0o7777 != 0o700") != 1:
+        fail("platform session port exact parent mode mask drift", issues)
+    app_impls, unresolved_app_impls = rust_impl_declarations(app_code)
+    if unresolved_app_impls:
+        fail(f"platform session port durable-vendor impl inventory unresolved: {unresolved_app_impls}", issues)
+    vendor_impls = [
+        declaration
+        for declaration in app_impls
+        if "DurableCurrentSessionStore" in declaration
+    ]
+    if vendor_impls != [
+        "impl DurableCurrentSessionStore",
+        "impl SessionHistoryReadPort for DurableCurrentSessionStore",
+    ]:
+        fail(
+            "platform session port app-private vendor exact impl inventory drift "
+            f"(actual={vendor_impls})",
+            issues,
+        )
+
+    opportunity_code = strip_rust_comments_and_literals(texts[APP_OPPORTUNITY_TEST])
+    opportunity_tests = re.findall(
+        r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)",
+        opportunity_code,
+    )
+    for test_name in PLATFORM_SESSION_PORT_OPPORTUNITY_TESTS:
+        if opportunity_tests.count(test_name) != 1:
+            fail(f"platform session port opportunity evidence missing/duplicate: {test_name}", issues)
+
+    app_lib = texts["apps/ustc-agentd/src/lib.rs"]
+    for fragment in (
+        "SessionRepositoryError::Unavailable => \"session_store_unavailable\"",
+        "SessionRepositoryError::Corrupt => \"session_store_corrupt\"",
+        "SessionRepositoryError::InvalidEvent => \"session_store_invalid_event\"",
+        "SessionRepositoryError::LimitExceeded => \"session_store_limit_exceeded\"",
+        "SessionRepositoryError::InternalInvariant => \"session_store_internal_invariant\"",
+        "\"session_store_current_session_absent\"",
+        "\"session_store_current_session_scope_mismatch\"",
+        "let current_tenant_id = current.snapshot().tenant_id().clone();",
+        "let current_user_id = current.snapshot().user_id().clone();",
+    ):
+        if app_lib.count(fragment) != 1:
+            fail(f"platform session port composition projection drift: {fragment!r}", issues)
+
+    fixture = texts["apps/ustc-agentd/src/affairs_fixture.rs"]
+    if fixture.count(".load_history(session_id)") != 1:
+        fail("platform session port fixture admission must read the durable history once", issues)
+    if "session: Option<SessionSnapshot>" in fixture:
+        fail("platform session port retired fixture-cloned session authority present", issues)
+
+    cli_product_test = texts[APP_CLI_PRODUCT_TEST]
+    for fragment in (
+        "session_store: PathBuf",
+        "--session-store",
+        "m00-sessions.json",
+        "Permissions::from_mode(0o700)",
+        "&self.session_store",
+    ):
+        if cli_product_test.count(fragment) != 1:
+            fail(
+                "platform session port client E2E wiring drift: "
+                f"missing/duplicate {fragment!r}",
+                issues,
+            )
+
+    for launcher in ("scripts/run_three_plugin_mvp.sh", "scripts/run_affairs_web_demo.sh"):
+        script = texts[launcher]
+        for fragment in ("--session-store", "m00-sessions.json", "stat -c '%a'", "stat -c '%u'"):
+            if script.count(fragment) != 1:
+                fail(f"platform session port launcher drift in {launcher}: {fragment!r}", issues)
+        if re.search(r"\bchmod\b", script):
+            fail(f"platform session port launcher must not chmod-repair state root: {launcher}", issues)
+
+    matrix_rows = {
+        columns[0]: columns
+        for line in texts["docs/acceptance/matrix.tsv"].splitlines()[1:]
+        if line.strip() and len(columns := line.split("\t")) == 7
+    }
+    row = matrix_rows.get("AUTH-021")
+    if row is None:
+        fail("platform session port acceptance row AUTH-021 missing", issues)
+    elif (
+        row[1] != "platform-session-port"
+        or row[3] != PLATFORM_SESSION_PORT_TEST_COMMAND
+        or row[4] != "pr"
+        or row[5] != "implemented"
+        or row[6] != "backend"
+    ):
+        fail("platform session port acceptance row AUTH-021 drift", issues)
+    baseline_rows = [
+        line
+        for line in texts["docs/acceptance/platform-baseline.md"].splitlines()
+        if line.startswith("| `AUTH-021` |")
+    ]
+    if len(baseline_rows) != 1 or "B4a" not in baseline_rows[0] or "durable" not in baseline_rows[0]:
+        fail("platform session port long-horizon AUTH-021 projection drift", issues)
+
+    for rel, fragments in PLATFORM_SESSION_PORT_DOC_FRAGMENTS.items():
+        for fragment in fragments:
+            if fragment not in texts[rel]:
+                fail(f"platform session port projection missing in {rel}: {fragment!r}", issues)
+
+
 EXPECTED_MAIN_CALLS = (
     "check_key_files_present_and_nonempty(issues)",
     "check_campaign_authorization(issues)",
@@ -12385,6 +12766,7 @@ EXPECTED_MAIN_CALLS = (
     "check_platform_session_contract(issues)",
     "check_platform_session_implementation(issues)",
     "check_platform_request_context(issues)",
+    "check_platform_session_port(issues)",
     "check_p1_source_revision_contract(issues)",
     "check_p1_source_registry_implementation(issues)",
     "check_m60_b2_packet_digest(issues)",
@@ -12473,6 +12855,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_platform_core_manifest": {"digest": "3082cf7fedfaf39080d287a036c8875f762751bb8832121ca2d7cd81d5947d62", "status": "active"},
     "check_platform_identity_implementation": {"digest": "b30158e2721bb04582b6dced31eb4328b493ba13d0f9153347388ad1ccd91c29", "status": "active"},
     "check_platform_request_context": {"digest": "716b2414ce325537cd03c1c1abdee12a12fcf61f43773a894ebf021d9a6c3fbc", "status": "active"},
+    "check_platform_session_port": {"digest": "bb77b840e9bd9270cb335ee3a37cda794e40b456b2d2e0f9487e4de4765dedc7", "status": "active"},
     "check_platform_session_contract": {"digest": "e3a2e5ef5ca953bdf2739ac3072df8bcfed0ebece4a893f52980fb7ca3b15c1b", "status": "active"},
     "check_platform_session_implementation": {"digest": "f1a25036ae6940b332c258af80f2e23815071ca19cb1d5db79d7a4f8b844be8f", "status": "active"},
     "check_rust_doctest_gate": {"digest": "372200f9ce289b3af148b7e7001408498b3d817098d7013692f016b766d2ec58", "status": "active"},
@@ -12605,6 +12988,7 @@ def main() -> int:
     check_platform_session_contract(issues)
     check_platform_session_implementation(issues)
     check_platform_request_context(issues)
+    check_platform_session_port(issues)
     check_p1_source_revision_contract(issues)
     check_p1_source_registry_implementation(issues)
     check_m60_b2_packet_digest(issues)

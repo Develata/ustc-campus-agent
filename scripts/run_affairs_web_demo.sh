@@ -11,7 +11,20 @@ if [[ ! -f "$fixture" ]]; then
   exit 1
 fi
 
-install -d -m 700 "$state_root"
+if [[ -L "$state_root" ]] || [[ -e "$state_root" && ! -d "$state_root" ]]; then
+  printf 'unsafe Affairs state directory: %s\n' "$state_root" >&2
+  exit 73
+fi
+umask 077
+if [[ ! -e "$state_root" ]]; then
+  install -d -m 0700 "$state_root"
+fi
+state_mode=$(stat -c '%a' "$state_root")
+state_owner=$(stat -c '%u' "$state_root")
+if [[ "$state_mode" != 700 ]] || [[ "$state_owner" != "$(id -u)" ]]; then
+  printf 'state directory must be owned by the current user with mode 0700: %s\n' "$state_root" >&2
+  exit 73
+fi
 printf 'USTC Affairs Navigator: http://%s\n' "$bind"
 printf 'Retained public source fixture: https://www.teach.ustc.edu.cn/service/svc-student/13824.html\n'
 printf 'Local demo state: %s\n' "$state_root"
@@ -21,4 +34,5 @@ exec cargo run --locked -p ustc-agentd -- serve-web \
   --bind "$bind" \
   --fixture "$fixture" \
   --store "$state_root/records.json" \
-  --idempotency "$state_root/idempotency.json"
+  --idempotency "$state_root/idempotency.json" \
+  --session-store "$state_root/m00-sessions.json"

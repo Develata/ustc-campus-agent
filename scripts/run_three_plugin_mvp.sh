@@ -23,8 +23,15 @@ if [ -e "$STATE_DIR" ] && [ ! -d "$STATE_DIR" ]; then
 fi
 
 umask 077
-mkdir -p "$STATE_DIR"
-chmod 0700 "$STATE_DIR"
+if [ ! -e "$STATE_DIR" ]; then
+  install -d -m 0700 "$STATE_DIR"
+fi
+state_mode=$(stat -c '%a' "$STATE_DIR")
+state_owner=$(stat -c '%u' "$STATE_DIR")
+if [ "$state_mode" != 700 ] || [ "$state_owner" != "$(id -u)" ]; then
+  printf 'state directory must be owned by the current user with mode 0700: %s\n' "$STATE_DIR" >&2
+  exit 73
+fi
 
 AFFAIRS_FIXTURE="$ROOT/fixtures/affairs/proc-011-reviewed.json"
 CHANGE_FIXTURE="$ROOT/fixtures/change-radar/academic-calendar-demo-reviewed.json"
@@ -58,4 +65,5 @@ exec cargo run --locked -p ustc-agentd --bin ustc-agentd -- \
   --opportunity-catalog "$OPPORTUNITY_CATALOG" \
   --opportunity-profile-store "$STATE_DIR/opportunity-profiles.json" \
   --store "$STATE_DIR/affairs-records.json" \
-  --idempotency "$STATE_DIR/affairs-idempotency.json"
+  --idempotency "$STATE_DIR/affairs-idempotency.json" \
+  --session-store "$STATE_DIR/m00-sessions.json"

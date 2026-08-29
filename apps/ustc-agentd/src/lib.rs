@@ -12,6 +12,7 @@ mod affairs_fixture;
 mod affairs_invocation;
 mod change_fixture;
 mod change_invocation;
+mod m00_session;
 mod opportunity_fixture;
 mod opportunity_invocation;
 mod opportunity_persistence;
@@ -30,6 +31,7 @@ use affairs_invocation::AffairsInvocationSpine;
 use affairs_navigator::AffairsGetService;
 use change_fixture::ChangeRadarFixture;
 use change_invocation::ChangeInvocationSpine;
+use m00_session::DurableCurrentSessionStore;
 use opportunity_fixture::OpportunityFixture;
 use opportunity_invocation::{OpportunityAuthorityStore, OpportunityInvocationSpine};
 use opportunity_persistence::DurableOpportunityProfileRepository;
@@ -40,6 +42,8 @@ use ustc_campus_agent_client_protocol::{
     ClientIntentDto, ClientResponseDto, SubmitAffairsGetDto, SubmitChangeFeedDto,
     SubmitOpportunityDto, ViewerAuthorizationDto, read_frame, write_frame,
 };
+use ustc_campus_agent_core::identity::{TenantId, UserId};
+use ustc_campus_agent_core::session_port::{SessionHistoryReadPort, SessionRepositoryError};
 
 const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -56,12 +60,26 @@ pub struct AffairsComposition {
     opportunity: Option<OpportunityComposition>,
     store: FileRecordStore,
     idempotency: DurableIdempotencyStore,
+    sessions: DurableCurrentSessionStore,
+    current_tenant_id: TenantId,
+    current_user_id: UserId,
 }
 
 struct OpportunityComposition {
     fixture: OpportunityFixture,
     authority: OpportunityAuthorityStore,
     profiles: Mutex<DurableOpportunityProfileRepository>,
+}
+
+fn map_session_store_error(error: SessionRepositoryError) -> String {
+    match error {
+        SessionRepositoryError::Unavailable => "session_store_unavailable",
+        SessionRepositoryError::Corrupt => "session_store_corrupt",
+        SessionRepositoryError::InvalidEvent => "session_store_invalid_event",
+        SessionRepositoryError::LimitExceeded => "session_store_limit_exceeded",
+        SessionRepositoryError::InternalInvariant => "session_store_internal_invariant",
+    }
+    .to_owned()
 }
 
 impl AffairsComposition {
@@ -75,6 +93,7 @@ impl AffairsComposition {
         fixture_path: &Path,
         store_path: &Path,
         idempotency_path: &Path,
+        session_store_path: &Path,
     ) -> Result<Self, String> {
         let fixture = AffairsFixture::load(fixture_path)?;
         let store =
@@ -85,12 +104,31 @@ impl AffairsComposition {
             now_ms,
             fixture.idempotency_deadline_ms,
         )?;
+        let mut sessions = DurableCurrentSessionStore::open_or_bootstrap(
+            session_store_path,
+            &fixture.session_events,
+        )
+        .map_err(map_session_store_error)?;
+        let current = sessions
+            .load_history(fixture.session.session_id())
+            .map_err(map_session_store_error)?
+            .ok_or_else(|| "session_store_current_session_absent".to_owned())?;
+        if current.snapshot().tenant_id() != fixture.session.tenant_id()
+            || current.snapshot().user_id() != fixture.session.user_id()
+        {
+            return Err("session_store_current_session_scope_mismatch".to_owned());
+        }
+        let current_tenant_id = current.snapshot().tenant_id().clone();
+        let current_user_id = current.snapshot().user_id().clone();
         Ok(Self {
             fixture,
             change: None,
             opportunity: None,
             store,
             idempotency,
+            sessions,
+            current_tenant_id,
+            current_user_id,
         })
     }
 
@@ -101,8 +139,14 @@ impl AffairsComposition {
         change_fixture_path: &Path,
         store_path: &Path,
         idempotency_path: &Path,
+        session_store_path: &Path,
     ) -> Result<Self, String> {
-        let mut composition = Self::open(fixture_path, store_path, idempotency_path)?;
+        let mut composition = Self::open(
+            fixture_path,
+            store_path,
+            idempotency_path,
+            session_store_path,
+        )?;
         composition.change = Some(ChangeRadarFixture::load(change_fixture_path)?);
         Ok(composition)
     }
@@ -117,8 +161,14 @@ impl AffairsComposition {
         opportunity_profile_store_path: &Path,
         store_path: &Path,
         idempotency_path: &Path,
+        session_store_path: &Path,
     ) -> Result<Self, String> {
-        let mut composition = Self::open(fixture_path, store_path, idempotency_path)?;
+        let mut composition = Self::open(
+            fixture_path,
+            store_path,
+            idempotency_path,
+            session_store_path,
+        )?;
         composition.attach_opportunity(
             opportunity_fixture_path,
             opportunity_catalog_path,
@@ -128,6 +178,7 @@ impl AffairsComposition {
     }
 
     /// Opens all three first-party Plugin product paths in one composition.
+    #[allow(clippy::too_many_arguments)] // One explicit path per independently durable authority.
     pub fn open_with_change_and_opportunity(
         fixture_path: &Path,
         change_fixture_path: &Path,
@@ -136,12 +187,14 @@ impl AffairsComposition {
         opportunity_profile_store_path: &Path,
         store_path: &Path,
         idempotency_path: &Path,
+        session_store_path: &Path,
     ) -> Result<Self, String> {
         let mut composition = Self::open_with_change(
             fixture_path,
             change_fixture_path,
             store_path,
             idempotency_path,
+            session_store_path,
         )?;
         composition.attach_opportunity(
             opportunity_fixture_path,
@@ -159,8 +212,8 @@ impl AffairsComposition {
     ) -> Result<(), String> {
         let fixture = OpportunityFixture::load(fixture_path, catalog_path)?;
         let authority = OpportunityAuthorityStore::new(
-            self.fixture.session.tenant_id().clone(),
-            self.fixture.session.user_id().clone(),
+            self.current_tenant_id.clone(),
+            self.current_user_id.clone(),
             fixture.market_enabled,
             fixture.market_grant_active,
             &fixture.source_evidence_digest,
@@ -201,7 +254,7 @@ impl AffairsComposition {
             Arc::clone(&self.fixture.descriptor),
             self.fixture.now,
             self.fixture.policy_snapshot_id.clone(),
-            Some(self.fixture.session.clone()),
+            self.sessions.clone(),
         );
         let now_ms = i64::try_from(self.fixture.now.as_unix_millis()).unwrap_or(i64::MAX);
         m10.submit(request, &mut ports, now_ms)
@@ -228,7 +281,7 @@ impl AffairsComposition {
             Arc::clone(&change.descriptor),
             self.fixture.now,
             self.fixture.policy_snapshot_id.clone(),
-            Some(self.fixture.session.clone()),
+            self.sessions.clone(),
         );
         m10.submit(request, &mut ports)
     }
@@ -258,7 +311,7 @@ impl AffairsComposition {
             descriptor,
             self.fixture.now,
             self.fixture.policy_snapshot_id.clone(),
-            Some(self.fixture.session.clone()),
+            self.sessions.clone(),
         );
         m10.submit(request, &mut ports)
     }

@@ -184,6 +184,7 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AUTH-018` | refresh extends only idle expiry while equality expires credential absolute and idle cause ties have deterministic precedence late observation preserves effective expiry revoke blocks immediately and terminal sessions cannot mutate or resurrect | rust-unit | PR |
 | `AUTH-019` | session expected revisions and ordered events fail closed on exhaustion and reject gap duplicate reorder wrapped-zero cross-session and forged-derived-field input while replay reconstructs an equal snapshot without adapter I/O | rust-unit | PR |
 | `AUTH-020` | session-domain commands events snapshots and B2-owned errors retain no raw credential or arbitrary adapter payload expose no mutable unchecked or raw-credential conversion authority fields never represent structural evidence decoding as authentication and declare no clock RNG transport database framework or auth-adapter dependency while deserializer-generated syntax and type diagnostics are excluded as untrusted boundary diagnostics owned by the later control-evidence redaction boundary | rust-unit + rust-doc-test | PR |
+| `AUTH-021` | exact replay-only B4a session history ports deterministic fakes and a secure durable DemoReviewed current-session read/bootstrap vendor preserve retained session scope across restart without raw secret/path/error echo; B4b B5 SSO and durable lifecycle mutation remain unclaimed | rust-unit + rust-doc-test + app integration + contract-check | PR |
 
 ## 9. Capability registry and ControlledCLI — `SEC-*`
 

@@ -22,7 +22,7 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 - **ChangeRadar**：读取同一 source identity 的两个 immutable DemoReviewed revisions，展示确定性的 semantic changes，并提供 Atom feed；
 - **Opportunity Graph**：明确 consent 后创建 tenant-private synthetic profile，生成 source-grounded 课程计划，随后 revoke/delete；删除后只保留不含 completed courses 或 preference weights 的 typed tombstone。
 
-命令只接受 loopback bind。运行状态默认写入 `$XDG_STATE_HOME/ustc-campus-agent/three-plugin-mvp`（未设置时为 `~/.local/state/ustc-campus-agent/three-plugin-mvp`）；可用 `USTC_AGENTD_BIND` 与 `USTC_AGENTD_STATE_DIR` 覆盖。停止并以同一命令、同一 state directory 重启，会读回允许持久化的 Affairs records/idempotency 与 Opportunity active profile/tombstone；Market activation 和 ChangeRadar source baseline 由同一 checkout 中的 reviewed declarative fixtures 重建并重新校验。
+命令只接受 loopback bind。运行状态默认写入 `$XDG_STATE_HOME/ustc-campus-agent/three-plugin-mvp`（未设置时为 `~/.local/state/ustc-campus-agent/three-plugin-mvp`）；可用 `USTC_AGENTD_BIND` 与 `USTC_AGENTD_STATE_DIR` 覆盖。state directory 必须是当前用户拥有、模式 `0700` 的真实目录；launcher 不会静默 chmod/修复不安全路径。停止并以同一命令、同一 state directory 重启，会读回 `affairs-records.json`、`affairs-idempotency.json`、`m00-sessions.json` 与 `opportunity-profiles.json` 中允许持久化的 Affairs records/idempotency、DemoReviewed 当前 session history 以及 Opportunity active profile/tombstone；Market activation 和 ChangeRadar source baseline 由同一 checkout 中的 reviewed declarative fixtures 重建并重新校验。`m00-sessions.json` 是模式 `0600`、event-history-only 的 B4a read authority，不是正式 SSO 或 durable session lifecycle mutation。
 
 当前 fixture 保留了 2026-08-26 获取的[中国科大教务处公开页面](https://www.teach.ustc.edu.cn/service/svc-student/13824.html)及 normalized bytes，并由 checker/test 核对 SHA-256；ChangeRadar 与 Opportunity source 也显著标记为 DemoReviewed/synthetic。这些 fixture 不会替代原始官方页面。服务没有生产认证、TLS、正式多用户 SSO 或自动来源更新，禁止直接暴露到公网。
 

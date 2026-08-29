@@ -3,14 +3,14 @@
 ## Metadata
 
 - `Module ID`: `M00`
-- `Status`: Accepted blueprint; `M00-B1 identity-types`, `M00-B2 session-domain` and bounded `M00-B3 request-context` implemented; production B4 adapters and B5 composition planned
+- `Status`: Accepted blueprint; `M00-B1 identity-types`, `M00-B2 session-domain`, bounded `M00-B3 request-context` and bounded B4a `session-port` implemented; B4b control-evidence and B5 composition planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m00-platform-control/v1`
-- `Last Review`: `2026-07-29`
+- `Last Review`: `2026-08-29`
 - `Composition`: `apps/ustc-agentd`
-- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`; `crates/platform-core/src/request_context.rs` for bounded `M00-B3`; adapter implementations under `M90`
-- `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md), [`platform-session/v0`](../../contracts/platform-session.md), [`platform-request-context/v0`](../../contracts/platform-request-context.md), and [`module-boundaries.md`](../../contracts/module-boundaries.md)
-- `Acceptance`: implemented `AUTH-011` through `AUTH-020`, including bounded request-context `AUTH-013`; production B4 adapter/vendor and B5 M10-composition evidence remain planned
+- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`; `crates/platform-core/src/request_context.rs` for bounded `M00-B3`; `crates/platform-core/src/session_port.rs` plus the app-private `apps/ustc-agentd/src/m00_session.rs` read/bootstrap vendor for bounded B4a; later production adapters under `M90`
+- `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md), [`platform-session/v0`](../../contracts/platform-session.md), [`platform-request-context/v0`](../../contracts/platform-request-context.md), [`platform-session-port/v0`](../../contracts/platform-session-port.md), and [`module-boundaries.md`](../../contracts/module-boundaries.md)
+- `Acceptance`: implemented `AUTH-011` through `AUTH-021`, including bounded request-context `AUTH-013` and bounded B4a `AUTH-021`; B4b control-evidence and B5 M10-administrator composition remain planned
 
 ## 1. Purpose
 
@@ -171,10 +171,10 @@ The hot path is request-context admission: session lookup, expiry/revoke check, 
 2. `session-domain` — legal session transitions, frozen by [`platform-session/v0`](../../contracts/platform-session.md).
 3. `request-context` — immutable request/command/causation envelope.
 4. `policy-reference` — pinned platform policy identity.
-5. `session-port` — repository/clock/secret-ref interfaces and fakes.
+5. `session-port` — repository/clock/secret-ref interfaces, deterministic fakes and one secure durable DemoReviewed current-session read/bootstrap vendor; implemented under [`platform-session-port/v0`](../../contracts/platform-session-port.md).
 6. `control-evidence` — stable events/errors and redaction rules.
 
-Each small module receives a separate reviewable commit with unit tests before the composition adapter.
+Each small module receives a separate reviewable commit. Under the accepted product-first B4 boundary, the B4a `session-port` commit also carries its single least-authority read/bootstrap vendor and replaces the existing fixture-session lookup; this is B4a evidence, not the B5 administrator operation/composition.
 
 **These six list positions are not batch numbers, and the two stop agreeing after position 3.** [`01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md) groups them into five batches: `M00-B1` is item 1 and `M00-B2` is item 2, but `M00-B3 request-context` lands items 3 and 4 together, `M00-B4 ports-and-fakes` lands items 5 and 6 together, and `M00-B5 api-admission-integration` is a composition batch that appears nowhere in this list. A `M00-B4` reference elsewhere therefore means `session-port` *and* `control-evidence`, not position 4. The roadmap owns the grouping; this section owns only the decomposition.
 
@@ -186,7 +186,7 @@ Each small module receives a separate reviewable commit with unit tests before t
 
 `M00-B1` deliberately does not create an authenticated actor, session lifecycle, request context, policy decision, ID generator or storage port. Those claims remain blocked behind later batches. `AUTH-013` stays catalog-only until request-context work.
 
-`M00-B1` is implemented in `crates/platform-core/src/identity.rs`, with evidence in `crates/platform-core/tests/platform_identity.rs` and rustdoc `compile_fail` API proofs; `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` pass. Invocation authority now consumes the M00 tenant/user definitions. That is bounded partial evidence for one small module. `M00-B2` is now implemented alongside it under §15, `M00-B3` through `M00-B5` are planned, and the module remains short of the §16 exit gate, so it is neither `StandaloneReady` nor accepted.
+`M00-B1` is implemented in `crates/platform-core/src/identity.rs`, with evidence in `crates/platform-core/tests/platform_identity.rs` and rustdoc `compile_fail` API proofs; `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` pass. Invocation authority now consumes the M00 tenant/user definitions. That is bounded partial evidence for one small module. `M00-B2`, B3 and B4a session-port are now separately implemented; B4b control-evidence and B5 are planned, and the module remains short of the exit gate, so it is neither `StandaloneReady` nor accepted.
 
 ## 15. Second approved batch — `M00-B2 session-domain`
 
@@ -204,6 +204,12 @@ The contract is **accepted and implemented**. `crates/platform-core/src/session.
 
 Two boundary facts are worth stating here rather than only in the contract. The session module imports the canonical `SessionId`, `TenantId` and `UserId` without renaming and re-exports none of them, so it adds no externally reachable API to a `platform-identity/v0` kind and mints no seventh kind. Adding it to `crates/platform-core/` extends the frozen surface `platform-identity/v0` §4 accounts for; that extension is deliberate registered drift, listed in `platform-session/v0` §11.1, and it changes no accepted grammar, bound, precedence, Serde shape or kind set.
 
-## 16. Exit gate
+## 16. Product-first B4a — `session-port`
+
+[`platform-session-port/v0`](../../contracts/platform-session-port.md) freezes the complete B4a interfaces and deterministic fakes plus one app-private durable DemoReviewed current-session read/bootstrap vendor. The vendor stores only canonical event histories, replay-derives snapshots, rejects unsafe/corrupt state and supplies retained tenant/user scope to authenticated Opportunity authority. Exact missing and same-ID scope-mismatch startup outcomes replace fixture fallback. `AUTH-021` is implemented.
+
+This is not all B4: B4b `control-evidence` remains planned, as do durable lifecycle mutation, formal SSO and B5 administrator composition. M00 therefore remains `partial-evidence`.
+
+## 17. Exit gate
 
 `M00` is integration-ready when standalone tests prove tenant/session scope, expire/revoke, duplicate/conflicting command behavior, redaction and deterministic replay through fake ports. It is accepted only after `M10` proves one admitted and one denied request without invoking a downstream fake on denial.

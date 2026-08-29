@@ -20,6 +20,7 @@ fn temp_dir() -> PathBuf {
     let id = COUNTER.fetch_add(1, Ordering::SeqCst);
     let dir = std::env::temp_dir().join(format!("agentd-comp-{}-{id}", std::process::id()));
     fs::create_dir_all(&dir).expect("create temp dir");
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).expect("secure temp dir");
     dir
 }
 
@@ -78,6 +79,7 @@ struct TestEnv {
     fixture: PathBuf,
     store: PathBuf,
     idempotency: PathBuf,
+    sessions: PathBuf,
 }
 
 impl TestEnv {
@@ -90,18 +92,25 @@ impl TestEnv {
         let fixture_path = dir.join("fixture.json");
         let store_path = dir.join("store.json");
         let idempotency_path = dir.join("idempotency.json");
+        let sessions_path = dir.join("sessions.json");
         fs::write(&fixture_path, fixture.to_string()).expect("write fixture");
         Self {
             _dir: dir,
             fixture: fixture_path,
             store: store_path,
             idempotency: idempotency_path,
+            sessions: sessions_path,
         }
     }
 
     fn open(&self) -> AffairsComposition {
-        AffairsComposition::open(&self.fixture, &self.store, &self.idempotency)
-            .expect("composition open")
+        AffairsComposition::open(
+            &self.fixture,
+            &self.store,
+            &self.idempotency,
+            &self.sessions,
+        )
+        .expect("composition open")
     }
 }
 
@@ -416,8 +425,8 @@ fn authenticated_wrong_session_rejected() {
         } => {
             assert_eq!(
                 error.class,
-                WireErrorClassDto::SessionIdMismatch,
-                "wrong session must be SessionIdMismatch"
+                WireErrorClassDto::SessionNotFound,
+                "wrong session must be SessionNotFound"
             );
         }
         _ => panic!("expected Admission error, got {response:?}"),
@@ -567,7 +576,8 @@ fn unresolved_conflict_cannot_bootstrap_reviewed_publication() {
     fixture["authority_comparison"] = json!("incomparable");
     fixture["conflict_kind"] = json!("direct_contradiction");
     let env = TestEnv::with_fixture(fixture);
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     let Err(error) = result else {
         panic!("unresolved evidence must fail before repository publication");
     };
@@ -590,6 +600,7 @@ fn malformed_json_fails_closed() {
         &fixture_path,
         &dir.join("store.json"),
         &dir.join("idempotency.json"),
+        &dir.join("sessions.json"),
     );
     assert!(result.is_err(), "malformed JSON must fail closed");
 }
@@ -599,7 +610,8 @@ fn invalid_schema_digest_fails_closed() {
     let mut fixture = base_fixture();
     fixture["schema_digest"] = json!("not-hex");
     let env = TestEnv::with_fixture(fixture);
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     assert!(result.is_err(), "invalid schema_digest must fail closed");
 }
 
@@ -608,7 +620,8 @@ fn invalid_capability_key_fails_closed() {
     let mut fixture = base_fixture();
     fixture["capability_key_hex"] = json!("too-short");
     let env = TestEnv::with_fixture(fixture);
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     assert!(
         result.is_err(),
         "invalid capability_key_hex must fail closed"
@@ -620,7 +633,8 @@ fn empty_operator_grant_id_fails_closed() {
     let mut fixture = base_fixture();
     fixture["operator_grant_id"] = json!("");
     let env = TestEnv::with_fixture(fixture);
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     assert!(result.is_err(), "empty operator_grant_id must fail closed");
 }
 
@@ -629,7 +643,8 @@ fn invalid_procedure_id_in_fixture_fails_closed() {
     let mut fixture = base_fixture();
     fixture["procedure_id"] = json!("INVALID-UPPERCASE");
     let env = TestEnv::with_fixture(fixture);
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     assert!(result.is_err(), "invalid procedure_id must fail closed");
 }
 
@@ -1067,7 +1082,8 @@ fn write_idempotency(json: &str) -> TestEnv {
 fn idempotency_malformed_json_fails_closed() {
     let env = TestEnv::with_fixture(base_fixture());
     write_private_state(&env.idempotency, "not valid json");
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     assert!(
         result.is_err(),
         "malformed idempotency JSON must fail closed"
@@ -1094,7 +1110,8 @@ fn idempotency_wrong_schema_version_fails_closed() {
         "key_index": { "idem:valid": cmd }
     });
     let env = write_idempotency(&json.to_string());
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     assert!(result.is_err(), "wrong schema_version must fail closed");
 }
 
@@ -1115,7 +1132,8 @@ fn idempotency_zero_deadline_ms_fails_closed() {
         "key_index": {}
     });
     let env = write_idempotency(&json.to_string());
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     assert!(result.is_err(), "zero deadline_ms must fail closed");
 }
 
@@ -1136,7 +1154,8 @@ fn idempotency_zero_fencing_token_fails_closed() {
         "key_index": {}
     });
     let env = write_idempotency(&json.to_string());
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     assert!(result.is_err(), "zero fencing_token must fail closed");
 }
 
@@ -1161,7 +1180,8 @@ fn idempotency_dangling_key_index_fails_closed() {
         "key_index": { "idem:dangling": dangling }
     });
     let env = write_idempotency(&json.to_string());
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     assert!(result.is_err(), "dangling key_index must fail closed");
 }
 
@@ -1185,7 +1205,8 @@ fn idempotency_in_flight_with_disposition_fails_closed() {
         "key_index": { "idem:valid": cmd }
     });
     let env = write_idempotency(&json.to_string());
-    let result = AffairsComposition::open(&env.fixture, &env.store, &env.idempotency);
+    let result =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
     assert!(
         result.is_err(),
         "in_flight with disposition must fail closed"

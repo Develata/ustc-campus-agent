@@ -1759,6 +1759,7 @@ fn assert_public_surface_is_frozen() {
                 "market",
                 "request_context",
                 "session",
+                "session_port",
                 "source_registry",
                 "source_revision",
             ] as &[&str],
@@ -1771,6 +1772,14 @@ fn assert_public_surface_is_frozen() {
             SESSION_SOURCE,
             &[] as &[&str],
             &ADMITTED_SESSION_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
+            "session_port.rs",
+            SESSION_PORT_SOURCE,
+            &[] as &[&str],
+            &ADMITTED_SESSION_PORT_ITEMS as &[&str],
             &[] as &[&str],
             false,
         ),
@@ -1859,6 +1868,7 @@ fn assert_public_surface_is_frozen() {
             "market.rs" => &ADMITTED_MARKET_MACRO_INVOCATIONS,
             "lib.rs" => &ADMITTED_LIB_MACRO_INVOCATIONS,
             "session.rs" => &ADMITTED_SESSION_MACRO_INVOCATIONS,
+            "session_port.rs" => &ADMITTED_SESSION_PORT_MACRO_INVOCATIONS,
             other => panic!("ungoverned platform-core source macro invocations: {other}"),
         };
         assert_eq!(
@@ -1966,6 +1976,7 @@ fn assert_public_surface_is_frozen() {
         ("market.rs", MARKET_SOURCE),
         ("lib.rs", LIB_SOURCE),
         ("session.rs", SESSION_SOURCE),
+        ("session_port.rs", SESSION_PORT_SOURCE),
     ] {
         let sibling_code = strip_comments_and_literals(sibling);
         for (carrier, tokens) in [
@@ -2058,6 +2069,7 @@ fn assert_public_surface_is_frozen() {
             "market.rs" => &ADMITTED_MARKET_IMPLS,
             "lib.rs" => &ADMITTED_LIB_IMPLS,
             "session.rs" => &ADMITTED_SESSION_IMPLS,
+            "session_port.rs" => &ADMITTED_SESSION_PORT_IMPLS,
             other => panic!("ungoverned platform-core sibling implementations: {other}"),
         };
         assert_eq!(
@@ -2239,7 +2251,7 @@ const DESERIALIZE_BODY_INDEX: usize = 13;
 ///
 /// The rule belongs to every governed source, not only the identity module: an unadmitted
 /// attribute in a sibling is the same carrier reached one file over.
-const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 4] = [
+const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 5] = [
     ("invocation.rs", &["derive", "must_use"]),
     ("market.rs", &["derive", "must_use", "serde"]),
     ("lib.rs", &["cfg", "derive", "must_use", "serde", "test"]),
@@ -2247,6 +2259,7 @@ const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 4] = [
         "session.rs",
         &["cfg", "derive", "must_use", "serde", "test"],
     ),
+    ("session_port.rs", &["derive", "must_use"]),
 ];
 
 /// The only macro this file defines. Pinned because a definition rebinds every call site that
@@ -4111,6 +4124,7 @@ const INVOCATION_SOURCE: &str = include_str!("../src/invocation.rs");
 const MARKET_SOURCE: &str = include_str!("../src/market.rs");
 const LIB_SOURCE: &str = include_str!("../src/lib.rs");
 const SESSION_SOURCE: &str = include_str!("../src/session.rs");
+const SESSION_PORT_SOURCE: &str = include_str!("../src/session_port.rs");
 const MANIFEST_SOURCE: &str = include_str!("../Cargo.toml");
 const LOCKFILE_SOURCE: &str = include_str!("../../../Cargo.lock");
 
@@ -4216,12 +4230,13 @@ const ADMITTED_MARKET_ITEMS: [&str; 12] = [
     "type Value = UniqueStringMap;",
 ];
 
-const ADMITTED_LIB_ITEMS: [&str; 9] = [
+const ADMITTED_LIB_ITEMS: [&str; 10] = [
     "pub mod identity;",
     "pub mod invocation;",
     "pub mod market;",
     "pub mod request_context;",
     "pub mod session;",
+    "pub mod session_port;",
     "pub mod source_registry;",
     "pub mod source_revision;",
     "#[cfg(test)] mod tests",
@@ -4241,6 +4256,16 @@ const ADMITTED_SESSION_ITEMS: [&str; 7] = [
     "use crate::identity::{SessionId, TenantId, UserId};",
     "#[cfg(test)] mod tests",
     "use super::*;",
+];
+
+const ADMITTED_SESSION_PORT_ITEMS: [&str; 4] = [
+    "use std::fmt;",
+    "use serde::{Deserialize, Deserializer, Serialize, Serializer, de};",
+    "use crate::identity::SessionId;",
+    concat!(
+        "use crate::session::{ AuthAdapterId, CredentialEvidenceDigest, SessionEvent, ",
+        "SessionInstant, SessionSnapshot, evolve, };"
+    ),
 ];
 
 /// The complete `impl` surface of each sibling, sorted. These are M20 items; a genuine M20
@@ -4313,6 +4338,15 @@ const ADMITTED_SESSION_IMPLS: [&str; 29] = [
     "impl-arg Into<String>",
 ];
 
+const ADMITTED_SESSION_PORT_IMPLS: [&str; 6] = [
+    "impl Deserialize<'de> for SecretRef",
+    "impl SecretRef",
+    "impl Serialize for SecretRef",
+    "impl SessionHistory",
+    "impl fmt::Debug for SecretRef",
+    "impl-arg Into<String>",
+];
+
 /// Macro INVOCATION names of each governed source, pinned exactly. A splicing macro reached by
 /// any spelling adds items from a file no scan reads, and no substring enumerates the spellings
 /// of `include /* x */ !("f.rs")`. `include_str!` stays admitted in lib.rs, which legitimately
@@ -4324,6 +4358,7 @@ const ADMITTED_MARKET_MACRO_INVOCATIONS: [&str; 2] = ["matches", "write"];
 const ADMITTED_LIB_MACRO_INVOCATIONS: [&str; 4] = ["assert", "assert_eq", "include_str", "panic"];
 const ADMITTED_SESSION_MACRO_INVOCATIONS: [&str; 5] =
     ["assert", "assert_eq", "matches", "panic", "write"];
+const ADMITTED_SESSION_PORT_MACRO_INVOCATIONS: [&str; 0] = [];
 
 /// The Cargo target set of `platform-core`, pinned by the same key sets as
 /// `check_platform_core_manifest` in `scripts/check_repo_contracts.py`.
@@ -4426,7 +4461,7 @@ fn manifest_keys(entries: &[(String, String)], table: &str) -> Vec<String> {
 /// text. Adding a row is registered surface drift that must be mirrored in
 /// `scripts/check_repo_contracts.py`; it changes no accepted grammar, bound, error precedence,
 /// Serde shape or nominal kind set.
-const ADMITTED_CROSS_FILE_IDENTITY_BINDINGS: [(&str, &str); 2] = [
+const ADMITTED_CROSS_FILE_IDENTITY_BINDINGS: [(&str, &str); 3] = [
     (
         "invocation.rs",
         "pub use crate::identity::{TenantId, UserId};",
@@ -4435,6 +4470,7 @@ const ADMITTED_CROSS_FILE_IDENTITY_BINDINGS: [(&str, &str); 2] = [
         "session.rs",
         "use crate::identity::{SessionId, TenantId, UserId};",
     ),
+    ("session_port.rs", "use crate::identity::SessionId;"),
 ];
 
 /// The six kinds whose public surface `platform-identity/v0` freezes.

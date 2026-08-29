@@ -20,6 +20,7 @@ struct ServeOptions {
     opportunity_profile_store: Option<PathBuf>,
     store: PathBuf,
     idempotency: PathBuf,
+    session_store: PathBuf,
 }
 
 #[derive(Default)]
@@ -32,6 +33,7 @@ struct RawServeOptions {
     opportunity_profile_store: Option<String>,
     store: Option<String>,
     idempotency: Option<String>,
+    session_store: Option<String>,
 }
 
 fn main() -> ExitCode {
@@ -92,6 +94,10 @@ fn run_serve(mut args: std::iter::Skip<std::env::Args>, mode: ServeMode) -> Exit
                 Ok(value) => raw.idempotency = Some(value),
                 Err(code) => return code,
             },
+            "--session-store" => match take_value(&mut args, "--session-store") {
+                Ok(value) => raw.session_store = Some(value),
+                Err(code) => return code,
+            },
             other => {
                 eprintln!("unknown server flag: {other}");
                 return ExitCode::from(2);
@@ -118,6 +124,7 @@ fn run_serve(mut args: std::iter::Skip<std::env::Args>, mode: ServeMode) -> Exit
                 profile_store,
                 &options.store,
                 &options.idempotency,
+                &options.session_store,
             )
         }
         (None, Some((opportunity_fixture, catalog, profile_store))) => {
@@ -128,6 +135,7 @@ fn run_serve(mut args: std::iter::Skip<std::env::Args>, mode: ServeMode) -> Exit
                 profile_store,
                 &options.store,
                 &options.idempotency,
+                &options.session_store,
             )
         }
         (Some(change_fixture), None) => AffairsComposition::open_with_change(
@@ -135,10 +143,14 @@ fn run_serve(mut args: std::iter::Skip<std::env::Args>, mode: ServeMode) -> Exit
             change_fixture,
             &options.store,
             &options.idempotency,
+            &options.session_store,
         ),
-        (None, None) => {
-            AffairsComposition::open(&options.fixture, &options.store, &options.idempotency)
-        }
+        (None, None) => AffairsComposition::open(
+            &options.fixture,
+            &options.store,
+            &options.idempotency,
+            &options.session_store,
+        ),
     };
     let composition = match composition_result {
         Ok(composition) => composition,
@@ -181,6 +193,7 @@ fn collect_options(raw: RawServeOptions) -> Result<ServeOptions, ExitCode> {
         opportunity_profile_store,
         store,
         idempotency,
+        session_store,
     } = raw;
     match (
         opportunity_fixture.as_ref(),
@@ -204,6 +217,7 @@ fn collect_options(raw: RawServeOptions) -> Result<ServeOptions, ExitCode> {
         opportunity_profile_store: opportunity_profile_store.map(PathBuf::from),
         store: PathBuf::from(require(store, "--store")?),
         idempotency: PathBuf::from(require(idempotency, "--idempotency")?),
+        session_store: PathBuf::from(require(session_store, "--session-store")?),
     })
 }
 
@@ -220,7 +234,7 @@ fn print_help() {
         "\nCommands:\n  --help      show this message\n  --version   show binary version\n  serve       run bounded Affairs, with optional independent ChangeRadar and Opportunity Graph, over loopback framed TCP\n  serve-web   run the loopback three-Plugin Web demo; each optional Plugin fails closed when not configured"
     );
     println!(
-        "\nserver flags:\n  --bind <addr>                      loopback bind address (e.g. 127.0.0.1:0)\n  --fixture <path>                   reviewed Affairs fixture JSON path\n  --change-fixture <path>            optional reviewed ChangeRadar fixture JSON path\n  --opportunity-fixture <path>       optional DemoReviewed Opportunity metadata JSON\n  --opportunity-catalog <path>       retained Course Planning catalog bytes (required with Opportunity)\n  --opportunity-profile-store <path> tenant-private durable profile/tombstone store (required with Opportunity)\n  --store <path>                     durable Affairs record store path\n  --idempotency <path>               common durable M10 idempotency store path"
+        "\nserver flags:\n  --bind <addr>                      loopback bind address (e.g. 127.0.0.1:0)\n  --fixture <path>                   reviewed Affairs fixture JSON path\n  --change-fixture <path>            optional reviewed ChangeRadar fixture JSON path\n  --opportunity-fixture <path>       optional DemoReviewed Opportunity metadata JSON\n  --opportunity-catalog <path>       retained Course Planning catalog bytes (required with Opportunity)\n  --opportunity-profile-store <path> tenant-private durable profile/tombstone store (required with Opportunity)\n  --store <path>                     durable Affairs record store path\n  --idempotency <path>               common durable M10 idempotency store path\n  --session-store <path>             durable current-session event store path"
     );
 }
 

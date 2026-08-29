@@ -2,6 +2,7 @@
 #![allow(clippy::expect_used)]
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -30,6 +31,7 @@ fn temp_dir() -> PathBuf {
         std::process::id()
     ));
     fs::create_dir_all(&dir).expect("create temp dir");
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).expect("secure temp dir");
     dir
 }
 
@@ -43,6 +45,7 @@ struct TestEnv {
     change_fixture: PathBuf,
     store: PathBuf,
     idempotency: PathBuf,
+    sessions: PathBuf,
 }
 
 impl TestEnv {
@@ -104,6 +107,7 @@ impl TestEnv {
         Self {
             store: dir.join("records.json"),
             idempotency: dir.join("idempotency.json"),
+            sessions: dir.join("sessions.json"),
             dir,
             affairs_fixture,
             change_fixture,
@@ -116,6 +120,7 @@ impl TestEnv {
             &self.change_fixture,
             &self.store,
             &self.idempotency,
+            &self.sessions,
         )
         .expect("open shared composition")
     }
@@ -306,6 +311,7 @@ fn retained_change_evidence_tamper_blocks_startup() {
         &env.change_fixture,
         &env.store,
         &env.idempotency,
+        &env.sessions,
     );
     assert!(result.is_err(), "tampered evidence must fail closed");
 }
@@ -325,6 +331,7 @@ fn declared_raw_revision_digest_must_match_retained_evidence_bytes() {
         &env.change_fixture,
         &env.store,
         &env.idempotency,
+        &env.sessions,
     );
     assert!(
         result.is_err(),
