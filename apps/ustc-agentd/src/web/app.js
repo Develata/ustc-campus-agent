@@ -23,6 +23,21 @@ const opportunityProfile = document.querySelector("#opportunity-profile");
 const opportunityPlanResult = document.querySelector("#opportunity-plan-result");
 const opportunityDeleted = document.querySelector("#opportunity-deleted");
 const OPPORTUNITY_PROFILE_HINT = "ustc-campus-agent/opportunity-profile-id/v1";
+const OPPORTUNITY_PENDING_OPERATION = "ustc-campus-agent/opportunity-pending-operation/v1";
+const OPPORTUNITY_DEMO_TEMPLATE = {
+  completed_courses: ["MATH1001", "MATH1002", "CS1001", "PHYS1001"],
+  min_credits: 9,
+  max_credits: 12,
+  preference_weights: [
+    { course_code: "MATH2001", weight: 9 },
+    { course_code: "MATH2003", weight: 8 },
+    { course_code: "CS2006", weight: 7 },
+    { course_code: "PHYS2003", weight: 5 },
+    { course_code: "HUM2001", weight: 4 },
+    { course_code: "GEN2001", weight: 3 },
+    { course_code: "LANG2001", weight: 2 }
+  ]
+};
 let opportunityProfileId = null;
 
 function clear(element) {
@@ -482,6 +497,78 @@ function readOpportunityHint() {
   }
 }
 
+let boundedTokenCounter = 0;
+
+function boundedToken() {
+  boundedTokenCounter = (boundedTokenCounter + 1) % 0xffff;
+  const random = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0");
+  return `${Date.now()}-${boundedTokenCounter.toString(16).padStart(4, "0")}-${random}`;
+}
+
+function mintBoundedId(prefix) {
+  const token = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : boundedToken();
+  return `${prefix}web:${token}`;
+}
+
+function storePendingOperation(operation) {
+  try {
+    window.localStorage.setItem(OPPORTUNITY_PENDING_OPERATION, JSON.stringify(operation));
+  } catch (_error) {
+    // Storage is only a best-effort retry carrier; the server remains authoritative.
+  }
+}
+
+function readPendingOperation() {
+  try {
+    const raw = window.localStorage.getItem(OPPORTUNITY_PENDING_OPERATION);
+    const value = raw == null ? null : JSON.parse(raw);
+    return value && typeof value === "object" ? value : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function clearPendingOperation() {
+  try {
+    window.localStorage.removeItem(OPPORTUNITY_PENDING_OPERATION);
+  } catch (_error) {
+    return;
+  }
+}
+
+function mintOperationEnvelope(operation, profileId) {
+  return {
+    operation,
+    request_id: mintBoundedId("req:"),
+    correlation_id: mintBoundedId("corr:"),
+    idempotency_key: mintBoundedId("idem:"),
+    timestamp: Date.now(),
+    profile_id: profileId
+  };
+}
+
+function reusableOperationEnvelope(operation, profileId) {
+  const pending = readPendingOperation();
+  if (!pending || pending.operation !== operation) {
+    return null;
+  }
+  if (
+    typeof pending.request_id !== "string" ||
+    typeof pending.correlation_id !== "string" ||
+    typeof pending.idempotency_key !== "string" ||
+    !Number.isFinite(pending.timestamp) ||
+    pending.timestamp <= 0
+  ) {
+    return null;
+  }
+  if (operation === "delete" && pending.profile_id !== profileId) {
+    return null;
+  }
+  return pending;
+}
+
 async function requestOpportunity(url, options) {
   const response = await fetch(url, {
     cache: "no-store",
@@ -501,6 +588,49 @@ async function requestOpportunity(url, options) {
     throw new Error("服务器没有返回 Opportunity terminal result");
   }
   return payload.terminal;
+}
+
+function createOpportunityRequestBody(envelope) {
+  return {
+    consent: true,
+    request_id: envelope.request_id,
+    correlation_id: envelope.correlation_id,
+    idempotency_key: envelope.idempotency_key,
+    consented_at: envelope.timestamp,
+    completed_courses: OPPORTUNITY_DEMO_TEMPLATE.completed_courses,
+    min_credits: OPPORTUNITY_DEMO_TEMPLATE.min_credits,
+    max_credits: OPPORTUNITY_DEMO_TEMPLATE.max_credits,
+    preference_weights: OPPORTUNITY_DEMO_TEMPLATE.preference_weights
+  };
+}
+
+function deleteOpportunityRequestBody(envelope) {
+  return {
+    confirm_delete: true,
+    request_id: envelope.request_id,
+    correlation_id: envelope.correlation_id,
+    idempotency_key: envelope.idempotency_key,
+    revoked_at: envelope.timestamp
+  };
+}
+
+async function submitOpportunityOperation(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Accept": "application/json", "Content-Type": "application/json" },
+    body
+  });
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch (_error) {
+    return { outcome: "unknown", payload: null };
+  }
+  if (payload?.kind === "opportunity_accepted" || payload?.kind === "opportunity_rejected") {
+    return { outcome: "terminal", payload };
+  }
+  return { outcome: "unknown", payload };
 }
 
 function renderOpportunityProfileTerminal(terminal) {
@@ -613,33 +743,32 @@ async function createOpportunityProfile() {
     opportunityStatus.textContent = "必须先明确勾选 consent；未同意时不会发出 private write。";
     return;
   }
+  const envelope = reusableOperationEnvelope("create", null) ?? mintOperationEnvelope("create", null);
+  storePendingOperation(envelope);
   opportunityCreate.disabled = true;
   opportunityStatus.textContent = "正在创建 tenant-private synthetic profile…";
+  let outcome = null;
   try {
-    const terminal = await requestOpportunity("/api/v1/opportunity/profiles", {
-      method: "POST",
-      body: JSON.stringify({
-        consent: true,
-        completed_courses: ["MATH1001", "MATH1002", "CS1001", "PHYS1001"],
-        min_credits: 9,
-        max_credits: 12,
-        preference_weights: [
-          { course_code: "MATH2001", weight: 9 },
-          { course_code: "MATH2003", weight: 8 },
-          { course_code: "CS2006", weight: 7 },
-          { course_code: "PHYS2003", weight: 5 },
-          { course_code: "HUM2001", weight: 4 },
-          { course_code: "GEN2001", weight: 3 },
-          { course_code: "LANG2001", weight: 2 }
-        ]
-      })
-    });
-    renderOpportunityProfileTerminal(terminal);
-  } catch (error) {
-    opportunityStatus.textContent = `档案创建失败：${error instanceof Error ? error.message : "未知错误"}`;
+    outcome = await submitOpportunityOperation(
+      "/api/v1/opportunity/profiles",
+      JSON.stringify(createOpportunityRequestBody(envelope))
+    );
+  } catch (_error) {
+    outcome = { outcome: "unknown", payload: null };
   } finally {
     opportunityCreate.disabled = false;
   }
+  if (outcome.outcome !== "terminal") {
+    opportunityStatus.textContent = "档案创建结果尚未确认；已保留同一请求 envelope，请再次点击以按同一请求重试。";
+    return;
+  }
+  clearPendingOperation();
+  const payload = outcome.payload;
+  if (payload?.kind !== "opportunity_accepted") {
+    opportunityStatus.textContent = `档案创建失败：${payload?.rejection?.kind ?? "未知错误"}`;
+    return;
+  }
+  renderOpportunityProfileTerminal(payload.terminal);
 }
 
 async function viewOpportunityProfile() {
@@ -696,32 +825,49 @@ async function deleteOpportunityProfile() {
     opportunityStatus.textContent = "没有可删除的 private profile。";
     return;
   }
+  const envelope = reusableOperationEnvelope("delete", opportunityProfileId)
+    ?? mintOperationEnvelope("delete", opportunityProfileId);
+  storePendingOperation(envelope);
   opportunityDelete.disabled = true;
   opportunityStatus.textContent = "正在撤回 consent 并原子删除 private payload…";
+  const target = envelope.profile_id ?? opportunityProfileId;
+  let outcome = null;
   try {
-    const deletedProfileId = opportunityProfileId;
-    const terminal = await requestOpportunity(
-      `/api/v1/opportunity/profiles/${encodeURIComponent(deletedProfileId)}/revoke-delete`,
-      { method: "POST", body: JSON.stringify({ confirm_delete: true }) }
+    outcome = await submitOpportunityOperation(
+      `/api/v1/opportunity/profiles/${encodeURIComponent(target)}/revoke-delete`,
+      JSON.stringify(deleteOpportunityRequestBody(envelope))
     );
-    if (terminal?.kind !== "profile_deleted") {
-      throw new Error("Opportunity delete terminal 无法呈现");
-    }
-    const deletion = terminal.deletion;
-    setOpportunityHint(null);
-    opportunityConsent.checked = false;
-    opportunityProfile.hidden = true;
-    opportunityPlanResult.hidden = true;
-    opportunityDeleted.hidden = false;
-    text(
-      document.querySelector("#opportunity-delete-receipt"),
-      `${deletion.deletion_receipt_id} · profile ${deletion.profile_snapshot_id} · deleted ${formatTime(deletion.deleted_at)}`
-    );
-    opportunityStatus.textContent = "删除收据已持久化；tombstone 不含 completed courses 或 preference weights。下方 Synthetic profile 只是可再次 consent 的公开 demo 模板，不是已删除档案。";
-  } catch (error) {
-    opportunityStatus.textContent = `撤回/删除失败：${error instanceof Error ? error.message : "未知错误"}`;
+  } catch (_error) {
+    outcome = { outcome: "unknown", payload: null };
+  } finally {
     opportunityDelete.disabled = !opportunityProfileId;
   }
+  if (outcome.outcome !== "terminal") {
+    opportunityStatus.textContent = "撤回/删除结果尚未确认；已保留同一请求 envelope，请再次点击以按同一请求重试。";
+    return;
+  }
+  clearPendingOperation();
+  const payload = outcome.payload;
+  if (payload?.kind !== "opportunity_accepted") {
+    opportunityStatus.textContent = `撤回/删除失败：${payload?.rejection?.kind ?? "未知错误"}`;
+    return;
+  }
+  const terminal = payload.terminal;
+  if (terminal?.kind !== "profile_deleted") {
+    opportunityStatus.textContent = "Opportunity delete terminal 无法呈现";
+    return;
+  }
+  const deletion = terminal.deletion;
+  setOpportunityHint(null);
+  opportunityConsent.checked = false;
+  opportunityProfile.hidden = true;
+  opportunityPlanResult.hidden = true;
+  opportunityDeleted.hidden = false;
+  text(
+    document.querySelector("#opportunity-delete-receipt"),
+    `${deletion.deletion_receipt_id} · profile ${deletion.profile_snapshot_id} · deleted ${formatTime(deletion.deleted_at)}`
+  );
+  opportunityStatus.textContent = "删除收据已持久化；tombstone 不含 completed courses 或 preference weights。下方 Synthetic profile 只是可再次 consent 的公开 demo 模板，不是已删除档案。";
 }
 
 publicationConfirm.addEventListener("change", () => {

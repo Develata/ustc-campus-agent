@@ -126,31 +126,49 @@ impl WebState {
         &self,
         command: OpportunityCommandDto,
     ) -> Result<ClientResponseDto, WebRequestError> {
+        self.submit_opportunity_with_identity(command, None)
+    }
+
+    fn submit_opportunity_with_identity(
+        &self,
+        command: OpportunityCommandDto,
+        identity: Option<OpportunityCallerIdentity>,
+    ) -> Result<ClientResponseDto, WebRequestError> {
         command
             .validate()
             .map_err(|_| WebRequestError::InvalidOpportunityRequest)?;
-        let sequence = self
-            .next_request
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
-                current.checked_add(1)
-            })
-            .map_err(|_| WebRequestError::CounterExhausted)?;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| WebRequestError::InternalIdentity)?;
-        let request_nonce = now.as_nanos();
+        let (request_id, correlation_id, idempotency_key) = match identity {
+            Some(identity) => (
+                identity.request_id,
+                identity.correlation_id,
+                identity.idempotency_key,
+            ),
+            None => {
+                let sequence = self
+                    .next_request
+                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                        current.checked_add(1)
+                    })
+                    .map_err(|_| WebRequestError::CounterExhausted)?;
+                let request_nonce = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|_| WebRequestError::InternalIdentity)?
+                    .as_nanos();
+                (
+                    checked_text(format!("req:web:opportunity:{request_nonce}:{sequence}"))?,
+                    checked_text(format!("corr:web:opportunity:{request_nonce}:{sequence}"))?,
+                    checked_text(format!("idem:web:opportunity:{request_nonce}:{sequence}"))?,
+                )
+            }
+        };
         let payload_digest =
             opportunity_payload_digest(&command).map_err(|_| WebRequestError::InternalIdentity)?;
         let composition = self.lock()?;
         let request = SubmitOpportunityDto {
-            request_id: checked_text(format!("req:web:opportunity:{request_nonce}:{sequence}"))?,
-            correlation_id: checked_text(format!(
-                "corr:web:opportunity:{request_nonce}:{sequence}"
-            ))?,
+            request_id,
+            correlation_id,
             causation_id: None,
-            idempotency_key: Some(checked_text(format!(
-                "idem:web:opportunity:{request_nonce}:{sequence}"
-            ))?),
+            idempotency_key: Some(idempotency_key),
             actor: ActorIntentDto::Authenticated {
                 session_id: checked_text(composition.fixture.session.session_id().as_str())?,
             },
@@ -163,15 +181,6 @@ impl WebState {
             command,
         };
         Ok(composition.handle_opportunity_submit(&request))
-    }
-
-    fn now_millis() -> Result<UnixMillis, WebRequestError> {
-        let millis = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| WebRequestError::InternalIdentity)?
-            .as_millis();
-        let millis = i64::try_from(millis).map_err(|_| WebRequestError::InternalIdentity)?;
-        Ok(UnixMillis::new(millis))
     }
 
     fn resolve_public_available(
@@ -295,6 +304,7 @@ enum WebRequestError {
     InvalidProcedureId,
     InvalidBoardId,
     InvalidOpportunityRequest,
+    InvalidOpportunityIdentity,
     CounterExhausted,
     InternalIdentity,
     MissingPublicCapability,
@@ -305,6 +315,39 @@ enum WebRequestError {
 
 fn checked_text(value: impl Into<String>) -> Result<WireText, WebRequestError> {
     WireText::parse(value).map_err(|_| WebRequestError::InternalIdentity)
+}
+
+/// Caller-stable bounded identity for one create/revoke-delete intent. Passed
+/// through unchanged so a byte-identical retry keeps the same M00 command
+/// digest and recovers the committed terminal instead of minting a conflict.
+struct OpportunityCallerIdentity {
+    request_id: WireText,
+    correlation_id: WireText,
+    idempotency_key: WireText,
+}
+
+fn parse_caller_identity(
+    request_id: &str,
+    correlation_id: &str,
+    idempotency_key: &str,
+) -> Result<OpportunityCallerIdentity, WebRequestError> {
+    let parse = |value: &str| {
+        WireText::parse(value).map_err(|_| WebRequestError::InvalidOpportunityIdentity)
+    };
+    Ok(OpportunityCallerIdentity {
+        request_id: parse(request_id)?,
+        correlation_id: parse(correlation_id)?,
+        idempotency_key: parse(idempotency_key)?,
+    })
+}
+
+/// Caller-supplied timestamp bound: the server never replaces it, so retries
+/// keep the command digest stable.
+fn bounded_operation_timestamp(value: i64) -> Result<UnixMillis, WebRequestError> {
+    if value <= 0 {
+        return Err(WebRequestError::InvalidOpportunityIdentity);
+    }
+    Ok(UnixMillis::new(value))
 }
 
 #[derive(Serialize)]
@@ -356,6 +399,10 @@ struct PublishAffairsDemoBody {
 #[serde(deny_unknown_fields)]
 struct CreateOpportunityProfileBody {
     consent: bool,
+    request_id: String,
+    correlation_id: String,
+    idempotency_key: String,
+    consented_at: i64,
     completed_courses: Vec<String>,
     min_credits: u16,
     max_credits: u16,
@@ -381,6 +428,10 @@ struct GenerateOpportunityPlanBody {
 #[serde(deny_unknown_fields)]
 struct DeleteOpportunityProfileBody {
     confirm_delete: bool,
+    request_id: String,
+    correlation_id: String,
+    idempotency_key: String,
+    revoked_at: i64,
 }
 
 /// Builds the bounded same-origin Web router over one composition.
@@ -484,6 +535,9 @@ async fn affairs_get(
         }
         Err(WebRequestError::InvalidOpportunityRequest) => {
             web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error")
+        }
+        Err(WebRequestError::InvalidOpportunityIdentity) => {
+            web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_identity")
         }
         Err(WebRequestError::CompositionUnavailable) => {
             web_error(StatusCode::SERVICE_UNAVAILABLE, "composition_unavailable")
@@ -668,30 +722,38 @@ async fn opportunity_profile_create(
         Ok(preferences) => preferences,
         Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_profile"),
     };
-    let consented_at = match WebState::now_millis() {
+    let consented_at = match bounded_operation_timestamp(body.consented_at) {
+        Ok(value) => value,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_identity"),
+    };
+    let consent_purpose = match checked_text("opportunity_planning") {
         Ok(value) => value,
         Err(_) => return web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error"),
     };
-    opportunity_response(
-        state.submit_opportunity(OpportunityCommandDto::CreateProfile {
-            consent_purpose: match checked_text("opportunity_planning") {
-                Ok(value) => value,
-                Err(_) => {
-                    return web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error");
-                }
-            },
-            consent_fields: vec![
-                OpportunityConsentFieldDto::CompletedCourses,
-                OpportunityConsentFieldDto::CreditBounds,
-                OpportunityConsentFieldDto::PreferenceWeights,
-            ],
-            consented_at,
-            completed_courses,
-            min_credits: body.min_credits,
-            max_credits: body.max_credits,
-            preference_weights,
-        }),
+    let result = parse_caller_identity(
+        &body.request_id,
+        &body.correlation_id,
+        &body.idempotency_key,
     )
+    .and_then(|identity| {
+        state.submit_opportunity_with_identity(
+            OpportunityCommandDto::CreateProfile {
+                consent_purpose,
+                consent_fields: vec![
+                    OpportunityConsentFieldDto::CompletedCourses,
+                    OpportunityConsentFieldDto::CreditBounds,
+                    OpportunityConsentFieldDto::PreferenceWeights,
+                ],
+                consented_at,
+                completed_courses,
+                min_credits: body.min_credits,
+                max_credits: body.max_credits,
+                preference_weights,
+            },
+            Some(identity),
+        )
+    });
+    opportunity_response(result)
 }
 
 async fn opportunity_profile_view(
@@ -749,16 +811,25 @@ async fn opportunity_profile_delete(
         Ok(value) => value,
         Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_profile_snapshot_id"),
     };
-    let revoked_at = match WebState::now_millis() {
+    let revoked_at = match bounded_operation_timestamp(body.revoked_at) {
         Ok(value) => value,
-        Err(_) => return web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error"),
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_identity"),
     };
-    opportunity_response(state.submit_opportunity(
-        OpportunityCommandDto::RevokeConsentAndDeleteProfile {
-            profile_snapshot_id,
-            revoked_at,
-        },
-    ))
+    let result = parse_caller_identity(
+        &body.request_id,
+        &body.correlation_id,
+        &body.idempotency_key,
+    )
+    .and_then(|identity| {
+        state.submit_opportunity_with_identity(
+            OpportunityCommandDto::RevokeConsentAndDeleteProfile {
+                profile_snapshot_id,
+                revoked_at,
+            },
+            Some(identity),
+        )
+    });
+    opportunity_response(result)
 }
 
 fn opportunity_response(response: Result<ClientResponseDto, WebRequestError>) -> Response {
@@ -766,6 +837,9 @@ fn opportunity_response(response: Result<ClientResponseDto, WebRequestError>) ->
         Ok(response) => response,
         Err(WebRequestError::InvalidOpportunityRequest) => {
             return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_request");
+        }
+        Err(WebRequestError::InvalidOpportunityIdentity) => {
+            return web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_identity");
         }
         Err(_) => return web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error"),
     };

@@ -370,6 +370,10 @@ impl HttpResponse {
 fn valid_opportunity_profile_body() -> Value {
     json!({
         "consent": true,
+        "request_id": "req:web:opportunity-create-regression",
+        "correlation_id": "corr:web:opportunity-create-regression",
+        "idempotency_key": "idem:web:opportunity-create-regression",
+        "consented_at": 1_787_792_400_000i64,
         "completed_courses": ["MATH1001", "MATH1002", "CS1001", "PHYS1001"],
         "min_credits": 9,
         "max_credits": 12,
@@ -824,6 +828,10 @@ fn opportunity_http_journey_requires_consent_plans_and_deletes_private_payload()
         "/api/v1/opportunity/profiles",
         &json!({
             "consent": false,
+            "request_id": "req:web:journey-denied",
+            "correlation_id": "corr:web:journey-denied",
+            "idempotency_key": "idem:web:journey-denied",
+            "consented_at": 1_787_792_400_000i64,
             "completed_courses": ["MATH101"],
             "min_credits": 6,
             "max_credits": 8,
@@ -899,7 +907,13 @@ fn opportunity_http_journey_requires_consent_plans_and_deletes_private_payload()
 
     let deleted = server.post_json(
         &format!("/api/v1/opportunity/profiles/{encoded_profile}/revoke-delete"),
-        &json!({"confirm_delete": true}),
+        &json!({
+            "confirm_delete": true,
+            "request_id": "req:web:journey-delete",
+            "correlation_id": "corr:web:journey-delete",
+            "idempotency_key": "idem:web:journey-delete",
+            "revoked_at": 1_787_792_500_000i64
+        }),
     );
     assert!(deleted.status.contains(" 200 "), "{}", deleted.status);
     let deleted_value: Value = serde_json::from_str(&deleted.body).expect("delete JSON");
@@ -924,6 +938,158 @@ fn opportunity_http_journey_requires_consent_plans_and_deletes_private_payload()
         serde_json::from_str(&after_delete.body).expect("deleted-plan JSON");
     assert_eq!(after_delete_value["kind"], "opportunity_rejected");
     assert_eq!(after_delete_value["rejection"]["kind"], "profile_deleted");
+}
+
+#[test]
+fn create_retry_with_byte_identical_body_recovers_same_profile_receipt() {
+    let server = WebServer::start();
+    let body = valid_opportunity_profile_body().to_string();
+
+    let first = server.post_raw("/api/v1/opportunity/profiles", "application/json", &body);
+    assert!(
+        first.status.contains(" 201 "),
+        "{}: {}",
+        first.status,
+        first.body
+    );
+    let first_value: Value = serde_json::from_str(&first.body).expect("create JSON");
+    assert_eq!(first_value["kind"], "opportunity_accepted");
+    assert_eq!(first_value["terminal"]["kind"], "profile_created");
+    let profile_id = first_value["terminal"]["profile"]["profile_snapshot_id"]
+        .as_str()
+        .expect("profile id")
+        .to_owned();
+    let consent_id = first_value["terminal"]["profile"]["consent_id"]
+        .as_str()
+        .expect("consent id")
+        .to_owned();
+
+    // The first response is discarded; the exact same body is resent.
+    let retry = server.post_raw("/api/v1/opportunity/profiles", "application/json", &body);
+    assert!(
+        retry.status.contains(" 201 "),
+        "byte-identical create retry must recover the committed terminal, not ProfileAlreadyExists: {}: {}",
+        retry.status,
+        retry.body
+    );
+    let retry_value: Value = serde_json::from_str(&retry.body).expect("retry create JSON");
+    assert_eq!(retry_value["kind"], "opportunity_accepted");
+    assert_eq!(retry_value["terminal"]["kind"], "profile_created");
+    assert_eq!(
+        retry_value["terminal"]["profile"]["profile_snapshot_id"].as_str(),
+        Some(profile_id.as_str())
+    );
+    assert_eq!(
+        retry_value["terminal"]["profile"]["consent_id"].as_str(),
+        Some(consent_id.as_str())
+    );
+}
+
+#[test]
+fn delete_retry_with_byte_identical_body_recovers_same_deletion_receipt() {
+    let server = WebServer::start();
+    let created = server.post_json(
+        "/api/v1/opportunity/profiles",
+        &valid_opportunity_profile_body(),
+    );
+    assert!(created.status.contains(" 201 "), "{}", created.status);
+    let created_value: Value = serde_json::from_str(&created.body).expect("create JSON");
+    let profile_id = created_value["terminal"]["profile"]["profile_snapshot_id"]
+        .as_str()
+        .expect("profile id")
+        .to_owned();
+    let encoded_profile = profile_id.replace(':', "%3A");
+
+    let delete_body = json!({
+        "confirm_delete": true,
+        "request_id": "req:web:opportunity-delete-regression",
+        "correlation_id": "corr:web:opportunity-delete-regression",
+        "idempotency_key": "idem:web:opportunity-delete-regression",
+        "revoked_at": 1_787_792_500_000i64
+    })
+    .to_string();
+    let path = format!("/api/v1/opportunity/profiles/{encoded_profile}/revoke-delete");
+
+    let deleted = server.post_raw(&path, "application/json", &delete_body);
+    assert!(
+        deleted.status.contains(" 200 "),
+        "{}: {}",
+        deleted.status,
+        deleted.body
+    );
+    let deleted_value: Value = serde_json::from_str(&deleted.body).expect("delete JSON");
+    assert_eq!(deleted_value["terminal"]["kind"], "profile_deleted");
+    let receipt = deleted_value["terminal"]["deletion"]["deletion_receipt_id"]
+        .as_str()
+        .expect("deletion receipt")
+        .to_owned();
+
+    // The first response is discarded; the exact same body is resent. It must
+    // recover the committed terminal instead of conflicting with the tombstone.
+    let replay = server.post_raw(&path, "application/json", &delete_body);
+    assert!(
+        replay.status.contains(" 200 "),
+        "byte-identical delete retry must recover the committed deletion, not a tombstone conflict: {}: {}",
+        replay.status,
+        replay.body
+    );
+    let replay_value: Value = serde_json::from_str(&replay.body).expect("replay delete JSON");
+    assert_eq!(replay_value["terminal"]["kind"], "profile_deleted");
+    assert_eq!(
+        replay_value["terminal"]["deletion"]["deletion_receipt_id"].as_str(),
+        Some(receipt.as_str())
+    );
+}
+
+#[test]
+fn opportunity_identity_and_timestamp_malformed_bodies_are_stable_input_errors() {
+    let server = WebServer::start();
+
+    let mut empty_request_id = valid_opportunity_profile_body();
+    empty_request_id["request_id"] = json!("");
+    let response = server.post_json("/api/v1/opportunity/profiles", &empty_request_id);
+    assert!(response.status.contains(" 400 "), "{}", response.status);
+    let value: Value = serde_json::from_str(&response.body).expect("error JSON");
+    assert_eq!(value["error"], "invalid_opportunity_identity");
+
+    let mut control_character_key = valid_opportunity_profile_body();
+    control_character_key["idempotency_key"] = json!("idem:web:bad\u{0007}token");
+    let response = server.post_json("/api/v1/opportunity/profiles", &control_character_key);
+    assert!(response.status.contains(" 400 "), "{}", response.status);
+    let value: Value = serde_json::from_str(&response.body).expect("error JSON");
+    assert_eq!(value["error"], "invalid_opportunity_identity");
+
+    let mut negative_timestamp = valid_opportunity_profile_body();
+    negative_timestamp["consented_at"] = json!(-1);
+    let response = server.post_json("/api/v1/opportunity/profiles", &negative_timestamp);
+    assert!(response.status.contains(" 400 "), "{}", response.status);
+    let value: Value = serde_json::from_str(&response.body).expect("error JSON");
+    assert_eq!(value["error"], "invalid_opportunity_identity");
+
+    let mut missing_identity = valid_opportunity_profile_body();
+    missing_identity
+        .as_object_mut()
+        .expect("create body object")
+        .remove("correlation_id");
+    let response = server.post_json("/api/v1/opportunity/profiles", &missing_identity);
+    assert!(response.status.contains(" 400 "), "{}", response.status);
+    let value: Value = serde_json::from_str(&response.body).expect("error JSON");
+    assert_eq!(value["error"], "invalid_opportunity_json");
+
+    let zero_timestamp_delete = json!({
+        "confirm_delete": true,
+        "request_id": "req:web:opportunity-delete-malformed",
+        "correlation_id": "corr:web:opportunity-delete-malformed",
+        "idempotency_key": "idem:web:opportunity-delete-malformed",
+        "revoked_at": 0
+    });
+    let response = server.post_json(
+        "/api/v1/opportunity/profiles/profile%3Afixture/revoke-delete",
+        &zero_timestamp_delete,
+    );
+    assert!(response.status.contains(" 400 "), "{}", response.status);
+    let value: Value = serde_json::from_str(&response.body).expect("error JSON");
+    assert_eq!(value["error"], "invalid_opportunity_identity");
 }
 
 #[test]
@@ -1003,6 +1169,9 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(script.body.contains("createOpportunityProfile"));
     assert!(script.body.contains("renderOpportunityPlan"));
     assert!(script.body.contains("deleteOpportunityProfile"));
+    assert!(script.body.contains("submitOpportunityOperation"));
+    assert!(script.body.contains("opportunity-pending-operation"));
+    assert!(script.body.contains("mintBoundedId"));
 
     let health = server.get("/healthz");
     assert!(health.status.contains(" 200 "), "{}", health.status);

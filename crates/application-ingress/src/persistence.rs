@@ -445,6 +445,24 @@ impl FileRecordStore {
         &self,
         operation: impl FnOnce(&mut StoreState) -> Result<T, StoreError>,
     ) -> Result<T, StoreError> {
+        self.transaction_with_persist(operation, |state| {
+            persist_with_parent_sync(&self.path, state)
+        })
+    }
+
+    /// Runs `operation` under the store lock, then persists the resulting
+    /// state with a caller-supplied persistence step.
+    ///
+    /// Phase-aware rollback: failures before the rename commit (pre-commit)
+    /// restore the previous in-memory state; a failure after the rename
+    /// succeeded is `CommitUncertain` and must NOT restore old memory,
+    /// because the renamed candidate is already visible at `path` and a
+    /// rollback would let a later mutation overwrite it with stale state.
+    fn transaction_with_persist<T>(
+        &self,
+        operation: impl FnOnce(&mut StoreState) -> Result<T, StoreError>,
+        persist: impl FnOnce(&StoreState) -> Result<(), PersistFailure>,
+    ) -> Result<T, StoreError> {
         let mut state = self.state.lock().map_err(|_| StoreError::Poisoned)?;
         let before = state.clone();
         let result = match operation(&mut state) {
@@ -454,11 +472,14 @@ impl FileRecordStore {
                 return Err(error);
             }
         };
-        if let Err(error) = persist(&self.path, &state) {
-            *state = before;
-            return Err(error);
+        match persist(&state) {
+            Ok(()) => Ok(result),
+            Err(PersistFailure::PreCommit(error)) => {
+                *state = before;
+                Err(error)
+            }
+            Err(PersistFailure::CommitUncertain(error)) => Err(error),
         }
-        Ok(result)
     }
 }
 
@@ -501,7 +522,26 @@ fn read_existing_private_state(path: &Path) -> Result<Option<Vec<u8>>, StoreErro
     Ok(Some(bytes))
 }
 
-fn persist(path: &Path, state: &StoreState) -> Result<(), StoreError> {
+/// Phase-aware persistence failure.
+///
+/// `PreCommit`: the candidate never reached `path`, so rolling the in-memory
+/// state back is safe. `CommitUncertain`: `rename` already placed the
+/// candidate at `path` and only the mandatory parent-directory fsync failed;
+/// the candidate is visible on disk, so memory must not be rolled back and
+/// the failure is surfaced to the caller instead of being reported durable.
+enum PersistFailure {
+    PreCommit(StoreError),
+    CommitUncertain(StoreError),
+}
+
+fn persist_with_parent_sync(path: &Path, state: &StoreState) -> Result<(), PersistFailure> {
+    persist_candidate(path, state).map_err(PersistFailure::PreCommit)?;
+    sync_parent_directory(path)
+        .map_err(|error| PersistFailure::CommitUncertain(StoreError::CommitUncertain(error)))?;
+    Ok(())
+}
+
+fn persist_candidate(path: &Path, state: &StoreState) -> Result<(), StoreError> {
     if let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -523,20 +563,22 @@ fn persist(path: &Path, state: &StoreState) -> Result<(), StoreError> {
         file.write_all(&bytes).map_err(StoreError::Io)?;
         file.sync_all().map_err(StoreError::Io)?;
         fs::rename(&temporary, path).map_err(StoreError::Io)?;
-        if let Some(parent) = path
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-        {
-            File::open(parent)
-                .and_then(|directory| directory.sync_all())
-                .map_err(StoreError::Io)?;
-        }
         Ok(())
     })();
     if result.is_err() {
         let _ = fs::remove_file(&temporary);
     }
     result
+}
+
+fn sync_parent_directory(path: &Path) -> Result<(), io::Error> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        File::open(parent).and_then(|directory| directory.sync_all())?;
+    }
+    Ok(())
 }
 
 fn validate_state(state: &StoreState) -> Result<(), StoreError> {
@@ -648,6 +690,11 @@ pub enum StoreError {
     Invariant,
     CounterExhausted,
     Poisoned,
+    /// The rename committed the candidate to `path`, but the mandatory
+    /// parent-directory fsync failed afterwards. The caller receives this
+    /// failure and the in-memory state is left as-is: the renamed candidate
+    /// must not be clobbered by a rollback.
+    CommitUncertain(io::Error),
 }
 
 impl std::fmt::Display for StoreError {
@@ -658,6 +705,7 @@ impl std::fmt::Display for StoreError {
             Self::Invariant => "record store invariant failure",
             Self::CounterExhausted => "record store counter exhausted",
             Self::Poisoned => "record store synchronization failure",
+            Self::CommitUncertain(_) => "record store commit-uncertain failure",
         })
     }
 }
@@ -1426,6 +1474,123 @@ mod tests {
             .count();
         assert_eq!(claimed, 1, "exactly one Claimed");
         assert_eq!(busy, 1, "exactly one Busy");
+    }
+
+    #[test]
+    fn post_rename_parent_sync_failure_keeps_candidate_and_later_mutations() {
+        let path = temp_path();
+        let store = FileRecordStore::open(path.clone()).expect("open");
+        store
+            .insert_admitted_once(
+                "cmd:baseline",
+                public_capsule("cmd:baseline"),
+                public_policy(),
+            )
+            .expect("persist baseline");
+
+        let disk_before_precommit = fs::read(&path).expect("baseline bytes");
+        let precommit_capsule = public_capsule("cmd:precommit");
+        let precommit_record = StoredRecord {
+            capsule_digest: capsule_digest(&precommit_capsule).expect("precommit digest"),
+            capsule: precommit_capsule,
+            read_policy: public_policy(),
+            state: RecordState::Pending {
+                version: 0,
+                highest_fencing: 0,
+            },
+        };
+        let precommit_error = store
+            .transaction_with_persist(
+                |state| {
+                    state
+                        .records
+                        .insert("cmd:precommit".to_owned(), precommit_record);
+                    Ok(())
+                },
+                |_| {
+                    Err(PersistFailure::PreCommit(StoreError::Io(io::Error::new(
+                        io::ErrorKind::Other,
+                        "injected pre-rename failure",
+                    ))))
+                },
+            )
+            .expect_err("pre-commit failure must be reported");
+        assert!(matches!(precommit_error, StoreError::Io(_)));
+        assert!(
+            store
+                .get("cmd:precommit")
+                .expect("read memory after rollback")
+                .is_none(),
+            "pre-commit failure must restore in-memory state"
+        );
+        assert_eq!(
+            fs::read(&path).expect("bytes after pre-commit failure"),
+            disk_before_precommit,
+            "pre-commit failure must not alter disk bytes"
+        );
+
+        let candidate_capsule = public_capsule("cmd:candidate");
+        let candidate_record = StoredRecord {
+            capsule_digest: capsule_digest(&candidate_capsule).expect("candidate digest"),
+            capsule: candidate_capsule,
+            read_policy: public_policy(),
+            state: RecordState::Pending {
+                version: 0,
+                highest_fencing: 0,
+            },
+        };
+        let commit_uncertain = store
+            .transaction_with_persist(
+                |state| {
+                    state
+                        .records
+                        .insert("cmd:candidate".to_owned(), candidate_record);
+                    Ok(())
+                },
+                |state| {
+                    persist_candidate(&path, state).map_err(PersistFailure::PreCommit)?;
+                    Err(PersistFailure::CommitUncertain(
+                        StoreError::CommitUncertain(io::Error::new(
+                            io::ErrorKind::Other,
+                            "injected parent-directory sync failure",
+                        )),
+                    ))
+                },
+            )
+            .expect_err("post-rename sync failure must not claim durable success");
+        assert!(matches!(commit_uncertain, StoreError::CommitUncertain(_)));
+        assert!(
+            store
+                .get("cmd:candidate")
+                .expect("read in-memory candidate")
+                .is_some(),
+            "post-rename failure must not restore stale memory"
+        );
+        assert!(
+            FileRecordStore::open(path.clone())
+                .expect("reopen renamed candidate")
+                .get("cmd:candidate")
+                .expect("read reopened candidate")
+                .is_some(),
+            "renamed candidate must be visible on disk"
+        );
+
+        assert!(matches!(
+            store
+                .insert_admitted_once("cmd:later", public_capsule("cmd:later"), public_policy(),)
+                .expect("persist later mutation"),
+            InsertOutcome::Created
+        ));
+        let reopened = FileRecordStore::open(&path).expect("reopen final state");
+        for command_id in ["cmd:baseline", "cmd:candidate", "cmd:later"] {
+            assert!(
+                reopened
+                    .get(command_id)
+                    .expect("read final record")
+                    .is_some(),
+                "later mutation erased {command_id}"
+            );
+        }
     }
 
     #[test]

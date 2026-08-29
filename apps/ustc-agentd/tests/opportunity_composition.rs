@@ -392,6 +392,45 @@ fn consent_profile_plan_delete_and_restart_cross_the_full_bounded_spine() {
 }
 
 #[test]
+fn identical_command_and_identity_replays_committed_create_terminal() {
+    let env = TestEnv::new("create-replay");
+    let composition = env.open();
+    let command = create_command();
+    let first = composition.handle_opportunity_submit(&request(
+        command.clone(),
+        "create-replay",
+        authenticated_actor("session:proc011-web-demo"),
+    ));
+    let profile_id = match first {
+        ClientResponseDto::OpportunityAccepted { terminal, .. } => match *terminal {
+            M72OpportunityTerminalDto::ProfileCreated { profile } => profile.profile_snapshot_id,
+            _ => panic!("expected profile-created terminal"),
+        },
+        other => panic!("expected accepted profile creation, got {other:?}"),
+    };
+    assert_eq!(composition.opportunity_private_state_counts(), (1, 0));
+
+    // Byte-identical resend: same identity and command digest must recover the
+    // committed terminal instead of minting ProfileAlreadyExists.
+    let replay = composition.handle_opportunity_submit(&request(
+        command,
+        "create-replay",
+        authenticated_actor("session:proc011-web-demo"),
+    ));
+    match replay {
+        ClientResponseDto::OpportunityAccepted { terminal, .. } => match *terminal {
+            M72OpportunityTerminalDto::ProfileCreated { profile } => {
+                assert_eq!(profile.profile_snapshot_id, profile_id);
+            }
+            _ => panic!("expected replayed profile-created terminal"),
+        },
+        other => panic!("expected idempotent create replay, got {other:?}"),
+    }
+    assert_eq!(composition.opportunity_private_state_counts(), (1, 0));
+    assert_eq!(composition.opportunity_invocation_counts(), (2, 2, 2));
+}
+
+#[test]
 fn different_tenant_cannot_read_profile_or_reach_m60() {
     let env = TestEnv::new("tenant-isolation");
     let owner = env.open();
