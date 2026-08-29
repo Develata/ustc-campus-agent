@@ -25,7 +25,7 @@
 
 It does not authenticate a credential, parse a cookie or token, call a clock, persist an event, generate an identifier, build an admitted request context, assign a role, decide a downstream permission or emit the final cross-module `PlatformControlEvent`/`PlatformControlError` projection.
 
-Authentication adapters produce bounded `SessionCredentialEvidence`; implemented [`platform-session-port/v0`](platform-session-port.md) supplies the B4a clock/repository/secret-reference interfaces, deterministic fakes and one durable DemoReviewed current-session read/bootstrap vendor; `M00-B4 control-evidence` still later owns stable external event/error/redaction projections; `M00-B3 request-context` owns admitted actor/request/command/causation semantics. A caller cannot reinterpret this pure kernel or B4a read vendor as proof that credential authentication or durable lifecycle mutation already happened.
+Authentication adapters produce bounded `SessionCredentialEvidence`; implemented [`platform-session-port/v0`](platform-session-port.md) supplies the B4a clock/repository/secret-reference interfaces, deterministic fakes and one durable DemoReviewed current-session read/bootstrap vendor; implemented [`platform-control-evidence/v0`](platform-control-evidence.md) owns B4b stable redacted external event/error projections and journal ports; `M00-B3 request-context` owns admitted actor/request/command/causation semantics. A caller cannot reinterpret this pure kernel or either data projection as proof that credential authentication, request admission or durable evidence persistence already happened.
 
 ## 2. Required public semantic values
 

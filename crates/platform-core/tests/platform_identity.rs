@@ -1754,6 +1754,7 @@ fn assert_public_surface_is_frozen() {
             "lib.rs",
             LIB_SOURCE,
             &[
+                "control_evidence",
                 "identity",
                 "invocation",
                 "market",
@@ -1764,6 +1765,14 @@ fn assert_public_surface_is_frozen() {
                 "source_revision",
             ] as &[&str],
             &ADMITTED_LIB_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
+            "control_evidence.rs",
+            CONTROL_EVIDENCE_SOURCE,
+            &[] as &[&str],
+            &ADMITTED_CONTROL_EVIDENCE_ITEMS as &[&str],
             &[] as &[&str],
             false,
         ),
@@ -1867,6 +1876,7 @@ fn assert_public_surface_is_frozen() {
             "invocation.rs" => &ADMITTED_INVOCATION_MACRO_INVOCATIONS,
             "market.rs" => &ADMITTED_MARKET_MACRO_INVOCATIONS,
             "lib.rs" => &ADMITTED_LIB_MACRO_INVOCATIONS,
+            "control_evidence.rs" => &ADMITTED_CONTROL_EVIDENCE_MACRO_INVOCATIONS,
             "session.rs" => &ADMITTED_SESSION_MACRO_INVOCATIONS,
             "session_port.rs" => &ADMITTED_SESSION_PORT_MACRO_INVOCATIONS,
             other => panic!("ungoverned platform-core source macro invocations: {other}"),
@@ -1972,6 +1982,7 @@ fn assert_public_surface_is_frozen() {
     // The frozen surface belongs to the value kinds, not to one file. Rust's orphan rule does
     // not stop a sibling module in the same crate from adding a second inherent impl.
     for (label, sibling) in [
+        ("control_evidence.rs", CONTROL_EVIDENCE_SOURCE),
         ("invocation.rs", INVOCATION_SOURCE),
         ("market.rs", MARKET_SOURCE),
         ("lib.rs", LIB_SOURCE),
@@ -2068,6 +2079,7 @@ fn assert_public_surface_is_frozen() {
             "invocation.rs" => &ADMITTED_INVOCATION_IMPLS,
             "market.rs" => &ADMITTED_MARKET_IMPLS,
             "lib.rs" => &ADMITTED_LIB_IMPLS,
+            "control_evidence.rs" => &ADMITTED_CONTROL_EVIDENCE_IMPLS,
             "session.rs" => &ADMITTED_SESSION_IMPLS,
             "session_port.rs" => &ADMITTED_SESSION_PORT_IMPLS,
             other => panic!("ungoverned platform-core sibling implementations: {other}"),
@@ -2251,7 +2263,8 @@ const DESERIALIZE_BODY_INDEX: usize = 13;
 ///
 /// The rule belongs to every governed source, not only the identity module: an unadmitted
 /// attribute in a sibling is the same carrier reached one file over.
-const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 5] = [
+const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 6] = [
+    ("control_evidence.rs", &["derive", "must_use", "serde"]),
     ("invocation.rs", &["derive", "must_use"]),
     ("market.rs", &["derive", "must_use", "serde"]),
     ("lib.rs", &["cfg", "derive", "must_use", "serde", "test"]),
@@ -4119,6 +4132,7 @@ fn byte_literals(body: &str) -> Vec<char> {
     found
 }
 
+const CONTROL_EVIDENCE_SOURCE: &str = include_str!("../src/control_evidence.rs");
 const IDENTITY_SOURCE: &str = include_str!("../src/identity.rs");
 const INVOCATION_SOURCE: &str = include_str!("../src/invocation.rs");
 const MARKET_SOURCE: &str = include_str!("../src/market.rs");
@@ -4230,7 +4244,8 @@ const ADMITTED_MARKET_ITEMS: [&str; 12] = [
     "type Value = UniqueStringMap;",
 ];
 
-const ADMITTED_LIB_ITEMS: [&str; 10] = [
+const ADMITTED_LIB_ITEMS: [&str; 11] = [
+    "pub mod control_evidence;",
     "pub mod identity;",
     "pub mod invocation;",
     "pub mod market;",
@@ -4266,6 +4281,21 @@ const ADMITTED_SESSION_PORT_ITEMS: [&str; 4] = [
         "use crate::session::{ AuthAdapterId, CredentialEvidenceDigest, SessionEvent, ",
         "SessionInstant, SessionSnapshot, evolve, };"
     ),
+];
+
+const ADMITTED_CONTROL_EVIDENCE_ITEMS: [&str; 5] = [
+    "use serde::{Deserialize, Serialize};",
+    "use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};",
+    concat!(
+        "use crate::request_context::{ AdmissionRejectionClass, CausationId, ",
+        "DescriptorSnapshotId, EffectClass, M00AdmittedActor, OperationId, PermissionClass, ",
+        "PlatformPolicySnapshotId, PlatformRequestContext, RequestContextRejection, };"
+    ),
+    concat!(
+        "use crate::session::{ AuthAdapterId, SessionDomainError, SessionEvent, ",
+        "SessionExpiryCause, SessionInstant, };"
+    ),
+    "use crate::session_port::SessionRepositoryError;",
 ];
 
 /// The complete `impl` surface of each sibling, sorted. These are M20 items; a genuine M20
@@ -4346,6 +4376,8 @@ const ADMITTED_SESSION_PORT_IMPLS: [&str; 6] = [
     "impl fmt::Debug for SecretRef",
     "impl-arg Into<String>",
 ];
+const ADMITTED_CONTROL_EVIDENCE_IMPLS: [&str; 2] =
+    ["impl PlatformControlError", "impl PlatformControlEvent"];
 
 /// Macro INVOCATION names of each governed source, pinned exactly. A splicing macro reached by
 /// any spelling adds items from a file no scan reads, and no substring enumerates the spellings
@@ -4359,6 +4391,7 @@ const ADMITTED_LIB_MACRO_INVOCATIONS: [&str; 4] = ["assert", "assert_eq", "inclu
 const ADMITTED_SESSION_MACRO_INVOCATIONS: [&str; 5] =
     ["assert", "assert_eq", "matches", "panic", "write"];
 const ADMITTED_SESSION_PORT_MACRO_INVOCATIONS: [&str; 0] = [];
+const ADMITTED_CONTROL_EVIDENCE_MACRO_INVOCATIONS: [&str; 0] = [];
 
 /// The Cargo target set of `platform-core`, pinned by the same key sets as
 /// `check_platform_core_manifest` in `scripts/check_repo_contracts.py`.
@@ -4461,7 +4494,11 @@ fn manifest_keys(entries: &[(String, String)], table: &str) -> Vec<String> {
 /// text. Adding a row is registered surface drift that must be mirrored in
 /// `scripts/check_repo_contracts.py`; it changes no accepted grammar, bound, error precedence,
 /// Serde shape or nominal kind set.
-const ADMITTED_CROSS_FILE_IDENTITY_BINDINGS: [(&str, &str); 3] = [
+const ADMITTED_CROSS_FILE_IDENTITY_BINDINGS: [(&str, &str); 4] = [
+    (
+        "control_evidence.rs",
+        "use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};",
+    ),
     (
         "invocation.rs",
         "pub use crate::identity::{TenantId, UserId};",

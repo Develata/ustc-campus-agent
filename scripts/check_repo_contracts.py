@@ -269,6 +269,7 @@ KEY_FILES = [
     "docs/tasks/02-s0-architecture-review.md",
     "docs/tasks/campaign-w1-m00-b3.md",
     "docs/tasks/campaign-w1-m00-b4a.md",
+    "docs/tasks/campaign-w1-m00-b4b.md",
     "docs/tasks/campaign-w1-m20-b6.md",
     "docs/tasks/campaign-w1-m30-b0.md",
     "docs/tasks/campaign-w1-m40-b0.md",
@@ -288,6 +289,7 @@ KEY_FILES = [
     "docs/contracts/permissions.md",
     "docs/contracts/platform-identity.md",
     "docs/contracts/platform-request-context.md",
+    "docs/contracts/platform-control-evidence.md",
     "docs/contracts/platform-session.md",
     "docs/contracts/platform-session-port.md",
     "docs/contracts/plugin-package.md",
@@ -2646,6 +2648,10 @@ APP_OPPORTUNITY_TEST = "apps/ustc-agentd/tests/opportunity_composition.rs"
 APP_CLI_PRODUCT_TEST = "apps/ustc-agent/tests/affairs_get_product_path.rs"
 PLATFORM_SESSION_PORT_CONTRACT = "docs/contracts/platform-session-port.md"
 PLATFORM_SESSION_PORT_TASK = "docs/tasks/campaign-w1-m00-b4a.md"
+PLATFORM_CONTROL_EVIDENCE_SOURCE = "crates/platform-core/src/control_evidence.rs"
+PLATFORM_CONTROL_EVIDENCE_TEST = "crates/platform-core/tests/platform_control_evidence.rs"
+PLATFORM_CONTROL_EVIDENCE_CONTRACT = "docs/contracts/platform-control-evidence.md"
+PLATFORM_CONTROL_EVIDENCE_TASK = "docs/tasks/campaign-w1-m00-b4b.md"
 PLATFORM_CAPABILITY_TEST = "crates/platform-core/tests/market_capability_registry.rs"
 PLATFORM_INSTALLATION_TEST = 'crates/platform-core/tests/market_installation_lifecycle.rs'
 PLATFORM_INSTALLATION_SOURCE = 'crates/platform-core/src/market/installation.rs'
@@ -2915,7 +2921,8 @@ PLATFORM_IDENTITY_FORBIDDEN_SPLICE_PATTERNS = (
 )
 # Enumerated over the WHOLE package, not `src/*.rs`: a `#[path = "../elsewhere.rs"]` module
 # compiles a file that a `src`-only glob never sees.
-PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
+PLATFORM_CORE_SOURCE_FILES = ('src/control_evidence.rs',
+ 'src/identity.rs',
  'src/invocation.rs',
  'src/lib.rs',
  'src/market.rs',
@@ -2936,6 +2943,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'tests/market_installation_lifecycle.rs',
  'tests/market_package_catalog.rs',
  'tests/market_package_update.rs',
+ 'tests/platform_control_evidence.rs',
  'tests/platform_identity.rs',
  'tests/platform_request_context.rs',
  'tests/platform_session.rs',
@@ -2952,6 +2960,9 @@ PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT = (
     "use crate::identity::{SessionId, TenantId, UserId};"
 )
 PLATFORM_SESSION_PORT_ADMITTED_IDENTITY_IMPORT = "use crate::identity::SessionId;"
+PLATFORM_CONTROL_EVIDENCE_ADMITTED_IDENTITY_IMPORT = (
+    "use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};"
+)
 # Cross-file bindings of an admitted kind are admitted by ENUMERATION, never by pattern, and
 # each entry is keyed by exact repository-relative file together with exact normalized text.
 # Relaxing this into a prefix, regex or predicate over `crate::identity::` would re-open
@@ -2968,14 +2979,16 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
     (PLATFORM_AUTHORITY_SOURCE, PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_SESSION_PORT_SOURCE, PLATFORM_SESSION_PORT_ADMITTED_IDENTITY_IMPORT),
+    (PLATFORM_CONTROL_EVIDENCE_SOURCE, PLATFORM_CONTROL_EVIDENCE_ADMITTED_IDENTITY_IMPORT),
 )
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
 # a file extension. Pinning the declarations pins the compiled set semantically, so no
 # attribute spelling — `#[path]`, `#[cfg_attr(all(), path = "x.txt")]`, or a future one — can
 # introduce a module the scan never reads.
-PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
+PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'control_evidence.rs': (),
+ 'identity.rs': (),
  'invocation.rs': (),
- 'lib.rs': ('identity', 'invocation', 'market', 'request_context', 'session', 'session_port', 'source_registry', 'source_revision'),
+ 'lib.rs': ('control_evidence', 'identity', 'invocation', 'market', 'request_context', 'session', 'session_port', 'source_registry', 'source_revision'),
  'market.rs': ('authority', 'capability', 'grant', 'installation', 'update'),
  'market/authority.rs': (),
  'market/capability.rs': (),
@@ -2999,7 +3012,17 @@ PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
 # rejected; removing an admitted item fails too. The cost is real: an M20 change to the
 # protocol import list below must be mirrored here and in the Rust guard. That is the intended
 # price of a frozen v0 surface, and the failure message names the drift.
-PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Error;',
+PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
+                 'use serde::{Deserialize, Serialize};',
+                 'use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};',
+                 'use crate::request_context::{ AdmissionRejectionClass, CausationId, '
+                 'DescriptorSnapshotId, EffectClass, M00AdmittedActor, OperationId, '
+                 'PermissionClass, PlatformPolicySnapshotId, PlatformRequestContext, '
+                 'RequestContextRejection, };',
+                 'use crate::session::{ AuthAdapterId, SessionDomainError, SessionEvent, '
+                 'SessionExpiryCause, SessionInstant, };',
+                 'use crate::session_port::SessionRepositoryError;'),
+ 'identity.rs': ('use std::error::Error;',
                  'use std::fmt;',
                  'use std::str::FromStr;',
                  'use serde::de;',
@@ -3019,7 +3042,8 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                    'SchemaConstructionError, Sha256Digest, UnvalidatedArgumentValueV0, '
                    'UnvalidatedSchemaNodeV0, UnvalidatedToolInputSchemaV0, ValidatedSchemaNodeV0, '
                    'ValidatedToolInputSchemaV0, };'),
- 'lib.rs': ('pub mod identity;',
+ 'lib.rs': ('pub mod control_evidence;',
+            'pub mod identity;',
             'pub mod invocation;',
             'pub mod market;',
             'pub mod request_context;',
@@ -3187,7 +3211,8 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
 # $t { .. } } }` plus `m!(TenantId);` implements a trait for an identity kind while every
 # self-type scan sees `$t`. Sibling macro definitions are pinned and no sibling macro
 # invocation may name a governed kind.
-PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
+PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'control_evidence.rs': (),
+ 'identity.rs': ('identity_value',),
  'invocation.rs': ('authority_id',),
  'lib.rs': (),
  'market.rs': (),
@@ -3204,7 +3229,8 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
 # reached whatever the spelling — `include /* x */ !("f.rs")` contains no `include!` substring —
 # so the admitted name set per governed source is exact. `include_str!` stays admitted in
 # lib.rs, which legitimately embeds the first-party manifests as data.
-PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_value', 'matches', 'stringify', 'write'),
+PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'control_evidence.rs': (),
+ 'identity.rs': ('concat', 'identity_value', 'matches', 'stringify', 'write'),
  'invocation.rs': ('authority_id', 'format', 'write'),
  'lib.rs': ('assert', 'assert_eq', 'include_str', 'panic'),
  'market.rs': ('matches', 'write'),
@@ -3319,7 +3345,8 @@ PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS = (('CapabilityId,', 8),
 # A blanket `impl<T> Extension for T` names no kind and covers all six, so the sibling `impl`
 # surface is an allowlist as well. These are M20 items; a genuine M20 addition is drift that
 # must be admitted here explicitly rather than arriving unseen.
-PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevision',
+PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'control_evidence.rs': ('impl PlatformControlError', 'impl PlatformControlEvent'),
+ 'authority.rs': ('impl AuthorityReadRevision',
                   'impl CurrentGrantKey',
                   'impl Error for AuthorityRepositoryError',
                   'impl Error for InvocationRecheckError',
@@ -4566,7 +4593,8 @@ PLATFORM_IDENTITY_COMPILE_FAIL_EXPRESSIONS = {
 # `ignore` by spelling leaves the raw form open; an exact admitted name set closes the class,
 # including attributes nobody predicted. Derive ARGUMENTS are pinned separately, because a
 # derive is the one attribute that adds public API.
-PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive', 'doc', 'must_use'),
+PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'control_evidence.rs': ('derive', 'must_use', 'serde'),
+ 'identity.rs': ('$attribute', 'derive', 'doc', 'must_use'),
  'invocation.rs': ('derive', 'must_use'),
  'lib.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'market.rs': ('derive', 'must_use', 'serde'),
@@ -10358,6 +10386,7 @@ P1_SOURCE_REGISTRY_TEST = "crates/platform-core/tests/source_registry.rs"
 P1_SOURCE_REGISTRY_LIB = "crates/platform-core/src/lib.rs"
 P1_SOURCE_REGISTRY_IDENTITY_TEST = P1_1_SCOPE_AMENDMENT_PATH
 P1_SOURCE_REGISTRY_IDENTITY_MODULE_EXPECTATION = """&[
+                "control_evidence",
                 "identity",
                 "invocation",
                 "market",
@@ -12449,10 +12478,10 @@ PLATFORM_SESSION_PORT_DOC_FRAGMENTS = {
     "docs/plan/modules/10-platform-control-identity.md": (
         "platform-session-port/v0",
         "AUTH-021",
-        "B4b control-evidence",
+        "platform-control-evidence/v0",
     ),
     "docs/coverage-matrix.md": ("platform-session-port.md", "active:AUTH-021"),
-    "docs/overview/architecture.md": ("B4a session-port", "B4b/B5/SSO remain planned"),
+    "docs/overview/architecture.md": ("B4a session ports", "B4b redacted control-event/error"),
     "docs/tasks/01-execution-roadmap.md": ("platform-session-port/v0", "AUTH-021"),
     "README.md": ("m00-sessions.json", "event-history-only"),
 }
@@ -12745,6 +12774,286 @@ def check_platform_session_port(issues: list[str]) -> None:
                 fail(f"platform session port projection missing in {rel}: {fragment!r}", issues)
 
 
+PLATFORM_CONTROL_EVIDENCE_PUBLIC_ITEMS = {
+    "PlatformControlActor",
+    "PlatformControlEventKind",
+    "ControlEvidenceKey",
+    "PlatformControlEvent",
+    "PlatformControlErrorCode",
+    "PlatformControlError",
+    "ControlEvidenceJournalError",
+    "ControlEvidenceAppendOutcome",
+    "ControlEvidenceReadPort",
+    "ControlEvidenceAppendPort",
+}
+PLATFORM_CONTROL_EVIDENCE_PUBLIC_FUNCTIONS = {
+    "from_session_event",
+    "from_admitted_request",
+    "kind",
+    "key",
+    "occurred_at",
+    "from_session_domain",
+    "from_admission_rejection",
+    "from_session_repository",
+    "malformed_external_input",
+    "code",
+}
+PLATFORM_CONTROL_EVIDENCE_EVENT_KINDS = [
+    "SessionOpened",
+    "SessionRefreshed",
+    "SessionExpired",
+    "SessionRevoked",
+    "RequestAdmitted",
+]
+PLATFORM_CONTROL_EVIDENCE_ERROR_CODES = [
+    "LifecycleCredentialEvidenceExpired",
+    "LifecycleInvalidTimeOrder",
+    "LifecycleDeadlineOverflow",
+    "LifecycleSessionNotFound",
+    "LifecycleSessionAlreadyExists",
+    "LifecycleSessionIdMismatch",
+    "LifecycleRevisionMismatch",
+    "LifecycleRevisionOverflow",
+    "LifecycleTerminalSession",
+    "LifecycleNonMonotoneTime",
+    "LifecycleSessionNotYetExpired",
+    "LifecycleNoEffectiveRefresh",
+    "LifecycleEventSequenceMismatch",
+    "LifecycleEventTimeOutsideValidity",
+    "LifecycleIllegalEventForState",
+    "LifecycleEventDerivedFieldMismatch",
+    "AdmissionIdempotencyStoreUnavailable",
+    "AdmissionConflictingEnvelope",
+    "AdmissionDescriptorSnapshotAbsent",
+    "AdmissionDescriptorSnapshotMismatch",
+    "AdmissionPolicyDenied",
+    "AdmissionPolicyExpired",
+    "AdmissionSessionNotFound",
+    "AdmissionSessionIdMismatch",
+    "AdmissionSessionNotAdmitted",
+    "AdmissionCapabilityMissing",
+    "AdmissionCapabilityDisabled",
+    "AdmissionCapabilityRevoked",
+    "AdmissionInfrastructurePortUnavailable",
+    "AdmissionMalformedCommand",
+    "RepositoryUnavailable",
+    "RepositoryCorrupt",
+    "RepositoryInvalidEvent",
+    "RepositoryLimitExceeded",
+    "RepositoryInternalInvariant",
+    "MalformedExternalInput",
+]
+PLATFORM_CONTROL_EVIDENCE_TESTS = (
+    "session_events_project_one_to_one_without_credential_evidence",
+    "request_admission_event_retains_only_stable_control_fields",
+    "control_errors_map_every_domain_admission_repository_and_boundary_class",
+    "control_event_serde_is_closed_redacted_and_data_only",
+    "control_evidence_fake_is_idempotent_conflict_safe_and_atomic",
+    "control_evidence_ports_distinguish_absent_unavailable_corrupt_and_limit",
+)
+PLATFORM_CONTROL_EVIDENCE_DOC_FRAGMENTS = {
+    "docs/contracts/platform-session.md": ("platform-control-evidence/v0", "B4b"),
+    "docs/contracts/platform-session-port.md": ("platform-control-evidence/v0", "B4b"),
+    "docs/contracts/module-boundaries.md": ("platform-control-evidence/v0", "AUTH-022"),
+    "docs/coverage-matrix.md": ("platform-control-evidence.md", "active:AUTH-022"),
+    "docs/overview/architecture.md": ("B4b redacted control-event/error", "B5/production evidence persistence/SSO remain planned"),
+    "docs/plan/modules/00-module-map.md": ("platform-control-evidence/v0", "AUTH-022"),
+    "docs/plan/modules/10-platform-control-identity.md": ("platform-control-evidence/v0", "AUTH-022", "B5 composition planned"),
+    "docs/tasks/01-execution-roadmap.md": ("platform-control-evidence/v0", "AUTH-022", "production evidence persistence"),
+    "README.md": ("B4b stable redacted control-event/error", "data-only"),
+}
+
+
+def check_platform_control_evidence(issues: list[str]) -> None:
+    """Bind B4b's redacted data projections, mappings, journal ports and status truth."""
+    carriers = (
+        PLATFORM_CONTROL_EVIDENCE_CONTRACT,
+        PLATFORM_CONTROL_EVIDENCE_TASK,
+        PLATFORM_CONTROL_EVIDENCE_SOURCE,
+        PLATFORM_CONTROL_EVIDENCE_TEST,
+        "crates/platform-core/src/lib.rs",
+        "docs/acceptance/matrix.tsv",
+        "docs/acceptance/platform-baseline.md",
+        *PLATFORM_CONTROL_EVIDENCE_DOC_FRAGMENTS,
+    )
+    texts: dict[str, str] = {}
+    for rel in dict.fromkeys(carriers):
+        path = ROOT / rel
+        if not path.is_file():
+            fail(f"platform control evidence required carrier missing: {rel}", issues)
+            continue
+        text = path.read_text(encoding="utf-8")
+        if not text.strip():
+            fail(f"platform control evidence required carrier empty: {rel}", issues)
+            continue
+        texts[rel] = text
+    if len(texts) != len(set(carriers)):
+        return
+
+    for rel in (PLATFORM_CONTROL_EVIDENCE_CONTRACT, PLATFORM_CONTROL_EVIDENCE_TASK):
+        if rel not in KEY_FILES:
+            fail(f"platform control evidence authority carrier unregistered: {rel}", issues)
+
+    contract = texts[PLATFORM_CONTROL_EVIDENCE_CONTRACT]
+    for fragment in (
+        "# Platform control-evidence contract (`platform-control-evidence/v0`)",
+        "- **Acceptance:** `AUTH-022`",
+        "exactly 36",
+        "exactly six tests",
+        "data-shape evidence only",
+        "No result claims product/evidence transaction atomicity.",
+        "python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_control_evidence && cargo test --locked -p ustc-campus-agent-core --doc control_evidence",
+    ):
+        if contract.count(fragment) != 1:
+            fail(f"platform control evidence contract drift: missing/duplicate {fragment!r}", issues)
+
+    task = texts[PLATFORM_CONTROL_EVIDENCE_TASK]
+    for fragment in (
+        "`IMPLEMENTED_BOUNDED_SLICE`",
+        "`6cecbb47c480f3c01b35e0cefe122ec724d806618f1f668a9ab7832e7c39e2c2`",
+        "no production evidence store",
+        "B5 may consume these carriers",
+    ):
+        if task.count(fragment) != 1:
+            fail(f"platform control evidence task receipt drift: missing/duplicate {fragment!r}", issues)
+
+    lib_code = strip_rust_comments_and_literals(texts["crates/platform-core/src/lib.rs"])
+    lib_items, unresolved = rust_item_declarations(lib_code)
+    if unresolved or lib_items.count("pub mod control_evidence;") != 1:
+        fail("platform control evidence module declaration drift", issues)
+
+    source = texts[PLATFORM_CONTROL_EVIDENCE_SOURCE]
+    source_code = strip_rust_comments_and_literals(source)
+    public_items = set(re.findall(
+        r"\bpub\s+(?:struct|enum|trait)\s+([A-Za-z_][A-Za-z0-9_]*)",
+        source_code,
+        flags=re.ASCII,
+    ))
+    if public_items != PLATFORM_CONTROL_EVIDENCE_PUBLIC_ITEMS:
+        fail(
+            "platform control evidence exact public item inventory drift "
+            f"(missing={sorted(PLATFORM_CONTROL_EVIDENCE_PUBLIC_ITEMS - public_items)} "
+            f"extra={sorted(public_items - PLATFORM_CONTROL_EVIDENCE_PUBLIC_ITEMS)})",
+            issues,
+        )
+    public_functions = set(re.findall(
+        r"\bpub\s+(?:const\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)",
+        source_code,
+        flags=re.ASCII,
+    ))
+    if public_functions != PLATFORM_CONTROL_EVIDENCE_PUBLIC_FUNCTIONS:
+        fail("platform control evidence exact public function inventory drift", issues)
+    if _extract_unit_variants(source_code, "pub enum PlatformControlEventKind {") != PLATFORM_CONTROL_EVIDENCE_EVENT_KINDS:
+        fail("platform control evidence event-kind enum drift", issues)
+    if _extract_unit_variants(source_code, "pub enum PlatformControlErrorCode {") != PLATFORM_CONTROL_EVIDENCE_ERROR_CODES:
+        fail("platform control evidence 36-code enum drift", issues)
+    if _extract_unit_variants(source_code, "pub enum ControlEvidenceJournalError {") != [
+        "Unavailable", "Corrupt", "LimitExceeded", "InternalInvariant"
+    ]:
+        fail("platform control evidence journal error enum drift", issues)
+    if _extract_unit_variants(source_code, "pub enum ControlEvidenceAppendOutcome {") != [
+        "Appended", "AlreadySame", "Conflict"
+    ]:
+        fail("platform control evidence append outcome drift", issues)
+
+    normalized = re.sub(r"\s+", " ", source_code).strip()
+    for fragment in (
+        "pub enum PlatformControlActor { Public, Authenticated { tenant_id: TenantId, user_id: UserId, session_id: SessionId, }, }",
+        "pub enum ControlEvidenceKey { Session { session_id: SessionId, sequence: u64, }, Request { command_id: CommandId, }, }",
+        "SessionOpened { session_id: SessionId, sequence: u64, tenant_id: TenantId, user_id: UserId, auth_adapter_id: AuthAdapterId, opened_at: SessionInstant, }",
+        "SessionRefreshed { session_id: SessionId, sequence: u64, refreshed_at: SessionInstant, effective_expires_at: SessionInstant, }",
+        "SessionExpired { session_id: SessionId, sequence: u64, expired_at: SessionInstant, observed_at: SessionInstant, cause: SessionExpiryCause, }",
+        "SessionRevoked { session_id: SessionId, sequence: u64, revoked_at: SessionInstant, }",
+        "pub trait ControlEvidenceAppendPort: ControlEvidenceReadPort",
+    ):
+        if fragment not in normalized:
+            fail(f"platform control evidence exact schema/trait drift: {fragment!r}", issues)
+
+    impls, unresolved_impls = rust_impl_declarations(source_code)
+    if unresolved_impls or impls != ["impl PlatformControlError", "impl PlatformControlEvent"]:
+        fail("platform control evidence exact impl inventory drift", issues)
+    for forbidden in (
+        "CredentialEvidenceDigest",
+        "SecretRef",
+        "PayloadDigest",
+        "IdempotencyKey",
+        "ClientProvenance",
+        "OperationSnapshot",
+        "serde_json::Error",
+        "io::Error",
+        "impl fmt::Display for PlatformControlError",
+        "impl Error for PlatformControlError",
+    ):
+        if forbidden in source_code:
+            fail(f"platform control evidence forbidden carrier present: {forbidden!r}", issues)
+    if source.count("```compile_fail") != 4:
+        fail("platform control evidence must retain exactly four compile-fail proofs", issues)
+
+    mapping_specs = (
+        ("from_session_event", ("Opened", "Refreshed", "Expired", "Revoked"), "SessionEvent::"),
+        ("from_session_domain", tuple(code.removeprefix("Lifecycle") for code in PLATFORM_CONTROL_EVIDENCE_ERROR_CODES[:16]), "SessionDomainError::"),
+        ("from_admission_rejection", tuple(code.removeprefix("Admission") for code in PLATFORM_CONTROL_EVIDENCE_ERROR_CODES[16:30]), "AdmissionRejectionClass::"),
+        ("from_session_repository", ("Unavailable", "Corrupt", "InvalidEvent", "LimitExceeded", "InternalInvariant"), "SessionRepositoryError::"),
+    )
+    for function, variants, prefix in mapping_specs:
+        body = _rust_function_body(source_code, function)
+        if body is None:
+            fail(f"platform control evidence mapping body missing: {function}", issues)
+            continue
+        for variant in variants:
+            if body.count(prefix + variant) != 1:
+                fail(f"platform control evidence mapping arm drift: {function}:{variant}", issues)
+        if "_ =>" in body:
+            fail(f"platform control evidence mapping must remain exhaustive: {function}", issues)
+
+    test_code = strip_rust_comments_and_literals(texts[PLATFORM_CONTROL_EVIDENCE_TEST])
+    actual_tests = tuple(re.findall(r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)", test_code))
+    if actual_tests != PLATFORM_CONTROL_EVIDENCE_TESTS:
+        fail(f"platform control evidence exact test inventory drift: {actual_tests}", issues)
+    fake_start = test_code.find("impl ControlEvidenceAppendPort for FakeJournal")
+    fake_body = _rust_function_body(test_code[fake_start:], "append_once") if fake_start >= 0 else None
+    if fake_body is None:
+        fail("platform control evidence fake append_once body missing", issues)
+    else:
+        fake_normalized = re.sub(r"\s+", " ", fake_body).strip()
+        for fragment in (
+            "if self.unavailable { return Err(ControlEvidenceJournalError::Unavailable); }",
+            "if self.corrupt { return Err(ControlEvidenceJournalError::Corrupt); }",
+            "if self.events.len() >= self.max_records { return Err(ControlEvidenceJournalError::LimitExceeded); }",
+            "let mut candidate = self.events.clone();",
+            "if candidate.insert(key, event.clone()).is_some() || self.fail_commit { return Err(ControlEvidenceJournalError::InternalInvariant); }",
+            "self.events = candidate;",
+        ):
+            if fragment not in fake_normalized:
+                fail(f"platform control evidence fake semantic body drift: {fragment!r}", issues)
+        ordered = [
+            "self.unavailable",
+            "self.corrupt",
+            "self.events.get",
+            "self.events.len() >= self.max_records",
+            "self.events.clone()",
+            "self.fail_commit",
+            "self.events = candidate",
+        ]
+        positions = [fake_body.find(marker) for marker in ordered]
+        if any(position < 0 for position in positions) or positions != sorted(positions):
+            fail("platform control evidence fake precedence/atomicity body drift", issues)
+
+    matrix_line = (
+        "AUTH-022\tplatform-control-evidence\tM00 projects every session transition and admitted request into stable redacted data-only evidence maps all lifecycle admission repository and malformed-boundary failures into 36 bounded codes and exposes exact read append-once journal ports with deterministic fail-closed fakes while B5 production persistence SSO and Affairs publication remain unclaimed\t"
+        "python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_control_evidence && cargo test --locked -p ustc-campus-agent-core --doc control_evidence\tpr\timplemented\tbackend"
+    )
+    if texts["docs/acceptance/matrix.tsv"].count(matrix_line) != 1:
+        fail("platform control evidence AUTH-022 acceptance row drift", issues)
+    baseline = texts["docs/acceptance/platform-baseline.md"]
+    if baseline.count("`AUTH-022`") != 1 or "production persistence, B5" not in baseline:
+        fail("platform control evidence baseline projection drift", issues)
+    for rel, fragments in PLATFORM_CONTROL_EVIDENCE_DOC_FRAGMENTS.items():
+        for fragment in fragments:
+            if fragment not in texts[rel]:
+                fail(f"platform control evidence projection missing in {rel}: {fragment!r}", issues)
+
+
 EXPECTED_MAIN_CALLS = (
     "check_key_files_present_and_nonempty(issues)",
     "check_campaign_authorization(issues)",
@@ -12767,6 +13076,7 @@ EXPECTED_MAIN_CALLS = (
     "check_platform_session_implementation(issues)",
     "check_platform_request_context(issues)",
     "check_platform_session_port(issues)",
+    "check_platform_control_evidence(issues)",
     "check_p1_source_revision_contract(issues)",
     "check_p1_source_registry_implementation(issues)",
     "check_m60_b2_packet_digest(issues)",
@@ -12853,6 +13163,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_p1_source_revision_contract": {"digest": "f413cb4f58e9e0d17205583ca69105d3bc171e5dfb5cc1031cc4debc135fa992", "status": "active"},
     "check_platform_authority_implementation": {"digest": "64b767f09d0d29268af33e15bdf60d6fd879b61365abd45c1be2caa2319b92f4", "status": "active"},
     "check_platform_core_manifest": {"digest": "3082cf7fedfaf39080d287a036c8875f762751bb8832121ca2d7cd81d5947d62", "status": "active"},
+    "check_platform_control_evidence": {"digest": "29ab55813d5c6872937c9753d53dac607e7f27436ce00a8297c665d2e37c9a94", "status": "active"},
     "check_platform_identity_implementation": {"digest": "b30158e2721bb04582b6dced31eb4328b493ba13d0f9153347388ad1ccd91c29", "status": "active"},
     "check_platform_request_context": {"digest": "716b2414ce325537cd03c1c1abdee12a12fcf61f43773a894ebf021d9a6c3fbc", "status": "active"},
     "check_platform_session_port": {"digest": "bb77b840e9bd9270cb335ee3a37cda794e40b456b2d2e0f9487e4de4765dedc7", "status": "active"},
@@ -12989,6 +13300,7 @@ def main() -> int:
     check_platform_session_implementation(issues)
     check_platform_request_context(issues)
     check_platform_session_port(issues)
+    check_platform_control_evidence(issues)
     check_p1_source_revision_contract(issues)
     check_p1_source_registry_implementation(issues)
     check_m60_b2_packet_digest(issues)

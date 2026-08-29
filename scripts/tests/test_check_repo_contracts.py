@@ -7130,7 +7130,7 @@ class PlatformSessionImplementationTests(unittest.TestCase):
                 r"\A(?:pub )?use crate::identity::(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]*\});\Z",
             )
             self.assertNotIn(" as ", admitted_text)
-        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 7)
+        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 8)
 
     def test_forbidden_dependency_carrier_fails_closed(self) -> None:
         # A path-qualified call inside a function body declares no item, so the item allowlist
@@ -7384,6 +7384,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_platform_session_implementation(issues)",
         "check_platform_request_context(issues)",
         "check_platform_session_port(issues)",
+        "check_platform_control_evidence(issues)",
         "check_p1_source_revision_contract(issues)",
         "check_p1_source_registry_implementation(issues)",
         "check_m60_b2_packet_digest(issues)",
@@ -10055,18 +10056,144 @@ class PlatformSessionPortContractTests(unittest.TestCase):
     def test_session_port_acceptance_status_drift_fails_closed(self) -> None:
         self.replace_once(
             "docs/acceptance/matrix.tsv",
-            "\tpr\timplemented\tbackend\nMARKET-001",
-            "\tpr\tplanned\tbackend\nMARKET-001",
+            "\tpr\timplemented\tbackend\nAUTH-022",
+            "\tpr\tplanned\tbackend\nAUTH-022",
         )
         self.assert_issue("acceptance row AUTH-021 drift")
 
     def test_session_port_status_projection_drift_fails_closed(self) -> None:
         self.replace_once(
             "docs/overview/architecture.md",
-            "B4b/B5/SSO remain planned",
-            "B4b/B5/SSO are implemented",
+            "B4b redacted control-event/error",
+            "B4b control evidence removed",
         )
         self.assert_issue("projection missing")
+
+
+class PlatformControlEvidenceContractTests(unittest.TestCase):
+    """Mutation-proves the bounded M00-B4b checker and status projection."""
+
+    CONTRACT_REL = "docs/contracts/platform-control-evidence.md"
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        shutil.copytree(
+            REPO_ROOT / "crates/platform-core",
+            self.root / "crates/platform-core",
+            ignore=shutil.ignore_patterns("target"),
+        )
+        shutil.copytree(REPO_ROOT / "scripts", self.root / "scripts")
+        shutil.copy2(REPO_ROOT / "README.md", self.root / "README.md")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        self.original_key_files = list(checker.KEY_FILES)
+        setattr(checker, "ROOT", self.root)
+        self.assertEqual(self.check_control_evidence(), [])
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        checker.KEY_FILES[:] = self.original_key_files
+        self.temporary_directory.cleanup()
+
+    def check_control_evidence(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_platform_control_evidence(issues)
+        return issues
+
+    def replace_once(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, (rel, old))
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def assert_issue(self, fragment: str) -> None:
+        issues = self.check_control_evidence()
+        self.assertTrue(any(fragment in issue for issue in issues), issues)
+
+    def test_control_evidence_contract_missing_fails_closed(self) -> None:
+        (self.root / self.CONTRACT_REL).unlink()
+        self.assert_issue("required carrier missing")
+
+    def test_control_evidence_contract_empty_fails_closed(self) -> None:
+        (self.root / self.CONTRACT_REL).write_text("", encoding="utf-8")
+        self.assert_issue("required carrier empty")
+
+    def test_control_evidence_contract_unregistered_fails_closed(self) -> None:
+        checker.KEY_FILES.remove(self.CONTRACT_REL)
+        self.assert_issue("authority carrier unregistered")
+
+    def test_control_evidence_extra_public_surface_fails_closed(self) -> None:
+        path = self.root / checker.PLATFORM_CONTROL_EVIDENCE_SOURCE
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\npub struct UnreviewedEvidence;\n")
+        self.assert_issue("exact public item inventory drift")
+
+    def test_control_evidence_mapping_arm_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_CONTROL_EVIDENCE_SOURCE,
+            "SessionDomainError::DeadlineOverflow =>",
+            "SessionDomainError::InvalidTimeOrder =>",
+        )
+        self.assert_issue("mapping arm drift: from_session_domain:DeadlineOverflow")
+
+    def test_control_evidence_raw_display_surface_fails_closed(self) -> None:
+        path = self.root / checker.PLATFORM_CONTROL_EVIDENCE_SOURCE
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\nimpl fmt::Display for PlatformControlError {\n"
+                "    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, \"{:?}\", self) }\n"
+                "}\n"
+            )
+        self.assert_issue("forbidden carrier present")
+
+    def test_control_evidence_event_schema_field_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_CONTROL_EVIDENCE_SOURCE,
+            "        auth_adapter_id: AuthAdapterId,\n",
+            "",
+        )
+        self.assert_issue("exact schema/trait drift")
+
+    def test_control_evidence_fake_precedence_weakening_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_CONTROL_EVIDENCE_TEST,
+            "    ) -> Result<ControlEvidenceAppendOutcome, ControlEvidenceJournalError> {\n        if self.unavailable {\n",
+            "    ) -> Result<ControlEvidenceAppendOutcome, ControlEvidenceJournalError> {\n        if false && self.unavailable {\n",
+        )
+        self.assert_issue("fake semantic body drift")
+
+    def test_control_evidence_exact_test_rename_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_CONTROL_EVIDENCE_TEST,
+            "fn control_event_serde_is_closed_redacted_and_data_only()",
+            "fn renamed_control_event_serde_test()",
+        )
+        self.assert_issue("exact test inventory drift")
+
+    def test_control_evidence_main_invocation_removal_fails_closed(self) -> None:
+        self.replace_once(
+            "scripts/check_repo_contracts.py",
+            "    check_platform_control_evidence(issues)\n",
+            "",
+        )
+        source = (self.root / "scripts/check_repo_contracts.py").read_text(encoding="utf-8")
+        main = source.split("\ndef main() -> int:", 1)
+        self.assertEqual(len(main), 2)
+        actual = tuple(
+            line.strip()
+            for line in main[1].splitlines()
+            if line.strip().startswith("check_") and line.strip().endswith("(issues)")
+        )
+        self.assertNotEqual(actual, checker.EXPECTED_MAIN_CALLS)
+
+    def test_control_evidence_acceptance_status_rollback_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/acceptance/matrix.tsv",
+            "\tpr\timplemented\tbackend\nMARKET-001",
+            "\tpr\tplanned\tbackend\nMARKET-001",
+        )
+        self.assert_issue("AUTH-022 acceptance row drift")
 
 
 if __name__ == "__main__":

@@ -62,7 +62,7 @@ The thin peer clients display/serialize server projections and submit intent thr
 
 | ID | Module | Owns | Current evidence |
 |---|---|---|---|
-| `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity/session/request-context kernels plus bounded B4a session-port interfaces, deterministic fakes and one secure durable DemoReviewed current-session read/bootstrap vendor; B4b/B5/SSO remain planned |
+| `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity/session/request-context kernels, bounded B4a session ports plus secure durable DemoReviewed current-session read/bootstrap vendor, and bounded B4b redacted control-event/error plus journal-port kernel; B5/production evidence persistence/SSO remain planned |
 | `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | framework-neutral client-protocol/application-ingress carriers plus one loopback three-plugin JSON/Web composition; public HTTP/Dioxus/stream host planned |
 | `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | typed catalog/capability + bounded installation/grant/update domains + bounded transaction-current authority assembly + pure resolver/fixtures |
 | `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel |

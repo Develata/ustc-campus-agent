@@ -21,7 +21,7 @@
 - a private durable DemoReviewed session-history file used by the current three-plugin composition;
 - fail-closed file/currentness behavior and exact test-fake semantics.
 
-It does **not** authenticate a credential, expose raw secret bytes, implement USTC SSO, add public open/refresh/revoke transport, persist lifecycle mutations, make fixture policy/descriptor/capability/clock observations production authority, emit B4b control evidence, complete B5/M10 administration or implement Affairs PROC-011 administrator publication.
+It does **not** authenticate a credential, expose raw secret bytes, implement USTC SSO, add public open/refresh/revoke transport, persist lifecycle mutations, make fixture policy/descriptor/capability/clock observations production authority, itself emit B4b control evidence, complete B5/M10 administration or implement Affairs PROC-011 administrator publication. The separate implemented [`platform-control-evidence/v0`](platform-control-evidence.md) consumes only public typed carriers and remains data-only.
 
 ## 2. Exact public Rust surface
 
@@ -168,4 +168,4 @@ python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-ag
 
 The core target has exactly six contract tests; `m00_session.rs` has exactly six Unix-gated unit tests; `opportunity_composition.rs` binds the exact two B4a tests `concurrent_retained_session_reads_are_peer_isolated` and `retained_session_restart_scope_and_changed_bootstrap_fail_closed`. Runtime filesystem tests, checker mutations, full workspace test/Clippy/doctest and exact-source review remain mandatory gates.
 
-M00 remains `partial-evidence`. B4a session-port/read vendor is bounded implemented. B4b control-evidence, durable lifecycle mutation, B5 and PROC-011 remain planned; B4 as a batch is incomplete.
+M00 remains `partial-evidence`. B4a session-port/read vendor and B4b [`platform-control-evidence/v0`](platform-control-evidence.md) are bounded implemented, completing the typed interface/fake scope of B4. Durable lifecycle/evidence persistence, B5 and PROC-011 remain planned.
