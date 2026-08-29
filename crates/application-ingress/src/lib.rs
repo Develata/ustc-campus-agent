@@ -7,6 +7,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod affairs_publication;
 pub mod capability;
 pub mod m00_projection;
 pub mod m70_projection;
@@ -17,6 +18,11 @@ pub mod m72_service;
 pub mod persistence;
 pub mod service;
 
+pub use affairs_publication::{
+    AffairsPublicationApplicationError, AffairsPublicationApplicationPort,
+    AffairsPublicationCommand, AffairsPublicationEvidenceError, AffairsPublicationOutcome,
+    M10AffairsPublicationService, affairs_publication_payload_digest,
+};
 pub use capability::{CapabilityError, CapabilityIssuer, StoredPublicAuthorization};
 pub use m70_service::{
     ChangeFeedInvocationError, ChangeFeedInvocationOutcome, ChangeFeedInvocationPort,

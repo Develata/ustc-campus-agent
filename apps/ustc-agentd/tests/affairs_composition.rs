@@ -2,17 +2,23 @@
 #![allow(clippy::expect_used)]
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use affairs_navigator::{ProcedurePublicationError, ProcedurePublicationRepositoryError};
 use serde_json::{Value, json};
 use ustc_agentd::AffairsComposition;
+use ustc_campus_agent_application_ingress::{
+    AffairsPublicationApplicationError, AffairsPublicationEvidenceError, AffairsPublicationOutcome,
+};
 use ustc_campus_agent_client_protocol::{
     ActorIntentDto, ClientErrorDto, ClientProvenanceDto, ClientResponseDto, M71OutcomeDto,
-    RedactionDto, SubmitAffairsGetDto, ViewerAuthorizationDto, WireErrorClassDto, WireText,
-    affairs_get_payload_digest,
+    RedactionDto, SubmitAffairsGetDto, UnixMillis, ViewerAuthorizationDto, WireErrorClassDto,
+    WireText, affairs_get_payload_digest,
 };
+use ustc_campus_agent_core::request_context::CapabilityDisposition;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -112,6 +118,10 @@ impl TestEnv {
         )
         .expect("composition open")
     }
+
+    fn publication_state(&self) -> PathBuf {
+        self.idempotency.with_extension("affairs-publication.json")
+    }
 }
 
 fn wire(s: &str) -> WireText {
@@ -153,6 +163,20 @@ fn submit_request_with_digest(
     req
 }
 
+fn submit_request_as_of(
+    procedure_id: &str,
+    actor: ActorIntentDto,
+    idempotency_key: Option<&str>,
+    as_of_millis: i64,
+) -> SubmitAffairsGetDto {
+    let mut request = submit_request(procedure_id, actor, idempotency_key);
+    let as_of = UnixMillis::new(as_of_millis);
+    request.payload_digest =
+        affairs_get_payload_digest(&request.procedure_id, Some(as_of)).expect("as-of digest");
+    request.as_of = Some(as_of);
+    request
+}
+
 fn authenticated_actor() -> ActorIntentDto {
     ActorIntentDto::Authenticated {
         session_id: wire("session:fixture"),
@@ -178,6 +202,451 @@ fn extract_accepted(
         } => (command_id, terminal, public_capability),
         _ => panic!("expected Accepted, got {response:?}"),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Administrator publication: M10 -> M00/evidence -> direct M71 port
+// ---------------------------------------------------------------------------
+
+#[test]
+fn administrator_publication_is_ordered_idempotent_and_restart_recoverable() {
+    let env = TestEnv::new();
+    let mut comp = env.open();
+    assert_eq!(comp.current_publication_revision(), Some(1));
+    assert_eq!(comp.control_evidence_event_count(), 0);
+    assert_eq!(comp.publication_application_call_count(), 0);
+
+    let first = comp.publish_demo_as_administrator();
+    let AffairsPublicationOutcome::Published(first_receipt) = &first else {
+        panic!("administrator publication must succeed, got {first:?}");
+    };
+    assert_eq!(first_receipt.expected_publication_revision(), Some(1));
+    assert_eq!(first_receipt.publication_revision(), 2);
+    assert_eq!(comp.current_publication_revision(), Some(2));
+    assert_eq!(comp.control_evidence_event_count(), 1);
+    assert_eq!(comp.publication_application_call_count(), 1);
+    assert_eq!(comp.m60_call_count(), 1);
+
+    let retry = comp.publish_demo_as_administrator();
+    let AffairsPublicationOutcome::Published(retry_receipt) = &retry else {
+        panic!("exact retry must replay publication, got {retry:?}");
+    };
+    assert_eq!(retry_receipt.receipt_id(), first_receipt.receipt_id());
+    assert_eq!(comp.current_publication_revision(), Some(2));
+    assert_eq!(comp.control_evidence_event_count(), 1);
+    assert_eq!(comp.publication_application_call_count(), 2);
+    assert_eq!(comp.m60_call_count(), 1);
+
+    let query = submit_request(
+        "proc:fixture",
+        authenticated_actor(),
+        Some("idem:post-publication-query"),
+    );
+    let response = comp.handle_submit(&query);
+    let (_, terminal, _) = extract_accepted(&response);
+    assert!(matches!(terminal.outcome(), M71OutcomeDto::Found { .. }));
+    assert_eq!(comp.invocation_counts(), (1, 1, 1));
+    assert_eq!(comp.current_publication_revision(), Some(2));
+
+    let first_receipt_id = first_receipt.receipt_id().clone();
+    drop(comp);
+    let mut reopened = env.open();
+    assert_eq!(reopened.current_publication_revision(), Some(2));
+    assert_eq!(reopened.control_evidence_event_count(), 1);
+    assert_eq!(reopened.publication_receipt_id(), first_receipt_id.as_str());
+    assert_eq!(reopened.m60_call_count(), 0);
+    let recovered = reopened.publish_demo_as_administrator();
+    let AffairsPublicationOutcome::Published(recovered_receipt) = recovered else {
+        panic!("restart retry must recover, got {recovered:?}");
+    };
+    assert_eq!(recovered_receipt.receipt_id(), &first_receipt_id);
+    assert_eq!(reopened.current_publication_revision(), Some(2));
+    assert_eq!(reopened.control_evidence_event_count(), 1);
+    assert_eq!(reopened.publication_application_call_count(), 1);
+    assert_eq!(reopened.m60_call_count(), 0);
+
+    let response = reopened.handle_submit(&submit_request_as_of(
+        "proc:fixture",
+        authenticated_actor(),
+        Some("idem:restart-publication-query"),
+        199_000,
+    ));
+    let (_, terminal, _) = extract_accepted(&response);
+    assert!(matches!(terminal.outcome(), M71OutcomeDto::Found { .. }));
+    assert_eq!(reopened.invocation_counts(), (1, 1, 1));
+    assert_eq!(reopened.m60_call_count(), 1);
+}
+
+#[test]
+fn proc011_process_restart_helper() {
+    let Ok(phase) = std::env::var("PROC011_PROCESS_PHASE") else {
+        return;
+    };
+    let fixture = PathBuf::from(std::env::var_os("PROC011_FIXTURE").expect("fixture env"));
+    let store = PathBuf::from(std::env::var_os("PROC011_STORE").expect("store env"));
+    let idempotency =
+        PathBuf::from(std::env::var_os("PROC011_IDEMPOTENCY").expect("idempotency env"));
+    let sessions = PathBuf::from(std::env::var_os("PROC011_SESSIONS").expect("sessions env"));
+    let receipt_path = PathBuf::from(std::env::var_os("PROC011_RECEIPT").expect("receipt env"));
+    let mut composition =
+        AffairsComposition::open(&fixture, &store, &idempotency, &sessions).expect("child open");
+
+    match phase.as_str() {
+        "publish" => {
+            assert_eq!(composition.current_publication_revision(), Some(1));
+            let AffairsPublicationOutcome::Published(receipt) =
+                composition.publish_demo_as_administrator()
+            else {
+                panic!("child publication must succeed");
+            };
+            assert_eq!(receipt.publication_revision(), 2);
+            assert_eq!(composition.m60_call_count(), 1);
+            fs::write(receipt_path, receipt.receipt_id().as_str()).expect("write publish receipt");
+        }
+        "recover" => {
+            assert_eq!(composition.current_publication_revision(), Some(2));
+            assert_eq!(composition.control_evidence_event_count(), 1);
+            assert_eq!(composition.m60_call_count(), 0);
+            let AffairsPublicationOutcome::Published(receipt) =
+                composition.publish_demo_as_administrator()
+            else {
+                panic!("child retry must replay");
+            };
+            assert_eq!(composition.m60_call_count(), 0);
+            fs::write(receipt_path, receipt.receipt_id().as_str())
+                .expect("write recovered receipt");
+
+            let response = composition.handle_submit(&submit_request_as_of(
+                "proc:fixture",
+                authenticated_actor(),
+                Some("idem:real-process-restart-query"),
+                198_000,
+            ));
+            let (_, terminal, _) = extract_accepted(&response);
+            assert!(matches!(terminal.outcome(), M71OutcomeDto::Found { .. }));
+            assert_eq!(composition.invocation_counts(), (1, 1, 1));
+            assert_eq!(composition.m60_call_count(), 1);
+        }
+        other => panic!("unknown child phase: {other}"),
+    }
+}
+
+#[test]
+fn administrator_publication_survives_real_process_restart() {
+    let env = TestEnv::new();
+    let publish_receipt = env._dir.join("publish-receipt.txt");
+    let recovered_receipt = env._dir.join("recovered-receipt.txt");
+    let executable = std::env::current_exe().expect("current integration-test executable");
+
+    let run_phase = |phase: &str, receipt_path: &PathBuf| {
+        let status = Command::new(&executable)
+            .arg("--exact")
+            .arg("proc011_process_restart_helper")
+            .arg("--nocapture")
+            .env("PROC011_PROCESS_PHASE", phase)
+            .env("PROC011_FIXTURE", &env.fixture)
+            .env("PROC011_STORE", &env.store)
+            .env("PROC011_IDEMPOTENCY", &env.idempotency)
+            .env("PROC011_SESSIONS", &env.sessions)
+            .env("PROC011_RECEIPT", receipt_path)
+            .status()
+            .expect("spawn isolated process phase");
+        assert!(status.success(), "child process phase {phase} failed");
+    };
+
+    run_phase("publish", &publish_receipt);
+    run_phase("recover", &recovered_receipt);
+    assert_eq!(
+        fs::read_to_string(publish_receipt).expect("read publish receipt"),
+        fs::read_to_string(recovered_receipt).expect("read recovered receipt")
+    );
+}
+
+#[test]
+fn publication_persistence_failure_is_not_visible_and_restart_keeps_prior_revision() {
+    let env = TestEnv::new();
+    let mut comp = env.open();
+    comp.fail_next_publication_persistence_for_test();
+
+    assert_eq!(
+        comp.publish_demo_as_administrator(),
+        AffairsPublicationOutcome::PublicationRejected(
+            AffairsPublicationApplicationError::Downstream(ProcedurePublicationError::Repository(
+                ProcedurePublicationRepositoryError::FailureInjected
+            ))
+        )
+    );
+    assert_eq!(comp.current_publication_revision(), Some(1));
+    assert_eq!(comp.control_evidence_event_count(), 1);
+    assert_eq!(comp.publication_application_call_count(), 1);
+    assert_eq!(comp.m60_call_count(), 1);
+    drop(comp);
+
+    let mut reopened = env.open();
+    assert_eq!(reopened.current_publication_revision(), Some(1));
+    assert_eq!(reopened.control_evidence_event_count(), 1);
+    assert_eq!(reopened.m60_call_count(), 0);
+    assert!(matches!(
+        reopened.publish_demo_as_administrator(),
+        AffairsPublicationOutcome::Published(_)
+    ));
+    assert_eq!(reopened.current_publication_revision(), Some(2));
+    assert_eq!(reopened.control_evidence_event_count(), 1);
+    assert_eq!(reopened.m60_call_count(), 1);
+}
+
+#[test]
+fn publication_state_corruption_matrix_fails_open_closed() {
+    let env = TestEnv::new();
+    let mut comp = env.open();
+    assert!(matches!(
+        comp.publish_demo_as_administrator(),
+        AffairsPublicationOutcome::Published(_)
+    ));
+    drop(comp);
+
+    let path = env.publication_state();
+    let valid = fs::read(&path).expect("read valid publication state");
+    let parsed: Value = serde_json::from_slice(&valid).expect("parse valid publication state");
+    let mut corruptions = vec![
+        b"{ malformed".to_vec(),
+        serde_json::to_vec_pretty(&parsed).expect("pretty state"),
+        vec![b'x'; 1_048_577],
+    ];
+
+    let mut unknown = parsed.clone();
+    unknown["unknown_field"] = json!(true);
+    corruptions.push(serde_json::to_vec(&unknown).expect("unknown-field state"));
+
+    let mut duplicate = parsed.clone();
+    duplicate["records"][1] = duplicate["records"][0].clone();
+    corruptions.push(serde_json::to_vec(&duplicate).expect("duplicate state"));
+
+    let mut gap = parsed.clone();
+    gap["records"][1]["expected_publication_revision"] = json!(2);
+    gap["records"][1]["publication_revision"] = json!(3);
+    corruptions.push(serde_json::to_vec(&gap).expect("gapped state"));
+
+    let mut reordered = parsed;
+    reordered["records"]
+        .as_array_mut()
+        .expect("records array")
+        .swap(0, 1);
+    corruptions.push(serde_json::to_vec(&reordered).expect("reordered state"));
+
+    for bytes in corruptions {
+        write_private_state(&path, bytes);
+        assert!(
+            AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions)
+                .is_err(),
+            "every malformed, noncanonical, oversized, duplicated, gapped, or reordered state must fail open"
+        );
+    }
+    write_private_state(&path, valid);
+    assert_eq!(env.open().current_publication_revision(), Some(2));
+}
+
+#[test]
+fn missing_publication_state_in_an_existing_state_set_fails_closed() {
+    let env = TestEnv::new();
+    drop(env.open());
+    fs::remove_file(env.publication_state()).expect("remove publication state");
+
+    let error =
+        match AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions) {
+            Ok(_) => panic!("missing publication state must not be treated as a fresh bootstrap"),
+            Err(error) => error,
+        };
+    assert!(error.contains("publication state is missing"), "{error}");
+}
+
+#[test]
+fn publication_primary_shape_and_parent_attacks_fail_closed() {
+    let symlink_env = TestEnv::new();
+    let sentinel = symlink_env._dir.join("publication-sentinel");
+    write_private_state(&sentinel, b"sentinel");
+    symlink(&sentinel, symlink_env.publication_state()).expect("publication symlink");
+    assert!(
+        AffairsComposition::open(
+            &symlink_env.fixture,
+            &symlink_env.store,
+            &symlink_env.idempotency,
+            &symlink_env.sessions,
+        )
+        .is_err()
+    );
+    assert_eq!(fs::read(&sentinel).expect("sentinel remains"), b"sentinel");
+
+    let hardlink_env = TestEnv::new();
+    let hardlink_target = hardlink_env._dir.join("publication-hardlink-target");
+    write_private_state(&hardlink_target, b"{}");
+    fs::hard_link(&hardlink_target, hardlink_env.publication_state())
+        .expect("publication hardlink");
+    assert!(
+        AffairsComposition::open(
+            &hardlink_env.fixture,
+            &hardlink_env.store,
+            &hardlink_env.idempotency,
+            &hardlink_env.sessions,
+        )
+        .is_err()
+    );
+
+    let directory_env = TestEnv::new();
+    fs::create_dir(directory_env.publication_state()).expect("publication directory");
+    assert!(
+        AffairsComposition::open(
+            &directory_env.fixture,
+            &directory_env.store,
+            &directory_env.idempotency,
+            &directory_env.sessions,
+        )
+        .is_err()
+    );
+
+    let fifo_env = TestEnv::new();
+    let fifo_path = fifo_env.publication_state();
+    assert!(
+        Command::new("mkfifo")
+            .arg(&fifo_path)
+            .status()
+            .expect("execute mkfifo")
+            .success(),
+        "create publication FIFO"
+    );
+    assert!(
+        AffairsComposition::open(
+            &fifo_env.fixture,
+            &fifo_env.store,
+            &fifo_env.idempotency,
+            &fifo_env.sessions,
+        )
+        .is_err()
+    );
+
+    let wrong_mode_env = TestEnv::new();
+    write_private_state(&wrong_mode_env.publication_state(), b"{}");
+    fs::set_permissions(
+        wrong_mode_env.publication_state(),
+        fs::Permissions::from_mode(0o640),
+    )
+    .expect("set unsafe publication mode");
+    assert!(
+        AffairsComposition::open(
+            &wrong_mode_env.fixture,
+            &wrong_mode_env.store,
+            &wrong_mode_env.idempotency,
+            &wrong_mode_env.sessions,
+        )
+        .is_err()
+    );
+
+    let unsafe_parent_env = TestEnv::new();
+    fs::set_permissions(&unsafe_parent_env._dir, fs::Permissions::from_mode(0o750))
+        .expect("set unsafe state parent mode");
+    assert!(
+        AffairsComposition::open(
+            &unsafe_parent_env.fixture,
+            &unsafe_parent_env.store,
+            &unsafe_parent_env.idempotency,
+            &unsafe_parent_env.sessions,
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn runtime_publication_state_replacement_creates_no_new_publication_authority() {
+    let env = TestEnv::new();
+    let mut comp = env.open();
+    write_private_state(&env.publication_state(), b"{}");
+
+    assert_eq!(comp.current_publication_revision(), None);
+    let query_response = comp.handle_submit(&submit_request_as_of(
+        "proc:fixture",
+        public_actor(),
+        Some("idem:runtime-publication-corrupt"),
+        199_000,
+    ));
+    assert!(
+        matches!(
+            query_response,
+            ClientResponseDto::Error {
+                error: ClientErrorDto::Infrastructure {
+                    retryable: false,
+                    ..
+                }
+            }
+        ),
+        "durable read corruption must be infrastructure failure, never semantic NotFound: {query_response:?}"
+    );
+    assert_eq!(comp.invocation_counts(), (1, 1, 1));
+    assert!(matches!(
+        comp.publish_demo_as_administrator(),
+        AffairsPublicationOutcome::PublicationRejected(AffairsPublicationApplicationError::Denied)
+    ));
+    assert_eq!(comp.control_evidence_event_count(), 1);
+    assert_eq!(comp.publication_application_call_count(), 1);
+    assert_eq!(comp.m60_call_count(), 0);
+    assert!(
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions)
+            .is_err()
+    );
+}
+
+#[test]
+fn disabled_publication_is_rejected_before_evidence_or_m71() {
+    let env = TestEnv::new();
+    let mut comp = env.open();
+    comp.set_publication_capability(CapabilityDisposition::Disabled);
+
+    let outcome = comp.publish_demo_as_administrator();
+
+    assert!(matches!(outcome, AffairsPublicationOutcome::Rejected(_)));
+    assert_eq!(comp.control_evidence_event_count(), 0);
+    assert_eq!(comp.publication_application_call_count(), 0);
+    assert_eq!(comp.m60_call_count(), 0);
+    assert_eq!(comp.current_publication_revision(), Some(1));
+}
+
+#[test]
+fn evidence_destination_attack_blocks_before_m71() {
+    let env = TestEnv::new();
+    let mut comp = env.open();
+    let target = env._dir.join("evidence-sentinel");
+    write_private_state(&target, b"sentinel");
+    let evidence_path = env.idempotency.with_extension("control-evidence.json");
+    symlink(&target, &evidence_path).expect("install evidence symlink");
+
+    let outcome = comp.publish_demo_as_administrator();
+
+    assert_eq!(
+        outcome,
+        AffairsPublicationOutcome::EvidenceRejected(AffairsPublicationEvidenceError::Corrupt)
+    );
+    assert_eq!(fs::read(&target).expect("read sentinel"), b"sentinel");
+    assert_eq!(comp.publication_application_call_count(), 0);
+    assert_eq!(comp.m60_call_count(), 0);
+    assert_eq!(comp.current_publication_revision(), Some(1));
+}
+
+#[test]
+fn wrong_fixture_administrator_identity_denies_before_m60_or_repository_mutation() {
+    let mut fixture = base_fixture();
+    fixture["publication_administrator_user_id"] = json!("user:different-administrator");
+    let env = TestEnv::with_fixture(fixture);
+    let mut comp = env.open();
+
+    let outcome = comp.publish_demo_as_administrator();
+
+    assert!(matches!(
+        outcome,
+        AffairsPublicationOutcome::PublicationRejected(_)
+    ));
+    assert_eq!(comp.control_evidence_event_count(), 1);
+    assert_eq!(comp.publication_application_call_count(), 1);
+    assert_eq!(comp.m60_call_count(), 0);
+    assert_eq!(comp.current_publication_revision(), Some(1));
 }
 
 // ---------------------------------------------------------------------------
@@ -799,9 +1268,16 @@ fn unkeyed_submit_re_evaluates_after_restart() {
     assert_eq!(comp1.m60_call_count(), 1, "first unkeyed submit calls M71");
     drop(comp1);
 
+    let original_fixture = fs::read(&env.fixture).expect("read original fixture");
     let mut updated_fixture = base_fixture();
     updated_fixture["title"] = json!("Updated fixture procedure");
     fs::write(&env.fixture, updated_fixture.to_string()).expect("update fixture");
+
+    let blocked =
+        AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions);
+    let error = blocked.err().expect("draft drift must fail durable open");
+    assert!(error.contains("bound to a different fixture draft"));
+    fs::write(&env.fixture, original_fixture).expect("restore exact bound fixture");
 
     let comp2 = env.open();
     let response2 = comp2.handle_submit(&request);

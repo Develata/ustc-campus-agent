@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use sha2::{Digest, Sha256 as Sha256Hasher};
 use time::OffsetDateTime;
 use ustc_campus_agent_core::source_revision::{
-    SourceRevision, SourceRevisionHealth, SourceRevisionProvenance,
+    SourceRevision, SourceRevisionHealth, SourceRevisionId, SourceRevisionProvenance,
 };
 
 use crate::artifact::{
@@ -28,7 +28,7 @@ use crate::m60_port::{
     M60EvidencePortError, M60EvidenceUnverifiedReason, M60RetainedEvidenceRequest,
     M60VerifiedEvidenceSet,
 };
-use crate::repository::AffairsRepository;
+use crate::repository::{AffairsRepository, AffairsRepositoryReadError};
 use crate::value::{
     ActorRef, AffairsValueError, ArtifactId, AudienceTag, EffectiveInterval, ProcedureId,
     ProcedurePublicationReceiptId, ProcedureReviewId, SourceId, Title,
@@ -435,6 +435,317 @@ impl ProcedurePublicationCommit {
     }
 }
 
+/// Sealed root for recovering publications belonging to one exact reviewed
+/// draft. It can only be minted from a sealed service/recovery receipt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcedurePublicationRecoveryAnchor {
+    source_revision_id: SourceRevisionId,
+    draft_digest: Sha256,
+    reviewer: ActorRef,
+    reviewed_at: OffsetDateTime,
+    published_at: OffsetDateTime,
+    m60_evidence_set_digest: Sha256,
+    m60_revision_count: u8,
+}
+
+impl ProcedurePublicationRecoveryAnchor {
+    pub fn from_receipt(
+        draft: &ProcedureDraft,
+        receipt: &ProcedurePublicationReceipt,
+    ) -> Result<Self, ProcedurePublicationRepositoryError> {
+        let anchor = Self {
+            source_revision_id: draft.source_revision().revision_id().clone(),
+            draft_digest: receipt.draft_digest().clone(),
+            reviewer: receipt.reviewer().clone(),
+            reviewed_at: receipt.reviewed_at(),
+            published_at: receipt.published_at(),
+            m60_evidence_set_digest: receipt.m60_evidence_set_digest().clone(),
+            m60_revision_count: receipt.m60_revision_count(),
+        };
+        let (_, reconstructed) = ProcedurePublicationRecoveryRecord::try_recover(
+            draft,
+            &anchor,
+            draft.source_revision().revision_id().clone(),
+            receipt.draft_digest().clone(),
+            receipt.review_id().clone(),
+            receipt.reviewer().clone(),
+            receipt.reviewed_at(),
+            receipt.receipt_id().clone(),
+            receipt.artifact_id().clone(),
+            receipt.expected_publication_revision(),
+            receipt.publication_revision(),
+            receipt.published_at(),
+            receipt.m60_evidence_set_digest().clone(),
+            receipt.m60_revision_count(),
+        )?;
+        if reconstructed.receipt() != receipt {
+            return Err(ProcedurePublicationRepositoryError::StoredPublicationCorrupted);
+        }
+        Ok(anchor)
+    }
+}
+
+/// Checked durable representation of one already-committed publication.
+///
+/// This carrier contains no M00 authority and cannot publish arbitrary state.
+/// Recovery always rebinds it to one exact checked [`ProcedureDraft`] and
+/// recomputes every deterministic review, receipt, artifact and revision
+/// identity before returning a sealed [`ProcedurePublicationCommit`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcedurePublicationRecoveryRecord {
+    source_revision_id: SourceRevisionId,
+    draft_digest: Sha256,
+    review_id: ProcedureReviewId,
+    reviewer: ActorRef,
+    reviewed_at: OffsetDateTime,
+    receipt_id: ProcedurePublicationReceiptId,
+    artifact_id: ArtifactId,
+    expected_publication_revision: Option<u64>,
+    publication_revision: u64,
+    published_at: OffsetDateTime,
+    m60_evidence_set_digest: Sha256,
+    m60_revision_count: u8,
+}
+
+impl ProcedurePublicationRecoveryRecord {
+    /// Projects one service-minted commit into a checked durable record.
+    ///
+    /// The supplied draft must reconstruct the exact artifact, state and
+    /// receipt already sealed in `commit`; otherwise no record is returned.
+    pub fn from_commit(
+        commit: &ProcedurePublicationCommit,
+        draft: &ProcedureDraft,
+    ) -> Result<Self, ProcedurePublicationRepositoryError> {
+        let receipt = commit.receipt();
+        let anchor = ProcedurePublicationRecoveryAnchor::from_receipt(draft, receipt)?;
+        let (record, reconstructed) = Self::try_recover(
+            draft,
+            &anchor,
+            draft.source_revision().revision_id().clone(),
+            receipt.draft_digest().clone(),
+            receipt.review_id().clone(),
+            receipt.reviewer().clone(),
+            receipt.reviewed_at(),
+            receipt.receipt_id().clone(),
+            receipt.artifact_id().clone(),
+            receipt.expected_publication_revision(),
+            receipt.publication_revision(),
+            receipt.published_at(),
+            receipt.m60_evidence_set_digest().clone(),
+            receipt.m60_revision_count(),
+        )?;
+        if reconstructed.expected_publication_revision() != commit.expected_publication_revision()
+            || reconstructed.artifact() != commit.artifact()
+            || reconstructed.state() != commit.state()
+            || reconstructed.receipt() != commit.receipt()
+        {
+            return Err(ProcedurePublicationRepositoryError::StoredPublicationCorrupted);
+        }
+        Ok(record)
+    }
+
+    /// Reconstructs a service-equivalent sealed commit from one persisted
+    /// record and an exact checked draft, without consulting mutable M60 state.
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_recover(
+        draft: &ProcedureDraft,
+        anchor: &ProcedurePublicationRecoveryAnchor,
+        source_revision_id: SourceRevisionId,
+        draft_digest: Sha256,
+        review_id: ProcedureReviewId,
+        reviewer: ActorRef,
+        reviewed_at: OffsetDateTime,
+        receipt_id: ProcedurePublicationReceiptId,
+        artifact_id: ArtifactId,
+        expected_publication_revision: Option<u64>,
+        publication_revision: u64,
+        published_at: OffsetDateTime,
+        m60_evidence_set_digest: Sha256,
+        m60_revision_count: u8,
+    ) -> Result<(Self, ProcedurePublicationCommit), ProcedurePublicationRepositoryError> {
+        if source_revision_id != anchor.source_revision_id
+            || draft_digest != anchor.draft_digest
+            || reviewer != anchor.reviewer
+            || reviewed_at != anchor.reviewed_at
+            || published_at != anchor.published_at
+            || m60_evidence_set_digest != anchor.m60_evidence_set_digest
+            || m60_revision_count != anchor.m60_revision_count
+            || &source_revision_id != draft.source_revision().revision_id()
+            || &draft_digest != draft.draft_digest()
+            || m60_revision_count == 0
+            || usize::from(m60_revision_count) != draft.evidence().evidence_assessments().len()
+            || reviewed_at < draft.evidence().known_at()
+            || reviewed_at < draft.evidence().last_verified_at()
+            || published_at < reviewed_at
+        {
+            return Err(ProcedurePublicationRepositoryError::StoredPublicationCorrupted);
+        }
+        let next_revision = expected_publication_revision
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or(ProcedurePublicationRepositoryError::StoredPublicationCorrupted)?;
+        if publication_revision != next_revision {
+            return Err(ProcedurePublicationRepositoryError::StoredPublicationCorrupted);
+        }
+
+        let approval =
+            ProcedureReviewApproval::new(draft_digest.clone(), reviewer.clone(), reviewed_at);
+        if approval.review_id() != &review_id {
+            return Err(ProcedurePublicationRepositoryError::StoredPublicationCorrupted);
+        }
+        let expected_receipt_id = derive_publication_receipt_id(
+            &draft_digest,
+            &review_id,
+            expected_publication_revision,
+            publication_revision,
+            published_at,
+        );
+        if expected_receipt_id != receipt_id {
+            return Err(ProcedurePublicationRepositoryError::StoredPublicationCorrupted);
+        }
+        let expected_artifact_id = derive_artifact_id(
+            &draft_digest,
+            &review_id,
+            &m60_evidence_set_digest,
+            publication_revision,
+            published_at,
+        );
+        if expected_artifact_id != artifact_id {
+            return Err(ProcedurePublicationRepositoryError::StoredPublicationCorrupted);
+        }
+
+        let (
+            procedure_id,
+            title,
+            audience_tags,
+            board_policy,
+            prerequisites,
+            ordered_steps,
+            deadlines,
+            effective_interval,
+            entry_points,
+            contacts,
+            evidence,
+        ) = draft.clone().into_artifact_parts();
+        let artifact = ProcedureArtifact::new(
+            artifact_id.clone(),
+            procedure_id.clone(),
+            title,
+            audience_tags,
+            board_policy,
+            prerequisites,
+            ordered_steps,
+            deadlines,
+            effective_interval,
+            entry_points,
+            contacts,
+            evidence,
+            published_at,
+        )
+        .map_err(|_| ProcedurePublicationRepositoryError::StoredPublicationCorrupted)?;
+        let state = ProcedurePublicationState::published(
+            procedure_id.clone(),
+            artifact_id.clone(),
+            publication_revision,
+        );
+        let receipt = ProcedurePublicationReceipt {
+            receipt_id: receipt_id.clone(),
+            procedure_id,
+            artifact_id: artifact_id.clone(),
+            draft_digest: draft_digest.clone(),
+            review_id: review_id.clone(),
+            reviewer: reviewer.clone(),
+            expected_publication_revision,
+            publication_revision,
+            reviewed_at,
+            published_at,
+            m60_evidence_set_digest: m60_evidence_set_digest.clone(),
+            m60_revision_count,
+        };
+        let commit = ProcedurePublicationCommit::try_new(
+            expected_publication_revision,
+            artifact,
+            state,
+            receipt,
+        )?;
+        let record = Self {
+            source_revision_id,
+            draft_digest,
+            review_id,
+            reviewer,
+            reviewed_at,
+            receipt_id,
+            artifact_id,
+            expected_publication_revision,
+            publication_revision,
+            published_at,
+            m60_evidence_set_digest,
+            m60_revision_count,
+        };
+        Ok((record, commit))
+    }
+
+    #[must_use]
+    pub fn source_revision_id(&self) -> &SourceRevisionId {
+        &self.source_revision_id
+    }
+
+    #[must_use]
+    pub fn draft_digest(&self) -> &Sha256 {
+        &self.draft_digest
+    }
+
+    #[must_use]
+    pub fn review_id(&self) -> &ProcedureReviewId {
+        &self.review_id
+    }
+
+    #[must_use]
+    pub fn reviewer(&self) -> &ActorRef {
+        &self.reviewer
+    }
+
+    #[must_use]
+    pub fn reviewed_at(&self) -> OffsetDateTime {
+        self.reviewed_at
+    }
+
+    #[must_use]
+    pub fn receipt_id(&self) -> &ProcedurePublicationReceiptId {
+        &self.receipt_id
+    }
+
+    #[must_use]
+    pub fn artifact_id(&self) -> &ArtifactId {
+        &self.artifact_id
+    }
+
+    #[must_use]
+    pub const fn expected_publication_revision(&self) -> Option<u64> {
+        self.expected_publication_revision
+    }
+
+    #[must_use]
+    pub const fn publication_revision(&self) -> u64 {
+        self.publication_revision
+    }
+
+    #[must_use]
+    pub fn published_at(&self) -> OffsetDateTime {
+        self.published_at
+    }
+
+    #[must_use]
+    pub fn m60_evidence_set_digest(&self) -> &Sha256 {
+        &self.m60_evidence_set_digest
+    }
+
+    #[must_use]
+    pub const fn m60_revision_count(&self) -> u8 {
+        self.m60_revision_count
+    }
+}
+
 /// Atomic publication repository port.
 pub trait ProcedurePublicationRepository: AffairsRepository + Send + Sync {
     fn publication_revision(&self, procedure_id: &ProcedureId) -> Option<u64>;
@@ -480,6 +791,8 @@ pub enum ProcedurePublicationRepositoryError {
     StoredPublicationCorrupted,
     ProcedureCapacityExceeded,
     ArtifactCapacityExceeded,
+    PersistenceUnavailable,
+    PersistenceLimitExceeded,
     FailureInjected,
 }
 
@@ -544,17 +857,24 @@ impl InMemoryPublishedAffairsRepository {
 }
 
 impl AffairsRepository for InMemoryPublishedAffairsRepository {
-    fn find_current_artifact(&self, procedure_id: &ProcedureId) -> Option<ProcedureArtifact> {
-        let state = self.publication_states.get(procedure_id)?;
-        let artifact_id = state.current_artifact_id()?;
-        self.artifacts.get(artifact_id).cloned()
+    fn find_current_artifact(
+        &self,
+        procedure_id: &ProcedureId,
+    ) -> Result<Option<ProcedureArtifact>, AffairsRepositoryReadError> {
+        let Some(state) = self.publication_states.get(procedure_id) else {
+            return Ok(None);
+        };
+        let Some(artifact_id) = state.current_artifact_id() else {
+            return Ok(None);
+        };
+        Ok(self.artifacts.get(artifact_id).cloned())
     }
 
     fn find_publication_state(
         &self,
         procedure_id: &ProcedureId,
-    ) -> Option<ProcedurePublicationState> {
-        self.publication_states.get(procedure_id).cloned()
+    ) -> Result<Option<ProcedurePublicationState>, AffairsRepositoryReadError> {
+        Ok(self.publication_states.get(procedure_id).cloned())
     }
 }
 

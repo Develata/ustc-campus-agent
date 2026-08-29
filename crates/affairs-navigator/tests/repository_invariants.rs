@@ -46,10 +46,10 @@ fn rejects_procedure_mismatch_without_mutation() {
     );
     let a = value::ProcedureId::parse("proc:a").unwrap();
     let b = value::ProcedureId::parse("proc:b").unwrap();
-    assert!(repo.find_publication_state(&a).is_none());
-    assert!(repo.find_publication_state(&b).is_none());
-    assert!(repo.find_current_artifact(&a).is_none());
-    assert!(repo.find_current_artifact(&b).is_none());
+    assert!(repo.find_publication_state(&a).unwrap().is_none());
+    assert!(repo.find_publication_state(&b).unwrap().is_none());
+    assert!(repo.find_current_artifact(&a).unwrap().is_none());
+    assert!(repo.find_current_artifact(&b).unwrap().is_none());
 }
 
 #[test]
@@ -66,8 +66,8 @@ fn rejects_current_artifact_mismatch_without_mutation() {
         repository::RepositorySeedError::CurrentArtifactIdMismatch
     );
     let id = value::ProcedureId::parse("proc:a").unwrap();
-    assert!(repo.find_publication_state(&id).is_none());
-    assert!(repo.find_current_artifact(&id).is_none());
+    assert!(repo.find_publication_state(&id).unwrap().is_none());
+    assert!(repo.find_current_artifact(&id).unwrap().is_none());
 }
 
 #[test]
@@ -96,10 +96,11 @@ fn rejects_duplicate_identities_without_overwriting_the_first_pair() {
     );
 
     let id = value::ProcedureId::parse("proc:a").unwrap();
-    let retained = repo.find_current_artifact(&id).unwrap();
+    let retained = repo.find_current_artifact(&id).unwrap().unwrap();
     assert_eq!(retained.artifact_id().as_str(), "artifact:a:v1");
     assert_eq!(
         repo.find_publication_state(&id)
+            .unwrap()
             .unwrap()
             .current_artifact_id()
             .unwrap()

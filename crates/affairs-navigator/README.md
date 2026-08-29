@@ -1,13 +1,14 @@
 # M71 Affairs Navigator — bounded query and publication foundation
 
-Status: `partial-evidence`; **not** a complete `PROC-011` product path.
+Status: `partial-evidence`; the sibling daemon now closes the bounded `PROC-011` core-demo path, not a production publication system.
 
 This crate implements the accepted M71 query algebra plus a bounded
 `DemoReviewed` draft → administrator review → atomic publication foundation.
-It is retained supporting code for the three-plugin MVP, but it does not claim
-production persistence or M00 administrator authentication. The sibling
-`ustc-agentd` composition now publishes a controlled fixture through this
-foundation and queries the same in-memory repository through M10/Web.
+The crate remains storage-neutral. The sibling `ustc-agentd` composition now
+admits a fixed administrator command through M10 → M00 → durable control
+evidence → M71, persists checked recovery records in an app-private repository,
+and queries the recovered publication through the ordinary M10/Market/Harness/
+ToolGateway path plus loopback HTTP/Web.
 
 ## Implemented
 
@@ -34,6 +35,10 @@ foundation and queries the same in-memory repository through M10/Web.
 9. The original fixture-seeded `InMemoryAffairsRepository` remains only for
    query-kernel tests; the retained `ustc-agentd` path uses the publication
    repository for both startup publication and subsequent lookup.
+10. `ProcedurePublicationRecoveryAnchor` and
+    `ProcedurePublicationRecoveryRecord` reconstruct sealed commits only after
+    draft/reviewer/time/M60 authority, deterministic IDs, CAS revisions and
+    chronology agree. These public values contain no Serde or storage policy.
 
 ## Authority and dependency boundary
 
@@ -54,15 +59,15 @@ later changes; a failed/uncommitted attempt always obtains a fresh M60 decision.
 - No live USTC retrieval, parser, source approval or legal permission claim.
 - `DemoReviewed` snapshots are non-personal demo evidence, not real-time official
   publication.
-- No M00 administrator authentication/authorization composition yet.
-- No durable source/publication/profile store or restart recovery yet.
-- No M00-authorized operator publication command/API or Agent/ToolGateway route;
-  current application/Web composition publishes only during controlled fixture
-  bootstrap.
+- No production SSO, remote administrator authentication, public network
+  publication API or generic operation registry. The retained adapter is a
+  loopback-only fixed `DemoReviewed` administrator command.
+- No production source/profile database. The daemon's bounded canonical-JSON
+  repository owns only the exact fixture draft/review/publication recovery set.
 - No supersede/archive command journal or structured-search product route yet.
 - The M60 fixture adapter is test evidence, not production M60 authority.
-- `PROC-011` remains non-pass until M00-authorized publication, durable restart
-  and the remaining temporal/failure assertions exist.
+- Bounded `PROC-011` does not close Android, inbound MCP, SSE, Market artifact
+  switching or full client-protocol version-skew acceptance.
 
 ## Gate commands
 

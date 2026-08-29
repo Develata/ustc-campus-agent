@@ -62,8 +62,8 @@ The thin peer clients display/serialize server projections and submit intent thr
 
 | ID | Module | Owns | Current evidence |
 |---|---|---|---|
-| `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity/session/request-context kernels, bounded B4a session ports plus secure durable DemoReviewed current-session read/bootstrap vendor, and bounded B4b redacted control-event/error plus journal-port kernel; B5/production evidence persistence/SSO remain planned |
-| `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | framework-neutral client-protocol/application-ingress carriers plus one loopback three-plugin JSON/Web composition; public HTTP/Dioxus/stream host planned |
+| `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity/session/request-context kernels, bounded B4a durable DemoReviewed current-session read and B4b redacted evidence ports; one Affairs B5 composition persists admitted-request evidence before M71, while production evidence service/SSO remain planned |
+| `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | framework-neutral query carriers plus one typed internal `affairs.publish` command, loopback JSON/Web admin projection and operator CLI caller; production auth/Dioxus/stream host planned |
 | `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | typed catalog/capability + bounded installation/grant/update domains + bounded transaction-current authority assembly + pure resolver/fixtures |
 | `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel |
 | `M40` | Tool Gateway/Execution | exact tool correlation, authorization order, intent/executor/receipt/result | protocol values + fake conformance |
@@ -71,10 +71,10 @@ The thin peer clients display/serialize server projections and submit intent thr
 | `M51` | MCP Binding/Executor | reviewed binding/discovery/schema drift and MCP execution | planned |
 | `M60` | Campus Trust/Source | source policy, immutable revision, provenance, conflict, freshness, baseline | bounded registry plus canonical-URL-bound, deterministic-ID `DemoReviewed` revision values and an M60-owned revision-health type; retrieval/parser/durable baseline remains planned |
 | `M70` | ChangeRadar | semantic change review/event/feed | exact-source-pinned board policy, typed semantic diff, administrator approve/reject receipts, coherent M60 verification, exactly-once in-memory publication and deterministic Atom now have one fixture-backed current-Market/Harness/ToolGateway/M10/loopback-Web path; M00-authorized administration and durable restart remain planned |
-| `M71` | Affairs Navigator | reviewed procedure tree/artifacts/search | hardened procedure/artifact/policy/freshness/conflict kernel plus fixture-backed exact stable-ID composition; real source/admin/Web lifecycle planned |
+| `M71` | Affairs Navigator | reviewed procedure tree/artifacts/search | bounded `PROC-011`: checked DemoReviewed draft/review/publication, M00-authorized fixed administrator command, strict durable recovery records/process restart and exact stable-ID query read-back; production source/generic admin/supersession/search remain planned |
 | `M72` | Opportunity Graph | reviewed opportunities, private profiles, qualification/planning | offline Course Planning spike |
-| `M80` | Client Core and Interaction Shells | framework-neutral client behavior and peer Dioxus Web/Android, `ustc-agent` and public-read-first inbound MCP adapters; later admitted Windows | bounded client-core and real ordinary-user fixture-loopback Affairs CLI evidence; production auth/HTTP/stream, inbound MCP and Dioxus peers planned |
-| `M90` | Infrastructure/Operations | ports for storage/journal/evidence/config/secrets/HTTP/telemetry and Docker Compose deployment | CI/checker only |
+| `M80` | Client Core and Interaction Shells | framework-neutral client behavior and peer Dioxus Web/Android, `ustc-agent` and public-read-first inbound MCP adapters; later admitted Windows | ordinary-user Affairs CLI plus bounded loopback HTTP/Web and separate `ustc-agentctl` fixed administrator demo caller; production auth/stream, inbound MCP and Dioxus peers planned |
+| `M90` | Infrastructure/Operations | ports for storage/journal/evidence/config/secrets/HTTP/telemetry and Docker Compose deployment | CI/checker plus app-private secure canonical-JSON stores for bounded session/evidence/Affairs publication/Opportunity fixture state; no production database claim |
 
 “Current evidence” is not module completion. See the module blueprint exit gate and acceptance matrix.
 

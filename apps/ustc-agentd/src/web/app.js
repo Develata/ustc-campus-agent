@@ -9,6 +9,10 @@ const errorMessage = document.querySelector("#error-message");
 const radarButton = document.querySelector("#radar-load");
 const radarStatus = document.querySelector("#radar-status");
 const radarResult = document.querySelector("#radar-result");
+const publicationRefresh = document.querySelector("#publication-refresh");
+const publicationConfirm = document.querySelector("#publication-confirm");
+const publicationPublish = document.querySelector("#publication-publish");
+const publicationStatus = document.querySelector("#publication-status");
 const opportunityConsent = document.querySelector("#opportunity-consent");
 const opportunityCreate = document.querySelector("#opportunity-create");
 const opportunityView = document.querySelector("#opportunity-view");
@@ -288,6 +292,74 @@ async function lookup() {
   } finally {
     submitButton.disabled = false;
     submitButton.textContent = "查看流程";
+  }
+}
+
+async function requestPublication(method, body) {
+  const response = await fetch("/api/v1/demo/administrator/affairs/publication", {
+    method,
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-USTC-Agent-Administrator-Demo": "confirm-v1"
+    },
+    body,
+    cache: "no-store"
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    const detail = payload?.outcome?.error ?? payload?.error ?? `HTTP ${response.status}`;
+    throw new Error(detail);
+  }
+  return payload;
+}
+
+function renderPublicationStatus(payload) {
+  if (payload?.schema !== "ustc-affairs-publication-status/v1") {
+    throw new Error("publication status schema 不匹配");
+  }
+  text(document.querySelector("#publication-revision"), payload.publication_revision);
+  text(document.querySelector("#publication-receipt"), payload.publication_receipt_id);
+  text(document.querySelector("#publication-evidence-count"), payload.control_evidence_event_count);
+  publicationStatus.textContent = `已恢复 durable publication revision ${payload.publication_revision ?? "unknown"}。`;
+}
+
+async function loadPublicationStatus() {
+  publicationRefresh.disabled = true;
+  publicationStatus.textContent = "正在读取 durable publication 与 M00 control evidence 状态…";
+  try {
+    renderPublicationStatus(await requestPublication("GET"));
+  } catch (error) {
+    publicationStatus.textContent = `状态读取失败：${error instanceof Error ? error.message : "未知错误"}`;
+  } finally {
+    publicationRefresh.disabled = false;
+  }
+}
+
+async function publishAffairsDemo() {
+  if (!publicationConfirm.checked) {
+    publicationStatus.textContent = "必须先显式确认固定 demo publication。";
+    return;
+  }
+  publicationPublish.disabled = true;
+  publicationStatus.textContent = "正在执行 M10 → M00 admission/evidence → M71 publication…";
+  try {
+    const payload = await requestPublication(
+      "POST",
+      JSON.stringify({ confirm_publish: true })
+    );
+    if (
+      payload?.schema !== "ustc-affairs-publication-response/v1" ||
+      payload?.outcome?.kind !== "published"
+    ) {
+      throw new Error("publication response schema 无法呈现");
+    }
+    publicationStatus.textContent = `M71 已返回 revision ${payload.outcome.publication_revision}；正在回读 durable state…`;
+    await loadPublicationStatus();
+  } catch (error) {
+    publicationStatus.textContent = `发布失败：${error instanceof Error ? error.message : "未知错误"}`;
+  } finally {
+    publicationPublish.disabled = !publicationConfirm.checked;
   }
 }
 
@@ -652,6 +724,16 @@ async function deleteOpportunityProfile() {
   }
 }
 
+publicationConfirm.addEventListener("change", () => {
+  publicationPublish.disabled = !publicationConfirm.checked;
+});
+publicationRefresh.addEventListener("click", () => {
+  void loadPublicationStatus();
+});
+publicationPublish.addEventListener("click", () => {
+  void publishAffairsDemo();
+});
+
 opportunityCreate.addEventListener("click", () => {
   void createOpportunityProfile();
 });
@@ -688,4 +770,5 @@ if (opportunityProfileId) {
 }
 
 void lookup();
+void loadPublicationStatus();
 void loadChangeFeed();

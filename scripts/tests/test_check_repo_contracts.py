@@ -10064,7 +10064,7 @@ class PlatformSessionPortContractTests(unittest.TestCase):
     def test_session_port_status_projection_drift_fails_closed(self) -> None:
         self.replace_once(
             "docs/overview/architecture.md",
-            "B4b redacted control-event/error",
+            "B4b redacted evidence ports",
             "B4b control evidence removed",
         )
         self.assert_issue("projection missing")
@@ -10190,8 +10190,8 @@ class PlatformControlEvidenceContractTests(unittest.TestCase):
     def test_control_evidence_acceptance_status_rollback_fails_closed(self) -> None:
         self.replace_once(
             "docs/acceptance/matrix.tsv",
-            "\tpr\timplemented\tbackend\nMARKET-001",
-            "\tpr\tplanned\tbackend\nMARKET-001",
+            "\tpr\timplemented\tbackend\nAUTH-023",
+            "\tpr\tplanned\tbackend\nAUTH-023",
         )
         self.assert_issue("AUTH-022 acceptance row drift")
 

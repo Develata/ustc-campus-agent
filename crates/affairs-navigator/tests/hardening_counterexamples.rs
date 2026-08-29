@@ -291,14 +291,18 @@ fn service_fails_closed_on_incoherent_repository_pairing() {
         fn find_current_artifact(
             &self,
             _procedure_id: &value::ProcedureId,
-        ) -> Option<artifact::ProcedureArtifact> {
-            Some(self.artifact.clone())
+        ) -> Result<Option<artifact::ProcedureArtifact>, repository::AffairsRepositoryReadError>
+        {
+            Ok(Some(self.artifact.clone()))
         }
         fn find_publication_state(
             &self,
             _procedure_id: &value::ProcedureId,
-        ) -> Option<artifact::ProcedurePublicationState> {
-            Some(self.state.clone())
+        ) -> Result<
+            Option<artifact::ProcedurePublicationState>,
+            repository::AffairsRepositoryReadError,
+        > {
+            Ok(Some(self.state.clone()))
         }
     }
 

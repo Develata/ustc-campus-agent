@@ -148,6 +148,35 @@
       </div>
     </article>
 
+    <section class="opportunity-board" aria-labelledby="publication-admin-title">
+      <div class="radar-heading">
+        <div>
+          <p class="eyebrow">AFFAIRS PUBLICATION · ADMINISTRATOR DEMO</p>
+          <h2 id="publication-admin-title">显式确认后，才进入 M10 → M00/evidence → M71。</h2>
+          <p>此面板只调用本机 loopback 的固定 DemoReviewed 管理员命令；自定义请求头阻断普通跨站表单，M00 的 durable session、grant、permission 与 evidence 仍是发布 authority。它不是生产 SSO 或通用内容管理后台。</p>
+        </div>
+        <div class="radar-actions">
+          <button id="publication-refresh" type="button">读取持久状态</button>
+        </div>
+      </div>
+      <div class="opportunity-consent">
+        <label class="consent-check" for="publication-confirm">
+          <input id="publication-confirm" type="checkbox">
+          <span>我确认执行固定的 DemoReviewed revision publish；重复提交必须返回同一 receipt。</span>
+        </label>
+        <div class="opportunity-actions">
+          <button id="publication-publish" type="button" disabled>发布 demo revision</button>
+        </div>
+      </div>
+      <p id="publication-status" class="status" role="status" aria-live="polite">等待读取 durable publication state…</p>
+      <dl class="radar-evidence">
+        <div><dt>Publication revision</dt><dd id="publication-revision">—</dd></div>
+        <div><dt>Publication receipt</dt><dd id="publication-receipt">—</dd></div>
+        <div><dt>Control evidence events</dt><dd id="publication-evidence-count">—</dd></div>
+        <div><dt>Recovery mode</dt><dd>strict reopen · canonical JSON</dd></div>
+      </dl>
+    </section>
+
     <section class="radar-board" aria-labelledby="radar-title">
       <div class="radar-heading">
         <div>

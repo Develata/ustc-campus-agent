@@ -9,8 +9,61 @@ use ustc_campus_agent_core::source_registry::{
 };
 use ustc_campus_agent_core::source_revision::{
     EffectiveInterval as M60EffectiveInterval, NormalizedSnapshotId, ParserIdentity, RawSnapshotId,
-    RevisionSha256, RevisionTimestamp, SourceRevision, SourceRevisionHealth,
+    RevisionSha256, RevisionTimestamp, SourceRevision, SourceRevisionHealth, SourceRevisionId,
 };
+
+#[derive(Debug)]
+struct CapturingRepository {
+    inner: InMemoryPublishedAffairsRepository,
+    commits: Vec<ProcedurePublicationCommit>,
+}
+
+impl CapturingRepository {
+    fn new() -> Self {
+        Self {
+            inner: InMemoryPublishedAffairsRepository::new(),
+            commits: Vec::new(),
+        }
+    }
+}
+
+impl AffairsRepository for CapturingRepository {
+    fn find_current_artifact(
+        &self,
+        procedure_id: &ProcedureId,
+    ) -> Result<Option<ProcedureArtifact>, AffairsRepositoryReadError> {
+        self.inner.find_current_artifact(procedure_id)
+    }
+
+    fn find_publication_state(
+        &self,
+        procedure_id: &ProcedureId,
+    ) -> Result<Option<ProcedurePublicationState>, AffairsRepositoryReadError> {
+        self.inner.find_publication_state(procedure_id)
+    }
+}
+
+impl ProcedurePublicationRepository for CapturingRepository {
+    fn publication_revision(&self, procedure_id: &ProcedureId) -> Option<u64> {
+        self.inner.publication_revision(procedure_id)
+    }
+
+    fn find_publication_replay(
+        &self,
+        receipt_id: &ProcedurePublicationReceiptId,
+    ) -> Result<Option<ProcedurePublicationReceipt>, ProcedurePublicationRepositoryError> {
+        self.inner.find_publication_replay(receipt_id)
+    }
+
+    fn apply_publication(
+        &mut self,
+        commit: ProcedurePublicationCommit,
+    ) -> Result<(), ProcedurePublicationRepositoryError> {
+        self.inner.apply_publication(commit.clone())?;
+        self.commits.push(commit);
+        Ok(())
+    }
+}
 
 fn source_revision(number: u8, url_suffix: &str) -> SourceRevision {
     let mut raw = [0_u8; 32];
@@ -125,6 +178,163 @@ fn approval(draft: &ProcedureDraft, reviewed_at: i64) -> ProcedureReviewApproval
     )
 }
 
+#[derive(Clone)]
+struct RecoveryFields {
+    source_revision_id: SourceRevisionId,
+    draft_digest: Sha256,
+    review_id: ProcedureReviewId,
+    reviewer: ActorRef,
+    reviewed_at: time::OffsetDateTime,
+    receipt_id: ProcedurePublicationReceiptId,
+    artifact_id: ArtifactId,
+    expected_publication_revision: Option<u64>,
+    publication_revision: u64,
+    published_at: time::OffsetDateTime,
+    m60_evidence_set_digest: Sha256,
+    m60_revision_count: u8,
+}
+
+impl RecoveryFields {
+    fn from_record(record: &ProcedurePublicationRecoveryRecord) -> Self {
+        Self {
+            source_revision_id: record.source_revision_id().clone(),
+            draft_digest: record.draft_digest().clone(),
+            review_id: record.review_id().clone(),
+            reviewer: record.reviewer().clone(),
+            reviewed_at: record.reviewed_at(),
+            receipt_id: record.receipt_id().clone(),
+            artifact_id: record.artifact_id().clone(),
+            expected_publication_revision: record.expected_publication_revision(),
+            publication_revision: record.publication_revision(),
+            published_at: record.published_at(),
+            m60_evidence_set_digest: record.m60_evidence_set_digest().clone(),
+            m60_revision_count: record.m60_revision_count(),
+        }
+    }
+
+    fn recover(
+        &self,
+        draft: &ProcedureDraft,
+        anchor: &ProcedurePublicationRecoveryAnchor,
+    ) -> Result<
+        (
+            ProcedurePublicationRecoveryRecord,
+            ProcedurePublicationCommit,
+        ),
+        ProcedurePublicationRepositoryError,
+    > {
+        ProcedurePublicationRecoveryRecord::try_recover(
+            draft,
+            anchor,
+            self.source_revision_id.clone(),
+            self.draft_digest.clone(),
+            self.review_id.clone(),
+            self.reviewer.clone(),
+            self.reviewed_at,
+            self.receipt_id.clone(),
+            self.artifact_id.clone(),
+            self.expected_publication_revision,
+            self.publication_revision,
+            self.published_at,
+            self.m60_evidence_set_digest.clone(),
+            self.m60_revision_count,
+        )
+    }
+}
+
+fn committed_fixture() -> (
+    ProcedureDraft,
+    ProcedurePublicationReceipt,
+    ProcedurePublicationCommit,
+) {
+    let revision = source_revision(1, "registration-v1");
+    let draft = draft_candidate(revision.clone(), UncertaintyState::None).unwrap();
+    let review = approval(&draft, 30);
+    let mut m60 = m60_fixture::M60FixtureAdapter::new("verifier:demo", 1).unwrap();
+    m60.store(local_ref(&revision));
+    let mut repository = CapturingRepository::new();
+    let receipt = ProcedurePublicationService::new(&mut repository, &m60)
+        .publish(draft.clone(), review, t(40), None)
+        .unwrap();
+    (draft, receipt, repository.commits.pop().unwrap())
+}
+
+#[test]
+fn recovery_record_round_trip_reconstructs_exact_commit_without_m60() {
+    let (draft, receipt, commit) = committed_fixture();
+    let anchor = ProcedurePublicationRecoveryAnchor::from_receipt(&draft, &receipt).unwrap();
+    let record = ProcedurePublicationRecoveryRecord::from_commit(&commit, &draft).unwrap();
+    let (recovered_record, recovered_commit) = RecoveryFields::from_record(&record)
+        .recover(&draft, &anchor)
+        .unwrap();
+    assert_eq!(recovered_record, record);
+    assert_eq!(recovered_commit.artifact(), commit.artifact());
+    assert_eq!(recovered_commit.state(), commit.state());
+    assert_eq!(recovered_commit.receipt(), commit.receipt());
+
+    let mut rebuilt = InMemoryPublishedAffairsRepository::new();
+    rebuilt.apply_publication(recovered_commit).unwrap();
+    assert_eq!(
+        rebuilt
+            .find_publication_replay(receipt.receipt_id())
+            .unwrap(),
+        Some(receipt)
+    );
+}
+
+#[test]
+fn recovery_record_rejects_each_identity_revision_time_and_digest_mismatch() {
+    let (draft, receipt, commit) = committed_fixture();
+    let anchor = ProcedurePublicationRecoveryAnchor::from_receipt(&draft, &receipt).unwrap();
+    let record = ProcedurePublicationRecoveryRecord::from_commit(&commit, &draft).unwrap();
+    let base = RecoveryFields::from_record(&record);
+    let mut corruptions = Vec::new();
+
+    let mut fields = base.clone();
+    fields.source_revision_id = source_revision(2, "other").revision_id().clone();
+    corruptions.push(fields);
+    let mut fields = base.clone();
+    fields.draft_digest = Sha256::new(format!("sha256:{}", "0".repeat(64))).unwrap();
+    corruptions.push(fields);
+    let mut fields = base.clone();
+    fields.review_id = ProcedureReviewId::parse("review:corrupt").unwrap();
+    corruptions.push(fields);
+    let mut fields = base.clone();
+    fields.reviewer = ActorRef::parse("actor:other").unwrap();
+    corruptions.push(fields);
+    let mut fields = base.clone();
+    fields.reviewed_at = t(31);
+    corruptions.push(fields);
+    let mut fields = base.clone();
+    fields.receipt_id = ProcedurePublicationReceiptId::parse("receipt:corrupt").unwrap();
+    corruptions.push(fields);
+    let mut fields = base.clone();
+    fields.artifact_id = ArtifactId::parse("artifact:corrupt").unwrap();
+    corruptions.push(fields);
+    let mut fields = base.clone();
+    fields.expected_publication_revision = Some(1);
+    corruptions.push(fields);
+    let mut fields = base.clone();
+    fields.publication_revision = 2;
+    corruptions.push(fields);
+    let mut fields = base.clone();
+    fields.published_at = t(41);
+    corruptions.push(fields);
+    let mut fields = base.clone();
+    fields.m60_evidence_set_digest = Sha256::new(format!("sha256:{}", "f".repeat(64))).unwrap();
+    corruptions.push(fields);
+    let mut fields = base;
+    fields.m60_revision_count = 2;
+    corruptions.push(fields);
+
+    for fields in corruptions {
+        assert_eq!(
+            fields.recover(&draft, &anchor).unwrap_err(),
+            ProcedurePublicationRepositoryError::StoredPublicationCorrupted
+        );
+    }
+}
+
 #[test]
 fn reviewed_draft_publishes_atomically_and_retry_is_idempotent() {
     let revision = source_revision(1, "registration-v1");
@@ -157,12 +367,14 @@ fn reviewed_draft_publishes_atomically_and_retry_is_idempotent() {
     assert_eq!(repository.receipt_count(), 1);
     let state = repository
         .find_publication_state(receipt.procedure_id())
+        .unwrap()
         .unwrap();
     assert_eq!(state.publication_revision(), 1);
     assert_eq!(state.current_artifact_id(), Some(receipt.artifact_id()));
     assert_eq!(
         repository
             .find_current_artifact(receipt.procedure_id())
+            .unwrap()
             .unwrap()
             .artifact_id(),
         receipt.artifact_id()

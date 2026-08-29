@@ -4,10 +4,10 @@
 
 - `Module ID`: `M71`
 - `Package ID`: `ustc.affairs-navigator`
-- `Status`: Accepted blueprint with bounded executable query kernel plus exact M60 `DemoReviewed` draft import, one coherent M60-owned publication decision over source health and retained evidence, digest-bound administrator approval, bounded atomic publication and same-repository M10/Web fixture composition evidence; M00 authorization and durable restart remain planned
+- `Status`: Accepted blueprint with bounded `PROC-011` core-demo evidence: M00-authorized fixed administrator publication, durable control evidence, checked M71 recovery records, strict process-restart recovery and separate Market/Harness/ToolGateway ordinary query read-back
 - `Implementation State`: `partial-evidence`
 - `Version`: `m71-affairs-navigator/v0`
-- `Last Review`: `2026-08-27`
+- `Last Review`: `2026-08-29`
 - `Primary code area`: `crates/affairs-navigator/`, `plugins/first-party/affairs-navigator/` and the bounded composition fixture under `apps/ustc-agentd/`
 
 ## 1. Purpose
@@ -18,9 +18,9 @@ Its default truth path is exact/structured lookup over reviewed material, not fr
 
 ### Current bounded evidence
 
-`crates/affairs-navigator` retains checked stable procedure/artifact/source identities, typed drafts and artifacts, board-policy validation, ordered conditions/steps/time/entry projections, freshness/conflict/uncertainty outcomes and deterministic exact lookup. The publication foundation imports the exact M60-owned immutable `DemoReviewed` revision, binds its canonical URL/revision/digests into the draft identity, rejects mismatched or unpublishable evidence, obtains source health and retained-evidence verification as one coherent M60-owned publication decision, binds administrator review to the exact draft digest and atomically commits deterministic artifact/receipt IDs with CAS, caps and replay tombstones. A committed tombstone owns exact replay after later revision or revocation; an uncommitted retry still requires fresh M60 authority. The bounded `ustc-agentd` composition now turns its source-grounded noncanonical fixture into that exact revision/draft/review/publication sequence, then serves M00-admitted M10 queries and the loopback Web projection from the same published repository.
+`crates/affairs-navigator` retains checked stable procedure/artifact/source identities, typed drafts and artifacts, board-policy validation, deterministic exact lookup and the storage-neutral publication kernel. Its recovery anchor/record reconstruct sealed commits only when fixture-bound source/draft/reviewer/time/M60 facts, deterministic review/artifact/receipt identities, CAS revisions and chronology agree. `apps/ustc-agentd` owns the private canonical-JSON adapter: one fixed administrator republish command follows `M10 → M00 admission → durable control evidence → M71`; persistence succeeds before the in-memory candidate becomes visible, and strict reopen rebuilds the M71 repository without turning Serde DTOs into domain authority. Ordinary reads remain on the separate M10 → Market → Harness → ToolGateway → M71 path. Real-process, CLI, HTTP and browser evidence recover revision 2, the exact receipt and one durable control event after restart.
 
-The fixture is proof infrastructure, not an approved production source. `DemoReviewed` is an honest non-personal demo label, not real-time official data or legal approval. The public approval constructor and startup fixture actor prove no M00 role by themselves; the M60 publication port owns the coherent source-health/evidence decision, while a future operator command must obtain current M00 authorization before publication. The atomic repository is bounded in-memory evidence only: no durable adapter/restart, real retrieval/source approval, operator publication API, supersession projection, broad structured search, production Dioxus Web or external campus transaction is claimed. `PROC-011` therefore remains planned until its M00-authorized administrator command, durable restart and remaining temporal/failure assertions are bound.
+The fixture is proof infrastructure, not an approved production source. `DemoReviewed` is an honest non-personal demo label, not real-time official data or legal approval. The loopback HTTP/Web and `ustc-agentctl affairs publish-demo` projection require explicit demo confirmation but are not production authentication; M00 still owns the retained demo administrator/session/grant/permission decision. No live retrieval/source approval, generic import editor, public-network API, supersession projection, broad structured search, production Dioxus Web or external campus transaction is claimed. Bounded `PROC-011` is implemented while those production and peer-client rows remain separate.
 
 ## 2. Non-goals
 

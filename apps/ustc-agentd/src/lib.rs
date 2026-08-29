@@ -10,8 +10,11 @@
 
 mod affairs_fixture;
 mod affairs_invocation;
+mod affairs_persistence;
+mod affairs_publication;
 mod change_fixture;
 mod change_invocation;
+mod m00_control_evidence;
 mod m00_session;
 mod opportunity_fixture;
 mod opportunity_invocation;
@@ -28,21 +31,28 @@ use std::time::{Duration, Instant};
 
 use affairs_fixture::{AffairsFixture, DurableIdempotencyStore, FixturePorts};
 use affairs_invocation::AffairsInvocationSpine;
-use affairs_navigator::AffairsGetService;
+use affairs_navigator::{AffairsGetService, ProcedurePublicationRepository};
+use affairs_publication::{AffairsPublicationCounters, FixtureAffairsPublicationPort};
 use change_fixture::ChangeRadarFixture;
 use change_invocation::ChangeInvocationSpine;
+use m00_control_evidence::{DurableControlEvidenceJournal, ensure_secure_state_parent};
 use m00_session::DurableCurrentSessionStore;
 use opportunity_fixture::OpportunityFixture;
 use opportunity_invocation::{OpportunityAuthorityStore, OpportunityInvocationSpine};
 use opportunity_persistence::DurableOpportunityProfileRepository;
 use ustc_campus_agent_application_ingress::{
-    FileRecordStore, M10ChangeFeedService, M10OpportunityService, M10Service,
+    AffairsPublicationCommand, AffairsPublicationOutcome, FileRecordStore,
+    M10AffairsPublicationService, M10ChangeFeedService, M10OpportunityService, M10Service,
+    affairs_publication_payload_digest,
 };
 use ustc_campus_agent_client_protocol::{
     ClientIntentDto, ClientResponseDto, SubmitAffairsGetDto, SubmitChangeFeedDto,
     SubmitOpportunityDto, ViewerAuthorizationDto, read_frame, write_frame,
 };
-use ustc_campus_agent_core::identity::{TenantId, UserId};
+use ustc_campus_agent_core::identity::{CorrelationId, RequestId, TenantId, UserId};
+use ustc_campus_agent_core::request_context::{
+    ActorReference, CapabilityDisposition, ClientProvenance, IdempotencyKey,
+};
 use ustc_campus_agent_core::session_port::{SessionHistoryReadPort, SessionRepositoryError};
 
 const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
@@ -60,7 +70,10 @@ pub struct AffairsComposition {
     opportunity: Option<OpportunityComposition>,
     store: FileRecordStore,
     idempotency: DurableIdempotencyStore,
+    control_evidence: DurableControlEvidenceJournal,
     sessions: DurableCurrentSessionStore,
+    publication_counters: AffairsPublicationCounters,
+    publication_capability: CapabilityDisposition,
     current_tenant_id: TenantId,
     current_user_id: UserId,
 }
@@ -82,6 +95,14 @@ fn map_session_store_error(error: SessionRepositoryError) -> String {
     .to_owned()
 }
 
+fn path_entry_exists(path: &Path) -> Result<bool, String> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err("state_path_metadata_unavailable".to_owned()),
+    }
+}
+
 impl AffairsComposition {
     /// Opens the composition from durable fixture, record-store and
     /// idempotency-store paths.
@@ -95,7 +116,21 @@ impl AffairsComposition {
         idempotency_path: &Path,
         session_store_path: &Path,
     ) -> Result<Self, String> {
-        let fixture = AffairsFixture::load(fixture_path)?;
+        ensure_secure_state_parent(idempotency_path)?;
+        let publication_path = idempotency_path.with_extension("affairs-publication.json");
+        let control_evidence_path = idempotency_path.with_extension("control-evidence.json");
+        let publication_bootstrap_is_fresh = !path_entry_exists(&publication_path)?
+            && !path_entry_exists(store_path)?
+            && !path_entry_exists(idempotency_path)?
+            && !path_entry_exists(session_store_path)?
+            && !path_entry_exists(&control_evidence_path)?;
+        let fixture = AffairsFixture::load(
+            fixture_path,
+            &publication_path,
+            publication_bootstrap_is_fresh,
+        )?;
+        let control_evidence = DurableControlEvidenceJournal::open(&control_evidence_path)
+            .map_err(|error| format!("control evidence open failed: {error:?}"))?;
         let store =
             FileRecordStore::open(store_path).map_err(|e| format!("store open failed: {e:?}"))?;
         let now_ms = fixture.now.as_unix_millis();
@@ -126,7 +161,10 @@ impl AffairsComposition {
             opportunity: None,
             store,
             idempotency,
+            control_evidence,
             sessions,
+            publication_counters: AffairsPublicationCounters::default(),
+            publication_capability: CapabilityDisposition::Enabled,
             current_tenant_id,
             current_user_id,
         })
@@ -258,6 +296,106 @@ impl AffairsComposition {
         );
         let now_ms = i64::try_from(self.fixture.now.as_unix_millis()).unwrap_or(i64::MAX);
         m10.submit(request, &mut ports, now_ms)
+    }
+
+    /// Publishes the reviewed demo procedure through M10 admission, durable
+    /// M00 control evidence, and the direct owning M71 application port.
+    #[must_use]
+    pub fn publish_demo_as_administrator(&mut self) -> AffairsPublicationOutcome {
+        let procedure_id = self.fixture.publication_draft.procedure_id().clone();
+        let payload_digest = affairs_publication_payload_digest(&procedure_id, Some(1));
+        let request_id = match RequestId::parse("request:affairs-publication-demo") {
+            Ok(value) => value,
+            Err(_) => return AffairsPublicationOutcome::InternalInvariant,
+        };
+        let correlation_id = match CorrelationId::parse("correlation:affairs-publication-demo") {
+            Ok(value) => value,
+            Err(_) => return AffairsPublicationOutcome::InternalInvariant,
+        };
+        let idempotency_key = match IdempotencyKey::parse("idempotency:affairs-publication-demo") {
+            Ok(value) => value,
+            Err(_) => return AffairsPublicationOutcome::InternalInvariant,
+        };
+        let provenance =
+            match ClientProvenance::new("ustc-agentd", "internal-affairs-administrator", "rust-v1")
+            {
+                Ok(value) => value,
+                Err(_) => return AffairsPublicationOutcome::InternalInvariant,
+            };
+        let command = AffairsPublicationCommand::new(
+            request_id,
+            ActorReference::Authenticated {
+                session_id: self.fixture.session.session_id().clone(),
+            },
+            correlation_id,
+            None,
+            Some(idempotency_key),
+            provenance,
+            payload_digest,
+            procedure_id,
+            Some(1),
+        );
+        let expected_tenant = self.fixture.publication_administrator_tenant_id.clone();
+        let expected_user = self.fixture.publication_administrator_user_id.clone();
+        let expected_session = self.fixture.publication_administrator_session_id.clone();
+        let mut ports = FixturePorts::new(
+            self.idempotency.clone(),
+            Arc::clone(&self.fixture.publication_descriptor),
+            self.fixture.now,
+            self.fixture.policy_snapshot_id.clone(),
+            self.sessions.clone(),
+        )
+        .with_capability(self.publication_capability);
+        let outcome = {
+            let mut publication = FixtureAffairsPublicationPort::new(
+                &mut self.fixture.repo,
+                &self.fixture.m60,
+                &self.fixture.publication_draft,
+                &self.fixture.publication_reviewer,
+                self.fixture.publication_reviewed_at,
+                self.fixture.publication_published_at,
+                &expected_tenant,
+                &expected_user,
+                &expected_session,
+                self.publication_counters.clone(),
+            );
+            let mut service =
+                M10AffairsPublicationService::new(&mut publication, &mut self.control_evidence);
+            service.submit(&command, &mut ports)
+        };
+        if let AffairsPublicationOutcome::Published(receipt) = &outcome {
+            self.fixture.publication_receipt = receipt.clone();
+        }
+        outcome
+    }
+
+    /// Configures only the M00 capability fact for the publication command.
+    pub fn set_publication_capability(&mut self, capability: CapabilityDisposition) {
+        self.publication_capability = capability;
+    }
+
+    /// Injects one bounded fixture-adapter persistence failure. This is a test
+    /// seam for proving durable-before-visible publication ordering.
+    #[doc(hidden)]
+    pub fn fail_next_publication_persistence_for_test(&mut self) {
+        self.fixture.repo.fail_next_persist();
+    }
+
+    #[must_use]
+    pub fn publication_application_call_count(&self) -> u64 {
+        self.publication_counters.applications()
+    }
+
+    #[must_use]
+    pub fn control_evidence_event_count(&self) -> usize {
+        self.control_evidence.event_count()
+    }
+
+    #[must_use]
+    pub fn current_publication_revision(&self) -> Option<u64> {
+        self.fixture
+            .repo
+            .publication_revision(self.fixture.publication_draft.procedure_id())
     }
 
     /// Handles one public ChangeRadar board query through M00, M10 and the

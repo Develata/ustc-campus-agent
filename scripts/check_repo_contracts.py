@@ -12481,7 +12481,10 @@ PLATFORM_SESSION_PORT_DOC_FRAGMENTS = {
         "platform-control-evidence/v0",
     ),
     "docs/coverage-matrix.md": ("platform-session-port.md", "active:AUTH-021"),
-    "docs/overview/architecture.md": ("B4a session ports", "B4b redacted control-event/error"),
+    "docs/overview/architecture.md": (
+        "bounded B4a durable DemoReviewed current-session read",
+        "B4b redacted evidence ports",
+    ),
     "docs/tasks/01-execution-roadmap.md": ("platform-session-port/v0", "AUTH-021"),
     "README.md": ("m00-sessions.json", "event-history-only"),
 }
@@ -12856,7 +12859,10 @@ PLATFORM_CONTROL_EVIDENCE_DOC_FRAGMENTS = {
     "docs/contracts/platform-session-port.md": ("platform-control-evidence/v0", "B4b"),
     "docs/contracts/module-boundaries.md": ("platform-control-evidence/v0", "AUTH-022"),
     "docs/coverage-matrix.md": ("platform-control-evidence.md", "active:AUTH-022"),
-    "docs/overview/architecture.md": ("B4b redacted control-event/error", "B5/production evidence persistence/SSO remain planned"),
+    "docs/overview/architecture.md": (
+        "B4b redacted evidence ports",
+        "one Affairs B5 composition persists admitted-request evidence before M71",
+    ),
     "docs/plan/modules/00-module-map.md": ("platform-control-evidence/v0", "AUTH-022"),
     "docs/plan/modules/10-platform-control-identity.md": ("platform-control-evidence/v0", "AUTH-022", "B5 composition planned"),
     "docs/tasks/01-execution-roadmap.md": ("platform-control-evidence/v0", "AUTH-022", "production evidence persistence"),

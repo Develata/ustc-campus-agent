@@ -21,9 +21,10 @@ use affairs_navigator::{
     BoardPolicyVersion, ConflictKind, Contact as ArtifactContact, ContactChannel, ContactName,
     ContactRef, EntryPoint, EntryPointLabel, EvidenceConflictState, FixedClock,
     InMemoryPublishedAffairsRepository, Instruction, M60EvidencePortError,
-    M60ProcedureEvidencePort, M60RetainedEvidenceOutcome, M60RetainedEvidenceRequest, Prerequisite,
-    PrerequisiteCondition, ProcedureDraft, ProcedureEvidenceContext, ProcedureId,
-    ProcedurePublicationReceipt, ProcedurePublicationService, ProcedureReviewApproval,
+    M60ProcedureEvidencePort, M60ProcedurePublicationOutcome, M60ProcedurePublicationPort,
+    M60RetainedEvidenceOutcome, M60RetainedEvidenceRequest, Prerequisite, PrerequisiteCondition,
+    ProcedureDraft, ProcedureEvidenceContext, ProcedureId, ProcedurePublicationReceipt,
+    ProcedurePublicationRepository, ProcedurePublicationService, ProcedureReviewApproval,
     ProcedureStep, SourceId, Title, UncertaintyState, Url, ValidityHorizon,
     m60_ref_from_source_revision,
 };
@@ -58,6 +59,9 @@ use ustc_campus_agent_core::source_revision::{
 };
 
 use crate::affairs_invocation::AffairsInvocationCounters;
+use crate::affairs_persistence::{
+    DurablePublishedAffairsRepository, recovery_anchor_and_commit_from_receipt,
+};
 use crate::m00_session::DurableCurrentSessionStore;
 
 // ---------------------------------------------------------------------------
@@ -82,6 +86,17 @@ impl M60ProcedureEvidencePort for CountingM60Port {
     ) -> Result<M60RetainedEvidenceOutcome, M60EvidencePortError> {
         self.call_count.fetch_add(1, Ordering::SeqCst);
         self.inner.verify_retained(request)
+    }
+}
+
+impl M60ProcedurePublicationPort for CountingM60Port {
+    fn verify_publication(
+        &self,
+        revision: &SourceRevision,
+        request: &M60RetainedEvidenceRequest,
+    ) -> Result<M60ProcedurePublicationOutcome, M60EvidencePortError> {
+        self.call_count.fetch_add(1, Ordering::SeqCst);
+        self.inner.verify_publication(revision, request)
     }
 }
 
@@ -139,6 +154,9 @@ struct AffairsFixtureDto {
     source_reviewer: String,
     source_review_evidence: String,
     publication_reviewer: String,
+    publication_administrator_tenant_id: Option<String>,
+    publication_administrator_user_id: Option<String>,
+    publication_administrator_session_id: Option<String>,
     market_enabled: Option<bool>,
     market_grant_active: Option<bool>,
     verifier_id: String,
@@ -173,8 +191,16 @@ struct AffairsFixtureDto {
 // ---------------------------------------------------------------------------
 
 pub(crate) struct AffairsFixture {
-    pub(crate) repo: InMemoryPublishedAffairsRepository,
+    pub(crate) repo: DurablePublishedAffairsRepository,
     pub(crate) publication_receipt: ProcedurePublicationReceipt,
+    pub(crate) publication_draft: ProcedureDraft,
+    pub(crate) publication_reviewer: ActorRef,
+    pub(crate) publication_reviewed_at: OffsetDateTime,
+    pub(crate) publication_published_at: OffsetDateTime,
+    pub(crate) publication_descriptor: OperationSnapshot,
+    pub(crate) publication_administrator_tenant_id: TenantId,
+    pub(crate) publication_administrator_user_id: UserId,
+    pub(crate) publication_administrator_session_id: SessionId,
     pub(crate) source_evidence_digest: String,
     pub(crate) market_enabled: bool,
     pub(crate) market_grant_active: bool,
@@ -193,14 +219,22 @@ pub(crate) struct AffairsFixture {
 }
 
 impl AffairsFixture {
-    pub(crate) fn load(path: &Path) -> Result<Self, String> {
+    pub(crate) fn load(
+        path: &Path,
+        publication_path: &Path,
+        allow_fresh_publication_bootstrap: bool,
+    ) -> Result<Self, String> {
         let bytes = fs::read(path).map_err(|e| format!("fixture read failed: {e}"))?;
         let dto: AffairsFixtureDto =
             serde_json::from_slice(&bytes).map_err(|e| format!("fixture parse failed: {e}"))?;
-        Self::build(dto)
+        Self::build(dto, publication_path, allow_fresh_publication_bootstrap)
     }
 
-    fn build(dto: AffairsFixtureDto) -> Result<Self, String> {
+    fn build(
+        dto: AffairsFixtureDto,
+        publication_path: &Path,
+        allow_fresh_publication_bootstrap: bool,
+    ) -> Result<Self, String> {
         let known_at = OffsetDateTime::from_unix_timestamp(dto.known_at_secs)
             .map_err(|e| format!("known_at_secs invalid: {e}"))?;
         let observed_at = OffsetDateTime::from_unix_timestamp(dto.observed_at_secs)
@@ -427,14 +461,16 @@ impl AffairsFixture {
             evidence,
         )
         .map_err(|e| format!("procedure draft invalid: {e:?}"))?;
+        let publication_draft = draft.clone();
+        let publication_reviewer = ActorRef::parse(&dto.publication_reviewer)
+            .map_err(|e| format!("publication_reviewer invalid: {e}"))?;
         let approval = ProcedureReviewApproval::new(
             draft.draft_digest().clone(),
-            ActorRef::parse(&dto.publication_reviewer)
-                .map_err(|e| format!("publication_reviewer invalid: {e}"))?,
+            publication_reviewer.clone(),
             reviewed_at,
         );
-        let mut repo = InMemoryPublishedAffairsRepository::new();
-        let publication_receipt = ProcedurePublicationService::new(&mut repo, &m60)
+        let mut bootstrap_repo = InMemoryPublishedAffairsRepository::new();
+        let mut publication_receipt = ProcedurePublicationService::new(&mut bootstrap_repo, &m60)
             .publish(draft, approval, published_at, None)
             .map_err(|e| format!("reviewed publication failed: {e:?}"))?;
         let source_evidence_digest = publication_receipt
@@ -461,6 +497,24 @@ impl AffairsFixture {
         let user_id = UserId::parse(&dto.user_id).map_err(|e| format!("user_id invalid: {e}"))?;
         let session_id =
             SessionId::parse(&dto.session_id).map_err(|e| format!("session_id invalid: {e}"))?;
+        let publication_administrator_tenant_id = TenantId::parse(
+            dto.publication_administrator_tenant_id
+                .as_deref()
+                .unwrap_or(&dto.tenant_id),
+        )
+        .map_err(|e| format!("publication administrator tenant invalid: {e}"))?;
+        let publication_administrator_user_id = UserId::parse(
+            dto.publication_administrator_user_id
+                .as_deref()
+                .unwrap_or(&dto.user_id),
+        )
+        .map_err(|e| format!("publication administrator user invalid: {e}"))?;
+        let publication_administrator_session_id = SessionId::parse(
+            dto.publication_administrator_session_id
+                .as_deref()
+                .unwrap_or(&dto.session_id),
+        )
+        .map_err(|e| format!("publication administrator session invalid: {e}"))?;
         let auth_adapter_id = AuthAdapterId::parse(&dto.auth_adapter_id)
             .map_err(|e| format!("auth_adapter_id invalid: {e}"))?;
         let credential_digest = CredentialEvidenceDigest::parse(&dto.credential_evidence_digest)
@@ -529,6 +583,36 @@ impl AffairsFixture {
             snapshot_identity: descriptor_snapshot_id,
         };
         let descriptor_snapshot: OperationSnapshot = Arc::new(descriptor);
+        let publication_schema_digest = SchemaDigest::parse("b".repeat(64))
+            .map_err(|e| format!("publication schema_digest invalid: {e}"))?;
+        let publication_snapshot_id = DescriptorSnapshotId::from_canonical_identity(
+            &publication_schema_digest,
+            dto.descriptor_snapshot_version
+                .checked_add(1)
+                .ok_or_else(|| "publication descriptor version overflow".to_owned())?,
+        )
+        .map_err(|e| format!("publication descriptor_snapshot_id invalid: {e}"))?;
+        let publication_descriptor: OperationSnapshot = Arc::new(FixtureDescriptor {
+            operation_id: OperationId::parse("affairs.publish")
+                .map_err(|e| format!("publication operation_id invalid: {e}"))?,
+            schema_identity: SchemaIdentity::parse("schema:fixture-affairs-publication")
+                .map_err(|e| format!("publication schema_identity invalid: {e}"))?,
+            schema_digest: publication_schema_digest,
+            permission_class: PermissionClass::TenantPrivateWrite,
+            effect_class: EffectClass::TenantLocalMutation,
+            decoder_identity: DecoderIdentity::parse("decoder:fixture-affairs-publication")
+                .map_err(|e| format!("publication decoder_identity invalid: {e}"))?,
+            dispatcher_identity: DispatcherIdentity::parse(
+                "dispatcher:fixture-affairs-publication",
+            )
+            .map_err(|e| format!("publication dispatcher_identity invalid: {e}"))?,
+            adapter_allowlist: AdapterAllowlist::try_from_iter([AdapterIdentity::parse(
+                "adapter:fixture-affairs-publication",
+            )
+            .map_err(|e| format!("publication adapter_identity invalid: {e}"))?])
+            .map_err(|e| format!("publication adapter_allowlist invalid: {e:?}"))?,
+            snapshot_identity: publication_snapshot_id,
+        });
 
         // -- Policy snapshot ID --
         let policy_snapshot_id = PlatformPolicySnapshotId::parse(&dto.policy_snapshot_id)
@@ -543,9 +627,41 @@ impl AffairsFixture {
         let m60_call_count = Arc::new(AtomicU64::new(0));
         let m60 = CountingM60Port::new(m60, m60_call_count.clone());
 
+        let (recovery_anchor, initial_commit) =
+            recovery_anchor_and_commit_from_receipt(&publication_draft, &publication_receipt)?;
+        let mut repo = DurablePublishedAffairsRepository::open(
+            publication_path,
+            publication_draft.clone(),
+            recovery_anchor,
+            allow_fresh_publication_bootstrap,
+        )?;
+        if repo.record_count() == 0 {
+            repo.apply_publication(initial_commit)
+                .map_err(|error| format!("initial durable publication failed: {error:?}"))?;
+        }
+        if repo
+            .find_publication_replay(publication_receipt.receipt_id())
+            .map_err(|error| format!("initial durable publication lookup failed: {error:?}"))?
+            != Some(publication_receipt.clone())
+        {
+            return Err("durable publication state lost the fixture revision-1 receipt".to_owned());
+        }
+        publication_receipt = repo
+            .latest_receipt()
+            .map_err(|error| format!("latest durable publication lookup failed: {error:?}"))?
+            .ok_or_else(|| "durable publication state has no latest receipt".to_owned())?;
+
         Ok(Self {
             repo,
             publication_receipt,
+            publication_draft,
+            publication_reviewer,
+            publication_reviewed_at: reviewed_at,
+            publication_published_at: published_at,
+            publication_descriptor,
+            publication_administrator_tenant_id,
+            publication_administrator_user_id,
+            publication_administrator_session_id,
             source_evidence_digest,
             market_enabled: dto.market_enabled.unwrap_or(true),
             market_grant_active: dto.market_grant_active.unwrap_or(true),
@@ -1036,6 +1152,7 @@ pub(crate) struct FixturePorts {
     now: SessionInstant,
     policy_snapshot_id: PlatformPolicySnapshotId,
     sessions: DurableCurrentSessionStore,
+    capability: CapabilityDisposition,
 }
 
 impl FixturePorts {
@@ -1052,7 +1169,13 @@ impl FixturePorts {
             now,
             policy_snapshot_id,
             sessions,
+            capability: CapabilityDisposition::Enabled,
         }
+    }
+
+    pub(crate) fn with_capability(mut self, capability: CapabilityDisposition) -> Self {
+        self.capability = capability;
+        self
     }
 }
 
@@ -1100,7 +1223,7 @@ impl AdmissionPorts for FixturePorts {
         _actor_kind: ActorKind,
         _observed_at: SessionInstant,
     ) -> Result<CapabilityDisposition, AdmissionPortError> {
-        Ok(CapabilityDisposition::Enabled)
+        Ok(self.capability)
     }
 
     fn finalize_idempotency(

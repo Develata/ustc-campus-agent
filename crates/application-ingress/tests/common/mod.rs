@@ -386,6 +386,9 @@ impl Descriptor {
     pub fn tenant_private_write() -> Self {
         Self::new("affairs.get", PermissionClass::TenantPrivateWrite)
     }
+    pub fn affairs_publication() -> Self {
+        Self::new("affairs.publish", PermissionClass::TenantPrivateWrite)
+    }
     pub fn wrong_operation() -> Self {
         Self::new("wrong.operation", PermissionClass::PublicRead)
     }

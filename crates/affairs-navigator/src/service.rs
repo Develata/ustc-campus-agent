@@ -25,8 +25,15 @@ use crate::projection::{ProjectionOutcome, project_public_evidence};
 use crate::public_view::{
     ConflictDetail, ConflictState, CutoffMetadata, CutoffSource, Freshness, PublicProcedureView,
 };
-use crate::repository::AffairsRepository;
+use crate::repository::{AffairsRepository, AffairsRepositoryReadError};
 use crate::value::MaterializationReceiptId;
+
+fn map_repository_read_error(error: AffairsRepositoryReadError) -> GetProcedureError {
+    match error {
+        AffairsRepositoryReadError::Unavailable => GetProcedureError::PersistenceUnavailable,
+        AffairsRepositoryReadError::Corrupted => GetProcedureError::StoreCorrupted,
+    }
+}
 
 /// The sealed M71 receipt returned by `affairs.get`. Carries the six-outcome
 /// result and the sealed evidence-lineage. The constructor is private to this
@@ -108,7 +115,11 @@ impl<'a> AffairsGetService<'a> {
         // Step 1: state/current → NotFound / Archived (NotRequired lineage,
         // no M60 call).
         // ------------------------------------------------------------------
-        let Some(state) = self.repository.find_publication_state(&procedure_id) else {
+        let Some(state) = self
+            .repository
+            .find_publication_state(&procedure_id)
+            .map_err(map_repository_read_error)?
+        else {
             return Ok(self.not_found(procedure_id, as_of));
         };
 
@@ -130,7 +141,11 @@ impl<'a> AffairsGetService<'a> {
         // ------------------------------------------------------------------
         // Step 2: find current artifact.
         // ------------------------------------------------------------------
-        let Some(artifact) = self.repository.find_current_artifact(&procedure_id) else {
+        let Some(artifact) = self
+            .repository
+            .find_current_artifact(&procedure_id)
+            .map_err(map_repository_read_error)?
+        else {
             // State says Current but artifact is missing.
             return Err(GetProcedureError::InternalInconsistent);
         };
@@ -1048,6 +1063,53 @@ mod tests {
             receipt.evidence_lineage().unverified_reason(),
             Some(M60EvidenceUnverifiedReason::EffectiveIntervalMissing)
         );
+    }
+
+    // ------------------------------------------------------------------
+    // Infrastructure: repository read failures are never semantic NotFound.
+    // ------------------------------------------------------------------
+
+    struct FailingRepository(AffairsRepositoryReadError);
+
+    impl AffairsRepository for FailingRepository {
+        fn find_current_artifact(
+            &self,
+            _procedure_id: &ProcedureId,
+        ) -> Result<Option<ProcedureArtifact>, AffairsRepositoryReadError> {
+            Err(self.0)
+        }
+
+        fn find_publication_state(
+            &self,
+            _procedure_id: &ProcedureId,
+        ) -> Result<Option<ProcedurePublicationState>, AffairsRepositoryReadError> {
+            Err(self.0)
+        }
+    }
+
+    #[test]
+    fn repository_read_failures_are_typed_infrastructure_errors() {
+        let m60 = M60FixtureAdapter::new("verifier:fixture", 1).expect("valid");
+        let clock = FixedClock::new(t(200));
+        let query = AffairsGetQuery::new(
+            ProcedureId::parse("proc:repository-infra").expect("valid"),
+            Some(t(200)),
+        );
+
+        for (read_error, expected) in [
+            (
+                AffairsRepositoryReadError::Unavailable,
+                GetProcedureError::PersistenceUnavailable,
+            ),
+            (
+                AffairsRepositoryReadError::Corrupted,
+                GetProcedureError::StoreCorrupted,
+            ),
+        ] {
+            let repository = FailingRepository(read_error);
+            let service = AffairsGetService::new(&repository, &m60, &clock);
+            assert_eq!(service.execute(&query), Err(expected));
+        }
     }
 
     // ------------------------------------------------------------------

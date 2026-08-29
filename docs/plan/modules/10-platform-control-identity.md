@@ -3,14 +3,14 @@
 ## Metadata
 
 - `Module ID`: `M00`
-- `Status`: Accepted blueprint; `M00-B1 identity-types`, `M00-B2 session-domain`, bounded `M00-B3 request-context`, B4a `session-port` and B4b `control-evidence` implemented; B5 composition planned
+- `Status`: Accepted blueprint; `M00-B1 identity-types`, `M00-B2 session-domain`, bounded `M00-B3 request-context`, B4a `session-port`, B4b `control-evidence` and one fixed Affairs B5 composition implemented; generic B5 composition planned beyond that bounded slice
 - `Implementation State`: `partial-evidence`
 - `Version`: `m00-platform-control/v1`
 - `Last Review`: `2026-08-29`
 - `Composition`: `apps/ustc-agentd`
-- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`; `crates/platform-core/src/request_context.rs` for bounded `M00-B3`; `crates/platform-core/src/session_port.rs` plus app-private `apps/ustc-agentd/src/m00_session.rs` for B4a; `crates/platform-core/src/control_evidence.rs` for B4b; later production adapters under `M90`
+- `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`; `crates/platform-core/src/request_context.rs` for bounded `M00-B3`; `crates/platform-core/src/session_port.rs` plus app-private `apps/ustc-agentd/src/m00_session.rs` for B4a; `crates/platform-core/src/control_evidence.rs` plus app-private `apps/ustc-agentd/src/m00_control_evidence.rs` and `affairs_publication.rs` for B4b/B5; later production adapters under `M90`
 - `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md), [`platform-session/v0`](../../contracts/platform-session.md), [`platform-request-context/v0`](../../contracts/platform-request-context.md), [`platform-session-port/v0`](../../contracts/platform-session-port.md), [`platform-control-evidence/v0`](../../contracts/platform-control-evidence.md), and [`module-boundaries.md`](../../contracts/module-boundaries.md)
-- `Acceptance`: implemented `AUTH-011` through `AUTH-022`, including bounded request-context `AUTH-013`, B4a `AUTH-021` and B4b `AUTH-022`; B5 M10-administrator composition remains planned
+- `Acceptance`: implemented `AUTH-011` through `AUTH-023`, including bounded request-context `AUTH-013`, B4a `AUTH-021`, B4b `AUTH-022` and the fixed Affairs B5 composition `AUTH-023`; generic production M10-administrator composition remains planned
 
 ## 1. Purpose
 
@@ -186,7 +186,7 @@ Each small module receives a separate reviewable commit. Under the accepted prod
 
 `M00-B1` deliberately does not create an authenticated actor, session lifecycle, request context, policy decision, ID generator or storage port. Those claims remain blocked behind later batches. `AUTH-013` stays catalog-only until request-context work.
 
-`M00-B1` is implemented in `crates/platform-core/src/identity.rs`, with evidence in `crates/platform-core/tests/platform_identity.rs` and rustdoc `compile_fail` API proofs; `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` pass. Invocation authority now consumes the M00 tenant/user definitions. `M00-B2`, B3, B4a and B4b are separately implemented, but B5 remains planned and the module remains short of the exit gate.
+`M00-B1` is implemented in `crates/platform-core/src/identity.rs`, with evidence in `crates/platform-core/tests/platform_identity.rs` and rustdoc `compile_fail` API proofs; `AUTH-011`, `AUTH-012`, `AUTH-014`, `AUTH-015` and `AUTH-016` pass. Invocation authority now consumes the M00 tenant/user definitions. `M00-B2`, B3, B4a and B4b are separately implemented; one fixed Affairs B5 command now binds them, but reusable production B5 remains planned and the module remains short of the exit gate.
 
 ## 15. Second approved batch — `M00-B2 session-domain`
 

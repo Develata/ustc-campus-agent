@@ -4,8 +4,8 @@
 //! authorization or eligibility decisions. It constructs bounded public M10
 //! requests and admits only the matching typed public result as JSON or Atom.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::rejection::JsonRejection;
@@ -15,6 +15,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
+use ustc_campus_agent_application_ingress::{
+    AffairsPublicationApplicationError, AffairsPublicationOutcome,
+};
 use ustc_campus_agent_client_protocol::{
     ActorIntentDto, ClientErrorDto, ClientProvenanceDto, ClientResponseDto, OpportunityCommandDto,
     OpportunityConsentFieldDto, OpportunityPreferenceDto, OpportunityRejectionDto, RedactionDto,
@@ -30,19 +33,27 @@ const APP_JS: &str = include_str!("web/app.js");
 const STYLES_CSS: &str = include_str!("web/styles.css");
 
 const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+const ADMINISTRATOR_DEMO_HEADER: &str = "x-ustc-agent-administrator-demo";
+const ADMINISTRATOR_DEMO_CONFIRMATION: &str = "confirm-v1";
 
 #[derive(Clone)]
 struct WebState {
-    composition: Arc<AffairsComposition>,
+    composition: Arc<Mutex<AffairsComposition>>,
     next_request: Arc<AtomicU64>,
 }
 
 impl WebState {
-    fn new(composition: Arc<AffairsComposition>) -> Self {
+    fn new(composition: Arc<Mutex<AffairsComposition>>) -> Self {
         Self {
             composition,
             next_request: Arc::new(AtomicU64::new(1)),
         }
+    }
+
+    fn lock(&self) -> Result<MutexGuard<'_, AffairsComposition>, WebRequestError> {
+        self.composition
+            .lock()
+            .map_err(|_| WebRequestError::CompositionUnavailable)
     }
 
     fn submit(&self, procedure_id: String) -> Result<ClientResponseDto, WebRequestError> {
@@ -75,8 +86,9 @@ impl WebState {
             procedure_id,
             as_of: None,
         };
-        let submitted = self.composition.handle_submit(&request);
-        self.resolve_public_available(submitted)
+        let composition = self.lock()?;
+        let submitted = composition.handle_submit(&request);
+        self.resolve_public_available(&composition, submitted)
     }
 
     fn submit_change(&self, board_id: String) -> Result<ClientResponseDto, WebRequestError> {
@@ -107,7 +119,7 @@ impl WebState {
             payload_digest,
             board_id,
         };
-        Ok(self.composition.handle_change_submit(&request))
+        Ok(self.lock()?.handle_change_submit(&request))
     }
 
     fn submit_opportunity(
@@ -129,6 +141,7 @@ impl WebState {
         let request_nonce = now.as_nanos();
         let payload_digest =
             opportunity_payload_digest(&command).map_err(|_| WebRequestError::InternalIdentity)?;
+        let composition = self.lock()?;
         let request = SubmitOpportunityDto {
             request_id: checked_text(format!("req:web:opportunity:{request_nonce}:{sequence}"))?,
             correlation_id: checked_text(format!(
@@ -139,7 +152,7 @@ impl WebState {
                 "idem:web:opportunity:{request_nonce}:{sequence}"
             ))?),
             actor: ActorIntentDto::Authenticated {
-                session_id: checked_text(self.composition.fixture.session.session_id().as_str())?,
+                session_id: checked_text(composition.fixture.session.session_id().as_str())?,
             },
             provenance: ClientProvenanceDto {
                 build: checked_text(concat!("ustc-agentd/", env!("CARGO_PKG_VERSION")))?,
@@ -149,7 +162,7 @@ impl WebState {
             payload_digest,
             command,
         };
-        Ok(self.composition.handle_opportunity_submit(&request))
+        Ok(composition.handle_opportunity_submit(&request))
     }
 
     fn now_millis() -> Result<UnixMillis, WebRequestError> {
@@ -163,6 +176,7 @@ impl WebState {
 
     fn resolve_public_available(
         &self,
+        composition: &AffairsComposition,
         submitted: ClientResponseDto,
     ) -> Result<ClientResponseDto, WebRequestError> {
         match submitted {
@@ -172,7 +186,7 @@ impl WebState {
                 ..
             } => {
                 let viewer = ViewerAuthorizationDto::PublicCapability { capability };
-                let lookup = self.composition.handle_lookup(command_id.as_str(), &viewer);
+                let lookup = composition.handle_lookup(command_id.as_str(), &viewer);
                 Self::admit_public_available(lookup)
             }
             ClientResponseDto::Accepted {
@@ -197,6 +211,83 @@ impl WebState {
             _ => Err(WebRequestError::UnexpectedLookupResponse),
         }
     }
+
+    fn publication_status(&self) -> Result<AffairsPublicationStatusEnvelope, WebRequestError> {
+        let composition = self.lock()?;
+        Ok(AffairsPublicationStatusEnvelope {
+            schema: "ustc-affairs-publication-status/v1",
+            publication_revision: composition.current_publication_revision(),
+            publication_receipt_id: composition.publication_receipt_id().to_owned(),
+            control_evidence_event_count: composition.control_evidence_event_count(),
+        })
+    }
+
+    fn publish_demo(
+        &self,
+    ) -> Result<(StatusCode, AffairsPublicationResponseEnvelope), WebRequestError> {
+        let mut composition = self.lock()?;
+        let (status, outcome) = match composition.publish_demo_as_administrator() {
+            AffairsPublicationOutcome::Published(receipt) => (
+                StatusCode::OK,
+                AffairsPublicationResponseKind::Published {
+                    receipt_id: receipt.receipt_id().as_str().to_owned(),
+                    expected_publication_revision: receipt.expected_publication_revision(),
+                    publication_revision: receipt.publication_revision(),
+                },
+            ),
+            AffairsPublicationOutcome::Rejected(_) => (
+                StatusCode::FORBIDDEN,
+                AffairsPublicationResponseKind::Rejected {
+                    error: "m00_admission_denied",
+                },
+            ),
+            AffairsPublicationOutcome::Incomplete { .. } => (
+                StatusCode::CONFLICT,
+                AffairsPublicationResponseKind::Rejected {
+                    error: "m00_session_incomplete",
+                },
+            ),
+            AffairsPublicationOutcome::MalformedCommand => (
+                StatusCode::BAD_REQUEST,
+                AffairsPublicationResponseKind::Rejected {
+                    error: "malformed_publication_command",
+                },
+            ),
+            AffairsPublicationOutcome::EvidenceRejected(_) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                AffairsPublicationResponseKind::Rejected {
+                    error: "control_evidence_unavailable",
+                },
+            ),
+            AffairsPublicationOutcome::PublicationRejected(
+                AffairsPublicationApplicationError::Denied,
+            ) => (
+                StatusCode::CONFLICT,
+                AffairsPublicationResponseKind::Rejected {
+                    error: "publication_denied",
+                },
+            ),
+            AffairsPublicationOutcome::PublicationRejected(_) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                AffairsPublicationResponseKind::Rejected {
+                    error: "publication_unavailable",
+                },
+            ),
+            AffairsPublicationOutcome::InternalInvariant => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                AffairsPublicationResponseKind::Rejected {
+                    error: "internal_publication_invariant",
+                },
+            ),
+        };
+        Ok((
+            status,
+            AffairsPublicationResponseEnvelope {
+                schema: "ustc-affairs-publication-response/v1",
+                outcome,
+            },
+        ))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -209,6 +300,7 @@ enum WebRequestError {
     MissingPublicCapability,
     UnexpectedSubmitResponse,
     UnexpectedLookupResponse,
+    CompositionUnavailable,
 }
 
 fn checked_text(value: impl Into<String>) -> Result<WireText, WebRequestError> {
@@ -225,6 +317,39 @@ struct WebErrorEnvelope {
 struct HealthEnvelope {
     schema: &'static str,
     status: &'static str,
+}
+
+#[derive(Serialize)]
+struct AffairsPublicationStatusEnvelope {
+    schema: &'static str,
+    publication_revision: Option<u64>,
+    publication_receipt_id: String,
+    control_evidence_event_count: usize,
+}
+
+#[derive(Serialize)]
+struct AffairsPublicationResponseEnvelope {
+    schema: &'static str,
+    outcome: AffairsPublicationResponseKind,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum AffairsPublicationResponseKind {
+    Published {
+        receipt_id: String,
+        expected_publication_revision: Option<u64>,
+        publication_revision: u64,
+    },
+    Rejected {
+        error: &'static str,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PublishAffairsDemoBody {
+    confirm_publish: bool,
 }
 
 #[derive(Deserialize)]
@@ -259,13 +384,17 @@ struct DeleteOpportunityProfileBody {
 }
 
 /// Builds the bounded same-origin Web router over one composition.
-pub fn web_router(composition: Arc<AffairsComposition>) -> Router {
+pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/assets/app.js", get(app_js))
         .route("/assets/styles.css", get(styles_css))
         .route("/healthz", get(healthz))
         .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
+        .route(
+            "/api/v1/demo/administrator/affairs/publication",
+            get(affairs_publication_status).post(affairs_publication_publish),
+        )
         .route("/api/v1/changes/{board_id}", get(change_feed_get))
         .route("/api/v1/changes/{board_id}/atom", get(change_feed_atom))
         .route(
@@ -304,7 +433,7 @@ impl AffairsComposition {
         std::io::stdout()
             .flush()
             .map_err(|error| format!("stdout flush failed: {error}"))?;
-        axum::serve(listener, web_router(Arc::new(self)))
+        axum::serve(listener, web_router(Arc::new(Mutex::new(self))))
             .await
             .map_err(|error| format!("web serve failed: {error}"))
     }
@@ -356,6 +485,9 @@ async fn affairs_get(
         Err(WebRequestError::InvalidOpportunityRequest) => {
             web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error")
         }
+        Err(WebRequestError::CompositionUnavailable) => {
+            web_error(StatusCode::SERVICE_UNAVAILABLE, "composition_unavailable")
+        }
     }
 }
 
@@ -374,6 +506,56 @@ fn affairs_response_status(response: &ClientResponseDto) -> StatusCode {
         | ClientResponseDto::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
         _ => StatusCode::BAD_GATEWAY,
     }
+}
+
+async fn affairs_publication_status(State(state): State<WebState>, headers: HeaderMap) -> Response {
+    if !administrator_demo_header_authorized(&headers) {
+        return web_error(
+            StatusCode::FORBIDDEN,
+            "administrator_demo_confirmation_required",
+        );
+    }
+    match state.publication_status() {
+        Ok(status) => typed_json_response(StatusCode::OK, status),
+        Err(_) => web_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "publication_status_unavailable",
+        ),
+    }
+}
+
+async fn affairs_publication_publish(
+    State(state): State<WebState>,
+    headers: HeaderMap,
+    body: Result<Json<PublishAffairsDemoBody>, JsonRejection>,
+) -> Response {
+    if !administrator_demo_header_authorized(&headers) {
+        return web_error(
+            StatusCode::FORBIDDEN,
+            "administrator_demo_confirmation_required",
+        );
+    }
+    let Json(body) = match body {
+        Ok(body) => body,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_publication_json"),
+    };
+    if !body.confirm_publish {
+        return web_error(
+            StatusCode::BAD_REQUEST,
+            "explicit_publish_confirmation_required",
+        );
+    }
+    match state.publish_demo() {
+        Ok((status, envelope)) => typed_json_response(status, envelope),
+        Err(_) => web_error(StatusCode::SERVICE_UNAVAILABLE, "publication_unavailable"),
+    }
+}
+
+fn administrator_demo_header_authorized(headers: &HeaderMap) -> bool {
+    headers
+        .get(ADMINISTRATOR_DEMO_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == ADMINISTRATOR_DEMO_CONFIRMATION)
 }
 
 async fn change_feed_get(
@@ -621,7 +803,7 @@ fn opportunity_response(response: Result<ClientResponseDto, WebRequestError>) ->
     typed_json_response(status, response)
 }
 
-fn typed_json_response(status: StatusCode, response: ClientResponseDto) -> Response {
+fn typed_json_response<T: Serialize>(status: StatusCode, response: T) -> Response {
     let mut response = Json(response).into_response();
     *response.status_mut() = status;
     hardened(response)

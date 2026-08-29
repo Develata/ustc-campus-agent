@@ -273,6 +273,47 @@ impl WebServer {
         HttpResponse::parse(&bytes)
     }
 
+    fn get_admin(&self, path: &str) -> HttpResponse {
+        let mut stream = TcpStream::connect(&self.endpoint).expect("connect web server");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .expect("set read timeout");
+        write!(
+            stream,
+            "GET {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nX-USTC-Agent-Administrator-Demo: confirm-v1\r\nConnection: close\r\n\r\n",
+            self.endpoint
+        )
+        .expect("write administrator HTTP request");
+        stream.flush().expect("flush administrator HTTP request");
+        let mut bytes = Vec::new();
+        stream
+            .read_to_end(&mut bytes)
+            .expect("read administrator HTTP response");
+        HttpResponse::parse(&bytes)
+    }
+
+    fn post_admin_json(&self, path: &str, body: &Value) -> HttpResponse {
+        let body = body.to_string();
+        let mut stream = TcpStream::connect(&self.endpoint).expect("connect web server");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .expect("set read timeout");
+        write!(
+            stream,
+            "POST {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nX-USTC-Agent-Administrator-Demo: confirm-v1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            self.endpoint,
+            body.len(),
+            body
+        )
+        .expect("write administrator HTTP request");
+        stream.flush().expect("flush administrator HTTP request");
+        let mut bytes = Vec::new();
+        stream
+            .read_to_end(&mut bytes)
+            .expect("read administrator HTTP response");
+        HttpResponse::parse(&bytes)
+    }
+
     fn post_json(&self, path: &str, body: &Value) -> HttpResponse {
         let body = body.to_string();
         self.post_raw(path, "application/json", &body)
@@ -423,6 +464,74 @@ fn reviewed_affairs_http_path_returns_typed_found_result() {
             .as_str()
             .is_some_and(|value| !value.is_empty())
     );
+}
+
+#[test]
+fn administrator_publication_http_requires_explicit_demo_confirmation_and_is_idempotent() {
+    const PATH: &str = "/api/v1/demo/administrator/affairs/publication";
+    let server = WebServer::start_affairs_only();
+
+    let denied = server.get(PATH);
+    assert!(denied.status.contains(" 403 "), "{}", denied.status);
+    assert!(
+        denied
+            .body
+            .contains("administrator_demo_confirmation_required")
+    );
+
+    let initial = server.get_admin(PATH);
+    assert!(initial.status.contains(" 200 "), "{}", initial.status);
+    let initial: Value = serde_json::from_str(&initial.body).expect("publication status JSON");
+    assert_eq!(initial["schema"], "ustc-affairs-publication-status/v1");
+    assert_eq!(initial["publication_revision"], 1);
+    assert_eq!(initial["control_evidence_event_count"], 0);
+
+    let unconfirmed = server.post_admin_json(PATH, &json!({"confirm_publish": false}));
+    assert!(
+        unconfirmed.status.contains(" 400 "),
+        "{}",
+        unconfirmed.status
+    );
+    assert!(
+        unconfirmed
+            .body
+            .contains("explicit_publish_confirmation_required")
+    );
+
+    let published = server.post_admin_json(PATH, &json!({"confirm_publish": true}));
+    assert!(
+        published.status.contains(" 200 "),
+        "{}: {}",
+        published.status,
+        published.body
+    );
+    let published: Value =
+        serde_json::from_str(&published.body).expect("publication response JSON");
+    assert_eq!(published["schema"], "ustc-affairs-publication-response/v1");
+    assert_eq!(published["outcome"]["kind"], "published");
+    assert_eq!(published["outcome"]["expected_publication_revision"], 1);
+    assert_eq!(published["outcome"]["publication_revision"], 2);
+    let receipt = published["outcome"]["receipt_id"]
+        .as_str()
+        .expect("publication receipt")
+        .to_owned();
+
+    let replay = server.post_admin_json(PATH, &json!({"confirm_publish": true}));
+    assert!(replay.status.contains(" 200 "), "{}", replay.status);
+    let replay: Value = serde_json::from_str(&replay.body).expect("replay response JSON");
+    assert_eq!(replay["outcome"]["receipt_id"], receipt);
+    assert_eq!(replay["outcome"]["publication_revision"], 2);
+
+    let recovered = server.get_admin(PATH);
+    let recovered: Value =
+        serde_json::from_str(&recovered.body).expect("recovered publication status JSON");
+    assert_eq!(recovered["publication_revision"], 2);
+    assert_eq!(recovered["publication_receipt_id"], receipt);
+    assert_eq!(recovered["control_evidence_event_count"], 1);
+
+    let publication_state = server.temp_dir.join("idempotency.affairs-publication.json");
+    let metadata = fs::metadata(publication_state).expect("durable publication state");
+    assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
 }
 
 #[test]

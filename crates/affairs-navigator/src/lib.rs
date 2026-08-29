@@ -94,7 +94,9 @@ pub use public_view::{
     PublicProcedureView,
 };
 pub use publication::*;
-pub use repository::{AffairsRepository, InMemoryAffairsRepository, RepositorySeedError};
+pub use repository::{
+    AffairsRepository, AffairsRepositoryReadError, InMemoryAffairsRepository, RepositorySeedError,
+};
 pub use service::{AffairsGetService, M71AffairsGetReceipt};
 pub use value::{
     ActorRef, AffairsValueError, AffairsValueErrorKind, ArtifactId, AudienceTag, BoardId,
