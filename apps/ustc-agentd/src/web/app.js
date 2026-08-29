@@ -23,7 +23,11 @@ const opportunityProfile = document.querySelector("#opportunity-profile");
 const opportunityPlanResult = document.querySelector("#opportunity-plan-result");
 const opportunityDeleted = document.querySelector("#opportunity-deleted");
 const OPPORTUNITY_PROFILE_HINT = "ustc-campus-agent/opportunity-profile-id/v1";
-const OPPORTUNITY_PENDING_OPERATION = "ustc-campus-agent/opportunity-pending-operation/v1";
+const OPPORTUNITY_PENDING_OPERATIONS = Object.freeze({
+  create: "ustc-campus-agent/opportunity-pending-create/v1",
+  delete: "ustc-campus-agent/opportunity-pending-delete/v1"
+});
+const opportunityPendingMemory = new Map();
 const OPPORTUNITY_DEMO_TEMPLATE = {
   completed_courses: ["MATH1001", "MATH1002", "CS1001", "PHYS1001"],
   min_credits: 9,
@@ -512,27 +516,57 @@ function mintBoundedId(prefix) {
   return `${prefix}web:${token}`;
 }
 
+function pendingOperationStorageKey(operation) {
+  return OPPORTUNITY_PENDING_OPERATIONS[operation] ?? null;
+}
+
 function storePendingOperation(operation) {
+  const key = pendingOperationStorageKey(operation.operation);
+  if (!key) {
+    throw new Error("unsupported Opportunity retry operation");
+  }
+  opportunityPendingMemory.set(operation.operation, operation);
   try {
-    window.localStorage.setItem(OPPORTUNITY_PENDING_OPERATION, JSON.stringify(operation));
+    window.localStorage.setItem(key, JSON.stringify(operation));
   } catch (_error) {
-    // Storage is only a best-effort retry carrier; the server remains authoritative.
+    // The in-memory carrier preserves same-page retries when storage is unavailable.
   }
 }
 
-function readPendingOperation() {
+function readPendingOperation(operation) {
+  const inMemory = opportunityPendingMemory.get(operation);
+  if (inMemory) {
+    return inMemory;
+  }
+  const key = pendingOperationStorageKey(operation);
+  if (!key) {
+    return null;
+  }
   try {
-    const raw = window.localStorage.getItem(OPPORTUNITY_PENDING_OPERATION);
+    const raw = window.localStorage.getItem(key);
     const value = raw == null ? null : JSON.parse(raw);
-    return value && typeof value === "object" ? value : null;
+    if (value && typeof value === "object") {
+      opportunityPendingMemory.set(operation, value);
+      return value;
+    }
+    return null;
   } catch (_error) {
     return null;
   }
 }
 
-function clearPendingOperation() {
+function clearPendingOperation(operation, expectedEnvelope) {
+  const pending = readPendingOperation(operation);
+  if (!pending || pending.idempotency_key !== expectedEnvelope.idempotency_key) {
+    return;
+  }
+  opportunityPendingMemory.delete(operation);
+  const key = pendingOperationStorageKey(operation);
+  if (!key) {
+    return;
+  }
   try {
-    window.localStorage.removeItem(OPPORTUNITY_PENDING_OPERATION);
+    window.localStorage.removeItem(key);
   } catch (_error) {
     return;
   }
@@ -550,7 +584,7 @@ function mintOperationEnvelope(operation, profileId) {
 }
 
 function reusableOperationEnvelope(operation, profileId) {
-  const pending = readPendingOperation();
+  const pending = readPendingOperation(operation);
   if (!pending || pending.operation !== operation) {
     return null;
   }
@@ -762,7 +796,7 @@ async function createOpportunityProfile() {
     opportunityStatus.textContent = "档案创建结果尚未确认；已保留同一请求 envelope，请再次点击以按同一请求重试。";
     return;
   }
-  clearPendingOperation();
+  clearPendingOperation("create", envelope);
   const payload = outcome.payload;
   if (payload?.kind !== "opportunity_accepted") {
     opportunityStatus.textContent = `档案创建失败：${payload?.rejection?.kind ?? "未知错误"}`;
@@ -846,7 +880,7 @@ async function deleteOpportunityProfile() {
     opportunityStatus.textContent = "撤回/删除结果尚未确认；已保留同一请求 envelope，请再次点击以按同一请求重试。";
     return;
   }
-  clearPendingOperation();
+  clearPendingOperation("delete", envelope);
   const payload = outcome.payload;
   if (payload?.kind !== "opportunity_accepted") {
     opportunityStatus.textContent = `撤回/删除失败：${payload?.rejection?.kind ?? "未知错误"}`;

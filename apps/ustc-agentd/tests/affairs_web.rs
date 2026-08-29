@@ -1170,7 +1170,20 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(script.body.contains("renderOpportunityPlan"));
     assert!(script.body.contains("deleteOpportunityProfile"));
     assert!(script.body.contains("submitOpportunityOperation"));
-    assert!(script.body.contains("opportunity-pending-operation"));
+    assert!(script.body.contains("opportunity-pending-create/v1"));
+    assert!(script.body.contains("opportunity-pending-delete/v1"));
+    assert!(script.body.contains("opportunityPendingMemory = new Map()"));
+    assert!(
+        script
+            .body
+            .contains("clearPendingOperation(\"create\", envelope)")
+    );
+    assert!(
+        script
+            .body
+            .contains("clearPendingOperation(\"delete\", envelope)")
+    );
+    assert!(!script.body.contains("opportunity-pending-operation/v1"));
     assert!(script.body.contains("mintBoundedId"));
 
     let health = server.get("/healthz");
