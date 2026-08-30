@@ -1,12 +1,12 @@
 # USTC Affairs Navigator
 
 - `Package ID`: `ustc.affairs-navigator`
-- `Status`: Bounded executable procedure kernel plus one retained source-grounded noncanonical fixture, exact-query and loopback-only Web demonstration; complete administrator/source-ingestion/production-Web feature remains planned
+- `Status`: Bounded `PROC-011` core-demo path implemented: fixed administrator publication uses `M10 → M00 admission/durable evidence → M71`, while ordinary reads remain on `M10 → deterministic Harness → current Market authorization → ToolGateway → M71`; publication state has strict durable restart recovery and loopback HTTP/CLI/Web projection
 - `Owning plan`: `docs/plan/06-first-party-plugins.md`
 - `Contracts`: `docs/contracts/source-import.md`, `docs/contracts/permissions.md`
 - `Acceptance`: `FP-001`, `PROC-*`
 
-Current retained evidence covers checked stable procedure/artifact identities, draft/policy/freshness/conflict semantics and one retained source-grounded noncanonical fixture for the USTC undergraduate transcript/enrollment-certificate procedure. The exact lookup runs through M00→M10→M71 and is exposed both through the loopback `ustc-agentd`/`ustc-agent` product path and a loopback-only thin Web renderer. Retained and normalized source bytes are hash-accounted; this is not administrator review/publication or approved M60 source authority. It does not implement general M60 import, administrator review/publish/archive, supersession, broad structured search, production auth/TLS/remote HTTP, Dioxus, Android, inbound MCP or Agent/Market integration; `PROC-011` therefore remains planned.
+Current retained evidence covers checked stable procedure/artifact identities, exact M60 `DemoReviewed` import, digest-bound review, deterministic IDs, CAS replay and a recovery anchor that binds every durable record to the fixture draft/reviewer/time/M60 decision before recreating a sealed M71 commit. The fixed administrator command recomputes its M10 payload digest, passes current M00 session/permission/capability admission, persists or verifies durable redacted control evidence, and only then calls M71. Canonical JSON state is owner-only, bounded and atomically replaced; malformed, noncanonical, reordered, duplicated, gapped, oversized, symlink/hardlink/FIFO/directory, mode or runtime-replacement cases fail closed. A two-process test and loopback CLI/Web/browser smokes recover revision 2, the exact receipt and one control-evidence event; after the fixture's separately validated bootstrap, durable reopen/retry itself performs no additional M60 publication decision. Ordinary user reads continue through Market/Harness/ToolGateway and still return the source-grounded result after restart. This is bounded proof, not production SSO/live retrieval/generic content management; supersession, broad search, Dioxus/Android and inbound MCP remain open.
 
 ## Goal
 
@@ -66,4 +66,4 @@ Archived historical artifact
 
 ## First honest acceptance
 
-One administrator-maintained board answers one real procedure with conditions, steps, time, sources and explicit uncertainty. The approved board/source and its data-use evidence must be frozen before implementation claims begin.
+One M00-authorized demo administrator imports a non-personal source-grounded snapshot explicitly labelled `DemoReviewed`, publishes one procedure through the real application boundary, and a user queries the same persisted state through Web with conditions, steps, time, sources and explicit uncertainty. The demo label must not imply real-time official data or legal approval.

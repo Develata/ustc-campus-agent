@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- `Status`: Accepted registry; one source-grounded noncanonical fixture, loopback-only `affairs.get` HTTP/Web demonstration and the earlier framed-CLI/result-lookup proof are retained as bounded partial evidence, while production public routes and all other operation projections remain planned
+- `Status`: Accepted registry; source-grounded noncanonical Affairs and ChangeRadar demonstrations are retained as bounded partial evidence; the consent-bound M72 private-profile slice below is the active implementation contract; production public routes and all other operation projections remain planned
 - `Version`: `application-interface-registry/v2`
-- `Last Review`: `2026-08-26`
+- `Last Review`: `2026-08-28`
 - `Owning plan`: [`M10 Application Ingress Host`](../plan/modules/20-application-api-host.md)
 - `Client counterpart`: [`client-shell/v2.1`](client-shell.md)
 - `Permission counterpart`: [`permissions.md`](permissions.md)
@@ -25,7 +25,7 @@ Operation IDs name semantics independently of transport or CLI spelling. Each ad
 | `market.package.get` | M20 | `public-read` | read | CLI, HTTP | planned |
 | `affairs.search` | M71 | `public-read` | read | CLI, HTTP, inbound MCP | planned after owning product contract |
 | `affairs.get` | M71 | `public-read` | read | CLI, HTTP, inbound MCP | bounded exact stable-ID evidence through `ustc-agentd`, `ustc-agent` and the loopback-only Web demo; production HTTP/inbound-MCP projection planned |
-| `change.list` | M70 | `public-read` | read | CLI, HTTP | planned after owning product contract |
+| `change.list` | M70 | `public-read` | read | CLI, HTTP | bounded exact semantic-change evidence through `ustc-agentd` and the loopback-only JSON/Web/Atom demo; production HTTP projection planned |
 | `change.get` | M70 | `public-read` | read | CLI, HTTP | planned after owning product contract |
 | `program.list` | M72 | `public-read` | read | CLI, HTTP, inbound MCP | planned after owning product contract |
 | `program.get` | M72 | `public-read` | read | CLI, HTTP, inbound MCP | planned after owning product contract |
@@ -34,16 +34,36 @@ Operation IDs name semantics independently of transport or CLI spelling. Each ad
 | `offering.list` | M72 | `public-read` | read | CLI, HTTP, inbound MCP | planned after owning product contract |
 | `course.review_linkout` | M72 | `public-linkout` | link-out | CLI, HTTP, inbound MCP | planned after owning product contract |
 | `source.provenance` | M60 | `public-read` | read | CLI, HTTP, inbound MCP | planned after owning source/product contract |
+| `profile.academic.create` | M72 | `tenant-private-write` | tenant-local mutation | HTTP | active bounded Opportunity Graph slice; exact consent and authenticated owner required |
+| `profile.academic.view` | M72 | `tenant-private-read` | read | HTTP | active bounded Opportunity Graph slice; metadata/count projection only |
+| `profile.academic.revoke_delete` | M72 | `tenant-private-write` | tenant-local deletion | HTTP | active bounded Opportunity Graph slice; consent revoke and payload deletion are one operation |
 | `profile.requirement_status` | M72 | `tenant-private-read` | read | CLI, HTTP, later inbound MCP | later private-data slice |
 | `planner.draft.list` | M72 | `tenant-private-read` | read | CLI, HTTP | later private-data slice |
 | `planner.draft.get` | M72 | `tenant-private-read` | read | CLI, HTTP | later private-data slice |
 | `planner.draft.delete` | M72 | `tenant-private-write` | tenant-local mutation | CLI, HTTP | later private-draft slice |
-| `planner.generate` | M72 | `tenant-private-write` | tenant-local draft mutation | CLI, HTTP, later inbound MCP | later private-draft slice |
+| `planner.generate` | M72 | `tenant-private-write` | bounded tenant-local planning | HTTP | active bounded Opportunity Graph slice; no enrollment/application side effect |
 | `planner.explain` | M72 | `tenant-private-read` | read | CLI, HTTP, later inbound MCP | later private-data slice |
 
-`program.*` means an approved cultivation-program projection. `planner.draft.*` means a tenant-local planning draft. Neither is an Agent/Harness plan, and no ambiguous `plan.*` alias is admitted.
+`program.*` means an approved cultivation-program projection. `profile.academic.*` is the exact consent-bound M72 private-profile family; principal identity is derived only from the M00-admitted session and is never caller-supplied inside the operation payload. `planner.draft.*` means a tenant-local planning draft. Neither is an Agent/Harness plan, and no ambiguous `plan.*` alias is admitted.
 
-The first planned production protocol proof remains `server.info` plus `capability.list`, followed by the shared CLI/inbound-MCP `market.package.list` slice. A bounded loopback-only `affairs.get` proof now exists earlier as vertical-slice evidence for the M10→M71 typed path and one operation-specific presentation surface. It includes one retained, source-grounded noncanonical fixture and a thin Web renderer, but still uses the bounded M60 fixture adapter and demo admission data. It does not make a remotely exposed production HTTP route, inbound MCP tool, general M60 ingestion service, administrator publication lifecycle, broad `affairs.search`, generic M80/Dioxus shell or `PROC-011` operational. Existing Course Planning code remains bounded offline evidence and does not make M72 operations operational.
+The first planned production protocol proof remains `server.info` plus `capability.list`, followed by the shared CLI/inbound-MCP `market.package.list` slice. Bounded loopback-only `affairs.get` and `change.list` proofs now exist earlier as vertical-slice evidence for `M10 → deterministic Harness → current Market authorization → ToolGateway → fixed first-party owning adapter → M71/M70` and two operation-specific presentation surfaces. The active M72 slice reuses that spine but requires an authenticated M00 actor, an exact three-field consent grant, tenant-private persistence, transaction-current source health and an owning Opportunity Graph executor. It does not authorize public or inbound-MCP private-profile exposure. The retained product paths remain loopback demos with reviewed/DemoReviewed source inputs and demo admission data; they do not make a remotely exposed production HTTP route, package-portable/out-of-process executor host, general M60 ingestion service, production SSO, broad search, generic M80/Dioxus shell or acceptance rows operational before their exact evidence passes.
+
+### 1.1 Active M72 private-operation wire contract
+
+All four operations use one bounded `SubmitOpportunityDto` envelope and a closed typed command sum. The envelope carries request/correlation/causation/idempotency identities, an **authenticated** session reference, client provenance and a domain-separated payload digest. It carries no tenant or user identifier; M10 forwards only the `M00AdmittedActor::Authenticated` identities.
+
+The command sum is exactly:
+
+- `create_profile`: consent purpose `opportunity_planning`; consent fields exactly `completed_courses`, `credit_bounds`, `preference_weights`; consent time; at most 64 completed course codes; positive `min_credits <= max_credits`; and at most 64 unique course preference weights;
+- `view_profile`: one exact `profile-snapshot:opportunity:*` identity;
+- `generate_plan`: one exact profile snapshot identity, `max_results` in `1..=8` and `beam_width` in `1..=4096`; the demo journey uses the deterministic pack default `1024`;
+- `revoke_consent_and_delete_profile`: one exact profile snapshot identity and a revocation time not earlier than consent.
+
+M10 recomputes the payload digest before admission, selects the operation descriptor from the command variant and denies any variant/descriptor drift. The typed terminal sum is exactly `profile_created | profile_found | plan_generated | profile_deleted`. Profile projections expose consent/profile identities, consent purpose/fields, consent time and only completed-course/preference **counts** plus credit bounds; they do not echo completed-course codes or preference weights. Planning projections may expose selected course codes and owner-private qualification inputs because the entire route is tenant-private, but `Debug`, logs, public lookup/cache and sibling Plugin projections must redact the request and terminal. Deletion terminals retain only deletion/profile/consent identities and deletion time.
+
+Failure precedence is: malformed/bounds/digest → M00 session/policy admission → current Market installation/grant authorization → bounded Harness/ToolGateway → owning repository/profile lookup → M60 source health → deterministic planner/projection. A wrong principal, disabled/revoked Plugin or missing/deleted profile reaches neither M60 nor planner. Syntactically valid profile facts that do not belong to the reviewed catalog return typed `invalid_profile_facts`, not an internal error or guessed identity. Stale/conflicting/unavailable source produces a typed refusal, never a best-effort plan. A tool failure before execution is a retryable infrastructure failure with zero executor/private-state calls; an effect whose outcome receipt cannot be persisted returns `incomplete`/outcome-unknown rather than false success, and the domain operations are replay-idempotent. Repository/provider failures remain distinguishable infrastructure failures rather than source facts. No M10 or Web fallback may call M72 directly after the invocation port denies or fails.
+
+The package declares private capabilities without auto-granting them. `profile.academic.create` and `profile.academic.revoke_delete` require `user.own_academic_snapshot.write`; `profile.academic.view` requires `user.own_academic_snapshot.read`; `planner.generate` requires `user.own_plan_draft.write`. All three private capability definitions are `TenantPrivateUser`, `autoGrant=Never`, `confirmationDefault=Ask`. A first-party package declaration is therefore not authority; each invocation still requires a transaction-current grant snapshot and recheck.
 
 ## 2. Schema identity and grant invalidation
 
@@ -73,8 +93,14 @@ Routes are transport projections of §1 operations. An endpoint may be a version
 | `/api/agent/runs/{id}:cancel` | POST | future typed cancellation operation | planned by owning harness contract |
 | `/api/agent/runs/{id}/events` | GET/SSE | future HarnessRun event projection | planned by owning harness contract |
 | `/api/v1/affairs/{procedure_id}` | GET | `affairs.get`; public-redacted `ClientResponseDto::Available` result from M00→M10→M71, rendered by the colocated thin Web page | bounded loopback-only demo; production auth/TLS/capability discovery not claimed |
+| `/api/v1/changes/{board_id}` | GET | `change.list`; typed M70 board result from M00→M10→bounded Harness→current Market authorization→ToolGateway→ChangeRadar, rendered by the colocated thin Web page | bounded loopback-only demo; production auth/TLS/durable M10 lookup not claimed |
+| `/api/v1/changes/{board_id}/atom` | GET | RFC 4287 Atom projection over the same reviewed ChangeRadar publication repository and bounded invocation path | bounded loopback-only demo; production feed persistence/distribution not claimed |
+| `/api/v1/opportunity/profiles` | POST | `profile.academic.create`; exact consent plus tenant-private profile payload | active bounded loopback-only demo contract; production SSO/TLS not claimed |
+| `/api/v1/opportunity/profiles/{profile_snapshot_id}` | GET | `profile.academic.view`; authenticated owner metadata/count projection | active bounded loopback-only demo contract; no public/browser cache |
+| `/api/v1/opportunity/plans` | POST | `planner.generate`; source/profile-grounded typed qualification and bounded plan | active bounded loopback-only demo contract; no enrollment/application side effect |
+| `/api/v1/opportunity/profiles/{profile_snapshot_id}/revoke-delete` | POST | `profile.academic.revoke_delete`; one consent-revoke/private-payload-delete operation | active bounded loopback-only demo contract; backup-erasure beyond owned demo state not claimed |
 
-The bounded Web demo also serves `/`, `/assets/styles.css`, `/assets/app.js` and `/healthz` from the same `ustc-agentd serve-web` process. `serve-web` rejects non-loopback bind addresses. The page accepts only a procedure ID, sends a same-origin GET and renders the server-owned typed result with `textContent`; it performs no source, freshness, conflict, eligibility or procedure calculation. The server creates bounded request/correlation identities, recomputes the payload digest and invokes the ordinary M00/M10 admission path. The response-only public capability minted by submit is consumed immediately by an internal typed lookup and MUST NOT be serialized, logged, stored in browser state or placed in a URL; the route returns only the public-redacted `Available` projection and fails closed if that handoff is absent or malformed. Static and API responses are `no-store`, `nosniff`, frame-denied and same-origin constrained. This demo surface is not a compatibility promise for the future Dioxus/production API.
+The bounded Web demo also serves `/`, `/assets/styles.css`, `/assets/app.js` and `/healthz` from the same `ustc-agentd serve-web` process. `serve-web` rejects non-loopback bind addresses. The Affairs form accepts only a procedure ID; the ChangeRadar section requests one fixed reviewed board identity and offers its sibling Atom projection. The active Opportunity Graph section uses only the server-owned demo session and synthetic profile input; the session/tenant/user identifiers are never accepted from a browser field or returned to JavaScript. All sections render only server-owned typed results with `textContent`; the page performs no source, freshness, conflict, eligibility, procedure, semantic-diff or planning calculation. The server creates bounded request/correlation identities, recomputes each operation's payload digest and invokes the ordinary M00/M10 admission path. For Affairs, the response-only public capability minted by submit is consumed immediately by an internal typed lookup and MUST NOT be serialized, logged, stored in browser state or placed in a URL. ChangeRadar returns its bounded synchronous typed terminal. Opportunity responses are owner-private and are never written to the public M10 lookup store. Static and API responses are `no-store`, `nosniff`, frame-denied and same-origin constrained. This demo surface is not a compatibility promise for the future Dioxus/production API.
 
 Every request carries client build/target/protocol identity. M10 performs version, size, identity, authorization, idempotency/precondition and audit admission before dispatching one application operation. A server function or HTTP/SSE route MUST NOT call concrete repositories, databases, Plugin executors, provider SDKs or journals directly.
 

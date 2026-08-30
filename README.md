@@ -6,19 +6,36 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 
 平台有三个正式的 default first-party Plugins：**USTC Affairs Navigator**、**USTC ChangeRadar** 与 **Campus Opportunity Graph**。三者共享 Campus Trust Kernel，但保持独立的 package identity、版本、安装与启停边界。
 
-平台主线已建立 framework-neutral Agent runtime kernel、typed invocation resolver 与 `agent-tool-protocol/v0` 的 executable evidence，并固定 `Agent ↔ ToolGateway ↔ PluginExecutor` 为唯一扩展边界。当前另有一个可直接运行的 **Affairs Navigator** bounded vertical slice：retained source-grounded fixture → M71 typed result → M10 durable ingress → ordinary-user CLI/loopback Web。它证明一个公开办事流程 fixture 的端到端产品路径，不代表管理员审批/发布、完整 M60 自动导入、生产认证、远程部署、Market/runtime 或三插件闭环。
+平台主线已建立 framework-neutral Agent runtime kernel、typed invocation resolver 与 `agent-tool-protocol/v0` 的 executable evidence，并固定 `Agent ↔ ToolGateway ↔ PluginExecutor` 为唯一扩展边界。当前同一 `ustc-agentd` binary 已组成一个 bounded 三插件 MVP：loopback Web → M10 → bounded Agent/Harness → transaction-current Market authorization → ToolGateway → owning Plugin → source/profile-grounded result → typed projection → Web。它使用显著标记的 DemoReviewed source snapshots 与 synthetic private profile，不代表 USTC 官方服务、实时来源、正式 SSO、自动审批或自动选课。
 
-## 可运行的办事导航纵切
+## 一条命令运行三插件 MVP
 
 准备好 Rust stable toolchain 后，在仓库根目录执行：
 
 ```bash
-./scripts/run_affairs_web_demo.sh
+./scripts/run_three_plugin_mvp.sh
 ```
 
-然后访问 <http://127.0.0.1:8787>。页面默认查询 `proc:ustc:undergraduate:transcript-certificate`，展示办理条件、步骤、明确的未知时间边界、入口、联系方式、safe lineage、freshness、conflict 与 uncertainty。当前 fixture 保留了 2026-08-26 获取的[中国科大教务处公开页面](https://www.teach.ustc.edu.cn/service/svc-student/13824.html)及 normalized bytes，并由测试核对两者 SHA-256；这不是管理员审批/发布，也不会替代原始页面。
+然后访问 <http://127.0.0.1:8787>。同一页面提供三条展示旅程：
 
-该命令只绑定 loopback。运行状态默认写入 `$XDG_STATE_HOME/ustc-campus-agent/affairs-demo`（未设置时为 `~/.local/state/ustc-campus-agent/affairs-demo`）；可用 `USTC_AFFAIRS_BIND` 与 `USTC_AFFAIRS_STATE_DIR` 覆盖。当前 slice 没有生产认证、TLS、多用户隔离或自动来源更新，不应直接暴露到公网。
+- **Affairs Navigator**：查询 `proc:ustc:undergraduate:transcript-certificate`，展示办理条件、步骤、入口、联系信息、provenance、freshness、conflict 与 uncertainty；管理员面板在显式确认后执行固定 `DemoReviewed` revision publish；
+- **ChangeRadar**：读取同一 source identity 的两个 immutable DemoReviewed revisions，展示确定性的 semantic changes，并提供 Atom feed；
+- **Opportunity Graph**：明确 consent 后创建 tenant-private synthetic profile，生成 source-grounded 课程计划，随后 revoke/delete；删除后只保留不含 completed courses 或 preference weights 的 typed tombstone。
+
+命令只接受 loopback bind。运行状态默认写入 `$XDG_STATE_HOME/ustc-campus-agent/three-plugin-mvp`（未设置时为 `~/.local/state/ustc-campus-agent/three-plugin-mvp`）；可用 `USTC_AGENTD_BIND` 与 `USTC_AGENTD_STATE_DIR` 覆盖。state directory 必须是当前用户拥有、模式 `0700` 的真实目录；launcher 不会静默 chmod/修复不安全路径。停止并以同一命令、同一 state directory 重启，会读回 Affairs records/idempotency、`m00-sessions.json`、administrator control evidence、checked Affairs publication recovery records 以及 Opportunity active profile/tombstone。Publication state 与 control evidence 是从 Affairs idempotency path 确定性派生的 owner-only sibling files；Market activation 和 ChangeRadar source baseline 仍由同一 checkout 中的 reviewed declarative fixtures 重建并重新校验。`m00-sessions.json` 是模式 `0600`、event-history-only 的 B4a read authority，不是正式 SSO 或 durable session lifecycle mutation。
+
+M00 的 bounded B4 interface/fake batch 现包含 B4a durable current-session read authority 与 B4b stable redacted control-event/error + append-once journal ports。Affairs 的 bounded B5 composition 已把固定管理员命令接到 `M10 → M00 admission/durable evidence → M71`，但 B4b Serde values 仍只是 data-only，且该 fixture-specific adapter 不等于 production evidence service、正式 SSO 或通用管理员 API。
+
+当前 fixture 保留了 2026-08-26 获取的[中国科大教务处公开页面](https://www.teach.ustc.edu.cn/service/svc-student/13824.html)及 normalized bytes，并由 checker/test 核对 SHA-256；ChangeRadar 与 Opportunity source 也显著标记为 DemoReviewed/synthetic。这些 fixture 不会替代原始官方页面。服务没有生产认证、TLS、正式多用户 SSO 或自动来源更新，禁止直接暴露到公网。
+
+只需 Affairs Navigator 的兼容性 demo 入口仍是 `./scripts/run_affairs_web_demo.sh`。
+
+`ustc-agentctl` 可从另一个本机进程读取或触发同一固定 demo 命令；非 loopback 地址、发布时缺少 `--confirm` 或 HTTP 侧缺少自定义确认请求头都会 fail closed：
+
+```bash
+cargo run -p ustc-agentctl -- affairs publication-status --server 127.0.0.1:8787
+cargo run -p ustc-agentctl -- affairs publish-demo --server 127.0.0.1:8787 --confirm
+```
 
 ## Current decisions
 
@@ -27,8 +44,8 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | Repository | `ustc-campus-agent`，GitHub private，Develata personal account |
 | Product name | USTC Campus Agent |
 | Default first-party Plugins | `ustc.affairs-navigator`, `ustc.change-radar`, `ustc.opportunity-graph` |
-| Implementation order | ChangeRadar foundation → Affairs Navigator → ChangeRadar feed → Opportunity Graph integration |
-| Course Planning | Retained bounded offline spike inside Opportunity Graph; not Market/runtime completion |
+| Implementation order | ChangeRadar foundation → Affairs Navigator → ChangeRadar feed → Opportunity Graph composition → three-plugin reproducible E2E |
+| Course Planning | Retained deterministic pack inside the active consent/profile/Market/Web Opportunity Graph composition; production SSO/live-source completion is not claimed |
 | Chinese name | TBD；首版使用中文描述“面向科大学生的插件化校园智能体” |
 | GitHub organization | Deferred |
 | Market repository | Deferred；当前为 monorepo 内 `market/` logical authority boundary |
@@ -38,13 +55,13 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 | Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
 | Required delivery targets | Web/PWA + Docker Compose Fullstack server + Android；Windows 为已接纳的 later peer、当前不进入 required gate；iOS/其他 desktop 后续候选 |
 | Multi-client shell | `M10` owns framework-neutral versioned operation/client-protocol registry；`M80` owns client core over it；Dioxus Web/Android、`ustc-agent` 与 public-read-first inbound MCP 为 peer adapters；later Windows 复用同一 core；M10 不依赖 client-core，GUI 不 spawn CLI；client/server adapter 不拥有平台 authority |
-| CLI privilege split | `ustc-agentctl` 为 operator/developer；`ustc-agent` 已有 bounded ordinary-user/headless Affairs path；`ustc-agentd serve-web` 只提供 loopback-only source-grounded fixture demo，生产 auth/remote HTTP/streaming 仍未实现；MCP 仅暴露 selected least-privilege tools/resources |
+| CLI privilege split | `ustc-agentctl` 为 operator/developer；`ustc-agent` 已有 bounded ordinary-user/headless Affairs path；`ustc-agentd serve-web` 提供 loopback-only、三插件 source/profile-grounded MVP，生产 auth/remote HTTP/streaming 仍未实现；MCP 仅暴露 selected least-privilege tools/resources |
 
 ## Repository layout
 
 ```text
 apps/                     # runnable binaries and future interaction-shell source
-  ustc-agentd/            # daemon plus bounded source-grounded fixture CLI/Web Affairs composition
+  ustc-agentd/            # daemon plus bounded three-plugin loopback Web composition
   ustc-agentctl/          # operator/developer CLI skeleton
   ustc-agent/             # bounded ordinary-user/headless Affairs CLI evidence; production transport/auth planned
   ustc-client/            # future shared Dioxus Web/Android Fullstack source
@@ -56,6 +73,7 @@ crates/
   agent-tool-protocol/    # provider-neutral canonical tool values and sealed view/call/result envelopes
   adapters/               # replaceable provider/tool/executor adapters; no authority ownership
   course-planning/         # typed fixture validation and deterministic planner core
+  change-radar/            # bounded source-revision semantic diff and baseline/candidate core
 market/                   # plugin catalog authority boundary inside this repo
 plugins/                  # three first-party plugin implementation/doc boundaries
 docs/                     # layered plans, features, contracts, acceptance, tasks, guides and ADRs

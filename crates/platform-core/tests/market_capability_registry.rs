@@ -7,9 +7,9 @@ use ustc_campus_agent_core::market::capability::{
 
 const REGISTRY: &[u8] = include_bytes!("../../../market/capabilities/registry.json");
 
-const SINGLE: &str = r#"{"schemaVersion":"capability-registry/v1","registryRevision":"capability-registry:2026-07-29-01","capabilities":[{"id":"campus.public_rules.read","effectClass":"Read","dataClass":"PublicCampusFact","scopeKind":"CampusPublic","autoGrant":"FirstPartyDefaultOnly","confirmationDefault":"Allow","status":"Active"}]}"#;
+const SINGLE: &str = r#"{"schemaVersion":"capability-registry/v1","registryRevision":"capability-registry:2026-08-28-01","capabilities":[{"id":"campus.public_rules.read","effectClass":"Read","dataClass":"PublicCampusFact","scopeKind":"CampusPublic","autoGrant":"FirstPartyDefaultOnly","confirmationDefault":"Allow","status":"Active"}]}"#;
 
-const REVISION: &str = "capability-registry:2026-07-29-01";
+const REVISION: &str = "capability-registry:2026-08-28-01";
 
 fn load(source: &[u8]) -> ustc_campus_agent_core::market::capability::CapabilityRegistry {
     match load_capability_registry(source) {
@@ -141,13 +141,13 @@ fn data_name(data: DataClass) -> &'static str {
 }
 
 #[test]
-fn current_registry_loads_with_exact_eight_definitions() {
+fn current_registry_loads_with_exact_nine_definitions() {
     let registry = load(REGISTRY);
     assert_eq!(
         registry.registry_revision().as_str(),
-        "capability-registry:2026-07-29-01"
+        "capability-registry:2026-08-28-01"
     );
-    assert_eq!(registry.definitions().len(), 8);
+    assert_eq!(registry.definitions().len(), 9);
 
     let sorted_ids: Vec<&str> = registry
         .definitions()
@@ -163,6 +163,7 @@ fn current_registry_loads_with_exact_eight_definitions() {
             "campus.public_plan.read",
             "campus.public_rules.read",
             "user.own_academic_snapshot.read",
+            "user.own_academic_snapshot.write",
             "user.own_course_preferences.read",
             "user.own_plan_draft.write",
         ]
@@ -221,7 +222,7 @@ fn current_registry_loads_with_exact_eight_definitions() {
                 );
                 assert_eq!(definition.risk_class(), RiskClass::High);
             }
-            "user.own_plan_draft.write" => {
+            "user.own_academic_snapshot.write" | "user.own_plan_draft.write" => {
                 assert_eq!(definition.effect_class(), EffectClass::Write);
                 assert_eq!(definition.data_class(), DataClass::UserProfile);
                 assert_eq!(definition.scope_kind(), ScopeKind::TenantPrivateUser);
@@ -578,7 +579,7 @@ fn deterministic_ordering_and_permutation_independent_digest() {
         registry.registry_digest().as_str(),
         permuted_registry.registry_digest().as_str()
     );
-    assert_eq!(registry.definitions().len(), 8);
+    assert_eq!(registry.definitions().len(), 9);
 }
 
 #[test]
@@ -586,7 +587,7 @@ fn fixed_definition_and_registry_digest_vectors() {
     let registry = load(REGISTRY);
     assert_eq!(
         registry.registry_digest().as_str(),
-        "sha256:428dc176278de88565478b61733606cebfc6e1da5bd6ffa4be0b2afa4694e92a"
+        "sha256:350791bc19bf390b6faa94aeec96b494c3fe6281d2e0dbaf4df6b079913b3eb6"
     );
     let linkout_def = match registry.find(&parsed_capability_id("campus.community_review.linkout"))
     {
@@ -809,7 +810,7 @@ fn policy_change_comparator_branches_and_precedence() {
 fn errors_do_not_leak_rejected_source_fragments() {
     let sentinel = "DO_NOT_ECHO_PRIVATE_FRAGMENT_9381";
     let invalid_id = format!(
-        r#"{{"schemaVersion":"capability-registry/v1","registryRevision":"capability-registry:2026-07-29-01","capabilities":[{{"id":"{sentinel}.bad","effectClass":"Read","dataClass":"PublicCampusFact","scopeKind":"CampusPublic","autoGrant":"FirstPartyDefaultOnly","confirmationDefault":"Allow","status":"Active"}}]}}"#
+        r#"{{"schemaVersion":"capability-registry/v1","registryRevision":"capability-registry:2026-08-28-01","capabilities":[{{"id":"{sentinel}.bad","effectClass":"Read","dataClass":"PublicCampusFact","scopeKind":"CampusPublic","autoGrant":"FirstPartyDefaultOnly","confirmationDefault":"Allow","status":"Active"}}]}}"#
     );
     let error = load_err(invalid_id.as_bytes());
     assert_eq!(error, CapabilityRegistryLoadError::InvalidCapabilityId);
@@ -817,7 +818,7 @@ fn errors_do_not_leak_rejected_source_fragments() {
     assert!(!format!("{error:?}").contains(sentinel));
 
     let unknown_enum = format!(
-        r#"{{"schemaVersion":"capability-registry/v1","registryRevision":"capability-registry:2026-07-29-01","capabilities":[{{"id":"campus.public_rules.read","effectClass":"{sentinel}","dataClass":"PublicCampusFact","scopeKind":"CampusPublic","autoGrant":"FirstPartyDefaultOnly","confirmationDefault":"Allow","status":"Active"}}]}}"#
+        r#"{{"schemaVersion":"capability-registry/v1","registryRevision":"capability-registry:2026-08-28-01","capabilities":[{{"id":"campus.public_rules.read","effectClass":"{sentinel}","dataClass":"PublicCampusFact","scopeKind":"CampusPublic","autoGrant":"FirstPartyDefaultOnly","confirmationDefault":"Allow","status":"Active"}}]}}"#
     );
     let json_error = load_err(unknown_enum.as_bytes());
     assert_eq!(json_error, CapabilityRegistryLoadError::JsonRejected);

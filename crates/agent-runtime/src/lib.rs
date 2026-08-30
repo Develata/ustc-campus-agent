@@ -16,7 +16,7 @@ pub const RUN_SPEC_SCHEMA_VERSION: &str = "agent-run/v0";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RunBudgets {
-    /// Maximum number of provider/model turns.
+    /// Maximum number of provider/model or deterministic harness turns.
     pub max_turns: u32,
     /// Maximum number of proposed tool calls.
     pub max_tool_calls: u32,
@@ -120,10 +120,12 @@ impl RunSpec {
 pub enum RunPhase {
     /// Spec accepted; no preparation event has been persisted.
     Created,
-    /// Ready to begin the next model turn.
+    /// Ready to begin the next model or deterministic harness turn.
     Preparing,
     /// One model turn is in progress or has produced a final response.
     ModelTurn,
+    /// One deterministic, provider-free harness turn is in progress.
+    HarnessTurn,
     /// A tool call is awaiting platform approval and intent creation.
     AwaitingToolApproval,
     /// An effect intent is persisted and awaits an exact receipt.
@@ -246,6 +248,8 @@ pub enum RunCommand {
     Prepare,
     /// Begin and charge the next model turn.
     StartModelTurn,
+    /// Begin and charge one provider-free deterministic harness turn.
+    StartHarnessTurn,
     /// Persist exact usage before accepting the model turn outcome.
     RecordModelUsage(ModelUsage),
     /// Persist one proposed tool call.
@@ -273,6 +277,7 @@ impl RunCommand {
         match self {
             Self::Prepare => "prepare",
             Self::StartModelTurn => "start_model_turn",
+            Self::StartHarnessTurn => "start_harness_turn",
             Self::RecordModelUsage(_) => "record_model_usage",
             Self::ProposeToolCall(_) => "propose_tool_call",
             Self::ApproveToolCall(_) => "approve_tool_call",
@@ -290,6 +295,7 @@ impl RunCommand {
         match self {
             Self::Prepare => RunEventKind::Prepared,
             Self::StartModelTurn => RunEventKind::ModelTurnStarted,
+            Self::StartHarnessTurn => RunEventKind::HarnessTurnStarted,
             Self::RecordModelUsage(usage) => RunEventKind::ModelUsageRecorded { usage },
             Self::ProposeToolCall(proposal) => RunEventKind::ToolCallProposed { proposal },
             Self::ApproveToolCall(intent) => RunEventKind::EffectIntentPersisted { intent },
@@ -314,6 +320,8 @@ pub enum RunEventKind {
     Prepared,
     /// One model turn started and consumed budget.
     ModelTurnStarted,
+    /// One deterministic harness turn started and consumed turn budget.
+    HarnessTurnStarted,
     /// Exact provider-reported usage was persisted for the current turn.
     ModelUsageRecorded { usage: ModelUsage },
     /// Tool call proposal persisted.
@@ -341,6 +349,7 @@ impl RunEventKind {
         match self {
             Self::Prepared => "prepared",
             Self::ModelTurnStarted => "model_turn_started",
+            Self::HarnessTurnStarted => "harness_turn_started",
             Self::ModelUsageRecorded { .. } => "model_usage_recorded",
             Self::ToolCallProposed { .. } => "tool_call_proposed",
             Self::EffectIntentPersisted { .. } => "effect_intent_persisted",
@@ -567,7 +576,7 @@ impl AgentRun {
         }
         match command {
             RunCommand::Prepare => self.require_phase(RunPhase::Created, command.name()),
-            RunCommand::StartModelTurn => {
+            RunCommand::StartModelTurn | RunCommand::StartHarnessTurn => {
                 self.require_phase(RunPhase::Preparing, command.name())?;
                 self.require_elapsed_budget_remaining()?;
                 self.require_budget(
@@ -584,8 +593,11 @@ impl AgentRun {
                 self.validate_model_usage(*usage)
             }
             RunCommand::ProposeToolCall(proposal) => {
-                self.require_phase(RunPhase::ModelTurn, command.name())?;
-                self.require_model_usage()?;
+                match self.phase {
+                    RunPhase::ModelTurn => self.require_model_usage()?,
+                    RunPhase::HarnessTurn => {}
+                    _ => return self.require_phase(RunPhase::ModelTurn, command.name()),
+                }
                 validate_proposal(proposal)?;
                 if self.seen_call_ids.contains(&proposal.call_id) {
                     return Err(RuntimeError::DuplicateCallId {
@@ -608,7 +620,10 @@ impl AgentRun {
                 self.validate_receipt(receipt)
             }
             RunCommand::RecordRetry { reason_code } => {
-                if !matches!(self.phase, RunPhase::Preparing | RunPhase::ModelTurn) {
+                if !matches!(
+                    self.phase,
+                    RunPhase::Preparing | RunPhase::ModelTurn | RunPhase::HarnessTurn
+                ) {
                     return Err(RuntimeError::IllegalTransition {
                         phase: self.phase,
                         operation: command.name(),
@@ -638,8 +653,11 @@ impl AgentRun {
                 Ok(())
             }
             RunCommand::Complete { output_digest } => {
-                self.require_phase(RunPhase::ModelTurn, command.name())?;
-                self.require_model_usage()?;
+                match self.phase {
+                    RunPhase::ModelTurn => self.require_model_usage()?,
+                    RunPhase::HarnessTurn => {}
+                    _ => return self.require_phase(RunPhase::ModelTurn, command.name()),
+                }
                 validate_digest("output_digest", output_digest)
             }
             RunCommand::Fail { error_code } => {
@@ -658,6 +676,7 @@ impl AgentRun {
         let command = match event {
             RunEventKind::Prepared => RunCommand::Prepare,
             RunEventKind::ModelTurnStarted => RunCommand::StartModelTurn,
+            RunEventKind::HarnessTurnStarted => RunCommand::StartHarnessTurn,
             RunEventKind::ModelUsageRecorded { usage } => RunCommand::RecordModelUsage(*usage),
             RunEventKind::ToolCallProposed { proposal } => {
                 RunCommand::ProposeToolCall(proposal.clone())
@@ -704,6 +723,11 @@ impl AgentRun {
                 self.turns_used += 1;
                 self.model_usage_recorded = false;
                 self.phase = RunPhase::ModelTurn;
+            }
+            RunEventKind::HarnessTurnStarted => {
+                self.turns_used += 1;
+                self.model_usage_recorded = false;
+                self.phase = RunPhase::HarnessTurn;
             }
             RunEventKind::ModelUsageRecorded { usage } => {
                 self.input_tokens_used += usage.input_tokens;
@@ -1313,6 +1337,59 @@ mod tests {
             replayed.terminal(),
             Some(TerminalOutcome::Completed { output_digest }) if output_digest == ONE_DIGEST
         ));
+    }
+
+    #[test]
+    fn deterministic_harness_run_replays_without_fabricated_model_usage() {
+        let immutable_spec = spec();
+        let Ok(mut run) = AgentRun::new(immutable_spec.clone()) else {
+            panic!("fixture spec must be valid");
+        };
+        let mut events = Vec::new();
+        decide_and_apply(&mut run, &mut events, RunCommand::Prepare);
+        decide_and_apply(&mut run, &mut events, RunCommand::StartHarnessTurn);
+        decide_and_apply(
+            &mut run,
+            &mut events,
+            RunCommand::ProposeToolCall(proposal()),
+        );
+        decide_and_apply(&mut run, &mut events, RunCommand::ApproveToolCall(intent()));
+        decide_and_apply(
+            &mut run,
+            &mut events,
+            RunCommand::RecordEffectReceipt(receipt(ZERO_DIGEST)),
+        );
+        decide_and_apply(&mut run, &mut events, RunCommand::StartHarnessTurn);
+        decide_and_apply(
+            &mut run,
+            &mut events,
+            RunCommand::Complete {
+                output_digest: ONE_DIGEST.to_owned(),
+            },
+        );
+
+        assert_eq!(run.phase(), RunPhase::Completed);
+        assert_eq!(run.turns_used(), 2);
+        assert_eq!(run.input_tokens_used(), 0);
+        assert_eq!(run.output_tokens_used(), 0);
+        assert_eq!(run.cost_microunits_used(), 0);
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event.kind, RunEventKind::HarnessTurnStarted))
+                .count(),
+            2
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event.kind, RunEventKind::ModelUsageRecorded { .. }))
+        );
+
+        let Ok(replayed) = AgentRun::replay(immutable_spec, &events) else {
+            panic!("harness event stream must replay");
+        };
+        assert_eq!(replayed, run);
     }
 
     #[test]

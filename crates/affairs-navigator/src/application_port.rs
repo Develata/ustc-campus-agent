@@ -9,8 +9,9 @@
 //!
 //! The blanket implementation delegates to the actual M71 application service
 //! ([`AffairsGetService::execute`]), which is the sole constructor of the
-//! sealed receipt. The crate's dependency graph (only `time` and `sha2`)
-//! structurally guarantees the port carries no M10/M80/client/storage type.
+//! sealed receipt. The crate admits only M60-owned source-revision values from
+//! platform core and no M10/M80/client/storage dependency, so the query port
+//! carries no client or storage type.
 
 use crate::{AffairsGetQuery, AffairsGetService, GetProcedureError, M71AffairsGetReceipt};
 

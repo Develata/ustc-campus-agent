@@ -386,6 +386,9 @@ impl Descriptor {
     pub fn tenant_private_write() -> Self {
         Self::new("affairs.get", PermissionClass::TenantPrivateWrite)
     }
+    pub fn affairs_publication() -> Self {
+        Self::new("affairs.publish", PermissionClass::TenantPrivateWrite)
+    }
     pub fn wrong_operation() -> Self {
         Self::new("wrong.operation", PermissionClass::PublicRead)
     }
@@ -395,10 +398,12 @@ impl Descriptor {
             schema_identity: SchemaIdentity::parse("schema:fixture").expect("fixture"),
             schema_digest: schema_digest(),
             permission_class,
-            effect_class: if matches!(permission_class, PermissionClass::PublicLinkout) {
-                EffectClass::LinkOut
-            } else {
-                EffectClass::Read
+            effect_class: match permission_class {
+                PermissionClass::PublicRead | PermissionClass::TenantPrivateRead => {
+                    EffectClass::Read
+                }
+                PermissionClass::PublicLinkout => EffectClass::LinkOut,
+                PermissionClass::TenantPrivateWrite => EffectClass::TenantLocalMutation,
             },
             decoder_identity: DecoderIdentity::parse("decoder:fixture").expect("fixture"),
             dispatcher_identity: DispatcherIdentity::parse("dispatcher:fixture").expect("fixture"),
@@ -629,6 +634,20 @@ impl affairs_navigator::M71AffairsGetPort for FailingM71Port {
     }
 }
 
+impl ustc_campus_agent_application_ingress::AffairsInvocationPort for FailingM71Port {
+    fn invoke(
+        &self,
+        _actor: &ustc_campus_agent_core::request_context::M00AdmittedActor,
+        query: &AffairsGetQuery,
+    ) -> Result<
+        affairs_navigator::M71AffairsGetReceipt,
+        ustc_campus_agent_application_ingress::AffairsInvocationError,
+    > {
+        affairs_navigator::M71AffairsGetPort::affairs_get(self, query)
+            .map_err(ustc_campus_agent_application_ingress::AffairsInvocationError::Downstream)
+    }
+}
+
 pub struct M71FixturePort<'a> {
     service: AffairsGetService<'a>,
 }
@@ -651,6 +670,20 @@ impl<'a> affairs_navigator::M71AffairsGetPort for M71FixturePort<'a> {
         query: &AffairsGetQuery,
     ) -> Result<affairs_navigator::M71AffairsGetReceipt, affairs_navigator::GetProcedureError> {
         self.service.execute(query)
+    }
+}
+
+impl ustc_campus_agent_application_ingress::AffairsInvocationPort for M71FixturePort<'_> {
+    fn invoke(
+        &self,
+        _actor: &ustc_campus_agent_core::request_context::M00AdmittedActor,
+        query: &AffairsGetQuery,
+    ) -> Result<
+        affairs_navigator::M71AffairsGetReceipt,
+        ustc_campus_agent_application_ingress::AffairsInvocationError,
+    > {
+        affairs_navigator::M71AffairsGetPort::affairs_get(self, query)
+            .map_err(ustc_campus_agent_application_ingress::AffairsInvocationError::Downstream)
     }
 }
 

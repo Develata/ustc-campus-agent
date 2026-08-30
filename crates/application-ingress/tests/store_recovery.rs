@@ -3,6 +3,7 @@
 mod common;
 
 use affairs_navigator::{FixedClock, InMemoryAffairsRepository, m60_fixture::M60FixtureAdapter};
+use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service, StoreError};
@@ -14,6 +15,11 @@ fn operator_viewer() -> ViewerAuthorizationDto {
     ViewerAuthorizationDto::Operator {
         grant_id: WireText::parse("operator:fixture").unwrap(),
     }
+}
+
+fn write_private_state(path: &std::path::Path, bytes: impl AsRef<[u8]>) {
+    std::fs::write(path, bytes).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
 }
 
 fn make_m71_fixture() -> (InMemoryAffairsRepository, M60FixtureAdapter, FixedClock) {
@@ -306,7 +312,7 @@ fn r4_actor_policy_mismatch_public_actor_with_authenticated_policy_rejected() {
 #[test]
 fn r4_corrupt_json_rejected() {
     let path = temp_path();
-    std::fs::write(&path, b"not valid json").unwrap();
+    write_private_state(&path, b"not valid json");
     let result = FileRecordStore::open(&path);
     assert!(matches!(result, Err(StoreError::Corrupted(_))));
 }
@@ -314,7 +320,7 @@ fn r4_corrupt_json_rejected() {
 #[test]
 fn r4_empty_file_rejected() {
     let path = temp_path();
-    std::fs::write(&path, b"").unwrap();
+    write_private_state(&path, b"");
     let result = FileRecordStore::open(&path);
     assert!(matches!(result, Err(StoreError::Corrupted(_))));
 }
@@ -345,6 +351,24 @@ impl<'a> affairs_navigator::M71AffairsGetPort for CountingM71Port<'a> {
     ) -> Result<affairs_navigator::M71AffairsGetReceipt, affairs_navigator::GetProcedureError> {
         self.count.fetch_add(1, Ordering::SeqCst);
         self.inner.affairs_get(query)
+    }
+}
+
+impl ustc_campus_agent_application_ingress::AffairsInvocationPort for CountingM71Port<'_> {
+    fn invoke(
+        &self,
+        actor: &ustc_campus_agent_core::request_context::M00AdmittedActor,
+        query: &affairs_navigator::AffairsGetQuery,
+    ) -> Result<
+        affairs_navigator::M71AffairsGetReceipt,
+        ustc_campus_agent_application_ingress::AffairsInvocationError,
+    > {
+        self.count.fetch_add(1, Ordering::SeqCst);
+        ustc_campus_agent_application_ingress::AffairsInvocationPort::invoke(
+            &self.inner,
+            actor,
+            query,
+        )
     }
 }
 

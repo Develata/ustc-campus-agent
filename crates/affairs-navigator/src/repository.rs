@@ -18,6 +18,14 @@ pub enum RepositorySeedError {
     DuplicatePublicationState,
 }
 
+/// Typed infrastructure failure while reading an Affairs repository.
+/// Semantic absence remains `Ok(None)` and must never represent corruption.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AffairsRepositoryReadError {
+    Unavailable,
+    Corrupted,
+}
+
 /// In-memory repository. Seeded through checked fixture constructors; the
 /// service reads through the `AffairsRepository` trait.
 #[derive(Debug, Default)]
@@ -71,27 +79,37 @@ impl InMemoryAffairsRepository {
 /// Read-only repository trait consumed by the M71 application service.
 pub trait AffairsRepository: Send + Sync {
     /// Returns the current artifact for `procedure_id`, if one exists.
-    fn find_current_artifact(&self, procedure_id: &ProcedureId) -> Option<ProcedureArtifact>;
+    fn find_current_artifact(
+        &self,
+        procedure_id: &ProcedureId,
+    ) -> Result<Option<ProcedureArtifact>, AffairsRepositoryReadError>;
 
     /// Returns the publication state for `procedure_id`, if it exists.
     fn find_publication_state(
         &self,
         procedure_id: &ProcedureId,
-    ) -> Option<ProcedurePublicationState>;
+    ) -> Result<Option<ProcedurePublicationState>, AffairsRepositoryReadError>;
 }
 
 impl AffairsRepository for InMemoryAffairsRepository {
-    fn find_current_artifact(&self, procedure_id: &ProcedureId) -> Option<ProcedureArtifact> {
-        let state = self.publication_states.get(procedure_id)?;
-        let artifact_id = state.current_artifact_id()?;
-        self.artifacts.get(artifact_id).cloned()
+    fn find_current_artifact(
+        &self,
+        procedure_id: &ProcedureId,
+    ) -> Result<Option<ProcedureArtifact>, AffairsRepositoryReadError> {
+        let Some(state) = self.publication_states.get(procedure_id) else {
+            return Ok(None);
+        };
+        let Some(artifact_id) = state.current_artifact_id() else {
+            return Ok(None);
+        };
+        Ok(self.artifacts.get(artifact_id).cloned())
     }
 
     fn find_publication_state(
         &self,
         procedure_id: &ProcedureId,
-    ) -> Option<ProcedurePublicationState> {
-        self.publication_states.get(procedure_id).cloned()
+    ) -> Result<Option<ProcedurePublicationState>, AffairsRepositoryReadError> {
+        Ok(self.publication_states.get(procedure_id).cloned())
     }
 }
 
@@ -103,7 +121,15 @@ mod tests {
     fn empty_repo_returns_none() {
         let repo = InMemoryAffairsRepository::new();
         let pid = ProcedureId::parse("proc:none").expect("valid id");
-        assert!(repo.find_current_artifact(&pid).is_none());
-        assert!(repo.find_publication_state(&pid).is_none());
+        assert!(
+            repo.find_current_artifact(&pid)
+                .expect("repository read")
+                .is_none()
+        );
+        assert!(
+            repo.find_publication_state(&pid)
+                .expect("repository read")
+                .is_none()
+        );
     }
 }

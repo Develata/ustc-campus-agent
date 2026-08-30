@@ -19,6 +19,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 use serde_json::Value;
 
 use ustc_campus_agent_client_core::wire::{WireText, affairs_get_payload_digest};
@@ -30,16 +33,25 @@ use ustc_campus_agent_client_core::wire::{WireText, affairs_get_payload_digest};
 fn base_fixture() -> Value {
     serde_json::json!({
         "procedure_id": "proc:fixture",
-        "artifact_id": "artifact:fixture:v1",
         "title": "Fixture procedure",
         "known_at_secs": 50,
+        "observed_at_secs": 40,
+        "reviewed_at_secs": 160,
+        "published_at_secs": 170,
         "last_verified_at_secs": 150,
         "max_fresh_seconds": 100,
         "max_presentable_seconds": 200,
         "source_id": "src:fixture",
-        "revision_id": "rev:fixture:0",
+        "source_url": "https://demo.example/affairs/fixture",
+        "raw_snapshot_id": "raw:affairs:fixture:1",
         "raw_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "normalized_snapshot_id": "normalized:affairs:fixture:1",
         "normalized_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "parser_identity": "parser:affairs:fixture:v1",
+        "source_published_at_secs": 30,
+        "source_reviewer": "reviewer:demo:source",
+        "source_review_evidence": "evidence:demo:source",
+        "publication_reviewer": "actor:demo:administrator",
         "verifier_id": "verifier:fixture",
         "evidence_contract_version": 1,
         "clock_unix_seconds": 200,
@@ -73,6 +85,9 @@ fn temp_dir(label: &str) -> PathBuf {
     let id = COUNTER.fetch_add(1, Ordering::SeqCst);
     let dir = std::env::temp_dir().join(format!("agentd-e2e-{}-{id}-{label}", std::process::id()));
     fs::create_dir_all(&dir).expect("create temp dir");
+    #[cfg(unix)]
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))
+        .expect("secure temp directory permissions");
     dir
 }
 
@@ -120,6 +135,7 @@ struct ServerEnv {
     fixture: PathBuf,
     store: PathBuf,
     idempotency: PathBuf,
+    session_store: PathBuf,
     child: Child,
     endpoint: String,
 }
@@ -128,6 +144,7 @@ fn spawn_agentd(
     fixture: &std::path::Path,
     store: &std::path::Path,
     idempotency: &std::path::Path,
+    session_store: &std::path::Path,
 ) -> (Child, String) {
     let bin = agentd_bin();
     let mut child = Command::new(&bin)
@@ -141,6 +158,8 @@ fn spawn_agentd(
             store.to_str().unwrap(),
             "--idempotency",
             idempotency.to_str().unwrap(),
+            "--session-store",
+            session_store.to_str().unwrap(),
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -192,15 +211,22 @@ impl ServerEnv {
         let fixture_path = dir.join("fixture.json");
         let store_path = dir.join("store.json");
         let idempotency_path = dir.join("idempotency.json");
+        let session_store_path = dir.join("m00-sessions.json");
         fs::write(&fixture_path, fixture.to_string()).expect("write fixture");
 
-        let (child, endpoint) = spawn_agentd(&fixture_path, &store_path, &idempotency_path);
+        let (child, endpoint) = spawn_agentd(
+            &fixture_path,
+            &store_path,
+            &idempotency_path,
+            &session_store_path,
+        );
 
         Self {
             _dir: dir,
             fixture: fixture_path,
             store: store_path,
             idempotency: idempotency_path,
+            session_store: session_store_path,
             child,
             endpoint,
         }
@@ -210,7 +236,12 @@ impl ServerEnv {
         self.child.kill().expect("kill old server");
         self.child.wait().expect("wait old server");
 
-        let (child, endpoint) = spawn_agentd(&self.fixture, &self.store, &self.idempotency);
+        let (child, endpoint) = spawn_agentd(
+            &self.fixture,
+            &self.store,
+            &self.idempotency,
+            &self.session_store,
+        );
         self.child = child;
         self.endpoint = endpoint;
     }

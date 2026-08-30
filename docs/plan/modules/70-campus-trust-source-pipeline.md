@@ -6,10 +6,10 @@
 - `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` is implemented under `source-import/v0` (P1-1); operational `Suspended`/`Revoked` lifecycle precondition applies before any live B2 retrieval adapter; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
 - `Implementation State`: `planned`
 - `Version`: `m60-campus-trust/v0.3`
-- `Last Review`: `2026-08-12`
+- `Last Review`: `2026-08-27`
 - `Owning Plan`: [`../05-campus-trust-kernel.md`](../05-campus-trust-kernel.md)
 - `Current Contract`: accepted [`source-import/v1`](../../contracts/source-import.md) and [`source-retrieval/v0`](../../contracts/source-retrieval.md) under R11 (`ACCEPT_EXACT_M60_B2_R11_PACKET`); bounded B1 implementation remains under [`source-import/v0`](../../contracts/source-import.md#15-source-importv0--historical-evidence-retained) (P1-1 review candidate)
-- `Primary code area`: `crates/platform-core/src/source_registry.rs` for bounded `M60-B1` (P1-1 review candidate under `source-import/v0`); `M60-B2` through `M60-B8` remain future; no v1 Rust implementation exists; current fixture semantics in `crates/course-planning/`
+- `Primary code area`: `crates/platform-core/src/source_registry.rs` for bounded `M60-B1` (P1-1 review candidate under `source-import/v0`) and `crates/platform-core/src/source_revision.rs` for bounded immutable-revision/provenance/health value evidence; M60-B2 retrieval, parser/normalizer adapters, durable accepted-baseline advancement and publication composition remain future; current fixture semantics in `crates/course-planning/`
 
 ## 1. Purpose
 

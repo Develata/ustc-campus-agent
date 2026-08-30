@@ -285,6 +285,19 @@ pub enum EffectClass {
     TenantLocalMutation,
 }
 
+const fn permission_effect_coherent_v0(permission: PermissionClass, effect: EffectClass) -> bool {
+    matches!(
+        (permission, effect),
+        (PermissionClass::PublicRead, EffectClass::Read)
+            | (PermissionClass::PublicLinkout, EffectClass::LinkOut)
+            | (PermissionClass::TenantPrivateRead, EffectClass::Read)
+            | (
+                PermissionClass::TenantPrivateWrite,
+                EffectClass::TenantLocalMutation
+            )
+    )
+}
+
 /// Closed actor-kind projection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -574,13 +587,17 @@ pub struct AdmittedOperation {
 }
 
 impl AdmittedOperation {
-    fn from_snapshot(snapshot: &dyn OperationDescriptorProjection) -> Self {
+    fn from_snapshot(
+        snapshot: &dyn OperationDescriptorProjection,
+        permission_class: PermissionClass,
+        effect_class: EffectClass,
+    ) -> Self {
         Self {
             operation_id: snapshot.operation_id().clone(),
             schema_identity: snapshot.schema_identity().clone(),
             schema_digest: snapshot.schema_digest().clone(),
-            permission_class: snapshot.permission_class(),
-            effect_class: snapshot.effect_class(),
+            permission_class,
+            effect_class,
             descriptor_snapshot_id: snapshot.snapshot_identity().clone(),
         }
     }
@@ -1946,6 +1963,22 @@ impl RequestAdmissionCoordinator {
             );
         }
 
+        let permission = snapshot.permission_class();
+        let effect = snapshot.effect_class();
+        if !permission_effect_coherent_v0(permission, effect) {
+            return finalize_rejection(
+                ports,
+                &token,
+                command.operation_id(),
+                rejection(
+                    AdmissionRejectionProjection::MalformedCommand {
+                        operation_id: Some(command.operation_id().clone()),
+                    },
+                    RequestContextDiagnosticSource::Coordinator,
+                ),
+            );
+        }
+
         let observed_at = match ports.now() {
             Ok(value) => value,
             Err(AdmissionPortError::Unavailable(port)) => {
@@ -1958,7 +1991,6 @@ impl RequestAdmissionCoordinator {
             }
         };
         let actor_kind = command.actor_reference.kind();
-        let permission = snapshot.permission_class();
         if actor_kind == ActorKind::Public
             && !matches!(
                 permission,
@@ -2109,7 +2141,7 @@ impl RequestAdmissionCoordinator {
             );
         }
 
-        let operation = AdmittedOperation::from_snapshot(snapshot.as_ref());
+        let operation = AdmittedOperation::from_snapshot(snapshot.as_ref(), permission, effect);
         let frozen = FrozenPrerequisites {
             policy_snapshot_id: policy.snapshot_id().clone(),
             observed_at,

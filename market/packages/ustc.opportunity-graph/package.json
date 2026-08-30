@@ -4,7 +4,7 @@
   "publisher": "first-party",
   "tier": "FirstParty",
   "displayName": "Campus Opportunity Graph",
-  "description": "Typed campus opportunity graph; Course Planning currently exists as a bounded offline development spike.",
+  "description": "Consent-bound tenant-private opportunity profile and deterministic source-grounded course planning through the bounded campus Agent spine.",
   "implementationStatus": "development",
   "installPolicy": {
     "class": "FirstPartySystemPlugin",
@@ -12,15 +12,27 @@
     "defaultEnabled": true,
     "userDisableAllowed": true
   },
-  "components": [],
+  "components": [
+    {
+      "type": "NativeRustComponent",
+      "path": "market/packages/ustc.opportunity-graph/components/native-rust-component.json"
+    },
+    {
+      "type": "DeclarativeResourcePack",
+      "path": "market/packages/ustc.opportunity-graph/components/course-planning-resource-pack.json"
+    }
+  ],
   "capabilities": [
     "campus.public_plan.read",
     "campus.public_course.read",
-    "campus.community_review.linkout"
+    "campus.community_review.linkout",
+    "user.own_academic_snapshot.read",
+    "user.own_academic_snapshot.write",
+    "user.own_plan_draft.write"
   ],
   "sourcePolicy": {
     "officialCatalog": "official-first snapshot/import; no stored raw password",
     "icourse": "link-out-only unless explicit permission is obtained",
-    "personalData": "future consent-aware tenant-owned projection; not part of the current Market manifest"
+    "personalData": "exact-purpose consent; tenant-private profile payload; owner-only planning; revoke-delete removes active payload and retains only a typed tombstone"
   }
 }

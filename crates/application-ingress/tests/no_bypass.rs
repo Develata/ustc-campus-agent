@@ -253,8 +253,12 @@ fn m71_evidence_unverified_reason_is_allowed() {
 #[test]
 fn permitted_m71_imports_present() {
     assert!(
-        SERVICE.contains("M71AffairsGetPort"),
-        "service must import M71AffairsGetPort"
+        SERVICE.contains("M71AffairsGetReceipt"),
+        "service must import the sealed M71 receipt carried by the M10-owned invocation port"
+    );
+    assert!(
+        SERVICE.contains("AffairsInvocationPort"),
+        "service must own the admitted-actor-aware Affairs invocation seam"
     );
     assert!(
         M71_PROJECTION.contains("M71AffairsGetReceipt"),

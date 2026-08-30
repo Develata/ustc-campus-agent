@@ -1,4 +1,4 @@
-//! # M71 `affairs.get` query kernel — proposal-only spike
+//! # M71 Affairs Navigator — bounded query and publication foundation
 //!
 //! Implementation of the frozen M71 public algebra and ratified TD-2 seam
 //! (M71-v8n). This crate provides:
@@ -16,19 +16,22 @@
 //!
 //! ## No-bypass contract (TD-2)
 //!
-//! This crate depends ONLY on `time` and `sha2` (workspace deps). There is no
-//! dependency on M10, M80, client, storage, or any other product crate. The
+//! This crate depends on `time`, `sha2`, and M60-owned value carriers from
+//! `ustc-campus-agent-core`. There is no dependency on M10, M80, client, or
+//! storage. The
 //! M71 application service is the sole caller of `M60ProcedureEvidencePort`;
 //! M10 cannot bypass M71 to reach M60. This is structurally enforced by the
-//! Cargo dependency graph: the crate's `Cargo.toml` lists only `time` and
-//! `sha2`, so no `use` statement can name an M10/client/storage type.
+//! Cargo dependency graph: no `use` statement can name an
+//! M10/client/storage type.
 //!
-//! ## Proposal nonclaims
+//! ## Product nonclaims
 //!
-//! This is explicitly proposal-only, compile-tested evidence. It is NOT
-//! retained/accepted implementation. The in-memory M60 fixture adapter is
-//! equal-contract fixture evidence, not accepted M60 implementation. See
-//! `README.md` for the full nonclaim list.
+//! This is retained partial evidence, not a complete `PROC-011` product path.
+//! The in-memory M60 fixture adapter is equal-contract test evidence, not
+//! production M60 authority. M00 administrator auth and durable persistence/
+//! restart recovery remain outside this slice. The current fixture-backed
+//! M10/Web composition lives in `ustc-agentd` and consumes only this public API.
+//! See `README.md` for the complete nonclaim list.
 
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![forbid(unsafe_code)]
@@ -45,6 +48,7 @@ pub mod lineage;
 pub mod m60_port;
 pub mod outcome;
 pub mod public_view;
+pub mod publication;
 pub mod repository;
 pub mod service;
 pub mod value;
@@ -89,18 +93,21 @@ pub use public_view::{
     ProjectionMetadata, PublicEvidenceAssessmentView, PublicEvidenceView, PublicPrerequisiteView,
     PublicProcedureView,
 };
-pub use repository::{AffairsRepository, InMemoryAffairsRepository, RepositorySeedError};
+pub use publication::*;
+pub use repository::{
+    AffairsRepository, AffairsRepositoryReadError, InMemoryAffairsRepository, RepositorySeedError,
+};
 pub use service::{AffairsGetService, M71AffairsGetReceipt};
 pub use value::{
     ActorRef, AffairsValueError, AffairsValueErrorKind, ArtifactId, AudienceTag, BoardId,
     BoardPolicyVersion, ContactChannel, ContactName, ContactRef, DeadlineLabel, EffectiveInterval,
     EntryPointLabel, Instruction, MaterializationReceiptId, PrerequisiteCondition, ProcedureId,
-    SourceId, Title, Url,
+    ProcedurePublicationReceiptId, ProcedureReviewId, SourceId, Title, Url,
 };
 
 // ---------------------------------------------------------------------------
-// Compile-time proof: the crate's dependency graph contains only `time` and
-// `sha2`. No `extern crate` declaration for any M10/M80/client/storage crate
+// Compile-time proof: no `extern crate` declaration for an
+// M10/M80/client/storage crate
 // can resolve because none are listed in `Cargo.toml`. This is the structural
 // no-bypass proof for TD-2.
 // ---------------------------------------------------------------------------
@@ -114,8 +121,7 @@ const _NO_BYPASS_COMPILE_TIME_PROOF: () = ();
 /// that failure IS the TD-2 no-bypass proof.
 #[cfg(doctest)]
 #[doc = "```compile_fail
-// affairs-navigator depends only on `time` and `sha2`. The following `use`
-// fails to compile because `ustc-campus-agent-core` is not in its Cargo.toml.
-use ustc_campus_agent_core;
+// The following `use` fails because the client crate is not a dependency.
+use ustc_campus_agent_client_core;
 ```"]
 const _NO_BYPASS_DOCTEST_ANCHOR: () = ();

@@ -2,13 +2,13 @@
 
 ## Metadata
 
-- `Status`: Accepted target architecture; protocol value objects and fake gateway/executor conformance implemented, production ToolGateway planned
+- `Status`: Accepted target architecture; protocol values/conformance plus bounded Affairs and ChangeRadar fixed-adapter ToolGateway compositions implemented, generic/package-portable production ToolGateway planned
 - `Version`: `agent-plugin-boundary/v0`
 - `Last Review`: `2026-07-24`
 - `Owning Plans`: [`04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md) owns package lifecycle; [`07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md) owns Agent/tool execution
 - `Decisions`: [`ADR-0008`](../adr/0008-agent-plugin-tool-boundary.md)
 - `Acceptance`: implemented `AGENT-017`, `AGENT-019`; planned `AGENT-018`, `PKG-019`, `PKG-020`
-- `Primary Code`: `crates/agent-tool-protocol/`, `crates/agent-runtime/`, `crates/platform-core/src/invocation.rs`, `apps/ustc-agentd/tests/tool_gateway_conformance.rs`
+- `Primary Code`: `crates/agent-tool-protocol/`, `crates/agent-runtime/`, `crates/platform-core/src/invocation.rs`, `apps/ustc-agentd/src/{affairs,change}_invocation.rs`, `apps/ustc-agentd/tests/`
 
 ## 1. Purpose
 
@@ -105,6 +105,16 @@ Execution transport is replaceable: reviewed MCP, a separately admitted process/
 
 A `NativeRustComponent` MUST NOT be dynamically linked into `agent-runtime` or execute as an arbitrary in-process extension. Its first runnable package must define a separately versioned executor artifact/profile and pass schema, admission, isolation and rollback review. The current direct Course Planning CLI remains an offline spike, not Plugin execution evidence.
 
+The first-party MVP may use one narrower bootstrap profile inside the composition
+root: an exact, statically linked, read-only first-party adapter may execute only
+for a hard-coded package/component/tool identity, a `PublicRead` capability, no
+secret references and no external side effect. It is still gated by current
+Market projection/recheck plus persisted Agent effect intent/receipt ordering;
+it admits no dynamic code or visible-name fallback. This profile is bounded
+composition evidence, not portable `NativeRustComponent` isolation evidence.
+Community packages, secrets, writes and arbitrary native executors remain
+out-of-process-only.
+
 ## 5. Package compilation
 
 `PluginPackage` remains the distribution/lifecycle unit. Enabled package components compile into bounded contributions:
@@ -114,7 +124,7 @@ A `NativeRustComponent` MUST NOT be dynamically linked into `agent-runtime` or e
 | `SkillComponent` | bounded procedural/context asset; no executable authority |
 | `DeclarativeResourcePack` | typed resource/context projection; no executable authority |
 | `McpServerComponent` | discovered/admitted tool definitions plus executor routes after binding review |
-| `NativeRustComponent` | tool definitions plus out-of-process admitted executor routes; never Agent linkage |
+| `NativeRustComponent` | tool definitions plus out-of-process admitted executor routes; never Agent linkage, except the fixed read-only first-party bootstrap profile above |
 
 A package may bundle several contribution kinds. Packaging does not imply enablement, grant or tool visibility. Namespacing, schema validation, capability mapping, version/digest pinning and collision rejection occur before contribution enters a projection.
 
@@ -145,7 +155,7 @@ Normative rules:
 resolve current package/installation/grant state
 → freeze ToolProjectionSnapshot
 → derive AgentToolsetView and private ToolRouteTable
-→ provider proposes a tool call
+→ provider or deterministic bounded Harness proposes a tool call
 → normalize against frozen view
 → recheck current deny-side authority
 → AgentRun accepts proposal
@@ -194,14 +204,15 @@ Implemented now:
 - `agent-tool-protocol/v0` owns canonical schema/arguments, frozen toolset views, correlated calls and typed digest/code results without Agent, Market, Plugin, framework or transport dependencies;
 - `agent-runtime` depends only on that protocol seam plus registry value dependencies, with no Market, Plugin or adapter implementation dependency;
 - P0a produces immutable per-turn tool projections and fail-closed call authorization;
-- composition-root synthetic proof maps successful resolution into `RunSpec`, while denial creates no run;
-- composition-root fake gateway maps the frozen private route through current-state `authorize_call`; unknown tool, malformed arguments, route mismatch, current denial and projection mismatch reach no fake executor;
+- composition-root synthetic/fake proofs remain standalone conformance evidence;
+- the bounded Affairs product path maps M00 actor identity into exact installation/grant authority, performs the current deny-side recheck before `AgentRun` accepts the proposal, persists intent before the fixed read-only adapter, persists success/failure receipts after the attempt and digests the versioned M10 terminal JSON carrier;
+- disabled installation, revoked grant, unknown tool, malformed arguments, route mismatch, current denial and projection mismatch reach no executor, with no direct-M71 fallback;
 - repository checks enforce the exact protocol path and current dependency direction.
 
 Planned later:
 
-- production ToolGateway/application service and provider adapter;
+- generic/package-portable production ToolGateway, out-of-process executor host and provider adapter beyond the fixed Affairs bootstrap profile;
 - bounded content/artifact/receipt result expansion beyond the current digest/code H0 subset;
 - executable Plugin packaging/tool-host conformance;
-- durable intent/receipt composition and real invocation;
+- durable intent/receipt journal and restart replay beyond the current in-memory ordering proof;
 - independent Agent/framework replacement conformance.

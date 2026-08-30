@@ -1,16 +1,17 @@
 #![allow(clippy::unwrap_used)]
 
 //! Public API proof that no M10/client/storage dependency is present in the
-//! crate. The proof is structural: `affairs-navigator`'s `Cargo.toml` lists
-//! only `time` and `sha2`. This test verifies the public API surface is
-//! reachable through the crate root without naming any external product crate.
+//! crate. `affairs-navigator` admits only M60-owned source-revision value
+//! carriers from platform core; this test verifies the product API remains
+//! reachable without any M10/client/storage type.
 
 mod common;
 
 use affairs_navigator::*;
 
-/// The crate's public API consists only of M71-owned types. No type from M10,
-/// M80, client, or storage appears in the public re-exports. This is
+/// The crate's public API consists of M71-owned types plus the exact M60
+/// source-revision carrier used for reviewed import. No type from M10, M80,
+/// client, or storage appears in the public re-exports. This is
 /// structurally enforced by the dependency graph: the crate cannot `use` a
 /// crate it does not depend on.
 #[test]
@@ -95,7 +96,8 @@ fn repository_trait_is_public() {
 }
 
 /// The `M60ProcedureEvidencePort` trait is the only M60 abstraction; the
-/// fixture adapter is one implementation. No M60 crate is imported.
+/// fixture adapter is one implementation. The publication path separately
+/// admits only M60's source-revision value carrier.
 #[test]
 fn m60_port_trait_is_public() {
     let m60 = m60_fixture::M60FixtureAdapter::new("verifier:fixture", 1).unwrap();

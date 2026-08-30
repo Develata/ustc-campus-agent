@@ -1,6 +1,5 @@
 {
   "procedure_id": "proc:ustc:undergraduate:transcript-certificate",
-  "artifact_id": "artifact:ustc:teach:13824:v2026-08-26",
   "title": "在校生办理成绩单、成绩排名证明与在读证明",
   "audience_tags": [
     "中国科学技术大学在校本科生"
@@ -38,13 +37,20 @@
   "known_at_secs": 1787759641,
   "observed_at_secs": 1787759641,
   "reviewed_at_secs": 1787759641,
+  "published_at_secs": 1787759641,
   "last_verified_at_secs": 1787759641,
   "max_fresh_seconds": 2592000,
   "max_presentable_seconds": 15552000,
   "source_id": "src:ustc-teach:13824",
-  "revision_id": "rev:ustc-teach:13824:retained-2026-08-26",
+  "source_url": "https://www.teach.ustc.edu.cn/service/svc-student/13824.html",
+  "raw_snapshot_id": "raw:ustc-teach:13824:2026-08-26",
   "raw_digest": "sha256:de0cf446858717898f24aebc4b31a6349c9cf1a4b4170fbe89ad8b162f399a50",
+  "normalized_snapshot_id": "normalized:ustc-teach:13824:2026-08-26",
   "normalized_digest": "sha256:70e2607246c4e7c91f66de4f7488a2ddf6d452ab4059e158978fcdede06ee4f9",
+  "parser_identity": "parser:affairs:fixture:v1",
+  "source_reviewer": "reviewer:demo:source",
+  "source_review_evidence": "evidence:demo:source",
+  "publication_reviewer": "actor:demo:administrator",
   "verifier_id": "verifier:fixture-retained-source",
   "evidence_contract_version": 1,
   "clock_unix_seconds": 1787759641,

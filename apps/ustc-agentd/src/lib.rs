@@ -1,13 +1,24 @@
 //! Bounded composition root for the `ustc-agentd` product-path slice.
 //!
-//! Only this crate may simultaneously name M00 fixture ports, application-ingress,
-//! M71 service/repository/application port and the equal-contract M60 fixture.
-//! The M60 fixture is injected only through M71's `M60ProcedureEvidencePort`;
-//! it never enters an M10/client seam and remains explicitly noncanonical.
+//! Only this crate may simultaneously name M00 fixture ports, M10 ingress, M20
+//! current invocation authority, the M30 deterministic harness path, the bounded
+//! ToolGateway adapters, and M70/M71 publication/query services. M60 fixture
+//! decisions enter only through the owning product ports; they never enter an
+//! M10/client seam and remain explicitly noncanonical.
 
 #![forbid(unsafe_code)]
 
 mod affairs_fixture;
+mod affairs_invocation;
+mod affairs_persistence;
+mod affairs_publication;
+mod change_fixture;
+mod change_invocation;
+mod m00_control_evidence;
+mod m00_session;
+mod opportunity_fixture;
+mod opportunity_invocation;
+mod opportunity_persistence;
 mod web;
 
 pub use web::web_router;
@@ -15,16 +26,34 @@ pub use web::web_router;
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use affairs_fixture::{AffairsFixture, DurableIdempotencyStore, FixturePorts};
-use affairs_navigator::AffairsGetService;
-use ustc_campus_agent_application_ingress::{FileRecordStore, M10Service};
-use ustc_campus_agent_client_protocol::{
-    ClientIntentDto, ClientResponseDto, SubmitAffairsGetDto, ViewerAuthorizationDto, read_frame,
-    write_frame,
+use affairs_invocation::AffairsInvocationSpine;
+use affairs_navigator::{AffairsGetService, ProcedurePublicationRepository};
+use affairs_publication::{AffairsPublicationCounters, FixtureAffairsPublicationPort};
+use change_fixture::ChangeRadarFixture;
+use change_invocation::ChangeInvocationSpine;
+use m00_control_evidence::{DurableControlEvidenceJournal, ensure_secure_state_parent};
+use m00_session::DurableCurrentSessionStore;
+use opportunity_fixture::OpportunityFixture;
+use opportunity_invocation::{OpportunityAuthorityStore, OpportunityInvocationSpine};
+use opportunity_persistence::DurableOpportunityProfileRepository;
+use ustc_campus_agent_application_ingress::{
+    AffairsPublicationCommand, AffairsPublicationOutcome, FileRecordStore,
+    M10AffairsPublicationService, M10ChangeFeedService, M10OpportunityService, M10Service,
+    affairs_publication_payload_digest,
 };
+use ustc_campus_agent_client_protocol::{
+    ClientIntentDto, ClientResponseDto, SubmitAffairsGetDto, SubmitChangeFeedDto,
+    SubmitOpportunityDto, ViewerAuthorizationDto, read_frame, write_frame,
+};
+use ustc_campus_agent_core::identity::{CorrelationId, RequestId, TenantId, UserId};
+use ustc_campus_agent_core::request_context::{
+    ActorReference, CapabilityDisposition, ClientProvenance, IdempotencyKey,
+};
+use ustc_campus_agent_core::session_port::{SessionHistoryReadPort, SessionRepositoryError};
 
 const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -37,8 +66,41 @@ const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// `AffairsGetService`. Both borrows are scoped to a single request.
 pub struct AffairsComposition {
     fixture: AffairsFixture,
+    change: Option<ChangeRadarFixture>,
+    opportunity: Option<OpportunityComposition>,
     store: FileRecordStore,
     idempotency: DurableIdempotencyStore,
+    control_evidence: DurableControlEvidenceJournal,
+    sessions: DurableCurrentSessionStore,
+    publication_counters: AffairsPublicationCounters,
+    publication_capability: CapabilityDisposition,
+    current_tenant_id: TenantId,
+    current_user_id: UserId,
+}
+
+struct OpportunityComposition {
+    fixture: OpportunityFixture,
+    authority: OpportunityAuthorityStore,
+    profiles: Mutex<DurableOpportunityProfileRepository>,
+}
+
+fn map_session_store_error(error: SessionRepositoryError) -> String {
+    match error {
+        SessionRepositoryError::Unavailable => "session_store_unavailable",
+        SessionRepositoryError::Corrupt => "session_store_corrupt",
+        SessionRepositoryError::InvalidEvent => "session_store_invalid_event",
+        SessionRepositoryError::LimitExceeded => "session_store_limit_exceeded",
+        SessionRepositoryError::InternalInvariant => "session_store_internal_invariant",
+    }
+    .to_owned()
+}
+
+fn path_entry_exists(path: &Path) -> Result<bool, String> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err("state_path_metadata_unavailable".to_owned()),
+    }
 }
 
 impl AffairsComposition {
@@ -52,8 +114,23 @@ impl AffairsComposition {
         fixture_path: &Path,
         store_path: &Path,
         idempotency_path: &Path,
+        session_store_path: &Path,
     ) -> Result<Self, String> {
-        let fixture = AffairsFixture::load(fixture_path)?;
+        ensure_secure_state_parent(idempotency_path)?;
+        let publication_path = idempotency_path.with_extension("affairs-publication.json");
+        let control_evidence_path = idempotency_path.with_extension("control-evidence.json");
+        let publication_bootstrap_is_fresh = !path_entry_exists(&publication_path)?
+            && !path_entry_exists(store_path)?
+            && !path_entry_exists(idempotency_path)?
+            && !path_entry_exists(session_store_path)?
+            && !path_entry_exists(&control_evidence_path)?;
+        let fixture = AffairsFixture::load(
+            fixture_path,
+            &publication_path,
+            publication_bootstrap_is_fresh,
+        )?;
+        let control_evidence = DurableControlEvidenceJournal::open(&control_evidence_path)
+            .map_err(|error| format!("control evidence open failed: {error:?}"))?;
         let store =
             FileRecordStore::open(store_path).map_err(|e| format!("store open failed: {e:?}"))?;
         let now_ms = fixture.now.as_unix_millis();
@@ -62,23 +139,152 @@ impl AffairsComposition {
             now_ms,
             fixture.idempotency_deadline_ms,
         )?;
+        let mut sessions = DurableCurrentSessionStore::open_or_bootstrap(
+            session_store_path,
+            &fixture.session_events,
+        )
+        .map_err(map_session_store_error)?;
+        let current = sessions
+            .load_history(fixture.session.session_id())
+            .map_err(map_session_store_error)?
+            .ok_or_else(|| "session_store_current_session_absent".to_owned())?;
+        if current.snapshot().tenant_id() != fixture.session.tenant_id()
+            || current.snapshot().user_id() != fixture.session.user_id()
+        {
+            return Err("session_store_current_session_scope_mismatch".to_owned());
+        }
+        let current_tenant_id = current.snapshot().tenant_id().clone();
+        let current_user_id = current.snapshot().user_id().clone();
         Ok(Self {
             fixture,
+            change: None,
+            opportunity: None,
             store,
             idempotency,
+            control_evidence,
+            sessions,
+            publication_counters: AffairsPublicationCounters::default(),
+            publication_capability: CapabilityDisposition::Enabled,
+            current_tenant_id,
+            current_user_id,
         })
     }
 
+    /// Opens the shared Affairs + ChangeRadar composition from two reviewed
+    /// fixture inputs and the common M10 stores.
+    pub fn open_with_change(
+        fixture_path: &Path,
+        change_fixture_path: &Path,
+        store_path: &Path,
+        idempotency_path: &Path,
+        session_store_path: &Path,
+    ) -> Result<Self, String> {
+        let mut composition = Self::open(
+            fixture_path,
+            store_path,
+            idempotency_path,
+            session_store_path,
+        )?;
+        composition.change = Some(ChangeRadarFixture::load(change_fixture_path)?);
+        Ok(composition)
+    }
+
+    /// Opens the shared Affairs + Opportunity Graph composition. This remains
+    /// independent of ChangeRadar so one Plugin may be disabled without
+    /// breaking the other product projections.
+    pub fn open_with_opportunity(
+        fixture_path: &Path,
+        opportunity_fixture_path: &Path,
+        opportunity_catalog_path: &Path,
+        opportunity_profile_store_path: &Path,
+        store_path: &Path,
+        idempotency_path: &Path,
+        session_store_path: &Path,
+    ) -> Result<Self, String> {
+        let mut composition = Self::open(
+            fixture_path,
+            store_path,
+            idempotency_path,
+            session_store_path,
+        )?;
+        composition.attach_opportunity(
+            opportunity_fixture_path,
+            opportunity_catalog_path,
+            opportunity_profile_store_path,
+        )?;
+        Ok(composition)
+    }
+
+    /// Opens all three first-party Plugin product paths in one composition.
+    #[allow(clippy::too_many_arguments)] // One explicit path per independently durable authority.
+    pub fn open_with_change_and_opportunity(
+        fixture_path: &Path,
+        change_fixture_path: &Path,
+        opportunity_fixture_path: &Path,
+        opportunity_catalog_path: &Path,
+        opportunity_profile_store_path: &Path,
+        store_path: &Path,
+        idempotency_path: &Path,
+        session_store_path: &Path,
+    ) -> Result<Self, String> {
+        let mut composition = Self::open_with_change(
+            fixture_path,
+            change_fixture_path,
+            store_path,
+            idempotency_path,
+            session_store_path,
+        )?;
+        composition.attach_opportunity(
+            opportunity_fixture_path,
+            opportunity_catalog_path,
+            opportunity_profile_store_path,
+        )?;
+        Ok(composition)
+    }
+
+    fn attach_opportunity(
+        &mut self,
+        fixture_path: &Path,
+        catalog_path: &Path,
+        profile_store_path: &Path,
+    ) -> Result<(), String> {
+        let fixture = OpportunityFixture::load(fixture_path, catalog_path)?;
+        let authority = OpportunityAuthorityStore::new(
+            self.current_tenant_id.clone(),
+            self.current_user_id.clone(),
+            fixture.market_enabled,
+            fixture.market_grant_active,
+            &fixture.source_evidence_digest,
+            fixture.authority_mutation,
+        )
+        .map_err(|error| format!("opportunity Market authority open failed: {error:?}"))?;
+        let profiles = DurableOpportunityProfileRepository::open(profile_store_path, 64, 256)?;
+        self.opportunity = Some(OpportunityComposition {
+            fixture,
+            authority,
+            profiles: Mutex::new(profiles),
+        });
+        Ok(())
+    }
+
     /// Handles one `SubmitAffairsGet` intent through the real M00 admission
-    /// coordinator, M10 service, M71 application service and M60 fixture port.
+    /// coordinator, M10 service, bounded Market/Agent/ToolGateway spine, owning
+    /// M71 application service and M60 fixture port.
     #[must_use]
     pub fn handle_submit(&self, request: &SubmitAffairsGetDto) -> ClientResponseDto {
         let m71 =
             AffairsGetService::new(&self.fixture.repo, &self.fixture.m60, &self.fixture.clock);
+        let affairs = AffairsInvocationSpine::new(
+            m71,
+            self.fixture.market_enabled,
+            self.fixture.market_grant_active,
+            self.fixture.source_evidence_digest.clone(),
+            self.fixture.invocation_counters.clone(),
+        );
         let m10 = M10Service::new(
             self.store.clone(),
             self.fixture.capabilities.clone(),
-            &m71,
+            &affairs,
             self.fixture.operator_grant_id.clone(),
         );
         let mut ports = FixturePorts::new(
@@ -86,10 +292,212 @@ impl AffairsComposition {
             Arc::clone(&self.fixture.descriptor),
             self.fixture.now,
             self.fixture.policy_snapshot_id.clone(),
-            Some(self.fixture.session.clone()),
+            self.sessions.clone(),
         );
         let now_ms = i64::try_from(self.fixture.now.as_unix_millis()).unwrap_or(i64::MAX);
         m10.submit(request, &mut ports, now_ms)
+    }
+
+    /// Publishes the reviewed demo procedure through M10 admission, durable
+    /// M00 control evidence, and the direct owning M71 application port.
+    #[must_use]
+    pub fn publish_demo_as_administrator(&mut self) -> AffairsPublicationOutcome {
+        let procedure_id = self.fixture.publication_draft.procedure_id().clone();
+        let payload_digest = affairs_publication_payload_digest(&procedure_id, Some(1));
+        let request_id = match RequestId::parse("request:affairs-publication-demo") {
+            Ok(value) => value,
+            Err(_) => return AffairsPublicationOutcome::InternalInvariant,
+        };
+        let correlation_id = match CorrelationId::parse("correlation:affairs-publication-demo") {
+            Ok(value) => value,
+            Err(_) => return AffairsPublicationOutcome::InternalInvariant,
+        };
+        let idempotency_key = match IdempotencyKey::parse("idempotency:affairs-publication-demo") {
+            Ok(value) => value,
+            Err(_) => return AffairsPublicationOutcome::InternalInvariant,
+        };
+        let provenance =
+            match ClientProvenance::new("ustc-agentd", "internal-affairs-administrator", "rust-v1")
+            {
+                Ok(value) => value,
+                Err(_) => return AffairsPublicationOutcome::InternalInvariant,
+            };
+        let command = AffairsPublicationCommand::new(
+            request_id,
+            ActorReference::Authenticated {
+                session_id: self.fixture.session.session_id().clone(),
+            },
+            correlation_id,
+            None,
+            Some(idempotency_key),
+            provenance,
+            payload_digest,
+            procedure_id,
+            Some(1),
+        );
+        let expected_tenant = self.fixture.publication_administrator_tenant_id.clone();
+        let expected_user = self.fixture.publication_administrator_user_id.clone();
+        let expected_session = self.fixture.publication_administrator_session_id.clone();
+        let mut ports = FixturePorts::new(
+            self.idempotency.clone(),
+            Arc::clone(&self.fixture.publication_descriptor),
+            self.fixture.now,
+            self.fixture.policy_snapshot_id.clone(),
+            self.sessions.clone(),
+        )
+        .with_capability(self.publication_capability);
+        let outcome = {
+            let mut publication = FixtureAffairsPublicationPort::new(
+                &mut self.fixture.repo,
+                &self.fixture.m60,
+                &self.fixture.publication_draft,
+                &self.fixture.publication_reviewer,
+                self.fixture.publication_reviewed_at,
+                self.fixture.publication_published_at,
+                &expected_tenant,
+                &expected_user,
+                &expected_session,
+                self.publication_counters.clone(),
+            );
+            let mut service =
+                M10AffairsPublicationService::new(&mut publication, &mut self.control_evidence);
+            service.submit(&command, &mut ports)
+        };
+        if let AffairsPublicationOutcome::Published(receipt) = &outcome {
+            self.fixture.publication_receipt = receipt.clone();
+        }
+        outcome
+    }
+
+    /// Configures only the M00 capability fact for the publication command.
+    pub fn set_publication_capability(&mut self, capability: CapabilityDisposition) {
+        self.publication_capability = capability;
+    }
+
+    /// Injects one bounded fixture-adapter persistence failure. This is a test
+    /// seam for proving durable-before-visible publication ordering.
+    #[doc(hidden)]
+    pub fn fail_next_publication_persistence_for_test(&mut self) {
+        self.fixture.repo.fail_next_persist();
+    }
+
+    #[must_use]
+    pub fn publication_application_call_count(&self) -> u64 {
+        self.publication_counters.applications()
+    }
+
+    #[must_use]
+    pub fn control_evidence_event_count(&self) -> usize {
+        self.control_evidence.event_count()
+    }
+
+    #[must_use]
+    pub fn current_publication_revision(&self) -> Option<u64> {
+        self.fixture
+            .repo
+            .publication_revision(self.fixture.publication_draft.procedure_id())
+    }
+
+    /// Handles one public ChangeRadar board query through M00, M10 and the
+    /// bounded Market/Agent/ToolGateway/owning-plugin spine.
+    #[must_use]
+    pub fn handle_change_submit(&self, request: &SubmitChangeFeedDto) -> ClientResponseDto {
+        let Some(change) = &self.change else {
+            return ClientResponseDto::Unavailable;
+        };
+        let invocation = ChangeInvocationSpine::new(
+            &change.repository,
+            &change.feed_policy,
+            change.market_enabled,
+            change.market_grant_active,
+            &change.source_evidence_digest,
+            change.invocation_counters.clone(),
+        );
+        let m10 = M10ChangeFeedService::new(&invocation);
+        let mut ports = FixturePorts::new(
+            self.idempotency.clone(),
+            Arc::clone(&change.descriptor),
+            self.fixture.now,
+            self.fixture.policy_snapshot_id.clone(),
+            self.sessions.clone(),
+        );
+        m10.submit(request, &mut ports)
+    }
+
+    /// Handles one consent-bound tenant-private Opportunity operation through
+    /// M00, M10, current Market authority, Harness/ToolGateway and M72.
+    #[must_use]
+    pub fn handle_opportunity_submit(&self, request: &SubmitOpportunityDto) -> ClientResponseDto {
+        let Some(opportunity) = &self.opportunity else {
+            return ClientResponseDto::Unavailable;
+        };
+        let descriptor = match opportunity.fixture.descriptor(&request.command) {
+            Ok(descriptor) => descriptor,
+            Err(_) => return ClientResponseDto::Unavailable,
+        };
+        let invocation = OpportunityInvocationSpine::new(
+            &opportunity.profiles,
+            &opportunity.fixture.source,
+            &opportunity.fixture.catalog,
+            &opportunity.authority,
+            opportunity.fixture.tool_failure,
+            opportunity.fixture.invocation_counters.clone(),
+        );
+        let m10 = M10OpportunityService::new(&invocation);
+        let mut ports = FixturePorts::new(
+            self.idempotency.clone(),
+            descriptor,
+            self.fixture.now,
+            self.fixture.policy_snapshot_id.clone(),
+            self.sessions.clone(),
+        );
+        m10.submit(request, &mut ports)
+    }
+
+    /// Returns ChangeRadar `(effect_intents, plugin_executions,
+    /// effect_receipts)` observed by the bounded invocation spine.
+    #[must_use]
+    pub fn change_invocation_counts(&self) -> (u64, u64, u64) {
+        self.change.as_ref().map_or((0, 0, 0), |change| {
+            (
+                change.invocation_counters.intents(),
+                change.invocation_counters.executions(),
+                change.invocation_counters.receipts(),
+            )
+        })
+    }
+
+    /// Returns Opportunity `(effect_intents, plugin_executions,
+    /// effect_receipts)` observed by the bounded invocation spine.
+    #[must_use]
+    pub fn opportunity_invocation_counts(&self) -> (u64, u64, u64) {
+        self.opportunity.as_ref().map_or((0, 0, 0), |opportunity| {
+            (
+                opportunity.fixture.invocation_counters.intents(),
+                opportunity.fixture.invocation_counters.executions(),
+                opportunity.fixture.invocation_counters.receipts(),
+            )
+        })
+    }
+
+    /// Returns Opportunity M60 source-currentness checks.
+    #[must_use]
+    pub fn opportunity_m60_call_count(&self) -> u64 {
+        self.opportunity
+            .as_ref()
+            .map_or(0, |opportunity| opportunity.fixture.source.calls())
+    }
+
+    /// Returns `(active_private_payloads, durable_tombstones)` without exposing
+    /// tenant-private profile values.
+    #[must_use]
+    pub fn opportunity_private_state_counts(&self) -> (usize, usize) {
+        let Some(opportunity) = &self.opportunity else {
+            return (0, 0);
+        };
+        opportunity.profiles.lock().map_or((0, 0), |profiles| {
+            (profiles.private_payload_count(), profiles.tombstone_count())
+        })
     }
 
     /// Handles one `Lookup` intent through the M10 record store. The M71
@@ -103,10 +511,17 @@ impl AffairsComposition {
     ) -> ClientResponseDto {
         let m71 =
             AffairsGetService::new(&self.fixture.repo, &self.fixture.m60, &self.fixture.clock);
+        let affairs = AffairsInvocationSpine::new(
+            m71,
+            self.fixture.market_enabled,
+            self.fixture.market_grant_active,
+            self.fixture.source_evidence_digest.clone(),
+            self.fixture.invocation_counters.clone(),
+        );
         let m10 = M10Service::new(
             self.store.clone(),
             self.fixture.capabilities.clone(),
-            &m71,
+            &affairs,
             self.fixture.operator_grant_id.clone(),
         );
         m10.lookup(command_id, viewer)
@@ -120,6 +535,25 @@ impl AffairsComposition {
         self.fixture
             .m60_call_count
             .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Returns `(effect_intents, plugin_executions, effect_receipts)` observed
+    /// by the bounded invocation spine.
+    #[must_use]
+    pub fn invocation_counts(&self) -> (u64, u64, u64) {
+        (
+            self.fixture.invocation_counters.intents(),
+            self.fixture.invocation_counters.executions(),
+            self.fixture.invocation_counters.receipts(),
+        )
+    }
+
+    /// Returns the immutable receipt identity minted while the fixture's exact
+    /// `DemoReviewed` revision was published. The M10 query path below reads
+    /// the same repository state committed by that publication.
+    #[must_use]
+    pub fn publication_receipt_id(&self) -> &str {
+        self.fixture.publication_receipt.receipt_id().as_str()
     }
 
     /// Binds a loopback TCP listener, prints `listening <addr>` to stdout, and
@@ -158,6 +592,10 @@ impl AffairsComposition {
         let intent = read_intent_with_timeout(&stream, FRAMED_CONNECTION_READ_TIMEOUT)?;
         let response = match intent {
             ClientIntentDto::SubmitAffairsGet { request } => self.handle_submit(&request),
+            ClientIntentDto::SubmitChangeFeed { request } => self.handle_change_submit(&request),
+            ClientIntentDto::SubmitOpportunity { request } => {
+                self.handle_opportunity_submit(&request)
+            }
             ClientIntentDto::Lookup { command_id, viewer } => {
                 self.handle_lookup(command_id.as_str(), &viewer)
             }

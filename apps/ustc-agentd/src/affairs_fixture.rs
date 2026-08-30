@@ -7,33 +7,38 @@
 #![allow(clippy::too_many_arguments)]
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::io::Write;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Write};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use affairs_navigator::m60_fixture::M60FixtureAdapter;
 use affairs_navigator::{
-    ActorRef, AffairsAuthority, AffairsAuthorityAssessment, AffairsEvidenceAssessment, ArtifactId,
-    AudienceTag, AuthorityComparison, AuthorityDerivation, AuthoritySubject, BoardId, BoardPolicy,
+    ActorRef, AffairsAuthority, AffairsAuthorityAssessment, AffairsEvidenceAssessment, AudienceTag,
+    AuthorityComparison, AuthorityDerivation, AuthoritySubject, BoardId, BoardPolicy,
     BoardPolicyVersion, ConflictKind, Contact as ArtifactContact, ContactChannel, ContactName,
     ContactRef, EntryPoint, EntryPointLabel, EvidenceConflictState, FixedClock,
-    InMemoryAffairsRepository, Instruction, M60EvidencePortError, M60ProcedureEvidencePort,
-    M60RetainedEvidenceOutcome, M60RetainedEvidenceRequest, M60RevisionRef, Prerequisite,
-    PrerequisiteCondition, ProcedureArtifact, ProcedureEvidenceContext, ProcedureId,
-    ProcedurePublicationState, ProcedureStep, Sha256, SourceId, Title, UncertaintyState, Url,
-    ValidityHorizon,
+    InMemoryPublishedAffairsRepository, Instruction, M60EvidencePortError,
+    M60ProcedureEvidencePort, M60ProcedurePublicationOutcome, M60ProcedurePublicationPort,
+    M60RetainedEvidenceOutcome, M60RetainedEvidenceRequest, Prerequisite, PrerequisiteCondition,
+    ProcedureDraft, ProcedureEvidenceContext, ProcedureId, ProcedurePublicationReceipt,
+    ProcedurePublicationRepository, ProcedurePublicationService, ProcedureReviewApproval,
+    ProcedureStep, SourceId, Title, UncertaintyState, Url, ValidityHorizon,
+    m60_ref_from_source_revision,
 };
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
+
+const MAX_IDEMPOTENCY_STORE_BYTES: u64 = 16 * 1024 * 1024;
 use ustc_campus_agent_application_ingress::{CapabilityIssuer, M10AdmissionPorts};
 use ustc_campus_agent_client_protocol::WireText;
 use ustc_campus_agent_core::identity::{CommandId, SessionId, TenantId, UserId};
 use ustc_campus_agent_core::request_context::{
-    ActorKind, AdapterAllowlist, AdapterIdentity, AdmissionPortError, AdmissionPorts,
-    CapabilityDisposition, DecoderIdentity, DescriptorSnapshotError, DescriptorSnapshotId,
-    DispatcherIdentity, EffectClass, EnvelopeHash, FinalAdmissionDisposition,
+    ActorKind, AdapterAllowlist, AdapterIdentity, AdmissionPortError, AdmissionPortKind,
+    AdmissionPorts, CapabilityDisposition, DecoderIdentity, DescriptorSnapshotError,
+    DescriptorSnapshotId, DispatcherIdentity, EffectClass, EnvelopeHash, FinalAdmissionDisposition,
     FinalizeIdempotencyOutcome, IdempotencyError, IdempotencyKey, IdempotencyReservation,
     IdempotencyReservationToken, OperationDescriptorProjection, OperationId, OperationSnapshot,
     PermissionClass, PersistedPriorDispositionDto, PlatformPolicySnapshotId, PolicyCurrentnessFact,
@@ -41,9 +46,23 @@ use ustc_campus_agent_core::request_context::{
 };
 use ustc_campus_agent_core::session::{
     AuthAdapterId, CredentialEvidenceDigest, OpenSession, SessionCommand,
-    SessionCredentialEvidence, SessionDuration, SessionInstant, SessionPolicy, SessionSnapshot,
-    decide, evolve,
+    SessionCredentialEvidence, SessionDuration, SessionEvent, SessionInstant, SessionPolicy,
+    SessionSnapshot, decide, evolve,
 };
+use ustc_campus_agent_core::session_port::SessionHistoryReadPort;
+use ustc_campus_agent_core::source_registry::{
+    SourceId as M60SourceId, SourceReviewEvidenceId, SourceReviewerId, SourceUrl as M60SourceUrl,
+};
+use ustc_campus_agent_core::source_revision::{
+    EffectiveInterval as M60EffectiveInterval, NormalizedSnapshotId, ParserIdentity, RawSnapshotId,
+    RevisionSha256, RevisionTimestamp, SourceRevision,
+};
+
+use crate::affairs_invocation::AffairsInvocationCounters;
+use crate::affairs_persistence::{
+    DurablePublishedAffairsRepository, recovery_anchor_and_commit_from_receipt,
+};
+use crate::m00_session::DurableCurrentSessionStore;
 
 // ---------------------------------------------------------------------------
 // Counting M60 port (owner-private call-count instrumentation)
@@ -67,6 +86,17 @@ impl M60ProcedureEvidencePort for CountingM60Port {
     ) -> Result<M60RetainedEvidenceOutcome, M60EvidencePortError> {
         self.call_count.fetch_add(1, Ordering::SeqCst);
         self.inner.verify_retained(request)
+    }
+}
+
+impl M60ProcedurePublicationPort for CountingM60Port {
+    fn verify_publication(
+        &self,
+        revision: &SourceRevision,
+        request: &M60RetainedEvidenceRequest,
+    ) -> Result<M60ProcedurePublicationOutcome, M60EvidencePortError> {
+        self.call_count.fetch_add(1, Ordering::SeqCst);
+        self.inner.verify_publication(revision, request)
     }
 }
 
@@ -95,7 +125,6 @@ struct FixtureContactDto {
 #[serde(deny_unknown_fields)]
 struct AffairsFixtureDto {
     procedure_id: String,
-    artifact_id: String,
     title: String,
     #[serde(default)]
     audience_tags: Vec<String>,
@@ -108,15 +137,28 @@ struct AffairsFixtureDto {
     #[serde(default)]
     contacts: Vec<FixtureContactDto>,
     known_at_secs: i64,
-    observed_at_secs: Option<i64>,
-    reviewed_at_secs: Option<i64>,
+    observed_at_secs: i64,
+    reviewed_at_secs: i64,
+    published_at_secs: i64,
     last_verified_at_secs: i64,
     max_fresh_seconds: u32,
     max_presentable_seconds: u32,
     source_id: String,
-    revision_id: String,
+    source_url: String,
+    raw_snapshot_id: String,
     raw_digest: String,
+    normalized_snapshot_id: String,
     normalized_digest: String,
+    parser_identity: String,
+    source_published_at_secs: Option<i64>,
+    source_reviewer: String,
+    source_review_evidence: String,
+    publication_reviewer: String,
+    publication_administrator_tenant_id: Option<String>,
+    publication_administrator_user_id: Option<String>,
+    publication_administrator_session_id: Option<String>,
+    market_enabled: Option<bool>,
+    market_grant_active: Option<bool>,
     verifier_id: String,
     evidence_contract_version: u16,
     clock_unix_seconds: i64,
@@ -142,7 +184,6 @@ struct AffairsFixtureDto {
     conflict_state: Option<String>,
     authority_comparison: Option<String>,
     conflict_kind: Option<String>,
-    archived_at_secs: Option<i64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -150,11 +191,25 @@ struct AffairsFixtureDto {
 // ---------------------------------------------------------------------------
 
 pub(crate) struct AffairsFixture {
-    pub(crate) repo: InMemoryAffairsRepository,
+    pub(crate) repo: DurablePublishedAffairsRepository,
+    pub(crate) publication_receipt: ProcedurePublicationReceipt,
+    pub(crate) publication_draft: ProcedureDraft,
+    pub(crate) publication_reviewer: ActorRef,
+    pub(crate) publication_reviewed_at: OffsetDateTime,
+    pub(crate) publication_published_at: OffsetDateTime,
+    pub(crate) publication_descriptor: OperationSnapshot,
+    pub(crate) publication_administrator_tenant_id: TenantId,
+    pub(crate) publication_administrator_user_id: UserId,
+    pub(crate) publication_administrator_session_id: SessionId,
+    pub(crate) source_evidence_digest: String,
+    pub(crate) market_enabled: bool,
+    pub(crate) market_grant_active: bool,
+    pub(crate) invocation_counters: AffairsInvocationCounters,
     pub(crate) m60: CountingM60Port,
     pub(crate) m60_call_count: Arc<AtomicU64>,
     pub(crate) clock: FixedClock,
     pub(crate) session: SessionSnapshot,
+    pub(crate) session_events: Vec<SessionEvent>,
     pub(crate) capabilities: CapabilityIssuer,
     pub(crate) descriptor: OperationSnapshot,
     pub(crate) policy_snapshot_id: PlatformPolicySnapshotId,
@@ -164,57 +219,75 @@ pub(crate) struct AffairsFixture {
 }
 
 impl AffairsFixture {
-    pub(crate) fn load(path: &Path) -> Result<Self, String> {
+    pub(crate) fn load(
+        path: &Path,
+        publication_path: &Path,
+        allow_fresh_publication_bootstrap: bool,
+    ) -> Result<Self, String> {
         let bytes = fs::read(path).map_err(|e| format!("fixture read failed: {e}"))?;
         let dto: AffairsFixtureDto =
             serde_json::from_slice(&bytes).map_err(|e| format!("fixture parse failed: {e}"))?;
-        Self::build(dto)
+        Self::build(dto, publication_path, allow_fresh_publication_bootstrap)
     }
 
-    fn build(dto: AffairsFixtureDto) -> Result<Self, String> {
+    fn build(
+        dto: AffairsFixtureDto,
+        publication_path: &Path,
+        allow_fresh_publication_bootstrap: bool,
+    ) -> Result<Self, String> {
         let known_at = OffsetDateTime::from_unix_timestamp(dto.known_at_secs)
             .map_err(|e| format!("known_at_secs invalid: {e}"))?;
-        let observed_at = OffsetDateTime::from_unix_timestamp(dto.observed_at_secs.unwrap_or(0))
+        let observed_at = OffsetDateTime::from_unix_timestamp(dto.observed_at_secs)
             .map_err(|e| format!("observed_at_secs invalid: {e}"))?;
-        let reviewed_at = OffsetDateTime::from_unix_timestamp(dto.reviewed_at_secs.unwrap_or(0))
+        let reviewed_at = OffsetDateTime::from_unix_timestamp(dto.reviewed_at_secs)
             .map_err(|e| format!("reviewed_at_secs invalid: {e}"))?;
+        let published_at = OffsetDateTime::from_unix_timestamp(dto.published_at_secs)
+            .map_err(|e| format!("published_at_secs invalid: {e}"))?;
         let last_verified_at = OffsetDateTime::from_unix_timestamp(dto.last_verified_at_secs)
             .map_err(|e| format!("last_verified_at_secs invalid: {e}"))?;
 
-        // -- M60 revision ref --
-        let raw_digest =
-            Sha256::new(&dto.raw_digest).map_err(|e| format!("raw_digest invalid: {e}"))?;
-        let normalized_digest = Sha256::new(&dto.normalized_digest)
-            .map_err(|e| format!("normalized_digest invalid: {e}"))?;
-        let source_id =
-            SourceId::parse(&dto.source_id).map_err(|e| format!("source_id invalid: {e}"))?;
-        let revision_ref = M60RevisionRef::new(
-            source_id.clone(),
-            dto.revision_id.clone(),
-            observed_at,
-            None,
-            None,
-            None,
-            raw_digest,
-            normalized_digest,
-        )
-        .map_err(|e| format!("revision_ref invalid: {e}"))?;
+        // -- Exact M60-owned DemoReviewed revision and equal-contract ref --
+        let source_revision = SourceRevision::demo_reviewed(
+            M60SourceId::parse(&dto.source_id)
+                .map_err(|e| format!("M60 source_id invalid: {e}"))?,
+            M60SourceUrl::parse(&dto.source_url).map_err(|e| format!("source_url invalid: {e}"))?,
+            RawSnapshotId::parse(&dto.raw_snapshot_id)
+                .map_err(|e| format!("raw_snapshot_id invalid: {e}"))?,
+            RevisionSha256::parse(&dto.raw_digest)
+                .map_err(|e| format!("raw_digest invalid: {e}"))?,
+            NormalizedSnapshotId::parse(&dto.normalized_snapshot_id)
+                .map_err(|e| format!("normalized_snapshot_id invalid: {e}"))?,
+            RevisionSha256::parse(&dto.normalized_digest)
+                .map_err(|e| format!("normalized_digest invalid: {e}"))?,
+            ParserIdentity::parse(&dto.parser_identity)
+                .map_err(|e| format!("parser_identity invalid: {e}"))?,
+            RevisionTimestamp::from_unix_seconds(dto.observed_at_secs),
+            dto.source_published_at_secs
+                .map(RevisionTimestamp::from_unix_seconds),
+            M60EffectiveInterval::new(None, None)
+                .map_err(|e| format!("source effective interval invalid: {e}"))?,
+            SourceReviewerId::parse(&dto.source_reviewer)
+                .map_err(|e| format!("source_reviewer invalid: {e}"))?,
+            SourceReviewEvidenceId::parse(&dto.source_review_evidence)
+                .map_err(|e| format!("source_review_evidence invalid: {e}"))?,
+        );
+        let revision_ref = m60_ref_from_source_revision(&source_revision)
+            .map_err(|e| format!("source revision projection invalid: {e}"))?;
 
-        // -- M60 fixture adapter --
+        // Publication uses a healthy M60 port. Query-only failure injection is
+        // applied only after the reviewed artifact has committed.
+        let query_failure_mode = dto
+            .m60_failure_mode
+            .as_deref()
+            .map(|mode| match mode {
+                "store_unavailable" => Ok(M60EvidencePortError::StoreUnavailable),
+                "store_corrupted" => Ok(M60EvidencePortError::StoreCorrupted),
+                other => Err(format!("unknown m60_failure_mode: {other}")),
+            })
+            .transpose()?;
         let mut m60 = M60FixtureAdapter::new(&dto.verifier_id, dto.evidence_contract_version)
             .map_err(|e| format!("m60 adapter invalid: {e}"))?;
         m60.store(revision_ref.clone());
-        if let Some(mode) = &dto.m60_failure_mode {
-            let error = match mode.as_str() {
-                "store_unavailable" => M60EvidencePortError::StoreUnavailable,
-                "store_corrupted" => M60EvidencePortError::StoreCorrupted,
-                other => return Err(format!("unknown m60_failure_mode: {other}")),
-            };
-            m60.set_failure_mode(Some(error));
-        }
-        if let Some(require) = dto.m60_require_effective_interval {
-            m60.require_effective_interval(require);
-        }
 
         // -- Evidence assessment --
         let prerequisite_revision_ref = revision_ref.clone();
@@ -274,9 +347,7 @@ impl AffairsFixture {
         )
         .map_err(|e| format!("board_policy invalid: {e}"))?;
 
-        // -- Artifact --
-        let artifact_id =
-            ArtifactId::parse(&dto.artifact_id).map_err(|e| format!("artifact_id invalid: {e}"))?;
+        // -- Structured publication candidate --
         let procedure_id = ProcedureId::parse(&dto.procedure_id)
             .map_err(|e| format!("procedure_id invalid: {e}"))?;
         let title = Title::new(&dto.title).map_err(|e| format!("title invalid: {e}"))?;
@@ -375,9 +446,9 @@ impl AffairsFixture {
                 })
                 .collect::<Result<Vec<_>, String>>()?
         };
-        let artifact = ProcedureArtifact::new(
-            artifact_id.clone(),
-            procedure_id.clone(),
+        let draft = ProcedureDraft::from_demo_reviewed(
+            source_revision,
+            procedure_id,
             title,
             audience_tags,
             board_policy,
@@ -388,23 +459,31 @@ impl AffairsFixture {
             entry_points,
             contacts,
             evidence,
-            known_at,
         )
-        .map_err(|e| format!("artifact invalid: {e}"))?;
+        .map_err(|e| format!("procedure draft invalid: {e:?}"))?;
+        let publication_draft = draft.clone();
+        let publication_reviewer = ActorRef::parse(&dto.publication_reviewer)
+            .map_err(|e| format!("publication_reviewer invalid: {e}"))?;
+        let approval = ProcedureReviewApproval::new(
+            draft.draft_digest().clone(),
+            publication_reviewer.clone(),
+            reviewed_at,
+        );
+        let mut bootstrap_repo = InMemoryPublishedAffairsRepository::new();
+        let mut publication_receipt = ProcedurePublicationService::new(&mut bootstrap_repo, &m60)
+            .publish(draft, approval, published_at, None)
+            .map_err(|e| format!("reviewed publication failed: {e:?}"))?;
+        let source_evidence_digest = publication_receipt
+            .m60_evidence_set_digest()
+            .as_str()
+            .to_owned();
 
-        // -- Repository --
-        let mut repo = InMemoryAffairsRepository::new();
-        let state = if let Some(archived_at) = dto.archived_at_secs {
-            ProcedurePublicationState::archived(
-                procedure_id.clone(),
-                OffsetDateTime::from_unix_timestamp(archived_at)
-                    .map_err(|e| format!("archived_at_secs invalid: {e}"))?,
-            )
-        } else {
-            ProcedurePublicationState::current(procedure_id.clone(), artifact_id)
-        };
-        repo.seed(artifact, state)
-            .map_err(|e| format!("repository seed failed: {e:?}"))?;
+        if let Some(error) = query_failure_mode {
+            m60.set_failure_mode(Some(error));
+        }
+        if let Some(require) = dto.m60_require_effective_interval {
+            m60.require_effective_interval(require);
+        }
 
         // -- Clock --
         let clock = FixedClock::new(
@@ -418,6 +497,24 @@ impl AffairsFixture {
         let user_id = UserId::parse(&dto.user_id).map_err(|e| format!("user_id invalid: {e}"))?;
         let session_id =
             SessionId::parse(&dto.session_id).map_err(|e| format!("session_id invalid: {e}"))?;
+        let publication_administrator_tenant_id = TenantId::parse(
+            dto.publication_administrator_tenant_id
+                .as_deref()
+                .unwrap_or(&dto.tenant_id),
+        )
+        .map_err(|e| format!("publication administrator tenant invalid: {e}"))?;
+        let publication_administrator_user_id = UserId::parse(
+            dto.publication_administrator_user_id
+                .as_deref()
+                .unwrap_or(&dto.user_id),
+        )
+        .map_err(|e| format!("publication administrator user invalid: {e}"))?;
+        let publication_administrator_session_id = SessionId::parse(
+            dto.publication_administrator_session_id
+                .as_deref()
+                .unwrap_or(&dto.session_id),
+        )
+        .map_err(|e| format!("publication administrator session invalid: {e}"))?;
         let auth_adapter_id = AuthAdapterId::parse(&dto.auth_adapter_id)
             .map_err(|e| format!("auth_adapter_id invalid: {e}"))?;
         let credential_digest = CredentialEvidenceDigest::parse(&dto.credential_evidence_digest)
@@ -449,6 +546,7 @@ impl AffairsFixture {
             decide(None, &open_command).map_err(|e| format!("session decide failed: {e}"))?;
         let session =
             evolve(None, &open_event).map_err(|e| format!("session evolve failed: {e}"))?;
+        let session_events = vec![open_event];
 
         // -- Capability issuer --
         let key_bytes = decode_hex_key(&dto.capability_key_hex)?;
@@ -485,6 +583,36 @@ impl AffairsFixture {
             snapshot_identity: descriptor_snapshot_id,
         };
         let descriptor_snapshot: OperationSnapshot = Arc::new(descriptor);
+        let publication_schema_digest = SchemaDigest::parse("b".repeat(64))
+            .map_err(|e| format!("publication schema_digest invalid: {e}"))?;
+        let publication_snapshot_id = DescriptorSnapshotId::from_canonical_identity(
+            &publication_schema_digest,
+            dto.descriptor_snapshot_version
+                .checked_add(1)
+                .ok_or_else(|| "publication descriptor version overflow".to_owned())?,
+        )
+        .map_err(|e| format!("publication descriptor_snapshot_id invalid: {e}"))?;
+        let publication_descriptor: OperationSnapshot = Arc::new(FixtureDescriptor {
+            operation_id: OperationId::parse("affairs.publish")
+                .map_err(|e| format!("publication operation_id invalid: {e}"))?,
+            schema_identity: SchemaIdentity::parse("schema:fixture-affairs-publication")
+                .map_err(|e| format!("publication schema_identity invalid: {e}"))?,
+            schema_digest: publication_schema_digest,
+            permission_class: PermissionClass::TenantPrivateWrite,
+            effect_class: EffectClass::TenantLocalMutation,
+            decoder_identity: DecoderIdentity::parse("decoder:fixture-affairs-publication")
+                .map_err(|e| format!("publication decoder_identity invalid: {e}"))?,
+            dispatcher_identity: DispatcherIdentity::parse(
+                "dispatcher:fixture-affairs-publication",
+            )
+            .map_err(|e| format!("publication dispatcher_identity invalid: {e}"))?,
+            adapter_allowlist: AdapterAllowlist::try_from_iter([AdapterIdentity::parse(
+                "adapter:fixture-affairs-publication",
+            )
+            .map_err(|e| format!("publication adapter_identity invalid: {e}"))?])
+            .map_err(|e| format!("publication adapter_allowlist invalid: {e:?}"))?,
+            snapshot_identity: publication_snapshot_id,
+        });
 
         // -- Policy snapshot ID --
         let policy_snapshot_id = PlatformPolicySnapshotId::parse(&dto.policy_snapshot_id)
@@ -499,12 +627,50 @@ impl AffairsFixture {
         let m60_call_count = Arc::new(AtomicU64::new(0));
         let m60 = CountingM60Port::new(m60, m60_call_count.clone());
 
+        let (recovery_anchor, initial_commit) =
+            recovery_anchor_and_commit_from_receipt(&publication_draft, &publication_receipt)?;
+        let mut repo = DurablePublishedAffairsRepository::open(
+            publication_path,
+            publication_draft.clone(),
+            recovery_anchor,
+            allow_fresh_publication_bootstrap,
+        )?;
+        if repo.record_count() == 0 {
+            repo.apply_publication(initial_commit)
+                .map_err(|error| format!("initial durable publication failed: {error:?}"))?;
+        }
+        if repo
+            .find_publication_replay(publication_receipt.receipt_id())
+            .map_err(|error| format!("initial durable publication lookup failed: {error:?}"))?
+            != Some(publication_receipt.clone())
+        {
+            return Err("durable publication state lost the fixture revision-1 receipt".to_owned());
+        }
+        publication_receipt = repo
+            .latest_receipt()
+            .map_err(|error| format!("latest durable publication lookup failed: {error:?}"))?
+            .ok_or_else(|| "durable publication state has no latest receipt".to_owned())?;
+
         Ok(Self {
             repo,
+            publication_receipt,
+            publication_draft,
+            publication_reviewer,
+            publication_reviewed_at: reviewed_at,
+            publication_published_at: published_at,
+            publication_descriptor,
+            publication_administrator_tenant_id,
+            publication_administrator_user_id,
+            publication_administrator_session_id,
+            source_evidence_digest,
+            market_enabled: dto.market_enabled.unwrap_or(true),
+            market_grant_active: dto.market_grant_active.unwrap_or(true),
+            invocation_counters: AffairsInvocationCounters::default(),
             m60,
             m60_call_count,
             clock,
             session,
+            session_events,
             capabilities,
             descriptor: descriptor_snapshot,
             policy_snapshot_id,
@@ -549,16 +715,16 @@ fn hex_digit(byte: u8) -> Result<u8, String> {
 // Fixture descriptor — fixed OperationDescriptorProjection
 // ---------------------------------------------------------------------------
 
-struct FixtureDescriptor {
-    operation_id: OperationId,
-    schema_identity: SchemaIdentity,
-    schema_digest: SchemaDigest,
-    permission_class: PermissionClass,
-    effect_class: EffectClass,
-    decoder_identity: DecoderIdentity,
-    dispatcher_identity: DispatcherIdentity,
-    adapter_allowlist: AdapterAllowlist,
-    snapshot_identity: DescriptorSnapshotId,
+pub(crate) struct FixtureDescriptor {
+    pub(crate) operation_id: OperationId,
+    pub(crate) schema_identity: SchemaIdentity,
+    pub(crate) schema_digest: SchemaDigest,
+    pub(crate) permission_class: PermissionClass,
+    pub(crate) effect_class: EffectClass,
+    pub(crate) decoder_identity: DecoderIdentity,
+    pub(crate) dispatcher_identity: DispatcherIdentity,
+    pub(crate) adapter_allowlist: AdapterAllowlist,
+    pub(crate) snapshot_identity: DescriptorSnapshotId,
 }
 
 impl OperationDescriptorProjection for FixtureDescriptor {
@@ -663,6 +829,50 @@ fn validate_idempotency_state(state: &IdempotencyState) -> Result<(), String> {
     Ok(())
 }
 
+fn read_existing_idempotency_state(path: &Path) -> Result<Option<Vec<u8>>, String> {
+    let path_metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("idempotency metadata failed: {error}")),
+    };
+    if !path_metadata.file_type().is_file() {
+        return Err("idempotency state path is not a regular file".to_owned());
+    }
+    if path_metadata.permissions().mode() & 0o777 != 0o600 {
+        return Err("idempotency state mode must be 0600".to_owned());
+    }
+    if path_metadata.len() > MAX_IDEMPOTENCY_STORE_BYTES {
+        return Err("idempotency state exceeds byte cap".to_owned());
+    }
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|error| format!("idempotency open failed: {error}"))?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|error| format!("idempotency opened metadata failed: {error}"))?;
+    if !opened_metadata.file_type().is_file()
+        || opened_metadata.dev() != path_metadata.dev()
+        || opened_metadata.ino() != path_metadata.ino()
+        || opened_metadata.permissions().mode() & 0o777 != 0o600
+        || opened_metadata.len() > MAX_IDEMPOTENCY_STORE_BYTES
+    {
+        return Err("idempotency state identity or mode changed during open".to_owned());
+    }
+
+    let mut bytes = Vec::new();
+    std::io::Read::by_ref(&mut file)
+        .take(MAX_IDEMPOTENCY_STORE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("idempotency read failed: {error}"))?;
+    if bytes.len() as u64 > MAX_IDEMPOTENCY_STORE_BYTES {
+        return Err("idempotency state exceeds byte cap".to_owned());
+    }
+    Ok(Some(bytes))
+}
+
 #[derive(Clone)]
 pub(crate) struct DurableIdempotencyStore {
     path: PathBuf,
@@ -680,8 +890,7 @@ impl DurableIdempotencyStore {
         if deadline_duration_ms == 0 {
             return Err("idempotency_deadline_ms must be nonzero".to_owned());
         }
-        let state = if path.exists() {
-            let bytes = fs::read(path).map_err(|e| format!("idempotency read failed: {e}"))?;
+        let state = if let Some(bytes) = read_existing_idempotency_state(path)? {
             let state: IdempotencyState = serde_json::from_slice(&bytes)
                 .map_err(|e| format!("idempotency parse failed: {e}"))?;
             if state.schema_version != 1 {
@@ -704,21 +913,47 @@ impl DurableIdempotencyStore {
     }
 
     fn persist(&self, state: &IdempotencyState) -> Result<(), String> {
-        if let Some(parent) = self.path.parent() {
+        if let Some(parent) = self
+            .path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             fs::create_dir_all(parent).map_err(|e| format!("idempotency mkdir failed: {e}"))?;
         }
         let bytes =
             serde_json::to_vec(state).map_err(|e| format!("idempotency encode failed: {e}"))?;
+        if bytes.len() as u64 > MAX_IDEMPOTENCY_STORE_BYTES {
+            return Err("idempotency state exceeds byte cap".to_owned());
+        }
         let temporary = self.path.with_extension("tmp");
-        let mut file = fs::File::create(&temporary)
-            .map_err(|e| format!("idempotency temp create failed: {e}"))?;
-        file.write_all(&bytes)
-            .map_err(|e| format!("idempotency write failed: {e}"))?;
-        file.sync_all()
-            .map_err(|e| format!("idempotency sync failed: {e}"))?;
-        fs::rename(&temporary, &self.path)
-            .map_err(|e| format!("idempotency rename failed: {e}"))?;
-        Ok(())
+        let result = (|| {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&temporary)
+                .map_err(|e| format!("idempotency temp create failed: {e}"))?;
+            file.write_all(&bytes)
+                .map_err(|e| format!("idempotency write failed: {e}"))?;
+            file.sync_all()
+                .map_err(|e| format!("idempotency sync failed: {e}"))?;
+            fs::rename(&temporary, &self.path)
+                .map_err(|e| format!("idempotency rename failed: {e}"))?;
+            if let Some(parent) = self
+                .path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+            {
+                File::open(parent)
+                    .and_then(|directory| directory.sync_all())
+                    .map_err(|e| format!("idempotency parent sync failed: {e}"))?;
+            }
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temporary);
+        }
+        result
     }
 
     pub(crate) fn reserve_or_retrieve(
@@ -916,7 +1151,8 @@ pub(crate) struct FixturePorts {
     descriptor: OperationSnapshot,
     now: SessionInstant,
     policy_snapshot_id: PlatformPolicySnapshotId,
-    session: Option<SessionSnapshot>,
+    sessions: DurableCurrentSessionStore,
+    capability: CapabilityDisposition,
 }
 
 impl FixturePorts {
@@ -925,15 +1161,21 @@ impl FixturePorts {
         descriptor: OperationSnapshot,
         now: SessionInstant,
         policy_snapshot_id: PlatformPolicySnapshotId,
-        session: Option<SessionSnapshot>,
+        sessions: DurableCurrentSessionStore,
     ) -> Self {
         Self {
             store,
             descriptor,
             now,
             policy_snapshot_id,
-            session,
+            sessions,
+            capability: CapabilityDisposition::Enabled,
         }
+    }
+
+    pub(crate) fn with_capability(mut self, capability: CapabilityDisposition) -> Self {
+        self.capability = capability;
+        self
     }
 }
 
@@ -967,9 +1209,12 @@ impl AdmissionPorts for FixturePorts {
 
     fn load_session(
         &mut self,
-        _session_id: &SessionId,
+        session_id: &SessionId,
     ) -> Result<Option<SessionSnapshot>, AdmissionPortError> {
-        Ok(self.session.clone())
+        self.sessions
+            .load_history(session_id)
+            .map(|history| history.map(|retained| retained.snapshot().clone()))
+            .map_err(|_| AdmissionPortError::Unavailable(AdmissionPortKind::Session))
     }
 
     fn check_capability(
@@ -978,7 +1223,7 @@ impl AdmissionPorts for FixturePorts {
         _actor_kind: ActorKind,
         _observed_at: SessionInstant,
     ) -> Result<CapabilityDisposition, AdmissionPortError> {
-        Ok(CapabilityDisposition::Enabled)
+        Ok(self.capability)
     }
 
     fn finalize_idempotency(
@@ -1002,6 +1247,8 @@ mod tests {
 
     use super::*;
     use std::fs;
+    use std::io;
+    use std::os::unix::fs::{PermissionsExt, symlink};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -1043,20 +1290,94 @@ mod tests {
         .to_string()
     }
 
+    fn write_secure(path: &Path, bytes: impl AsRef<[u8]>) -> io::Result<()> {
+        fs::write(path, bytes)?;
+        let mut permissions = fs::metadata(path)?.permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(path, permissions)
+    }
+
     #[test]
     fn valid_persisted_state_reopens() {
         let dir = test_dir("valid-reopen");
         let path = dir.join("store.json");
-        fs::write(&path, valid_state_json()).unwrap();
+        write_secure(&path, valid_state_json()).unwrap();
         let store = DurableIdempotencyStore::open(&path, 1000000001000, 30000);
         assert!(store.is_ok(), "valid state must reopen");
+    }
+
+    #[test]
+    fn private_idempotency_store_rejects_unsafe_primary_and_temporary_files() {
+        let dir = test_dir("secure-idempotency-store");
+        let path = dir.join("store.json");
+        let store = DurableIdempotencyStore::open(&path, 1000000001000, 30000)
+            .expect("open absent idempotency store");
+        store
+            .persist(&IdempotencyState::default())
+            .expect("persist secure idempotency store");
+        assert_eq!(
+            fs::metadata(&path)
+                .expect("persisted idempotency metadata")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+        DurableIdempotencyStore::open(&path, 1000000001000, 30000)
+            .expect("reopen secure idempotency store");
+
+        let insecure = test_dir("insecure-idempotency-mode").join("store.json");
+        write_secure(&insecure, valid_state_json()).expect("write valid insecure fixture");
+        let mut permissions = fs::metadata(&insecure)
+            .expect("insecure idempotency metadata")
+            .permissions();
+        permissions.set_mode(0o644);
+        fs::set_permissions(&insecure, permissions).expect("set insecure idempotency mode");
+        assert!(DurableIdempotencyStore::open(&insecure, 1000000001000, 30000).is_err());
+
+        let symlink_dir = test_dir("idempotency-primary-symlink");
+        let symlink_path = symlink_dir.join("store.json");
+        let sentinel = symlink_dir.join("sentinel.json");
+        write_secure(&sentinel, valid_state_json()).expect("write idempotency sentinel");
+        symlink(&sentinel, &symlink_path).expect("create idempotency primary symlink");
+        assert!(DurableIdempotencyStore::open(&symlink_path, 1000000001000, 30000).is_err());
+
+        let temporary_dir = test_dir("idempotency-temporary-symlink");
+        let temporary_path = temporary_dir.join("store.json");
+        let temporary_sentinel = temporary_dir.join("sentinel");
+        fs::write(&temporary_sentinel, b"do-not-overwrite").expect("write temp sentinel");
+        symlink(&temporary_sentinel, temporary_path.with_extension("tmp"))
+            .expect("create idempotency temporary symlink");
+        let temporary_store = DurableIdempotencyStore::open(&temporary_path, 1000000001000, 30000)
+            .expect("open absent idempotency store");
+        assert!(
+            temporary_store
+                .persist(&IdempotencyState::default())
+                .is_err()
+        );
+        assert_eq!(
+            fs::read(&temporary_sentinel).expect("read idempotency temp sentinel"),
+            b"do-not-overwrite"
+        );
+
+        let oversized = test_dir("oversized-idempotency-store").join("store.json");
+        let oversized_file = File::create(&oversized).expect("create oversized idempotency store");
+        oversized_file
+            .set_len(MAX_IDEMPOTENCY_STORE_BYTES + 1)
+            .expect("size oversized idempotency store");
+        let mut permissions = fs::metadata(&oversized)
+            .expect("oversized idempotency metadata")
+            .permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(&oversized, permissions).expect("secure oversized idempotency mode");
+        assert!(DurableIdempotencyStore::open(&oversized, 1000000001000, 30000).is_err());
     }
 
     #[test]
     fn malformed_json_fails_closed() {
         let dir = test_dir("malformed-json");
         let path = dir.join("store.json");
-        fs::write(&path, b"not json").unwrap();
+        write_secure(&path, b"not json").unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1066,7 +1387,7 @@ mod tests {
         let path = dir.join("store.json");
         let mut json = serde_json::from_str::<serde_json::Value>(&valid_state_json()).unwrap();
         json["schema_version"] = serde_json::json!(2);
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1076,7 +1397,7 @@ mod tests {
         let path = dir.join("store.json");
         let mut json = serde_json::from_str::<serde_json::Value>(&valid_state_json()).unwrap();
         json["bogus_field"] = serde_json::json!(42);
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1095,7 +1416,7 @@ mod tests {
         json["entries"]["UPPERCASE INVALID"] = json["entries"][&old_key].clone();
         json["entries"].as_object_mut().unwrap().remove(&old_key);
         json["key_index"].as_object_mut().unwrap().clear();
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1114,7 +1435,7 @@ mod tests {
         let val = json["key_index"][&old_key].clone();
         json["key_index"].as_object_mut().unwrap().remove(&old_key);
         json["key_index"]["UPPERCASE INVALID KEY"] = val;
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1133,7 +1454,7 @@ mod tests {
         json["entries"][&key]["reservation_version"] = serde_json::json!(0);
         json["entries"][&key]["in_flight"] = serde_json::json!(true);
         json["entries"][&key]["disposition"] = serde_json::Value::Null;
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1152,7 +1473,7 @@ mod tests {
         json["entries"][&key]["fencing_token"] = serde_json::json!(0);
         json["entries"][&key]["in_flight"] = serde_json::json!(true);
         json["entries"][&key]["disposition"] = serde_json::Value::Null;
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1171,7 +1492,7 @@ mod tests {
         json["entries"][&key]["deadline_ms"] = serde_json::json!(0);
         json["entries"][&key]["in_flight"] = serde_json::json!(true);
         json["entries"][&key]["disposition"] = serde_json::Value::Null;
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1188,7 +1509,7 @@ mod tests {
             .unwrap()
             .clone();
         json["entries"][&key]["in_flight"] = serde_json::json!(true);
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1206,7 +1527,7 @@ mod tests {
             .clone();
         json["entries"][&key]["in_flight"] = serde_json::json!(false);
         json["entries"][&key]["disposition"] = serde_json::Value::Null;
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1217,7 +1538,7 @@ mod tests {
         let mut json = serde_json::from_str::<serde_json::Value>(&valid_state_json()).unwrap();
         let cmd = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         json["key_index"]["idem:dangling"] = serde_json::json!(cmd);
-        fs::write(&path, json.to_string()).unwrap();
+        write_secure(&path, json.to_string()).unwrap();
         assert!(DurableIdempotencyStore::open(&path, 1000000001000, 30000).is_err());
     }
 
@@ -1254,7 +1575,7 @@ mod tests {
 
         let dir = test_dir("persist-fail-finalize");
         let store_path = dir.join("store.json");
-        fs::write(&store_path, in_flight_state_json()).unwrap();
+        write_secure(&store_path, in_flight_state_json()).unwrap();
 
         let store = DurableIdempotencyStore::open(&store_path, 1000000001000, 30000).unwrap();
 

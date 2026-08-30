@@ -5,7 +5,7 @@
   "tier": "FirstParty",
   "displayName": "USTC ChangeRadar",
   "description": "Reviewed semantic changes over approved campus sources with stable revisions, affected scope, provenance, and per-board feeds.",
-  "implementationStatus": "planned",
+  "implementationStatus": "development",
   "installPolicy": {
     "class": "FirstPartySystemPlugin",
     "defaultInstalled": true,

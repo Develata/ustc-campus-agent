@@ -192,6 +192,12 @@ It proves only offline typed validation and planning. It does not prove Market i
 
 Future research, competition, lecture and scholarship slices reuse the same trust/profile semantics. A materially different ontology requires a new ADR.
 
+### 4.2 ChangeRadar bounded foundation
+
+Current `crates/change-radar` consumes M60-owned immutable `DemoReviewed` revision values and proves bounded board-policy validation, deterministic typed field comparison, stable candidate identity, explicit stale/conflict/unavailable outcomes, digest-bound administrator approve/reject receipts, coherent transaction-current M60 verification, atomic in-memory publication and deterministic Atom rendering. Duplicate, no-change and out-of-order revisions create no false semantic event; injected candidate/review/publication repository failures expose typed errors without partial durable-domain state.
+
+This remains supporting `partial-evidence`, not the complete ChangeRadar product journey. It now has one fixture-backed public `change.list` path through M10, current Market authorization, the bounded Harness/ToolGateway, a fixed owning Plugin adapter and loopback Web/Atom board projection. It still has no source retrieval/parser, durable accepted baseline/restart, M00-authorized administration, M80 peer-client projection or acceptance promotion.
+
 ## 5. Frozen implementation order
 
 ```text

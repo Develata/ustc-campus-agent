@@ -9,8 +9,9 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-time.workspace = true
 sha2.workspace = true
+time.workspace = true
+ustc-campus-agent-core = { path = "../platform-core" }
 
 [lib]
 path = "src/lib.rs"

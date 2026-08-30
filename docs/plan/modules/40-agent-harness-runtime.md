@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Module ID`: `M30`
-- `Status`: Accepted blueprint; node-local runtime kernel implemented, finite harness planned
+- `Status`: Accepted blueprint; node-local runtime kernel plus provider-free deterministic Harness turns implemented, finite user-task harness planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m30-agent-runtime/v0`
 - `Last Review`: `2026-07-25`
@@ -50,7 +50,8 @@ CreateHarnessRun
 SubmitClarificationAnswer
 Accept/Reject TaskGraphProposal
 DispatchReadyNode
-RecordModelUsage / ToolProposal / EffectIntent / Receipt
+StartModelTurn + RecordModelUsage | StartHarnessTurn
+ToolProposal / EffectIntent / Receipt
 RecordEvidence / ReviewDisposition
 RequestCancel/Fail/Expire
 ```
@@ -67,6 +68,11 @@ RuntimeError
 ```
 
 `M30` sees only `agent-tool-protocol/v0` tool definitions/calls/results and opaque route references. It never receives package/component/executor details.
+
+`StartHarnessTurn` is the provider-free path for deterministic bounded routing.
+It consumes turn/tool budgets and the same intent/receipt ordering, but records no
+fabricated provider token/cost usage. It is a node-local execution mode, not the
+future user-task `HarnessRun` phase machine.
 
 ## 5. Dependency direction
 

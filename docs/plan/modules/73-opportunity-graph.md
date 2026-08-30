@@ -4,11 +4,11 @@
 
 - `Module ID`: `M72`
 - `Package ID`: `ustc.opportunity-graph`
-- `Status`: Accepted blueprint; offline Course Planning spike exists
-- `Implementation State`: `bounded-spike`
+- `Status`: Accepted blueprint; bounded consent/profile and Course Planning evidence exists
+- `Implementation State`: `partial-evidence`
 - `Version`: `m72-opportunity-graph/v0`
-- `Last Review`: `2026-07-25`
-- `Primary code areas`: `plugins/first-party/opportunity-graph/`, current `crates/course-planning/`, future cohesive opportunity/profile modules
+- `Last Review`: `2026-08-27`
+- `Primary code areas`: `plugins/first-party/opportunity-graph/`, `crates/opportunity-graph/`, `crates/course-planning/`, future peer opportunity packs
 
 ## 1. Purpose
 
@@ -169,7 +169,45 @@ Use typed indexed facts and tenant-scoped profile projections. Candidate generat
 11. future peer domain packs with separate contracts.
 12. `opportunity-ports` — public/profile repositories, clock and audit fakes.
 
-Existing `course-planning` is reviewed as items 6–8 and 10. It does not prove profile consent, Market lifecycle or live source integration.
+Existing `course-planning` remains items 6–8 and 10. The retained
+`opportunity-graph` foundation adds exact consent fields, one active tenant/user
+profile snapshot, wrong-principal denial before M60 access, deterministic
+qualification/planning reuse, source/profile stale classification and atomic
+revoke/delete tombstones. It is in-memory and fixture-backed: it does not prove
+M00/M10/M20/M30/M40/M80 composition, durable deletion/backup erasure, Market
+lifecycle or live source retrieval.
+
+### 13.1 Active common-platform composition slice
+
+The accepted next slice is intentionally narrower than the full M72 ontology:
+
+```text
+loopback Web
+→ M10 authenticated profile/create|view|plan|revoke-delete intent
+→ M00 admitted tenant/user identities
+→ transaction-current M20 installation + grant recheck
+→ deterministic bounded M30 Harness
+→ M40 ToolGateway intent/executor/receipt ordering
+→ owning `ustc.opportunity-graph` adapter
+→ tenant-private profile repository + M60 revision-health port + planner
+→ typed owner-private M10 terminal
+→ Web
+```
+
+The frozen operation IDs are `profile.academic.create`,
+`profile.academic.view`, `planner.generate`, and
+`profile.academic.revoke_delete`; exact fields/bounds/errors are owned by
+[`interfaces.md`](../../contracts/interfaces.md) §1.1. Principal identity is
+derived only from the admitted session. Wrong principal, missing/deleted profile,
+disabled/revoked Plugin, repository failure and non-current/unavailable M60
+revision all fail closed before any later stage named by the precedence contract.
+
+The retained Course Planning JSON remains synthetic. The composition adapter
+must construct a real `DemoReviewed` M60 `SourceRevision` from retained evidence,
+bind the catalog to the derived revision identity and prominently preserve the
+non-live/non-official claim. One file-backed profile adapter provides restart
+read-back and deletion of the owned recoverable payload; full M90 database,
+encryption, backup-erasure and production SSO remain separate gates.
 
 ## 14. Exit gate
 

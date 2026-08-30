@@ -25,7 +25,7 @@
 
 It does not authenticate a credential, parse a cookie or token, call a clock, persist an event, generate an identifier, build an admitted request context, assign a role, decide a downstream permission or emit the final cross-module `PlatformControlEvent`/`PlatformControlError` projection.
 
-Authentication adapters produce bounded `SessionCredentialEvidence`; `M00-B4 session-port` later supplies clock/repository/secret-reference interfaces and deterministic fakes; `M00-B4 control-evidence` later owns stable external event/error/redaction projections; `M00-B3 request-context` later owns admitted actor/request/command/causation semantics. A caller cannot reinterpret this pure kernel as proof that credential authentication or durable persistence already happened.
+Authentication adapters produce bounded `SessionCredentialEvidence`; implemented [`platform-session-port/v0`](platform-session-port.md) supplies the B4a clock/repository/secret-reference interfaces, deterministic fakes and one durable DemoReviewed current-session read/bootstrap vendor; implemented [`platform-control-evidence/v0`](platform-control-evidence.md) owns B4b stable redacted external event/error projections and journal ports; `M00-B3 request-context` owns admitted actor/request/command/causation semantics. A caller cannot reinterpret this pure kernel or either data projection as proof that credential authentication, request admission or durable evidence persistence already happened.
 
 ## 2. Required public semantic values
 
@@ -1001,7 +1001,7 @@ This contract is therefore accepted, and accepted is the *entry* condition for i
 What acceptance does **not** establish:
 
 - no `AUTH-017..020` row may be promoted from documentation alone; each is promoted only when its named test exists and every assertion in §§3–13 that it covers is executable;
-- `M00` does not advance past `partial-evidence`, and neither `StandaloneReady` nor any later readiness state is reachable from this batch; bounded B3 is now separately implemented by `platform-request-context/v0`, while production B4 ports/vendors and B5 composition remain unstarted;
+- `M00` does not advance past `partial-evidence`, and neither `StandaloneReady` nor any later readiness state is reachable from this batch; bounded B3 is separately implemented by `platform-request-context/v0`, B4a session-port/read-vendor evidence is separately implemented by `platform-session-port/v0`, while B4b control-evidence and B5 composition remain unstarted;
 - this B2 contract alone establishes no actor, request-context, policy-reference, port, adapter, journal or M10 admission behavior. The later bounded B3 kernel is recorded below without retroactively enlarging B2.
 
 ## 16. Change rule
@@ -1037,4 +1037,10 @@ The amendment binds those two entries to private `#[cfg(test)]` fixtures inside 
 
 ## 18. B3 request-context integration
 
-[`platform-request-context/v0`](platform-request-context.md) consumes `SessionSnapshot` through the transaction-current `AdmissionPorts::load_session` observation. For an authenticated request it requires exact requested/loaded `SessionId` equality and then calls the production `SessionSnapshot::admits_at(observed_at)` predicate before constructing `M00AdmittedActor::Authenticated`. Public admission carries no session. This integration changes no session command, event, transition, deadline, error, or Serde shape, so `platform-session/v0` is retained. The bounded kernel is `AUTH-013`; production B4 storage/auth vendors and B5 M10 composition remain planned.
+[`platform-request-context/v0`](platform-request-context.md) consumes `SessionSnapshot` through the transaction-current `AdmissionPorts::load_session` observation. For an authenticated request it requires exact requested/loaded `SessionId` equality and then calls the production `SessionSnapshot::admits_at(observed_at)` predicate before constructing `M00AdmittedActor::Authenticated`. Public admission carries no session. This integration changes no session command, event, transition, deadline, error, or Serde shape, so `platform-session/v0` is retained. The bounded kernel is `AUTH-013`; B4a now supplies one secure durable DemoReviewed current-session read/bootstrap vendor under `AUTH-021`, while formal authentication, durable lifecycle mutation, B4b control evidence and B5 administration remain planned.
+
+## 19. B4a session-port implementation record
+
+[`platform-session-port/v0`](platform-session-port.md) is the separate owning contract for the B4a port surface and durable current-session read/bootstrap vendor. It replays this contract's immutable `SessionEvent` values through production `evolve`; it never decodes or persists `SessionSnapshot`, changes no transition rule here and adds no raw credential path. The three-plugin composition now reads authenticated current-session authority from the retained file, with exact missing/scope-mismatch startup denials and no fixture fallback.
+
+M00 remains `partial-evidence`: B4a is bounded implemented, B4b `control-evidence` and B5 composition are planned, and formal USTC SSO/public session lifecycle transport remains deferred.

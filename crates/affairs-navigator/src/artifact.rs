@@ -557,11 +557,23 @@ impl ProcedurePublicationState {
     /// Builds one publication state for a procedure with a Current artifact.
     #[must_use]
     pub fn current(procedure_id: ProcedureId, current_artifact_id: ArtifactId) -> Self {
+        Self::published(procedure_id, current_artifact_id, 1)
+    }
+
+    /// Builds one transaction-checked published state at an exact non-zero
+    /// revision. Publication services call this only after repository CAS
+    /// preflight; it is not public authority.
+    pub(crate) fn published(
+        procedure_id: ProcedureId,
+        current_artifact_id: ArtifactId,
+        publication_revision: u64,
+    ) -> Self {
+        debug_assert!(publication_revision > 0);
         Self {
             procedure_id,
             current_artifact_id: Some(current_artifact_id),
             archived_at: None,
-            publication_revision: 1,
+            publication_revision,
         }
     }
 

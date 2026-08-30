@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Module ID`: `M10`
-- `Status`: Accepted blueprint with bounded executable evidence for the M10-owned client-protocol/application-ingress carriers, one fixture-backed loopback Affairs composition and one operation-specific loopback HTTP/Web route; production public HTTP/Dioxus/stream hosting remains planned
+- `Status`: Accepted blueprint with bounded executable evidence for M10-owned client-protocol/application-ingress carriers and one loopback three-plugin HTTP/Web composition; production public HTTP/Dioxus/stream hosting remains planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m10-application-ingress/v2.1`
 - `Last Review`: `2026-08-24`

@@ -33,6 +33,10 @@ class MarketContractTests(unittest.TestCase):
         shutil.copytree(REPO_ROOT / "market", self.root / "market")
         shutil.copytree(REPO_ROOT / "plugins", self.root / "plugins")
         shutil.copytree(REPO_ROOT / "docs/contracts", self.root / "docs/contracts")
+        shutil.copytree(
+            REPO_ROOT / "fixtures/opportunity-graph",
+            self.root / "fixtures/opportunity-graph",
+        )
         self.original_root = cast(Path, getattr(checker, "ROOT"))
         setattr(checker, "ROOT", self.root)
 
@@ -43,6 +47,11 @@ class MarketContractTests(unittest.TestCase):
     def check_market(self) -> list[str]:
         issues: list[str] = []
         checker.check_market(issues)
+        return issues
+
+    def check_course_fixture(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_course_fixture(issues)
         return issues
 
     def manifest_path(self, package_id: str) -> Path:
@@ -75,6 +84,35 @@ class MarketContractTests(unittest.TestCase):
     def test_three_default_first_party_manifests_pass(self) -> None:
         self.assertEqual(self.check_market(), [])
 
+    def test_course_catalog_three_way_digest_binding_fails_closed(self) -> None:
+        self.assertEqual(self.check_course_fixture(), [])
+        resource_path = (
+            self.root
+            / "market/packages/ustc.opportunity-graph/components/course-planning-resource-pack.json"
+        )
+        resource = json.loads(resource_path.read_text(encoding="utf-8"))
+        resource["resourceSha256"] = "0" * 64
+        resource_path.write_text(json.dumps(resource) + "\n", encoding="utf-8")
+        self.assertTrue(
+            any(
+                "Course Planning catalog digest binding drift" in issue
+                for issue in self.check_course_fixture()
+            )
+        )
+        native_path = (
+            self.root
+            / "market/packages/ustc.opportunity-graph/components/native-rust-component.json"
+        )
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+        native["operations"] = native["operations"][:-1]
+        native_path.write_text(json.dumps(native) + "\n", encoding="utf-8")
+        self.assertTrue(
+            any(
+                "Opportunity native-component identity/operation drift" in issue
+                for issue in self.check_course_fixture()
+            )
+        )
+
     def test_missing_default_package_fails_closed(self) -> None:
         shutil.rmtree(self.root / "market/packages/ustc.change-radar")
         self.assertTrue(
@@ -96,13 +134,20 @@ class MarketContractTests(unittest.TestCase):
         )
 
     def test_default_package_cannot_auto_grant_private_capability(self) -> None:
-        package_id = "ustc.opportunity-graph"
-        manifest = self.load_manifest(package_id)
-        capabilities = cast(list[str], manifest["capabilities"])
-        capabilities.append("user.own_academic_snapshot.read")
-        self.write_manifest(package_id, manifest)
+        registry = self.load_registry()
+        rows = cast(list[dict[str, object]], registry["capabilities"])
+        private = next(
+            row
+            for row in rows
+            if row.get("id") == "user.own_academic_snapshot.read"
+        )
+        private["autoGrant"] = "FirstPartyDefaultOnly"
+        private["confirmationDefault"] = "Allow"
+        self.write_registry(registry)
+        issues = self.check_market()
+        self.assertTrue(any("capability registry axes drifted" in issue for issue in issues))
         self.assertTrue(
-            any("capability is not auto-grant-eligible" in issue for issue in self.check_market())
+            any("capability registry unsafe auto-grant tuple" in issue for issue in issues)
         )
 
     def test_capability_registry_rejects_legacy_fields_and_schema_drift(self) -> None:
@@ -4438,8 +4483,8 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def test_market_capability_registry_missing_bound_test_fails_closed(self) -> None:
         self.rewrite(
             self.capability_test_path(),
-            "#[test]\nfn current_registry_loads_with_exact_eight_definitions()",
-            "fn current_registry_loads_with_exact_eight_definitions()",
+            "#[test]\nfn current_registry_loads_with_exact_nine_definitions()",
+            "fn current_registry_loads_with_exact_nine_definitions()",
         )
         self.assert_rejected(
             self.check_identity(),
@@ -6521,6 +6566,15 @@ class ExternalAgentAccessContractTests(unittest.TestCase):
     def test_current_external_agent_access_contract_passes(self) -> None:
         self.assertEqual(self.check_contract(), [])
 
+    def test_change_list_bounded_projection_removal_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/contracts/interfaces.md",
+            "Bounded loopback-only `affairs.get` and `change.list` proofs",
+            "A bounded loopback-only `affairs.get` proof",
+        )
+        issues = self.check_contract()
+        self.assertTrue(any("external-Agent semantic projection" in issue for issue in issues), issues)
+
     def test_operation_registry_row_removal_fails_closed(self) -> None:
         path = self.root / "docs/contracts/interfaces.md"
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -7071,9 +7125,12 @@ class PlatformSessionImplementationTests(unittest.TestCase):
             checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS
         ):
             self.assertRegex(admitted_file, r"\Acrates/platform-core/src/[a-z_/]+\.rs\Z")
-            self.assertRegex(admitted_text, r"\A(?:pub )?use crate::identity::\{[^}]*\};\Z")
+            self.assertRegex(
+                admitted_text,
+                r"\A(?:pub )?use crate::identity::(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]*\});\Z",
+            )
             self.assertNotIn(" as ", admitted_text)
-        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 6)
+        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 8)
 
     def test_forbidden_dependency_carrier_fails_closed(self) -> None:
         # A path-qualified call inside a function body declares no item, so the item allowlist
@@ -7326,6 +7383,8 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_platform_session_contract(issues)",
         "check_platform_session_implementation(issues)",
         "check_platform_request_context(issues)",
+        "check_platform_session_port(issues)",
+        "check_platform_control_evidence(issues)",
         "check_p1_source_revision_contract(issues)",
         "check_p1_source_registry_implementation(issues)",
         "check_m60_b2_packet_digest(issues)",
@@ -9671,11 +9730,471 @@ class PlatformRequestContextContractTests(unittest.TestCase):
         self.assertTrue(
             any(
                 issue.startswith(
-                    "platform request context exact 64-test inventory drift"
+                    "platform request context exact 65-test inventory drift"
                 )
                 for issue in issues
             ),
             issues,
         )
+
+    def test_request_context_permission_effect_v0_surface_drift_fails_closed(self) -> None:
+        contract_rel = self.CONTRACT_REL
+        source_rel = "crates/platform-core/src/request_context.rs"
+        test_rel = "crates/platform-core/tests/platform_request_context.rs"
+
+        def restore_all() -> None:
+            for rel in (contract_rel, source_rel, test_rel):
+                (self.root / rel).write_bytes((REPO_ROOT / rel).read_bytes())
+
+        # 1. Reintroducing PrivilegedExternalEffect into the permission-class
+        #    list fails with a contract permission block drift diagnostic.
+        with self.subTest("contract_permission_privileged_external_effect"):
+            restore_all()
+            path = self.root / contract_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "TenantPrivateWrite\n```",
+                    "TenantPrivateWrite\nPrivilegedExternalEffect\n```",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("contract permission block drift" in i for i in issues),
+                issues,
+            )
+
+        # 2. Reordering a Rust PermissionClass unit variant fails.
+        with self.subTest("rust_permission_class_variant_order"):
+            restore_all()
+            path = self.root / source_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "    PublicRead,\n    PublicLinkout,",
+                    "    PublicLinkout,\n    PublicRead,",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("Rust PermissionClass unit-variant drift" in i for i in issues),
+                issues,
+            )
+
+        # 3. Reordering a Rust EffectClass unit variant fails.
+        with self.subTest("rust_effect_class_variant_order"):
+            restore_all()
+            path = self.root / source_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "    Read,\n    LinkOut,",
+                    "    LinkOut,\n    Read,",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("Rust EffectClass unit-variant drift" in i for i in issues),
+                issues,
+            )
+
+        # 4. Changing the contract EffectClass block fails.
+        with self.subTest("contract_effect_block_drift"):
+            restore_all()
+            path = self.root / contract_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "TenantLocalMutation\n```",
+                    "TenantLocalMutation\nExternalEffect\n```",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("contract effect block drift" in i for i in issues),
+                issues,
+            )
+
+        # 5. Reordering the exact contract coherence matrix fails closed.
+        with self.subTest("contract_permission_effect_coherence_order"):
+            restore_all()
+            path = self.root / contract_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "PublicRead -> Read\nPublicLinkout -> LinkOut",
+                    "PublicLinkout -> LinkOut\nPublicRead -> Read",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("contract coherence block drift" in i for i in issues),
+                issues,
+            )
+
+        # 6. Removing the private production helper fails closed.
+        with self.subTest("rust_permission_effect_coherence_helper_removed"):
+            restore_all()
+            path = self.root / source_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "const fn permission_effect_coherent_v0(",
+                    "const fn permission_effect_coherent_v0_removed(",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("permission/effect coherence enforcement drift" in i for i in issues),
+                issues,
+            )
+
+        # 7. Removing the coordinator call site fails closed independently.
+        with self.subTest("rust_permission_effect_coherence_call_removed"):
+            restore_all()
+            path = self.root / source_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "if !permission_effect_coherent_v0(permission, effect) {",
+                    "if !permission_effect_coherent_v0_removed(permission, effect) {",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any("permission/effect coherence enforcement drift" in i for i in issues),
+                issues,
+            )
+
+        # 8. Deleting the new Rust evidence test fails the exact 65-test inventory.
+        with self.subTest("rust_evidence_test_removed"):
+            restore_all()
+            path = self.root / test_rel
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "fn request_context_permission_and_effect_v0_surface_is_exact(",
+                    "fn request_context_permission_and_effect_v0_surface_is_exact_mutated(",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            issues = self.check_request_context()
+            self.assertTrue(
+                any(
+                    i.startswith(
+                        "platform request context exact 65-test inventory drift"
+                    )
+                    for i in issues
+                ),
+                issues,
+            )
+
+
+class PlatformSessionPortContractTests(unittest.TestCase):
+    """Mutation-proves the bounded M00-B4a checker and durable authority projection."""
+
+    CONTRACT_REL = "docs/contracts/platform-session-port.md"
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        shutil.copytree(
+            REPO_ROOT / "crates/platform-core",
+            self.root / "crates/platform-core",
+            ignore=shutil.ignore_patterns("target"),
+        )
+        shutil.copytree(
+            REPO_ROOT / "apps/ustc-agentd",
+            self.root / "apps/ustc-agentd",
+            ignore=shutil.ignore_patterns("target"),
+        )
+        cli_product_test = self.root / checker.APP_CLI_PRODUCT_TEST
+        cli_product_test.parent.mkdir(parents=True)
+        shutil.copy2(REPO_ROOT / checker.APP_CLI_PRODUCT_TEST, cli_product_test)
+        (self.root / "scripts").mkdir()
+        for rel in (
+            "run_three_plugin_mvp.sh",
+            "run_affairs_web_demo.sh",
+        ):
+            shutil.copy2(REPO_ROOT / "scripts" / rel, self.root / "scripts" / rel)
+        shutil.copy2(REPO_ROOT / "README.md", self.root / "README.md")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        self.original_key_files = list(checker.KEY_FILES)
+        setattr(checker, "ROOT", self.root)
+        self.assertEqual(self.check_session_port(), [])
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        checker.KEY_FILES[:] = self.original_key_files
+        self.temporary_directory.cleanup()
+
+    def check_session_port(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_platform_session_port(issues)
+        return issues
+
+    def replace_once(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, (rel, old))
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def assert_issue(self, fragment: str) -> None:
+        issues = self.check_session_port()
+        self.assertTrue(any(fragment in issue for issue in issues), issues)
+
+    def test_session_port_contract_missing_empty_and_unregistered_fail_closed(self) -> None:
+        with self.subTest("missing"):
+            path = self.root / self.CONTRACT_REL
+            original = path.read_bytes()
+            path.unlink()
+            self.assert_issue("platform session port required carrier missing")
+            path.write_bytes(original)
+        with self.subTest("empty"):
+            path = self.root / self.CONTRACT_REL
+            original = path.read_bytes()
+            path.write_text(" \n", encoding="utf-8")
+            self.assert_issue("platform session port required carrier empty")
+            path.write_bytes(original)
+        with self.subTest("unregistered"):
+            checker.KEY_FILES.remove(self.CONTRACT_REL)
+            self.assert_issue("platform session port authority carrier unregistered")
+
+    def test_session_port_public_item_widening_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_SESSION_PORT_SOURCE,
+            "pub trait SessionClockPort {",
+            "pub struct ForgedSessionAuthority;\n\npub trait SessionClockPort {",
+        )
+        self.assert_issue("exact public item inventory drift")
+
+    def test_session_port_public_function_widening_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_SESSION_PORT_SOURCE,
+            "    pub const fn revision(&self) -> u64 {",
+            "    pub fn unchecked_snapshot(&self) -> &SessionSnapshot { &self.snapshot }\n\n    pub const fn revision(&self) -> u64 {",
+        )
+        self.assert_issue("exact public function inventory drift")
+
+    def test_session_port_compile_fail_inventory_drift_fails_closed(self) -> None:
+        path = self.root / checker.PLATFORM_SESSION_PORT_SOURCE
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count("```compile_fail"), 4)
+        path.write_text(text.replace("```compile_fail", "```ignore", 1), encoding="utf-8")
+        self.assert_issue("exact four compile-fail proofs drift")
+
+    def test_session_port_core_test_inventory_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_SESSION_PORT_TEST,
+            "fn session_append_fake_is_exactly_fenced_and_atomic()",
+            "fn session_append_fake_is_exactly_fenced_and_atomic_mutated()",
+        )
+        self.assert_issue("exact six core-test inventory drift")
+
+    def test_session_port_durable_test_inventory_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.APP_M00_SESSION_SOURCE,
+            "fn bootstrap_is_atomic_bounded_and_leaves_no_temporary_residue()",
+            "fn bootstrap_is_atomic_bounded_and_leaves_no_temporary_residue_mutated()",
+        )
+        self.assert_issue("exact six durable-vendor test inventory drift")
+
+    def test_session_port_durable_vendor_append_authority_fails_closed(self) -> None:
+        path = self.root / checker.APP_M00_SESSION_SOURCE
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\nimpl SessionHistoryAppendPort for DurableCurrentSessionStore {}\n"
+            )
+        self.assert_issue("app-private vendor exact impl inventory drift")
+
+    def test_session_port_durable_invariant_removal_fails_closed(self) -> None:
+        self.replace_once(
+            checker.APP_M00_SESSION_SOURCE,
+            "std::fs::hard_link(&temporary, path)",
+            "std::fs::rename(&temporary, path)",
+        )
+        self.assert_issue("durable invariant carrier missing")
+
+    def test_session_port_composition_static_error_mapping_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "apps/ustc-agentd/src/lib.rs",
+            'SessionRepositoryError::Corrupt => "session_store_corrupt"',
+            'SessionRepositoryError::Corrupt => "session_store_corrupt_detail"',
+        )
+        self.assert_issue("composition projection drift")
+
+    def test_session_port_launcher_chmod_repair_fails_closed(self) -> None:
+        path = self.root / "scripts/run_three_plugin_mvp.sh"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\nchmod 0700 \"$STATE_DIR\"\n")
+        self.assert_issue("launcher must not chmod-repair state root")
+
+    def test_session_port_client_e2e_wiring_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.APP_CLI_PRODUCT_TEST,
+            '            "--session-store",',
+            '            "--missing-session-store",',
+        )
+        self.assert_issue("client E2E wiring drift")
+
+    def test_session_port_acceptance_status_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/acceptance/matrix.tsv",
+            "\tpr\timplemented\tbackend\nAUTH-022",
+            "\tpr\tplanned\tbackend\nAUTH-022",
+        )
+        self.assert_issue("acceptance row AUTH-021 drift")
+
+    def test_session_port_status_projection_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/overview/architecture.md",
+            "B4b redacted evidence ports",
+            "B4b control evidence removed",
+        )
+        self.assert_issue("projection missing")
+
+
+class PlatformControlEvidenceContractTests(unittest.TestCase):
+    """Mutation-proves the bounded M00-B4b checker and status projection."""
+
+    CONTRACT_REL = "docs/contracts/platform-control-evidence.md"
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        shutil.copytree(
+            REPO_ROOT / "crates/platform-core",
+            self.root / "crates/platform-core",
+            ignore=shutil.ignore_patterns("target"),
+        )
+        shutil.copytree(REPO_ROOT / "scripts", self.root / "scripts")
+        shutil.copy2(REPO_ROOT / "README.md", self.root / "README.md")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        self.original_key_files = list(checker.KEY_FILES)
+        setattr(checker, "ROOT", self.root)
+        self.assertEqual(self.check_control_evidence(), [])
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        checker.KEY_FILES[:] = self.original_key_files
+        self.temporary_directory.cleanup()
+
+    def check_control_evidence(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_platform_control_evidence(issues)
+        return issues
+
+    def replace_once(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, (rel, old))
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def assert_issue(self, fragment: str) -> None:
+        issues = self.check_control_evidence()
+        self.assertTrue(any(fragment in issue for issue in issues), issues)
+
+    def test_control_evidence_contract_missing_fails_closed(self) -> None:
+        (self.root / self.CONTRACT_REL).unlink()
+        self.assert_issue("required carrier missing")
+
+    def test_control_evidence_contract_empty_fails_closed(self) -> None:
+        (self.root / self.CONTRACT_REL).write_text("", encoding="utf-8")
+        self.assert_issue("required carrier empty")
+
+    def test_control_evidence_contract_unregistered_fails_closed(self) -> None:
+        checker.KEY_FILES.remove(self.CONTRACT_REL)
+        self.assert_issue("authority carrier unregistered")
+
+    def test_control_evidence_extra_public_surface_fails_closed(self) -> None:
+        path = self.root / checker.PLATFORM_CONTROL_EVIDENCE_SOURCE
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\npub struct UnreviewedEvidence;\n")
+        self.assert_issue("exact public item inventory drift")
+
+    def test_control_evidence_mapping_arm_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_CONTROL_EVIDENCE_SOURCE,
+            "SessionDomainError::DeadlineOverflow =>",
+            "SessionDomainError::InvalidTimeOrder =>",
+        )
+        self.assert_issue("mapping arm drift: from_session_domain:DeadlineOverflow")
+
+    def test_control_evidence_raw_display_surface_fails_closed(self) -> None:
+        path = self.root / checker.PLATFORM_CONTROL_EVIDENCE_SOURCE
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\nimpl fmt::Display for PlatformControlError {\n"
+                "    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, \"{:?}\", self) }\n"
+                "}\n"
+            )
+        self.assert_issue("forbidden carrier present")
+
+    def test_control_evidence_event_schema_field_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_CONTROL_EVIDENCE_SOURCE,
+            "        auth_adapter_id: AuthAdapterId,\n",
+            "",
+        )
+        self.assert_issue("exact schema/trait drift")
+
+    def test_control_evidence_fake_precedence_weakening_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_CONTROL_EVIDENCE_TEST,
+            "    ) -> Result<ControlEvidenceAppendOutcome, ControlEvidenceJournalError> {\n        if self.unavailable {\n",
+            "    ) -> Result<ControlEvidenceAppendOutcome, ControlEvidenceJournalError> {\n        if false && self.unavailable {\n",
+        )
+        self.assert_issue("fake semantic body drift")
+
+    def test_control_evidence_exact_test_rename_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_CONTROL_EVIDENCE_TEST,
+            "fn control_event_serde_is_closed_redacted_and_data_only()",
+            "fn renamed_control_event_serde_test()",
+        )
+        self.assert_issue("exact test inventory drift")
+
+    def test_control_evidence_main_invocation_removal_fails_closed(self) -> None:
+        self.replace_once(
+            "scripts/check_repo_contracts.py",
+            "    check_platform_control_evidence(issues)\n",
+            "",
+        )
+        source = (self.root / "scripts/check_repo_contracts.py").read_text(encoding="utf-8")
+        main = source.split("\ndef main() -> int:", 1)
+        self.assertEqual(len(main), 2)
+        actual = tuple(
+            line.strip()
+            for line in main[1].splitlines()
+            if line.strip().startswith("check_") and line.strip().endswith("(issues)")
+        )
+        self.assertNotEqual(actual, checker.EXPECTED_MAIN_CALLS)
+
+    def test_control_evidence_acceptance_status_rollback_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/acceptance/matrix.tsv",
+            "\tpr\timplemented\tbackend\nAUTH-023",
+            "\tpr\tplanned\tbackend\nAUTH-023",
+        )
+        self.assert_issue("AUTH-022 acceptance row drift")
+
+
 if __name__ == "__main__":
     unittest.main()

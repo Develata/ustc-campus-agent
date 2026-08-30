@@ -243,6 +243,7 @@ pub struct ClientResult<'a> {
 /// distinct from any server wire code and are always paired with
 /// [`Origin::Transport`].
 const TRANSPORT_MALFORMED_CODE: &str = "client.transport.malformed_frame";
+const UNEXPECTED_PRODUCT_RESPONSE_CODE: &str = "client.protocol.unexpected_product_response";
 
 fn static_text(value: &'static str) -> WireText {
     // Static transport codes are non-empty, ASCII, and well under the bound, so
@@ -271,6 +272,13 @@ pub fn reduce_response(response: ClientResponseDto) -> ClientState {
                 terminal: Some(terminal),
             }
         }
+        ClientResponseDto::ChangeFeedAccepted { .. }
+        | ClientResponseDto::OpportunityAccepted { .. }
+        | ClientResponseDto::OpportunityRejected { .. } => ClientState::Error {
+            error_class: ErrorClass::Protocol,
+            wire_code: static_text(UNEXPECTED_PRODUCT_RESPONSE_CODE),
+            retryability: RetryabilityDto::NotRetryable,
+        },
         ClientResponseDto::Available {
             command_id,
             terminal,
@@ -490,7 +498,31 @@ fn classify_error(error: ClientErrorDto) -> (ErrorClass, WireText, RetryabilityD
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use super::*;
+
+    #[test]
+    fn affairs_reducer_rejects_change_feed_terminal_as_protocol_mismatch() {
+        let response = ClientResponseDto::ChangeFeedAccepted {
+            command_id: WireText::parse("cmd:change").unwrap(),
+            terminal: Box::new(
+                ustc_campus_agent_client_protocol::M70ChangeFeedTerminalDto::new(
+                    ustc_campus_agent_client_protocol::M70ChangeFeedOutcomeDto::NotFound {
+                        board_id: WireText::parse("board:fixture").unwrap(),
+                    },
+                ),
+            ),
+        };
+        match reduce_response(response) {
+            ClientState::Error {
+                error_class: ErrorClass::Protocol,
+                wire_code,
+                retryability: RetryabilityDto::NotRetryable,
+            } => assert_eq!(wire_code.as_str(), UNEXPECTED_PRODUCT_RESPONSE_CODE),
+            other => panic!("expected protocol mismatch, got {other:?}"),
+        }
+    }
 
     #[test]
     fn exit_codes_match_cli_contract() {

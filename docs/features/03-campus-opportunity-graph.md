@@ -1,7 +1,7 @@
 # Campus Opportunity Graph
 
 - `Package ID`: `ustc.opportunity-graph`
-- `Status`: Development; bounded offline Course Planning spike implemented
+- `Status`: Partial evidence; common-platform consent/profile/planning/Web slice in progress
 - `Owning plan`: `docs/plan/06-first-party-plugins.md`
 - `Contracts`: `docs/contracts/data-models.md`, `docs/contracts/source-import.md`
 - `Acceptance`: `COURSE-*`, future graph/profile cases
@@ -33,7 +33,13 @@ user installs/enables Opportunity Graph
 → user edits or deletes private profile facts
 ```
 
-This full journey is planned; only the offline Course Planning subset currently runs.
+This full installed-Plugin journey is the active M72 slice. The current candidate
+combines the offline Course Planning pack with exact-consent M10 commands,
+transaction-current Market/Harness/ToolGateway authorization, an M60-bound
+`DemoReviewed` catalog adapter, a mode-`0600` atomic tenant-private profile store and
+the Web create/view/plan/revoke-delete journey. The four bounded operations are
+`profile.academic.create`, `profile.academic.view`, `planner.generate` and
+`profile.academic.revoke_delete`; none has a direct M10/Web-to-M72 fallback.
 
 ## Course Planning bounded spike
 
@@ -50,7 +56,12 @@ The current slice maps:
 | `EvidenceSignal` | official fact, mirror fact, community link-out, uncertainty |
 | `ProfileFact` | user-provided academic snapshot/preference |
 
-`crates/course-planning` validates the synthetic `course-planning/v0` fixture, enforces source authority and hard constraints, and emits deterministic `course-plan-result/v0` JSON through `ustc-agentctl course plan`.
+`crates/course-planning` validates the synthetic `course-planning/v0` fixture,
+enforces source authority and hard constraints, and emits deterministic
+`course-plan-result/v0` JSON through `ustc-agentctl course plan`.
+`crates/opportunity-graph` consumes that pack only after exact principal/consent
+checks and binds results to one `DemoReviewed` M60 revision plus one private
+profile snapshot.
 
 The slice is offline and read-only. It performs no live source import, account mutation or enrollment.
 
@@ -78,6 +89,11 @@ Public opportunity facts and tenant-private profile facts remain separate. Priva
 
 ## Non-goals and honest status
 
-The current spike does **not** establish Market installation, grants, enable/disable, Agent discovery, live source ingestion or durable consent-aware profile state. It does not make Opportunity Graph the sole flagship or move it ahead of the frozen cross-Plugin implementation order.
+Until the active candidate passes exact Rust, real-browser, restart and independent
+review gates, it is not accepted completion evidence. It also does **not** establish
+production SSO/TLS, live source ingestion, arbitrary third-party Plugin execution,
+backup-erasure proof or enrollment/registration effects. This slice does not make
+Opportunity Graph the sole flagship or move it ahead of the three-Plugin MVP
+requirement.
 
 Future research, competition, lecture and scholarship packs must reuse the same trust/profile semantics or obtain a new ADR for a materially different ontology.

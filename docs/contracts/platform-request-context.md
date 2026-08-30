@@ -63,10 +63,30 @@ PublicRead
 PublicLinkout
 TenantPrivateRead
 TenantPrivateWrite
-PrivilegedExternalEffect
 ```
 
-Anonymous admission is allowed only for `PublicRead` or `PublicLinkout`; it is denied before session loading on every private/effectful class. Authenticated admission still checks session authority even for a public operation.
+`EffectClass` is closed:
+
+```text
+Read
+LinkOut
+TenantLocalMutation
+```
+
+`PermissionClass` / `EffectClass` coherence is closed:
+
+```text
+PublicRead -> Read
+PublicLinkout -> LinkOut
+TenantPrivateRead -> Read
+TenantPrivateWrite -> TenantLocalMutation
+```
+
+Every other pair is an incoherent operation descriptor. The coordinator rejects it before reading the clock as `MalformedCommand { operation_id: Some(current_operation_id) }` with coordinator-owned diagnostics. The v0 result algebra intentionally remains fourteen classes; a dedicated descriptor-incoherence class requires a separately accepted M00/M10 successor. Because prior rejections are fenced by idempotency, reevaluation after an operation-definition repair requires either a fresh idempotency key or an unkeyed new attempt. Changing only request ID, correlation ID, or provenance does not trigger reevaluation, and changing envelope fields under the same key conflicts.
+
+PrivilegedExternalEffect and external-effect execution are outside platform-request-context/v0; a successor contract must define the effect class, coherence rule, denial/retry mapping, rejection/projection algebra, and executable consumer before admission.
+
+Anonymous admission is allowed only for coherent `PublicRead -> Read` or `PublicLinkout -> LinkOut`; coherent private permission classes are denied after the single clock observation and before policy, session, or capability lookup. Authenticated admission still checks session authority even for a public operation.
 
 ## 4. Operation snapshot
 
@@ -74,8 +94,9 @@ Anonymous admission is allowed only for `PublicRead` or `PublicLinkout`; it is d
 
 1. requires that snapshot to be present;
 2. requires exact command/snapshot `OperationId` equality;
-3. copies the admitted descriptor facts into `AdmittedOperation`;
-4. preserves the same `Arc` in `PlatformRequestContext` for downstream use.
+3. reads permission and effect once, then requires the exact closed coherence pair;
+4. copies those validated descriptor facts into `AdmittedOperation`;
+5. preserves the same `Arc` in `PlatformRequestContext` for downstream use.
 
 The coordinator performs no live registry lookup. `DescriptorSnapshotId` accessors expose the checked content digest and nonzero snapshot version needed by M10 durable projection.
 
@@ -87,13 +108,14 @@ The coordinator executes the following fail-closed order:
 2. reserve/retrieve idempotency state;
 3. return identical prior or in-flight state before any descriptor/policy/session/capability lookup;
 4. acquire the request-scoped descriptor snapshot and require exact operation identity;
-5. obtain one observation time;
-6. reject public/private permission incoherence before session lookup;
-7. resolve a current policy snapshot;
-8. for authenticated actors, load and verify the exact session and require `SessionSnapshot::admits_at(observed_at)`;
-9. check current capability state;
-10. construct the sealed context and complete scalar disposition;
-11. finalize under the reservation's fencing token.
+5. read permission/effect once and reject descriptor incoherence before the clock read;
+6. obtain one observation time;
+7. reject public/private permission incoherence before policy, session, or capability lookup;
+8. resolve a current policy snapshot;
+9. for authenticated actors, load and verify the exact session and require `SessionSnapshot::admits_at(observed_at)`;
+10. check current capability state;
+11. construct the sealed context and complete scalar disposition from the validated descriptor pair;
+12. finalize under the reservation's fencing token.
 
 Any unavailable port maps to a typed fail-closed rejection. A stale finalizer cannot commit after reclamation.
 
@@ -194,4 +216,4 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-features
 ```
 
-The integration target contains exactly 64 named request-context tests: 15 retained M00 cases plus 49 expansion cases. Checker mutation tests prove that the contract missing/empty/unregistered cases, source module removal, one required Rust-test removal, acceptance-row regression, and unrelated owning-carrier mutation each produce a request-context-specific diagnostic.
+The integration target contains exactly 65 named request-context tests: 15 retained M00 cases plus 50 expansion cases. Checker mutation tests prove that the contract missing/empty/unregistered cases, source module removal, one required Rust-test removal, acceptance-row regression, and unrelated owning-carrier mutation each produce a request-context-specific diagnostic.

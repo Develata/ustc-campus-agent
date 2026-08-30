@@ -1,0 +1,20 @@
+{
+  "schema_version": "opportunity-demo-reviewed/v1",
+  "catalog_source_revision_marker": "synthetic-course-planning-v0",
+  "catalog_file_sha256": "407cb93f54c4f9438fec776cfc7968674243d793c84b3a47244e677aea4bbe21",
+  "source_id": "src:ustc:course-catalog:demo-2026-fall",
+  "source_url": "https://catalog.example.test/ustc/2026-fall",
+  "raw_snapshot_id": "raw:opportunity:course-catalog:v0",
+  "normalized_snapshot_id": "normalized:opportunity:course-catalog:v0",
+  "parser_identity": "parser:opportunity:course-catalog:v1",
+  "observed_at_secs": 1787616000,
+  "source_published_at_secs": 1787184000,
+  "source_reviewer": "reviewer:demo:opportunity-source",
+  "source_review_evidence": "evidence:demo:opportunity:catalog-v0",
+  "source_health": "current",
+  "market_enabled": true,
+  "market_grant_active": true,
+  "authority_change_after_projection": "none",
+  "tool_failure": "none",
+  "schema_digest_seed": "opportunity-private-operations/v1"
+}

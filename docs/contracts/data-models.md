@@ -1,6 +1,6 @@
 # Course Planning data model contract
 
-Status: implemented v0 in `crates/course-planning`.
+Status: Course Planning v0 implemented; bounded Opportunity consent/profile domain implemented; M10/Market/Web composition contract active.
 
 ## Boundary
 
@@ -64,6 +64,40 @@ All v0 input objects reject unknown JSON fields, and every course must explicitl
 - per-course soft preference weights.
 
 It is user-owned data, not campus-source authority.
+
+### Consent-bound Opportunity profile wrapper
+
+`crates/opportunity-graph` does not retain the fixture's profile inside the
+public catalog. It splits one exact `DemoReviewed` `SourceRevision` plus public
+course facts from one private `AcademicProfileInput`. Profile creation requires
+an authenticated tenant/user principal and explicit consent to exactly:
+
+- completed courses;
+- credit bounds;
+- preference weights.
+
+The domain repository contract allows one active profile snapshot per principal.
+Planning takes an exact profile snapshot ID, denies a mismatched principal
+before calling the M60 health port, and binds the receipt to source revision,
+profile snapshot and consent IDs. Revocation and profile deletion are one
+atomic repository operation; the tombstone retains identities and deletion
+receipt but not the academic payload. The active product slice requires a
+composition-owned file adapter to validate and atomically replace the complete
+tenant-private state before acknowledging create/delete. Restart rehydration
+must rebuild active records and tombstones through checked domain constructors;
+it may not deserialize an authority-bearing domain record directly. The adapter
+does not claim encryption-at-rest, remote backup erasure or production database
+semantics.
+
+The M10 projection carries no caller-supplied tenant/user identity. Profile
+create accepts at most 64 completed courses and 64 unique preference weights;
+plan generation accepts at most eight results and beam width 4,096. Profile
+view/create terminals expose profile/consent metadata, private-field counts and
+credit bounds but do not echo completed-course codes or preference weights.
+Planner terminals expose selected course codes, typed qualification blockers,
+hard-constraint results, deterministic rationale and fact-level provenance only
+to the authenticated owner route. Request/response `Debug` and operational logs
+redact both raw profile input and planning output.
 
 ### Course identity and scheduling
 

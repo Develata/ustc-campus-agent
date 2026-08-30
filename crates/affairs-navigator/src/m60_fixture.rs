@@ -6,6 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use time::OffsetDateTime;
+use ustc_campus_agent_core::source_revision::{SourceRevision, SourceRevisionHealth};
 
 use crate::evidence::M60RevisionRef;
 use crate::m60_port::{
@@ -13,6 +14,7 @@ use crate::m60_port::{
     M60RetainedEvidenceOutcome, M60RetainedEvidenceRequest, M60VerificationIdentity,
     M60VerifiedEvidenceSet, compute_evidence_set_digest,
 };
+use crate::publication::{M60ProcedurePublicationOutcome, M60ProcedurePublicationPort};
 use crate::value::{AffairsValueError, SourceId};
 
 /// In-memory M60 fixture adapter. Stores retained accepted/equal-contract
@@ -26,6 +28,7 @@ pub struct M60FixtureAdapter {
     verifier_id: String,
     evidence_contract_version: u16,
     failure_mode: Option<M60EvidencePortError>,
+    revision_health: SourceRevisionHealth,
 }
 
 impl M60FixtureAdapter {
@@ -53,6 +56,7 @@ impl M60FixtureAdapter {
             verifier_id: verifier_id.to_owned(),
             evidence_contract_version,
             failure_mode: None,
+            revision_health: SourceRevisionHealth::Current,
         })
     }
 
@@ -88,46 +92,48 @@ impl M60FixtureAdapter {
         self.failure_mode = mode;
         self
     }
-}
 
-impl M60ProcedureEvidencePort for M60FixtureAdapter {
-    fn verify_retained(
+    /// Selects the transaction-current health returned by the publication
+    /// fixture port. Production M60 derives this from source policy and retained
+    /// state; callers cannot supply it directly to the publication service.
+    pub fn set_revision_health(&mut self, health: SourceRevisionHealth) -> &mut Self {
+        self.revision_health = health;
+        self
+    }
+
+    fn verify_retained_inner(
         &self,
         request: &M60RetainedEvidenceRequest,
-    ) -> Result<M60RetainedEvidenceOutcome, M60EvidencePortError> {
-        if let Some(mode) = self.failure_mode {
-            return Err(mode);
-        }
-
+    ) -> M60RetainedEvidenceOutcome {
         for req_ref in request.revision_refs() {
             let key = (
                 req_ref.source_id().as_str().to_owned(),
                 req_ref.revision_id().to_owned(),
             );
             let Some(stored) = self.stored.get(&key) else {
-                return Ok(M60RetainedEvidenceOutcome::Unverified(
+                return M60RetainedEvidenceOutcome::Unverified(
                     M60EvidenceUnverifiedReason::MissingRevision,
-                ));
+                );
             };
             if stored.raw_digest() != req_ref.raw_digest()
                 || stored.normalized_digest() != req_ref.normalized_digest()
             {
-                return Ok(M60RetainedEvidenceOutcome::Unverified(
+                return M60RetainedEvidenceOutcome::Unverified(
                     M60EvidenceUnverifiedReason::DigestMismatch,
-                ));
+                );
             }
             if self.revoked.contains(&key) {
-                return Ok(M60RetainedEvidenceOutcome::Unverified(
+                return M60RetainedEvidenceOutcome::Unverified(
                     M60EvidenceUnverifiedReason::RevokedOrUnaccepted,
-                ));
+                );
             }
             if self.require_effective_interval
                 && req_ref.effective_from().is_none()
                 && req_ref.effective_to().is_none()
             {
-                return Ok(M60RetainedEvidenceOutcome::Unverified(
+                return M60RetainedEvidenceOutcome::Unverified(
                     M60EvidenceUnverifiedReason::EffectiveIntervalMissing,
-                ));
+                );
             }
         }
 
@@ -142,7 +148,44 @@ impl M60ProcedureEvidencePort for M60FixtureAdapter {
         .expect("validated in constructor");
         let verified_set = M60VerifiedEvidenceSet::new(digest, revision_count, identity)
             .expect("revision_count is checked >0");
-        Ok(M60RetainedEvidenceOutcome::Verified(verified_set))
+        M60RetainedEvidenceOutcome::Verified(verified_set)
+    }
+}
+
+impl M60ProcedureEvidencePort for M60FixtureAdapter {
+    fn verify_retained(
+        &self,
+        request: &M60RetainedEvidenceRequest,
+    ) -> Result<M60RetainedEvidenceOutcome, M60EvidencePortError> {
+        if let Some(mode) = self.failure_mode {
+            return Err(mode);
+        }
+        Ok(self.verify_retained_inner(request))
+    }
+}
+
+impl M60ProcedurePublicationPort for M60FixtureAdapter {
+    fn verify_publication(
+        &self,
+        _revision: &SourceRevision,
+        request: &M60RetainedEvidenceRequest,
+    ) -> Result<M60ProcedurePublicationOutcome, M60EvidencePortError> {
+        if let Some(mode) = self.failure_mode {
+            return Err(mode);
+        }
+        if self.revision_health != SourceRevisionHealth::Current {
+            return Ok(M60ProcedurePublicationOutcome::SourceNotCurrent(
+                self.revision_health,
+            ));
+        }
+        Ok(match self.verify_retained_inner(request) {
+            M60RetainedEvidenceOutcome::Verified(verified) => {
+                M60ProcedurePublicationOutcome::CurrentVerified(verified)
+            }
+            M60RetainedEvidenceOutcome::Unverified(reason) => {
+                M60ProcedurePublicationOutcome::Unverified(reason)
+            }
+        })
     }
 }
 

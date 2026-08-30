@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
-use std::fs::{self, File};
-use std::io::{self, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Read, Write};
 use std::num::NonZeroU64;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -10,6 +11,8 @@ use sha2::{Digest, Sha256};
 use ustc_campus_agent_client_protocol::{AdmittedActorDto, DispatchCapsuleBodyV2, M71TerminalDto};
 
 use crate::capability::StoredPublicAuthorization;
+
+const MAX_STORE_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -195,8 +198,7 @@ pub struct FileRecordStore {
 impl FileRecordStore {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self, StoreError> {
         let path = path.into();
-        let state = if path.exists() {
-            let bytes = fs::read(&path).map_err(StoreError::Io)?;
+        let state = if let Some(bytes) = read_existing_private_state(&path)? {
             let state: StoreState =
                 serde_json::from_slice(&bytes).map_err(StoreError::Corrupted)?;
             validate_state(&state)?;
@@ -443,6 +445,24 @@ impl FileRecordStore {
         &self,
         operation: impl FnOnce(&mut StoreState) -> Result<T, StoreError>,
     ) -> Result<T, StoreError> {
+        self.transaction_with_persist(operation, |state| {
+            persist_with_parent_sync(&self.path, state)
+        })
+    }
+
+    /// Runs `operation` under the store lock, then persists the resulting
+    /// state with a caller-supplied persistence step.
+    ///
+    /// Phase-aware rollback: failures before the rename commit (pre-commit)
+    /// restore the previous in-memory state; a failure after the rename
+    /// succeeded is `CommitUncertain` and must NOT restore old memory,
+    /// because the renamed candidate is already visible at `path` and a
+    /// rollback would let a later mutation overwrite it with stale state.
+    fn transaction_with_persist<T>(
+        &self,
+        operation: impl FnOnce(&mut StoreState) -> Result<T, StoreError>,
+        persist: impl FnOnce(&StoreState) -> Result<(), PersistFailure>,
+    ) -> Result<T, StoreError> {
         let mut state = self.state.lock().map_err(|_| StoreError::Poisoned)?;
         let before = state.clone();
         let result = match operation(&mut state) {
@@ -452,24 +472,113 @@ impl FileRecordStore {
                 return Err(error);
             }
         };
-        if let Err(error) = persist(&self.path, &state) {
-            *state = before;
-            return Err(error);
+        match persist(&state) {
+            Ok(()) => Ok(result),
+            Err(PersistFailure::PreCommit(error)) => {
+                *state = before;
+                Err(error)
+            }
+            Err(PersistFailure::CommitUncertain(error)) => Err(error),
         }
-        Ok(result)
     }
 }
 
-fn persist(path: &Path, state: &StoreState) -> Result<(), StoreError> {
-    if let Some(parent) = path.parent() {
+fn read_existing_private_state(path: &Path) -> Result<Option<Vec<u8>>, StoreError> {
+    let path_metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(StoreError::Io(error)),
+    };
+    if !path_metadata.file_type().is_file()
+        || path_metadata.permissions().mode() & 0o777 != 0o600
+        || path_metadata.len() > MAX_STORE_BYTES
+    {
+        return Err(StoreError::Invariant);
+    }
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(StoreError::Io)?;
+    let opened_metadata = file.metadata().map_err(StoreError::Io)?;
+    if !opened_metadata.file_type().is_file()
+        || opened_metadata.dev() != path_metadata.dev()
+        || opened_metadata.ino() != path_metadata.ino()
+        || opened_metadata.permissions().mode() & 0o777 != 0o600
+        || opened_metadata.len() > MAX_STORE_BYTES
+    {
+        return Err(StoreError::Invariant);
+    }
+
+    let mut bytes = Vec::new();
+    std::io::Read::by_ref(&mut file)
+        .take(MAX_STORE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(StoreError::Io)?;
+    if bytes.len() as u64 > MAX_STORE_BYTES {
+        return Err(StoreError::Invariant);
+    }
+    Ok(Some(bytes))
+}
+
+/// Phase-aware persistence failure.
+///
+/// `PreCommit`: the candidate never reached `path`, so rolling the in-memory
+/// state back is safe. `CommitUncertain`: `rename` already placed the
+/// candidate at `path` and only the mandatory parent-directory fsync failed;
+/// the candidate is visible on disk, so memory must not be rolled back and
+/// the failure is surfaced to the caller instead of being reported durable.
+enum PersistFailure {
+    PreCommit(StoreError),
+    CommitUncertain(StoreError),
+}
+
+fn persist_with_parent_sync(path: &Path, state: &StoreState) -> Result<(), PersistFailure> {
+    persist_candidate(path, state).map_err(PersistFailure::PreCommit)?;
+    sync_parent_directory(path)
+        .map_err(|error| PersistFailure::CommitUncertain(StoreError::CommitUncertain(error)))?;
+    Ok(())
+}
+
+fn persist_candidate(path: &Path, state: &StoreState) -> Result<(), StoreError> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         fs::create_dir_all(parent).map_err(StoreError::Io)?;
     }
     let bytes = serde_json::to_vec(state).map_err(StoreError::Corrupted)?;
+    if bytes.len() as u64 > MAX_STORE_BYTES {
+        return Err(StoreError::Invariant);
+    }
     let temporary = path.with_extension("tmp");
-    let mut file = File::create(&temporary).map_err(StoreError::Io)?;
-    file.write_all(&bytes).map_err(StoreError::Io)?;
-    file.sync_all().map_err(StoreError::Io)?;
-    fs::rename(&temporary, path).map_err(StoreError::Io)
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)
+            .map_err(StoreError::Io)?;
+        file.write_all(&bytes).map_err(StoreError::Io)?;
+        file.sync_all().map_err(StoreError::Io)?;
+        fs::rename(&temporary, path).map_err(StoreError::Io)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+fn sync_parent_directory(path: &Path) -> Result<(), io::Error> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        File::open(parent).and_then(|directory| directory.sync_all())?;
+    }
+    Ok(())
 }
 
 fn validate_state(state: &StoreState) -> Result<(), StoreError> {
@@ -581,6 +690,11 @@ pub enum StoreError {
     Invariant,
     CounterExhausted,
     Poisoned,
+    /// The rename committed the candidate to `path`, but the mandatory
+    /// parent-directory fsync failed afterwards. The caller receives this
+    /// failure and the in-memory state is left as-is: the renamed candidate
+    /// must not be clobbered by a rollback.
+    CommitUncertain(io::Error),
 }
 
 impl std::fmt::Display for StoreError {
@@ -591,6 +705,7 @@ impl std::fmt::Display for StoreError {
             Self::Invariant => "record store invariant failure",
             Self::CounterExhausted => "record store counter exhausted",
             Self::Poisoned => "record store synchronization failure",
+            Self::CommitUncertain(_) => "record store commit-uncertain failure",
         })
     }
 }
@@ -601,6 +716,7 @@ mod tests {
     use super::*;
     use crate::capability::CapabilityIssuer;
     use std::collections::BTreeMap;
+    use std::os::unix::fs::{PermissionsExt, symlink};
     use std::sync::atomic::{AtomicU64, Ordering};
     use ustc_campus_agent_client_protocol::{
         AdmittedActorDto, AffairsGetPayloadDto, FrozenPrerequisitesDto, M71LineageDto,
@@ -715,6 +831,87 @@ mod tests {
             tenant_id: "tenant:fixture".to_owned(),
             user_id: "user:fixture".to_owned(),
         }
+    }
+
+    #[test]
+    fn private_store_rejects_unsafe_primary_and_temporary_files() {
+        let path = temp_path();
+        let store = FileRecordStore::open(&path).expect("open empty store");
+        assert!(matches!(
+            store
+                .insert_admitted_once("cmd:001", public_capsule("cmd:001"), public_policy())
+                .expect("persist first record"),
+            InsertOutcome::Created
+        ));
+        assert_eq!(
+            fs::metadata(&path)
+                .expect("persisted store metadata")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+        drop(store);
+        FileRecordStore::open(&path).expect("reopen secure store");
+
+        let insecure = temp_path();
+        fs::write(&insecure, br#"{"schema_version":1,"records":{}}"#)
+            .expect("write insecure store");
+        let mut permissions = fs::metadata(&insecure)
+            .expect("insecure metadata")
+            .permissions();
+        permissions.set_mode(0o644);
+        fs::set_permissions(&insecure, permissions).expect("set insecure mode");
+        assert!(matches!(
+            FileRecordStore::open(&insecure),
+            Err(StoreError::Invariant)
+        ));
+
+        let symlink_path = temp_path();
+        let sentinel = symlink_path.with_extension("sentinel");
+        fs::write(&sentinel, br#"{"schema_version":1,"records":{}}"#)
+            .expect("write symlink sentinel");
+        let mut permissions = fs::metadata(&sentinel)
+            .expect("sentinel metadata")
+            .permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(&sentinel, permissions).expect("secure sentinel mode");
+        symlink(&sentinel, &symlink_path).expect("create primary symlink");
+        assert!(matches!(
+            FileRecordStore::open(&symlink_path),
+            Err(StoreError::Invariant)
+        ));
+
+        let temporary_path = temp_path();
+        let temporary_sentinel = temporary_path.with_extension("sentinel");
+        fs::write(&temporary_sentinel, b"do-not-overwrite").expect("write temp sentinel");
+        symlink(&temporary_sentinel, temporary_path.with_extension("tmp"))
+            .expect("create temporary symlink");
+        let temporary_store = FileRecordStore::open(&temporary_path).expect("open absent store");
+        assert!(
+            temporary_store
+                .insert_admitted_once("cmd:002", public_capsule("cmd:002"), public_policy())
+                .is_err()
+        );
+        assert_eq!(
+            fs::read(&temporary_sentinel).expect("read temp sentinel"),
+            b"do-not-overwrite"
+        );
+
+        let oversized = temp_path();
+        let oversized_file = File::create(&oversized).expect("create oversized store");
+        oversized_file
+            .set_len(MAX_STORE_BYTES + 1)
+            .expect("size oversized store");
+        let mut permissions = fs::metadata(&oversized)
+            .expect("oversized metadata")
+            .permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(&oversized, permissions).expect("secure oversized mode");
+        assert!(matches!(
+            FileRecordStore::open(&oversized),
+            Err(StoreError::Invariant)
+        ));
     }
 
     #[test]
@@ -1277,6 +1474,121 @@ mod tests {
             .count();
         assert_eq!(claimed, 1, "exactly one Claimed");
         assert_eq!(busy, 1, "exactly one Busy");
+    }
+
+    #[test]
+    fn post_rename_parent_sync_failure_keeps_candidate_and_later_mutations() {
+        let path = temp_path();
+        let store = FileRecordStore::open(path.clone()).expect("open");
+        store
+            .insert_admitted_once(
+                "cmd:baseline",
+                public_capsule("cmd:baseline"),
+                public_policy(),
+            )
+            .expect("persist baseline");
+
+        let disk_before_precommit = fs::read(&path).expect("baseline bytes");
+        let precommit_capsule = public_capsule("cmd:precommit");
+        let precommit_record = StoredRecord {
+            capsule_digest: capsule_digest(&precommit_capsule).expect("precommit digest"),
+            capsule: precommit_capsule,
+            read_policy: public_policy(),
+            state: RecordState::Pending {
+                version: 0,
+                highest_fencing: 0,
+            },
+        };
+        let precommit_error = store
+            .transaction_with_persist(
+                |state| {
+                    state
+                        .records
+                        .insert("cmd:precommit".to_owned(), precommit_record);
+                    Ok(())
+                },
+                |_| {
+                    Err(PersistFailure::PreCommit(StoreError::Io(io::Error::other(
+                        "injected pre-rename failure",
+                    ))))
+                },
+            )
+            .expect_err("pre-commit failure must be reported");
+        assert!(matches!(precommit_error, StoreError::Io(_)));
+        assert!(
+            store
+                .get("cmd:precommit")
+                .expect("read memory after rollback")
+                .is_none(),
+            "pre-commit failure must restore in-memory state"
+        );
+        assert_eq!(
+            fs::read(&path).expect("bytes after pre-commit failure"),
+            disk_before_precommit,
+            "pre-commit failure must not alter disk bytes"
+        );
+
+        let candidate_capsule = public_capsule("cmd:candidate");
+        let candidate_record = StoredRecord {
+            capsule_digest: capsule_digest(&candidate_capsule).expect("candidate digest"),
+            capsule: candidate_capsule,
+            read_policy: public_policy(),
+            state: RecordState::Pending {
+                version: 0,
+                highest_fencing: 0,
+            },
+        };
+        let commit_uncertain = store
+            .transaction_with_persist(
+                |state| {
+                    state
+                        .records
+                        .insert("cmd:candidate".to_owned(), candidate_record);
+                    Ok(())
+                },
+                |state| {
+                    persist_candidate(&path, state).map_err(PersistFailure::PreCommit)?;
+                    Err(PersistFailure::CommitUncertain(
+                        StoreError::CommitUncertain(io::Error::other(
+                            "injected parent-directory sync failure",
+                        )),
+                    ))
+                },
+            )
+            .expect_err("post-rename sync failure must not claim durable success");
+        assert!(matches!(commit_uncertain, StoreError::CommitUncertain(_)));
+        assert!(
+            store
+                .get("cmd:candidate")
+                .expect("read in-memory candidate")
+                .is_some(),
+            "post-rename failure must not restore stale memory"
+        );
+        assert!(
+            FileRecordStore::open(path.clone())
+                .expect("reopen renamed candidate")
+                .get("cmd:candidate")
+                .expect("read reopened candidate")
+                .is_some(),
+            "renamed candidate must be visible on disk"
+        );
+
+        assert!(matches!(
+            store
+                .insert_admitted_once("cmd:later", public_capsule("cmd:later"), public_policy(),)
+                .expect("persist later mutation"),
+            InsertOutcome::Created
+        ));
+        let reopened = FileRecordStore::open(&path).expect("reopen final state");
+        for command_id in ["cmd:baseline", "cmd:candidate", "cmd:later"] {
+            assert!(
+                reopened
+                    .get(command_id)
+                    .expect("read final record")
+                    .is_some(),
+                "later mutation erased {command_id}"
+            );
+        }
     }
 
     #[test]

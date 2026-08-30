@@ -268,6 +268,8 @@ KEY_FILES = [
     "docs/tasks/01-execution-roadmap.md",
     "docs/tasks/02-s0-architecture-review.md",
     "docs/tasks/campaign-w1-m00-b3.md",
+    "docs/tasks/campaign-w1-m00-b4a.md",
+    "docs/tasks/campaign-w1-m00-b4b.md",
     "docs/tasks/campaign-w1-m20-b6.md",
     "docs/tasks/campaign-w1-m30-b0.md",
     "docs/tasks/campaign-w1-m40-b0.md",
@@ -287,7 +289,9 @@ KEY_FILES = [
     "docs/contracts/permissions.md",
     "docs/contracts/platform-identity.md",
     "docs/contracts/platform-request-context.md",
+    "docs/contracts/platform-control-evidence.md",
     "docs/contracts/platform-session.md",
+    "docs/contracts/platform-session-port.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",
     "docs/contracts/source-retrieval.md",
@@ -309,7 +313,13 @@ EXTERNAL_AGENT_OPERATION_ROWS = {
         "CLI, HTTP, inbound MCP",
         "bounded exact stable-ID evidence through `ustc-agentd`, `ustc-agent` and the loopback-only Web demo; production HTTP/inbound-MCP projection planned",
     ),
-    "change.list": ("M70", "public-read", "read", "CLI, HTTP", "planned after owning product contract"),
+    "change.list": (
+        "M70",
+        "public-read",
+        "read",
+        "CLI, HTTP",
+        "bounded exact semantic-change evidence through `ustc-agentd` and the loopback-only JSON/Web/Atom demo; production HTTP projection planned",
+    ),
     "change.get": ("M70", "public-read", "read", "CLI, HTTP", "planned after owning product contract"),
     "program.list": ("M72", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
     "program.get": ("M72", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
@@ -318,11 +328,14 @@ EXTERNAL_AGENT_OPERATION_ROWS = {
     "offering.list": ("M72", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
     "course.review_linkout": ("M72", "public-linkout", "link-out", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
     "source.provenance": ("M60", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning source/product contract"),
+    "profile.academic.create": ("M72", "tenant-private-write", "tenant-local mutation", "HTTP", "active bounded Opportunity Graph slice; exact consent and authenticated owner required"),
+    "profile.academic.view": ("M72", "tenant-private-read", "read", "HTTP", "active bounded Opportunity Graph slice; metadata/count projection only"),
+    "profile.academic.revoke_delete": ("M72", "tenant-private-write", "tenant-local deletion", "HTTP", "active bounded Opportunity Graph slice; consent revoke and payload deletion are one operation"),
     "profile.requirement_status": ("M72", "tenant-private-read", "read", "CLI, HTTP, later inbound MCP", "later private-data slice"),
     "planner.draft.list": ("M72", "tenant-private-read", "read", "CLI, HTTP", "later private-data slice"),
     "planner.draft.get": ("M72", "tenant-private-read", "read", "CLI, HTTP", "later private-data slice"),
     "planner.draft.delete": ("M72", "tenant-private-write", "tenant-local mutation", "CLI, HTTP", "later private-draft slice"),
-    "planner.generate": ("M72", "tenant-private-write", "tenant-local draft mutation", "CLI, HTTP, later inbound MCP", "later private-draft slice"),
+    "planner.generate": ("M72", "tenant-private-write", "bounded tenant-local planning", "HTTP", "active bounded Opportunity Graph slice; no enrollment/application side effect"),
     "planner.explain": ("M72", "tenant-private-read", "read", "CLI, HTTP, later inbound MCP", "later private-data slice"),
 }
 
@@ -1355,7 +1368,7 @@ def check_market(issues: list[str]) -> None:
 
     expected_first_party_statuses = {
         "ustc.affairs-navigator": "planned",
-        "ustc.change-radar": "planned",
+        "ustc.change-radar": "development",
         "ustc.opportunity-graph": "development",
     }
     expected_first_party_versions = {
@@ -1371,6 +1384,9 @@ def check_market(issues: list[str]) -> None:
             "campus.public_plan.read",
             "campus.public_course.read",
             "campus.community_review.linkout",
+            "user.own_academic_snapshot.read",
+            "user.own_academic_snapshot.write",
+            "user.own_plan_draft.write",
         ],
     }
     expected_capability_axes = {
@@ -1416,6 +1432,14 @@ def check_market(issues: list[str]) -> None:
         ),
         "user.own_academic_snapshot.read": (
             "Read",
+            "UserProfile",
+            "TenantPrivateUser",
+            "Never",
+            "Ask",
+            "Active",
+        ),
+        "user.own_academic_snapshot.write": (
+            "Write",
             "UserProfile",
             "TenantPrivateUser",
             "Never",
@@ -1677,8 +1701,9 @@ def check_market(issues: list[str]) -> None:
         for capability in manifest_capabilities:
             if capability not in registered:
                 fail(f"{rel_path}: capability not registered: {capability}", issues)
-            if is_default_first_party and capability not in auto_grant:
-                fail(f"{rel_path}: default package capability is not auto-grant-eligible: {capability}", issues)
+            # First-party manifests may declare tenant-private capabilities,
+            # but their registry tuple remains Never/Ask and therefore cannot
+            # enter the default auto-grant set. Declaration is not a grant.
 
         source_policy = manifest.get("sourcePolicy")
         if not isinstance(source_policy, dict) or not source_policy or not all(
@@ -1702,9 +1727,55 @@ def check_market(issues: list[str]) -> None:
 
 
 def check_course_fixture(issues: list[str]) -> None:
-    fixture = load_json("market/fixtures/course-planning/minimal-v0.json", issues)
+    catalog_relative = "market/fixtures/course-planning/minimal-v0.json"
+    fixture = load_json(catalog_relative, issues)
     if not isinstance(fixture, dict):
         return
+    metadata = load_json("fixtures/opportunity-graph/course-planning-demo-reviewed.json", issues)
+    resource_pack = load_json(
+        "market/packages/ustc.opportunity-graph/components/course-planning-resource-pack.json",
+        issues,
+    )
+    native_component = load_json(
+        "market/packages/ustc.opportunity-graph/components/native-rust-component.json",
+        issues,
+    )
+    try:
+        catalog_digest = hashlib.sha256((ROOT / catalog_relative).read_bytes()).hexdigest()
+    except OSError as error:
+        fail(f"Course Planning fixture bytes unreadable: {error}", issues)
+        return
+    metadata_digest = metadata.get("catalog_file_sha256") if isinstance(metadata, dict) else None
+    resource_digest = resource_pack.get("resourceSha256") if isinstance(resource_pack, dict) else None
+    if metadata_digest != catalog_digest or resource_digest != catalog_digest:
+        fail(
+            "Course Planning catalog digest binding drift: "
+            f"actual={catalog_digest} metadata={metadata_digest} resource={resource_digest}",
+            issues,
+        )
+    if isinstance(resource_pack, dict) and (
+        resource_pack.get("schemaVersion") != "declarative-resource-pack/v1"
+        or resource_pack.get("packageId") != "ustc.opportunity-graph"
+        or resource_pack.get("packageVersion") != "0.1.0"
+        or resource_pack.get("resourcePath") != catalog_relative
+        or resource_pack.get("reviewClass") != "DemoReviewed"
+    ):
+        fail("Course Planning resource-pack identity drift", issues)
+    expected_operations = [
+        "profile.academic.create",
+        "profile.academic.view",
+        "planner.generate",
+        "profile.academic.revoke_delete",
+    ]
+    if not isinstance(native_component, dict) or native_component != {
+        "schemaVersion": "native-rust-component/v1",
+        "packageId": "ustc.opportunity-graph",
+        "packageVersion": "0.1.0",
+        "cratePath": "crates/opportunity-graph",
+        "compositionOwner": "apps/ustc-agentd",
+        "operations": expected_operations,
+    }:
+        fail("Opportunity native-component identity/operation drift", issues)
     expected_top_level = {
         "schema_version",
         "source_revision",
@@ -2570,6 +2641,17 @@ PLATFORM_AUTHORITY_SOURCE = "crates/platform-core/src/market/authority.rs"
 PLATFORM_AUTHORITY_TEST = "crates/platform-core/tests/market_authority_assembly.rs"
 PLATFORM_SESSION_SOURCE = "crates/platform-core/src/session.rs"
 PLATFORM_SESSION_TEST = "crates/platform-core/tests/platform_session.rs"
+PLATFORM_SESSION_PORT_SOURCE = "crates/platform-core/src/session_port.rs"
+PLATFORM_SESSION_PORT_TEST = "crates/platform-core/tests/platform_session_port.rs"
+APP_M00_SESSION_SOURCE = "apps/ustc-agentd/src/m00_session.rs"
+APP_OPPORTUNITY_TEST = "apps/ustc-agentd/tests/opportunity_composition.rs"
+APP_CLI_PRODUCT_TEST = "apps/ustc-agent/tests/affairs_get_product_path.rs"
+PLATFORM_SESSION_PORT_CONTRACT = "docs/contracts/platform-session-port.md"
+PLATFORM_SESSION_PORT_TASK = "docs/tasks/campaign-w1-m00-b4a.md"
+PLATFORM_CONTROL_EVIDENCE_SOURCE = "crates/platform-core/src/control_evidence.rs"
+PLATFORM_CONTROL_EVIDENCE_TEST = "crates/platform-core/tests/platform_control_evidence.rs"
+PLATFORM_CONTROL_EVIDENCE_CONTRACT = "docs/contracts/platform-control-evidence.md"
+PLATFORM_CONTROL_EVIDENCE_TASK = "docs/tasks/campaign-w1-m00-b4b.md"
 PLATFORM_CAPABILITY_TEST = "crates/platform-core/tests/market_capability_registry.rs"
 PLATFORM_INSTALLATION_TEST = 'crates/platform-core/tests/market_installation_lifecycle.rs'
 PLATFORM_INSTALLATION_SOURCE = 'crates/platform-core/src/market/installation.rs'
@@ -2839,7 +2921,8 @@ PLATFORM_IDENTITY_FORBIDDEN_SPLICE_PATTERNS = (
 )
 # Enumerated over the WHOLE package, not `src/*.rs`: a `#[path = "../elsewhere.rs"]` module
 # compiles a file that a `src`-only glob never sees.
-PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
+PLATFORM_CORE_SOURCE_FILES = ('src/control_evidence.rs',
+ 'src/identity.rs',
  'src/invocation.rs',
  'src/lib.rs',
  'src/market.rs',
@@ -2850,7 +2933,9 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'src/market/update.rs',
  'src/request_context.rs',
  'src/session.rs',
+ 'src/session_port.rs',
  'src/source_registry.rs',
+ 'src/source_revision.rs',
  'tests/invocation_resolution.rs',
  'tests/market_authority_assembly.rs',
  'tests/market_capability_registry.rs',
@@ -2858,9 +2943,11 @@ PLATFORM_CORE_SOURCE_FILES = ('src/identity.rs',
  'tests/market_installation_lifecycle.rs',
  'tests/market_package_catalog.rs',
  'tests/market_package_update.rs',
+ 'tests/platform_control_evidence.rs',
  'tests/platform_identity.rs',
  'tests/platform_request_context.rs',
  'tests/platform_session.rs',
+ 'tests/platform_session_port.rs',
  'tests/source_registry.rs',
  'tests/support/invocation_fixture.rs',
  'tests/support/invocation_fixture_executor.rs')
@@ -2871,6 +2958,10 @@ PLATFORM_UPDATE_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, User
 PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT = "use crate::identity::{TenantId, UserId};"
 PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT = (
     "use crate::identity::{SessionId, TenantId, UserId};"
+)
+PLATFORM_SESSION_PORT_ADMITTED_IDENTITY_IMPORT = "use crate::identity::SessionId;"
+PLATFORM_CONTROL_EVIDENCE_ADMITTED_IDENTITY_IMPORT = (
+    "use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};"
 )
 # Cross-file bindings of an admitted kind are admitted by ENUMERATION, never by pattern, and
 # each entry is keyed by exact repository-relative file together with exact normalized text.
@@ -2887,14 +2978,17 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
     (PLATFORM_UPDATE_SOURCE, PLATFORM_UPDATE_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_AUTHORITY_SOURCE, PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT),
+    (PLATFORM_SESSION_PORT_SOURCE, PLATFORM_SESSION_PORT_ADMITTED_IDENTITY_IMPORT),
+    (PLATFORM_CONTROL_EVIDENCE_SOURCE, PLATFORM_CONTROL_EVIDENCE_ADMITTED_IDENTITY_IMPORT),
 )
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
 # a file extension. Pinning the declarations pins the compiled set semantically, so no
 # attribute spelling — `#[path]`, `#[cfg_attr(all(), path = "x.txt")]`, or a future one — can
 # introduce a module the scan never reads.
-PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
+PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'control_evidence.rs': (),
+ 'identity.rs': (),
  'invocation.rs': (),
- 'lib.rs': ('identity', 'invocation', 'market', 'request_context', 'session', 'source_registry'),
+ 'lib.rs': ('control_evidence', 'identity', 'invocation', 'market', 'request_context', 'session', 'session_port', 'source_registry', 'source_revision'),
  'market.rs': ('authority', 'capability', 'grant', 'installation', 'update'),
  'market/authority.rs': (),
  'market/capability.rs': (),
@@ -2903,7 +2997,9 @@ PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
  'market/update.rs': (),
  'request_context.rs': (),
  'session.rs': (),
- 'source_registry.rs': ()}
+ 'session_port.rs': (),
+ 'source_registry.rs': (),
+ 'source_revision.rs': ()}
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
 # the spelling `crate::identity` is not the same as accounting for the use tree that contains
 # it. `#[path = "identity_hidden.txt"] pub mod identity;` keeps the admitted name while Cargo
@@ -2916,7 +3012,17 @@ PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'identity.rs': (),
 # rejected; removing an admitted item fails too. The cost is real: an M20 change to the
 # protocol import list below must be mirrored here and in the Rust guard. That is the intended
 # price of a frozen v0 surface, and the failure message names the drift.
-PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Error;',
+PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
+                 'use serde::{Deserialize, Serialize};',
+                 'use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};',
+                 'use crate::request_context::{ AdmissionRejectionClass, CausationId, '
+                 'DescriptorSnapshotId, EffectClass, M00AdmittedActor, OperationId, '
+                 'PermissionClass, PlatformPolicySnapshotId, PlatformRequestContext, '
+                 'RequestContextRejection, };',
+                 'use crate::session::{ AuthAdapterId, SessionDomainError, SessionEvent, '
+                 'SessionExpiryCause, SessionInstant, };',
+                 'use crate::session_port::SessionRepositoryError;'),
+ 'identity.rs': ('use std::error::Error;',
                  'use std::fmt;',
                  'use std::str::FromStr;',
                  'use serde::de;',
@@ -2936,12 +3042,15 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                    'SchemaConstructionError, Sha256Digest, UnvalidatedArgumentValueV0, '
                    'UnvalidatedSchemaNodeV0, UnvalidatedToolInputSchemaV0, ValidatedSchemaNodeV0, '
                    'ValidatedToolInputSchemaV0, };'),
- 'lib.rs': ('pub mod identity;',
+ 'lib.rs': ('pub mod control_evidence;',
+            'pub mod identity;',
             'pub mod invocation;',
             'pub mod market;',
             'pub mod request_context;',
             'pub mod session;',
+            'pub mod session_port;',
             'pub mod source_registry;',
+            'pub mod source_revision;',
             '#[cfg(test)] mod tests',
             'use super::*;'),
  'market.rs': ('pub mod authority;',
@@ -3073,6 +3182,11 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                 'use crate::identity::{SessionId, TenantId, UserId};',
                 '#[cfg(test)] mod tests',
                 'use super::*;'),
+ 'session_port.rs': ('use std::fmt;',
+                     'use serde::{Deserialize, Deserializer, Serialize, Serializer, de};',
+                     'use crate::identity::SessionId;',
+                     'use crate::session::{ AuthAdapterId, CredentialEvidenceDigest, SessionEvent, '
+                     'SessionInstant, SessionSnapshot, evolve, };'),
  'source_registry.rs': ('use std::collections::BTreeMap;',
                         'use std::error::Error;',
                         'use std::fmt;',
@@ -3084,13 +3198,21 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'identity.rs': ('use std::error::Err
                         'type Error = SourceValueError;',
                         'type Err = SourceValueError;',
                         '#[cfg(test)] mod tests',
+                        'use super::*;'),
+ 'source_revision.rs': ('use std::error::Error;',
+                        'use std::fmt;',
+                        'use sha2::{Digest, Sha256};',
+                        'use crate::source_registry::{SourceId, SourceReviewEvidenceId, '
+                        'SourceReviewerId, SourceUrl};',
+                        '#[cfg(test)] mod tests',
                         'use super::*;')}
 # A macro is the remaining item category that can add API to a governed type without naming it
 # in a `use`, a `type` or an `impl` header: `macro_rules! m { ($t:ty) => { impl AsRef<str> for
 # $t { .. } } }` plus `m!(TenantId);` implements a trait for an identity kind while every
 # self-type scan sees `$t`. Sibling macro definitions are pinned and no sibling macro
 # invocation may name a governed kind.
-PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
+PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'control_evidence.rs': (),
+ 'identity.rs': ('identity_value',),
  'invocation.rs': ('authority_id',),
  'lib.rs': (),
  'market.rs': (),
@@ -3100,12 +3222,15 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'identity.rs': ('identity_value',),
  'market/installation.rs': (),
  'market/update.rs': ('parsed',),
  'session.rs': (),
- 'source_registry.rs': ('source_value',)}
+ 'session_port.rs': (),
+ 'source_registry.rs': ('source_value',),
+ 'source_revision.rs': ('revision_id',)}
 # Macro INVOCATION names are pinned too, not screened for `include!`. A splicing macro can be
 # reached whatever the spelling — `include /* x */ !("f.rs")` contains no `include!` substring —
 # so the admitted name set per governed source is exact. `include_str!` stays admitted in
 # lib.rs, which legitimately embeds the first-party manifests as data.
-PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_value', 'matches', 'stringify', 'write'),
+PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'control_evidence.rs': (),
+ 'identity.rs': ('concat', 'identity_value', 'matches', 'stringify', 'write'),
  'invocation.rs': ('authority_id', 'format', 'write'),
  'lib.rs': ('assert', 'assert_eq', 'include_str', 'panic'),
  'market.rs': ('matches', 'write'),
@@ -3143,13 +3268,15 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'identity.rs': ('concat', 'identity_
                       'vec',
                       'write'),
  'session.rs': ('assert', 'assert_eq', 'matches', 'panic', 'write'),
+ 'session_port.rs': (),
  'source_registry.rs': ('assert',
                         'assert_eq',
                         'concat',
                         'matches',
                         'source_value',
                         'stringify',
-                        'write')}
+                        'write'),
+ 'source_revision.rs': ('assert', 'format', 'matches', 'revision_id', 'stringify', 'write')}
 PLATFORM_IDENTITY_ADMITTED_TEST_MACRO_INVOCATIONS = (
     "assert",
     "assert_eq",
@@ -3218,7 +3345,8 @@ PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS = (('CapabilityId,', 8),
 # A blanket `impl<T> Extension for T` names no kind and covers all six, so the sibling `impl`
 # surface is an allowlist as well. These are M20 items; a genuine M20 addition is drift that
 # must be admitted here explicitly rather than arriving unseen.
-PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevision',
+PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'control_evidence.rs': ('impl PlatformControlError', 'impl PlatformControlEvent'),
+ 'authority.rs': ('impl AuthorityReadRevision',
                   'impl CurrentGrantKey',
                   'impl Error for AuthorityRepositoryError',
                   'impl Error for InvocationRecheckError',
@@ -3382,6 +3510,12 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
                 'impl fmt::Display for SessionValueError',
                  'impl-arg Into<String>',
                  'impl-arg Into<String>'),
+ 'session_port.rs': ("impl Deserialize<'de> for SecretRef",
+                     'impl SecretRef',
+                     'impl Serialize for SecretRef',
+                     'impl SessionHistory',
+                     'impl fmt::Debug for SecretRef',
+                     'impl-arg Into<String>'),
  'source_registry.rs': ('impl $name',
                         "impl Deserialize<'de> for $name",
                         'impl Error for SourceRegistryError',
@@ -3398,6 +3532,17 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
                         'impl fmt::Display for $name',
                         'impl fmt::Display for SourceRegistryError',
                         'impl fmt::Display for SourceValueError',
+                        'impl-arg Into<String>'),
+ 'source_revision.rs': ('impl $name',
+                        'impl EffectiveInterval',
+                        'impl Error for SourceRevisionError',
+                        'impl RevisionSha256',
+                        'impl RevisionTimestamp',
+                        'impl SourceRevision',
+                        'impl fmt::Display for $name',
+                        'impl fmt::Display for RevisionSha256',
+                        'impl fmt::Display for SourceRevisionError',
+                        'impl-arg Into<String>',
                         'impl-arg Into<String>'),
  'update.rs': ('impl AcceptedSnapshotForTest for UpdateCommandOutcome',
                'impl AuthorityCarrierBinding',
@@ -3463,7 +3608,7 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'authority.rs': ('impl AuthorityReadRevi
 # `type`, so the item allowlist above cannot see it.
 # Kept as a second, independent carrier alongside the `extern` item accounting above.
 PLATFORM_CORE_FORBIDDEN_SOURCE_PATTERNS = (("extern crate", r"\bextern\s+crate\b"),)
-PLATFORM_CAPABILITY_TEST_FUNCTIONS = ('current_registry_loads_with_exact_eight_definitions', 'enum_risk_and_compatibility_mappings_are_exact', 'source_size_and_malformed_json_fail_closed', 'duplicate_json_keys_fail_closed', 'duplicate_capability_ids_fail_closed', 'invalid_capability_id_grammar_fail_closed', 'missing_extra_and_unknown_fields_fail_closed', 'invalid_schema_version_and_registry_revision_fail_closed', 'forbidden_and_incoherent_combinations_fail_closed', 'auto_grant_candidacy_and_deprecated_revoked_exclusions', 'deterministic_ordering_and_permutation_independent_digest', 'fixed_definition_and_registry_digest_vectors', 'one_field_change_alters_definition_digest', 'registry_revision_does_not_change_definition_digests', 'policy_change_comparator_branches_and_precedence', 'errors_do_not_leak_rejected_source_fragments', 'empty_registry_loads_with_zero_definitions', 'definition_classifier_preserves_existing_policy_matrix', 'definition_classifier_handles_none_added_removed_revoked_and_all_axes', 'definition_classifier_uses_complete_definition_not_digest_or_caller_hint')
+PLATFORM_CAPABILITY_TEST_FUNCTIONS = ('current_registry_loads_with_exact_nine_definitions', 'enum_risk_and_compatibility_mappings_are_exact', 'source_size_and_malformed_json_fail_closed', 'duplicate_json_keys_fail_closed', 'duplicate_capability_ids_fail_closed', 'invalid_capability_id_grammar_fail_closed', 'missing_extra_and_unknown_fields_fail_closed', 'invalid_schema_version_and_registry_revision_fail_closed', 'forbidden_and_incoherent_combinations_fail_closed', 'auto_grant_candidacy_and_deprecated_revoked_exclusions', 'deterministic_ordering_and_permutation_independent_digest', 'fixed_definition_and_registry_digest_vectors', 'one_field_change_alters_definition_digest', 'registry_revision_does_not_change_definition_digests', 'policy_change_comparator_branches_and_precedence', 'errors_do_not_leak_rejected_source_fragments', 'empty_registry_loads_with_zero_definitions', 'definition_classifier_preserves_existing_policy_matrix', 'definition_classifier_handles_none_added_removed_revoked_and_all_axes', 'definition_classifier_uses_complete_definition_not_digest_or_caller_hint')
 PLATFORM_GRANT_TEST_FUNCTIONS = ('checked_grant_ids_versions_and_sequences_are_canonical',
  'closed_scope_algebra_projects_exact_public_and_tenant_private_scopes',
  'non_issue_commands_validate_snapshot_and_expected_version',
@@ -4352,6 +4497,7 @@ PLATFORM_CORE_ADMITTED_MANIFEST_DEPENDENCIES = (
     "semver",
     "serde",
     "serde_json",
+    "sha2",
     "ustc-agent-tool-protocol",
 )
 PLATFORM_CORE_ADMITTED_MANIFEST_DEV_DEPENDENCIES = ("hex",)
@@ -4447,7 +4593,8 @@ PLATFORM_IDENTITY_COMPILE_FAIL_EXPRESSIONS = {
 # `ignore` by spelling leaves the raw form open; an exact admitted name set closes the class,
 # including attributes nobody predicted. Derive ARGUMENTS are pinned separately, because a
 # derive is the one attribute that adds public API.
-PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive', 'doc', 'must_use'),
+PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'control_evidence.rs': ('derive', 'must_use', 'serde'),
+ 'identity.rs': ('$attribute', 'derive', 'doc', 'must_use'),
  'invocation.rs': ('derive', 'must_use'),
  'lib.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'market.rs': ('derive', 'must_use', 'serde'),
@@ -4457,7 +4604,9 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'identity.rs': ('$attribute', 'derive'
  'market/installation.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'market/update.rs': ('allow', 'cfg', 'derive', 'must_use', 'test'),
  'session.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
- 'source_registry.rs': ('$attribute', 'allow', 'cfg', 'derive', 'doc', 'must_use', 'test')}
+ 'session_port.rs': ('derive', 'must_use'),
+ 'source_registry.rs': ('$attribute', 'allow', 'cfg', 'derive', 'doc', 'must_use', 'test'),
+ 'source_revision.rs': ('$attribute', 'allow', 'cfg', 'derive', 'must_use', 'non_exhaustive', 'test')}
 # `market/grant.rs` carries lint-affecting `allow` attributes, so names alone are not enough:
 # freeze the complete normalized attribute-body multiset. Counts are literal reviewed evidence,
 # not a minimum or a projection generated from the governed source at checker runtime.
@@ -4500,6 +4649,7 @@ WORKSPACE_ADMITTED_DEPENDENCIES = {
     },
     "base64": "0.22.1",
     "hmac": "0.12.1",
+    "libc": "0.2.183",
     "serde": {"version": "1.0.229", "features": ["derive"]},
     "serde_json": "1.0.151",
     "semver": "1.0.27",
@@ -4521,6 +4671,7 @@ PLATFORM_CORE_RESOLVED_DEPENDENCIES = {
     "serde": CRATES_IO_SOURCE,
     "hex": CRATES_IO_SOURCE,
     "serde_json": CRATES_IO_SOURCE,
+    "sha2": CRATES_IO_SOURCE,
     "ustc-agent-tool-protocol": None,
 }
 # Exact specification of every platform-core dependency, mirroring the workspace rule.
@@ -4529,6 +4680,7 @@ PLATFORM_CORE_ADMITTED_DEPENDENCY_SPECS = {
         "semver": {"workspace": True},
         "serde": {"workspace": True},
         "serde_json": {"workspace": True},
+        "sha2": {"workspace": True},
         "ustc-agent-tool-protocol": {"workspace": True},
     },
     "dev-dependencies": {
@@ -10234,12 +10386,15 @@ P1_SOURCE_REGISTRY_TEST = "crates/platform-core/tests/source_registry.rs"
 P1_SOURCE_REGISTRY_LIB = "crates/platform-core/src/lib.rs"
 P1_SOURCE_REGISTRY_IDENTITY_TEST = P1_1_SCOPE_AMENDMENT_PATH
 P1_SOURCE_REGISTRY_IDENTITY_MODULE_EXPECTATION = """&[
+                "control_evidence",
                 "identity",
                 "invocation",
                 "market",
                 "request_context",
                 "session",
+                "session_port",
                 "source_registry",
+                "source_revision",
             ] as &[&str],"""
 P1_SOURCE_REGISTRY_IDENTITY_ITEM_EXPECTATION = '    "pub mod source_registry;",'
 
@@ -10682,7 +10837,7 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
 
     required_fragments = {
         "docs/contracts/interfaces.md": (
-            "A bounded loopback-only `affairs.get` proof now exists earlier as vertical-slice evidence for the M10→M71 typed path and one operation-specific presentation surface",
+            "Bounded loopback-only `affairs.get` and `change.list` proofs now exist earlier as vertical-slice evidence for `M10 → deterministic Harness → current Market authorization → ToolGateway → fixed first-party owning adapter → M71/M70` and two operation-specific presentation surfaces",
             "The first remote profile uses reviewed MCP Streamable HTTP.",
             "`planner.generate` creates only a tenant-local draft. It does not enroll, register, pay or submit a transaction to any external campus system.",
         ),
@@ -11935,6 +12090,7 @@ REQUEST_CONTEXT_TESTS = (
     "request_context_persisted_leaf_serde_round_trips_checked_values",
     "request_context_persisted_leaf_invalid_deserialize_rejected",
     "request_context_schema_digest_persisted_lower_hex_exact",
+    "request_context_permission_and_effect_v0_surface_is_exact",
 )
 REQUEST_CONTEXT_REQUIRED_PUBLIC_ITEMS = {
     "ActorReference",
@@ -11975,6 +12131,48 @@ REQUEST_CONTEXT_DOC_FRAGMENTS = {
 }
 
 
+def _extract_closed_text_block(text: str, header: str) -> list[str] | None:
+    """Return the stripped non-empty lines of the ```text fenced block that
+    immediately follows the unique ``header`` line in ``text``, or ``None``
+    when the header or its fence is absent. Mechanically extracts the closed
+    ``PermissionClass`` and ``EffectClass`` contract blocks without parsing
+    surrounding prose.
+    """
+    idx = text.find(header)
+    if idx < 0:
+        return None
+    rest = text[idx + len(header):]
+    fence = rest.find("```text")
+    if fence < 0:
+        return None
+    body = rest[fence + len("```text"):]
+    close = body.find("```")
+    if close < 0:
+        return None
+    return [line.strip() for line in body[:close].splitlines() if line.strip()]
+
+
+def _extract_unit_variants(source: str, enum_header: str) -> list[str] | None:
+    """Return the ordered unit-variant identifiers of the ``pub enum`` whose
+    declaration begins with ``enum_header`` in ``source`` (comments and string
+    literals must already be stripped), or ``None`` when the enum is absent.
+    Only bare identifier variants are collected, so a struct/tuple variant is
+    detected as drift relative to the closed unit-variant surface.
+    """
+    idx = source.find(enum_header)
+    if idx < 0:
+        return None
+    body = source[idx + len(enum_header):]
+    close = body.find("}")
+    if close < 0:
+        return None
+    return re.findall(
+        r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*,?[ \t]*$",
+        body[:close],
+        re.MULTILINE,
+    )
+
+
 def check_platform_request_context(issues: list[str]) -> None:
     """Fail closed over the accepted bounded M00 request-context implementation."""
     required = (
@@ -12011,7 +12209,7 @@ def check_platform_request_context(issues: list[str]) -> None:
     for fragment in (
         "Contract ID: `platform-request-context/v0`",
         "Status: **implemented bounded platform-core kernel**",
-        "exactly 64 named request-context tests",
+        "exactly 65 named request-context tests",
         REQUEST_CONTEXT_TEST_COMMAND,
     ):
         if contract.count(fragment) != 1:
@@ -12101,7 +12299,7 @@ def check_platform_request_context(issues: list[str]) -> None:
         missing = sorted(set(REQUEST_CONTEXT_TESTS) - set(actual_tests))
         extra = sorted(set(actual_tests) - set(REQUEST_CONTEXT_TESTS))
         fail(
-            "platform request context exact 64-test inventory drift "
+            "platform request context exact 65-test inventory drift "
             f"(count={len(actual_tests)} missing={missing} extra={extra})",
             issues,
         )
@@ -12125,7 +12323,7 @@ def check_platform_request_context(issues: list[str]) -> None:
 
     baseline = texts["docs/acceptance/platform-baseline.md"]
     auth13 = [line for line in baseline.splitlines() if line.startswith("| `AUTH-013` |")]
-    if len(auth13) != 1 or "Public/Authenticated" not in auth13[0] or "64" not in auth13[0]:
+    if len(auth13) != 1 or "Public/Authenticated" not in auth13[0] or "65" not in auth13[0]:
         fail("platform request context long-horizon AUTH-013 projection drift", issues)
 
     for rel, fragments in REQUEST_CONTEXT_DOC_FRAGMENTS.items():
@@ -12135,6 +12333,732 @@ def check_platform_request_context(issues: list[str]) -> None:
                     f"platform request context projection missing in {rel}: {fragment!r}",
                     issues,
                 )
+
+    # Mechanically bind the post-AR-001 closed PermissionClass / EffectClass
+    # surface: the contract closed blocks and the Rust unit-variant order must
+    # each agree with the accepted four/three-value v0 authority.
+    expected_permission_variants = [
+        "PublicRead",
+        "PublicLinkout",
+        "TenantPrivateRead",
+        "TenantPrivateWrite",
+    ]
+    expected_effect_variants = ["Read", "LinkOut", "TenantLocalMutation"]
+    coherence_header = "`PermissionClass` / `EffectClass` coherence is closed:"
+    expected_coherence_rows = [
+        "PublicRead -> Read",
+        "PublicLinkout -> LinkOut",
+        "TenantPrivateRead -> Read",
+        "TenantPrivateWrite -> TenantLocalMutation",
+    ]
+    permission_block = _extract_closed_text_block(
+        contract, "`PermissionClass` is closed:"
+    )
+    if permission_block is None:
+        fail("platform request context contract permission block missing", issues)
+    elif permission_block != expected_permission_variants:
+        fail(
+            "platform request context contract permission block drift "
+            f"(expected {expected_permission_variants} got {permission_block})",
+            issues,
+        )
+    effect_block = _extract_closed_text_block(contract, "`EffectClass` is closed:")
+    if effect_block is None:
+        fail("platform request context contract effect block missing", issues)
+    elif effect_block != expected_effect_variants:
+        fail(
+            "platform request context contract effect block drift "
+            f"(expected {expected_effect_variants} got {effect_block})",
+            issues,
+        )
+    if contract.count(coherence_header) != 1:
+        fail(
+            "platform request context contract coherence header must appear exactly once",
+            issues,
+        )
+    coherence_block = _extract_closed_text_block(contract, coherence_header)
+    if coherence_block is None:
+        fail("platform request context contract coherence block missing", issues)
+    elif coherence_block != expected_coherence_rows:
+        fail(
+            "platform request context contract coherence block drift "
+            f"(expected {expected_coherence_rows} got {coherence_block})",
+            issues,
+        )
+    permission_variants = _extract_unit_variants(
+        source_code, "pub enum PermissionClass {"
+    )
+    if permission_variants is None:
+        fail("platform request context Rust PermissionClass enum missing", issues)
+    elif permission_variants != expected_permission_variants:
+        fail(
+            "platform request context Rust PermissionClass unit-variant drift "
+            f"(expected {expected_permission_variants} got {permission_variants})",
+            issues,
+        )
+    effect_variants = _extract_unit_variants(source_code, "pub enum EffectClass {")
+    if effect_variants is None:
+        fail("platform request context Rust EffectClass enum missing", issues)
+    elif effect_variants != expected_effect_variants:
+        fail(
+            "platform request context Rust EffectClass unit-variant drift "
+            f"(expected {expected_effect_variants} got {effect_variants})",
+            issues,
+        )
+    production_anchors = (
+        "const fn permission_effect_coherent_v0(",
+        "if !permission_effect_coherent_v0(permission, effect) {",
+        "AdmissionRejectionProjection::MalformedCommand {\n"
+        "                        operation_id: Some(command.operation_id().clone()),\n"
+        "                    },\n"
+        "                    RequestContextDiagnosticSource::Coordinator,",
+        "AdmittedOperation::from_snapshot(snapshot.as_ref(), permission, effect)",
+    )
+    for anchor in production_anchors:
+        if source_code.count(anchor) != 1:
+            fail(
+                "platform request context permission/effect coherence enforcement drift "
+                f"for anchor {anchor!r}",
+                issues,
+            )
+
+
+PLATFORM_SESSION_PORT_TEST_COMMAND = (
+    "python3 scripts/check_repo_contracts.py && cargo test --locked "
+    "-p ustc-campus-agent-core --test platform_session_port && cargo test --locked "
+    "-p ustc-campus-agent-core --doc session_port && cargo test --locked "
+    "-p ustc-agentd --lib m00_session::tests && cargo test --locked "
+    "-p ustc-agentd --test opportunity_composition"
+)
+PLATFORM_SESSION_PORT_PUBLIC_ITEMS = {
+    "CredentialEvidencePort",
+    "CredentialEvidencePortError",
+    "SecretRef",
+    "SessionAppendOutcome",
+    "SessionClockError",
+    "SessionClockPort",
+    "SessionHistory",
+    "SessionHistoryAppendPort",
+    "SessionHistoryReadPort",
+    "SessionRepositoryError",
+}
+PLATFORM_SESSION_PORT_PUBLIC_FUNCTIONS = {
+    "as_str",
+    "events",
+    "parse",
+    "revision",
+    "session_id",
+    "snapshot",
+    "try_from_events",
+}
+PLATFORM_SESSION_PORT_CORE_TESTS = (
+    "session_history_replays_only_complete_valid_event_sequences",
+    "session_read_port_distinguishes_absent_unavailable_and_corrupt",
+    "session_append_fake_is_exactly_fenced_and_atomic",
+    "session_append_fake_rejects_historical_retry_after_later_events",
+    "session_clock_fake_is_deterministic_and_fail_closed",
+    "credential_evidence_port_uses_only_logical_secret_refs_and_redacts",
+)
+PLATFORM_SESSION_PORT_APP_TESTS = (
+    "bootstrap_absent_store_then_restart_reads_equal_history",
+    "retained_store_wins_over_changed_bootstrap_and_missing_session_stays_absent",
+    "malformed_unknown_version_duplicate_cross_session_and_forged_event_fail_closed",
+    "noncanonical_order_empty_history_and_limit_fail_closed",
+    "unsafe_file_type_symlink_parent_mode_identity_and_oversize_fail_closed",
+    "bootstrap_is_atomic_bounded_and_leaves_no_temporary_residue",
+)
+PLATFORM_SESSION_PORT_OPPORTUNITY_TESTS = (
+    "concurrent_retained_session_reads_are_peer_isolated",
+    "retained_session_restart_scope_and_changed_bootstrap_fail_closed",
+)
+PLATFORM_SESSION_PORT_DOC_FRAGMENTS = {
+    "docs/contracts/platform-session.md": ("platform-session-port/v0", "B4a"),
+    "docs/contracts/module-boundaries.md": ("platform-session-port/v0", "AUTH-021"),
+    "docs/plan/modules/00-module-map.md": ("platform-session-port/v0", "AUTH-021"),
+    "docs/plan/modules/10-platform-control-identity.md": (
+        "platform-session-port/v0",
+        "AUTH-021",
+        "platform-control-evidence/v0",
+    ),
+    "docs/coverage-matrix.md": ("platform-session-port.md", "active:AUTH-021"),
+    "docs/overview/architecture.md": (
+        "bounded B4a durable DemoReviewed current-session read",
+        "B4b redacted evidence ports",
+    ),
+    "docs/tasks/01-execution-roadmap.md": ("platform-session-port/v0", "AUTH-021"),
+    "README.md": ("m00-sessions.json", "event-history-only"),
+}
+
+
+def check_platform_session_port(issues: list[str]) -> None:
+    """Bind the bounded B4a session-port, durable read vendor and status projections."""
+    carriers = (
+        PLATFORM_SESSION_PORT_CONTRACT,
+        PLATFORM_SESSION_PORT_TASK,
+        PLATFORM_SESSION_PORT_SOURCE,
+        PLATFORM_SESSION_PORT_TEST,
+        APP_M00_SESSION_SOURCE,
+        APP_OPPORTUNITY_TEST,
+        APP_CLI_PRODUCT_TEST,
+        "crates/platform-core/src/lib.rs",
+        "apps/ustc-agentd/src/lib.rs",
+        "apps/ustc-agentd/src/affairs_fixture.rs",
+        "scripts/run_three_plugin_mvp.sh",
+        "scripts/run_affairs_web_demo.sh",
+        "docs/acceptance/matrix.tsv",
+        "docs/acceptance/platform-baseline.md",
+        *PLATFORM_SESSION_PORT_DOC_FRAGMENTS,
+    )
+    texts: dict[str, str] = {}
+    for rel in dict.fromkeys(carriers):
+        path = ROOT / rel
+        if not path.is_file():
+            fail(f"platform session port required carrier missing: {rel}", issues)
+            continue
+        text = path.read_text(encoding="utf-8")
+        if not text.strip():
+            fail(f"platform session port required carrier empty: {rel}", issues)
+            continue
+        texts[rel] = text
+    if len(texts) != len(set(carriers)):
+        return
+
+    for rel in (PLATFORM_SESSION_PORT_CONTRACT, PLATFORM_SESSION_PORT_TASK):
+        if rel not in KEY_FILES:
+            fail(f"platform session port authority carrier unregistered: {rel}", issues)
+
+    contract = texts[PLATFORM_SESSION_PORT_CONTRACT]
+    for fragment in (
+        "`Version`: `platform-session-port/v0`",
+        "`Acceptance`: `AUTH-021`, `implemented`",
+        "The app-private vendor implements only `SessionHistoryReadPort`, never `SessionHistoryAppendPort`.",
+        "now surfaces `SessionNotFound` rather than the retired fixture-clone `SessionIdMismatch`.",
+        "exactly six contract tests",
+        "exactly six Unix-gated unit tests",
+        PLATFORM_SESSION_PORT_TEST_COMMAND,
+    ):
+        if contract.count(fragment) != 1:
+            fail(f"platform session port contract drift: missing/duplicate {fragment!r}", issues)
+
+    task = texts[PLATFORM_SESSION_PORT_TASK]
+    for fragment in (
+        "`implemented-bounded-b4a`",
+        "Base commit: `1266ea63f36e44c3f4077749e94329c20933e6c6`",
+        "no durable lifecycle append vendor",
+        "B4 remains incomplete until B4b `control-evidence`",
+    ):
+        if task.count(fragment) != 1:
+            fail(f"platform session port task receipt drift: missing/duplicate {fragment!r}", issues)
+
+    lib_code = strip_rust_comments_and_literals(texts["crates/platform-core/src/lib.rs"])
+    lib_items, unresolved_lib_items = rust_item_declarations(lib_code)
+    if unresolved_lib_items:
+        fail(f"platform session port lib item inventory unresolved: {unresolved_lib_items}", issues)
+    if lib_items.count("pub mod session_port;") != 1:
+        fail("platform session port module declaration must appear exactly once", issues)
+
+    source = texts[PLATFORM_SESSION_PORT_SOURCE]
+    source_code = strip_rust_comments_and_literals(source)
+    for carrier, pattern in PLATFORM_CORE_FORBIDDEN_SPLICE_PATTERNS:
+        if re.search(pattern, source_code):
+            fail(f"platform session port must not splice external source: {carrier!r}", issues)
+    if re.search(RUST_INNER_ATTRIBUTE_PATTERN, source_code) or re.search(
+        r"\bcfg_attr\b", source_code
+    ):
+        fail("platform session port carries a conditional/inner source attribute", issues)
+
+    public_items = set(
+        re.findall(
+            r"\bpub\s+(?:struct|enum|trait)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            source_code,
+            flags=re.ASCII,
+        )
+    )
+    if public_items != PLATFORM_SESSION_PORT_PUBLIC_ITEMS:
+        fail(
+            "platform session port exact public item inventory drift "
+            f"(missing={sorted(PLATFORM_SESSION_PORT_PUBLIC_ITEMS - public_items)} "
+            f"extra={sorted(public_items - PLATFORM_SESSION_PORT_PUBLIC_ITEMS)})",
+            issues,
+        )
+    public_functions = set(
+        re.findall(
+            r"\bpub\s+(?:const\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)",
+            source_code,
+            flags=re.ASCII,
+        )
+    )
+    if public_functions != PLATFORM_SESSION_PORT_PUBLIC_FUNCTIONS:
+        fail(
+            "platform session port exact public function inventory drift "
+            f"(missing={sorted(PLATFORM_SESSION_PORT_PUBLIC_FUNCTIONS - public_functions)} "
+            f"extra={sorted(public_functions - PLATFORM_SESSION_PORT_PUBLIC_FUNCTIONS)})",
+            issues,
+        )
+    if source.count("```compile_fail") != 4:
+        fail("platform session port exact four compile-fail proofs drift", issues)
+
+    normalized_source = re.sub(r"\s+", " ", source_code).strip()
+    required_shapes = (
+        "pub struct SecretRef(String);",
+        "pub struct SessionHistory { events: Vec<SessionEvent>, snapshot: SessionSnapshot, }",
+        "pub enum SessionAppendOutcome { Appended(SessionHistory), AlreadySame(SessionHistory), Conflict { current_revision: Option<u64> }, }",
+        "pub trait SessionHistoryReadPort { fn load_history( &mut self, session_id: &SessionId, ) -> Result<Option<SessionHistory>, SessionRepositoryError>; }",
+        "pub trait SessionHistoryAppendPort: SessionHistoryReadPort { fn compare_and_append( &mut self, session_id: &SessionId, expected_revision: Option<u64>, event: &SessionEvent, ) -> Result<SessionAppendOutcome, SessionRepositoryError>; }",
+        "pub trait SessionClockPort { fn now(&mut self) -> Result<SessionInstant, SessionClockError>; }",
+        "pub trait CredentialEvidencePort { fn fingerprint_adapter_evidence( &mut self, auth_adapter_id: &AuthAdapterId, secret_ref: &SecretRef, ) -> Result<CredentialEvidenceDigest, CredentialEvidencePortError>; }",
+    )
+    for shape in required_shapes:
+        if normalized_source.count(shape) != 1:
+            fail(f"platform session port exact Rust shape drift: {shape!r}", issues)
+
+    for enum_header, expected in (
+        (
+            "pub enum SessionRepositoryError {",
+            ["Unavailable", "Corrupt", "InvalidEvent", "LimitExceeded", "InternalInvariant"],
+        ),
+        ("pub enum SessionClockError {", ["Unavailable"]),
+        (
+            "pub enum CredentialEvidencePortError {",
+            ["Unavailable", "UnknownSecretRef", "InternalInvariant"],
+        ),
+    ):
+        if _extract_unit_variants(source_code, enum_header) != expected:
+            fail(f"platform session port closed enum drift: {enum_header}", issues)
+    for forbidden in (
+        "impl Default for SecretRef",
+        "impl fmt::Display for SecretRef",
+        "impl Default for SessionHistory",
+        "impl fmt::Debug for SessionHistory",
+        "impl Serialize for SessionHistory",
+        "impl<'de> Deserialize<'de> for SessionHistory",
+        "pub fn events_mut",
+        "pub fn snapshot_mut",
+    ):
+        if forbidden in source_code:
+            fail(f"platform session port forbidden public/authority surface present: {forbidden}", issues)
+
+    core_test_code = strip_rust_comments_and_literals(texts[PLATFORM_SESSION_PORT_TEST])
+    core_tests = tuple(re.findall(r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)", core_test_code))
+    if core_tests != PLATFORM_SESSION_PORT_CORE_TESTS:
+        fail(
+            "platform session port exact six core-test inventory drift "
+            f"(actual={list(core_tests)})",
+            issues,
+        )
+
+    app_source = texts[APP_M00_SESSION_SOURCE]
+    app_code = strip_rust_comments_and_literals(app_source)
+    app_tests = tuple(re.findall(r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)", app_code))
+    if app_tests != PLATFORM_SESSION_PORT_APP_TESTS:
+        fail(
+            "platform session port exact six durable-vendor test inventory drift "
+            f"(actual={list(app_tests)})",
+            issues,
+        )
+    for fragment in (
+        "const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;",
+        "const MAX_SESSIONS: usize = 64;",
+        "const MAX_EVENTS_PER_SESSION: usize = 1_024;",
+        "#[serde(deny_unknown_fields)]",
+        ".custom_flags(libc::O_NOFOLLOW)",
+        "std::fs::hard_link(&temporary, path)",
+        ".take(MAX_FILE_BYTES + 1)",
+        "canonical != bytes",
+        "if file.write_all(&bytes).is_err()",
+        "if file.sync_all().is_err()",
+    ):
+        if app_source.count(fragment) < 1:
+            fail(f"platform session port durable invariant carrier missing: {fragment!r}", issues)
+    if app_source.count("return cleanup_before_publish(&temporary);") != 2:
+        fail("platform session port write/sync failure cleanup binding drift", issues)
+    if app_source.count("permissions().mode() & 0o7777 != 0o600") != 2:
+        fail("platform session port exact file mode mask drift", issues)
+    if app_source.count("permissions().mode() & 0o7777 != 0o700") != 1:
+        fail("platform session port exact parent mode mask drift", issues)
+    app_impls, unresolved_app_impls = rust_impl_declarations(app_code)
+    if unresolved_app_impls:
+        fail(f"platform session port durable-vendor impl inventory unresolved: {unresolved_app_impls}", issues)
+    vendor_impls = [
+        declaration
+        for declaration in app_impls
+        if "DurableCurrentSessionStore" in declaration
+    ]
+    if vendor_impls != [
+        "impl DurableCurrentSessionStore",
+        "impl SessionHistoryReadPort for DurableCurrentSessionStore",
+    ]:
+        fail(
+            "platform session port app-private vendor exact impl inventory drift "
+            f"(actual={vendor_impls})",
+            issues,
+        )
+
+    opportunity_code = strip_rust_comments_and_literals(texts[APP_OPPORTUNITY_TEST])
+    opportunity_tests = re.findall(
+        r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)",
+        opportunity_code,
+    )
+    for test_name in PLATFORM_SESSION_PORT_OPPORTUNITY_TESTS:
+        if opportunity_tests.count(test_name) != 1:
+            fail(f"platform session port opportunity evidence missing/duplicate: {test_name}", issues)
+
+    app_lib = texts["apps/ustc-agentd/src/lib.rs"]
+    for fragment in (
+        "SessionRepositoryError::Unavailable => \"session_store_unavailable\"",
+        "SessionRepositoryError::Corrupt => \"session_store_corrupt\"",
+        "SessionRepositoryError::InvalidEvent => \"session_store_invalid_event\"",
+        "SessionRepositoryError::LimitExceeded => \"session_store_limit_exceeded\"",
+        "SessionRepositoryError::InternalInvariant => \"session_store_internal_invariant\"",
+        "\"session_store_current_session_absent\"",
+        "\"session_store_current_session_scope_mismatch\"",
+        "let current_tenant_id = current.snapshot().tenant_id().clone();",
+        "let current_user_id = current.snapshot().user_id().clone();",
+    ):
+        if app_lib.count(fragment) != 1:
+            fail(f"platform session port composition projection drift: {fragment!r}", issues)
+
+    fixture = texts["apps/ustc-agentd/src/affairs_fixture.rs"]
+    if fixture.count(".load_history(session_id)") != 1:
+        fail("platform session port fixture admission must read the durable history once", issues)
+    if "session: Option<SessionSnapshot>" in fixture:
+        fail("platform session port retired fixture-cloned session authority present", issues)
+
+    cli_product_test = texts[APP_CLI_PRODUCT_TEST]
+    for fragment in (
+        "session_store: PathBuf",
+        "--session-store",
+        "m00-sessions.json",
+        "Permissions::from_mode(0o700)",
+        "&self.session_store",
+    ):
+        if cli_product_test.count(fragment) != 1:
+            fail(
+                "platform session port client E2E wiring drift: "
+                f"missing/duplicate {fragment!r}",
+                issues,
+            )
+
+    for launcher in ("scripts/run_three_plugin_mvp.sh", "scripts/run_affairs_web_demo.sh"):
+        script = texts[launcher]
+        for fragment in ("--session-store", "m00-sessions.json", "stat -c '%a'", "stat -c '%u'"):
+            if script.count(fragment) != 1:
+                fail(f"platform session port launcher drift in {launcher}: {fragment!r}", issues)
+        if re.search(r"\bchmod\b", script):
+            fail(f"platform session port launcher must not chmod-repair state root: {launcher}", issues)
+
+    matrix_rows = {
+        columns[0]: columns
+        for line in texts["docs/acceptance/matrix.tsv"].splitlines()[1:]
+        if line.strip() and len(columns := line.split("\t")) == 7
+    }
+    row = matrix_rows.get("AUTH-021")
+    if row is None:
+        fail("platform session port acceptance row AUTH-021 missing", issues)
+    elif (
+        row[1] != "platform-session-port"
+        or row[3] != PLATFORM_SESSION_PORT_TEST_COMMAND
+        or row[4] != "pr"
+        or row[5] != "implemented"
+        or row[6] != "backend"
+    ):
+        fail("platform session port acceptance row AUTH-021 drift", issues)
+    baseline_rows = [
+        line
+        for line in texts["docs/acceptance/platform-baseline.md"].splitlines()
+        if line.startswith("| `AUTH-021` |")
+    ]
+    if len(baseline_rows) != 1 or "B4a" not in baseline_rows[0] or "durable" not in baseline_rows[0]:
+        fail("platform session port long-horizon AUTH-021 projection drift", issues)
+
+    for rel, fragments in PLATFORM_SESSION_PORT_DOC_FRAGMENTS.items():
+        for fragment in fragments:
+            if fragment not in texts[rel]:
+                fail(f"platform session port projection missing in {rel}: {fragment!r}", issues)
+
+
+PLATFORM_CONTROL_EVIDENCE_PUBLIC_ITEMS = {
+    "PlatformControlActor",
+    "PlatformControlEventKind",
+    "ControlEvidenceKey",
+    "PlatformControlEvent",
+    "PlatformControlErrorCode",
+    "PlatformControlError",
+    "ControlEvidenceJournalError",
+    "ControlEvidenceAppendOutcome",
+    "ControlEvidenceReadPort",
+    "ControlEvidenceAppendPort",
+}
+PLATFORM_CONTROL_EVIDENCE_PUBLIC_FUNCTIONS = {
+    "from_session_event",
+    "from_admitted_request",
+    "kind",
+    "key",
+    "occurred_at",
+    "from_session_domain",
+    "from_admission_rejection",
+    "from_session_repository",
+    "malformed_external_input",
+    "code",
+}
+PLATFORM_CONTROL_EVIDENCE_EVENT_KINDS = [
+    "SessionOpened",
+    "SessionRefreshed",
+    "SessionExpired",
+    "SessionRevoked",
+    "RequestAdmitted",
+]
+PLATFORM_CONTROL_EVIDENCE_ERROR_CODES = [
+    "LifecycleCredentialEvidenceExpired",
+    "LifecycleInvalidTimeOrder",
+    "LifecycleDeadlineOverflow",
+    "LifecycleSessionNotFound",
+    "LifecycleSessionAlreadyExists",
+    "LifecycleSessionIdMismatch",
+    "LifecycleRevisionMismatch",
+    "LifecycleRevisionOverflow",
+    "LifecycleTerminalSession",
+    "LifecycleNonMonotoneTime",
+    "LifecycleSessionNotYetExpired",
+    "LifecycleNoEffectiveRefresh",
+    "LifecycleEventSequenceMismatch",
+    "LifecycleEventTimeOutsideValidity",
+    "LifecycleIllegalEventForState",
+    "LifecycleEventDerivedFieldMismatch",
+    "AdmissionIdempotencyStoreUnavailable",
+    "AdmissionConflictingEnvelope",
+    "AdmissionDescriptorSnapshotAbsent",
+    "AdmissionDescriptorSnapshotMismatch",
+    "AdmissionPolicyDenied",
+    "AdmissionPolicyExpired",
+    "AdmissionSessionNotFound",
+    "AdmissionSessionIdMismatch",
+    "AdmissionSessionNotAdmitted",
+    "AdmissionCapabilityMissing",
+    "AdmissionCapabilityDisabled",
+    "AdmissionCapabilityRevoked",
+    "AdmissionInfrastructurePortUnavailable",
+    "AdmissionMalformedCommand",
+    "RepositoryUnavailable",
+    "RepositoryCorrupt",
+    "RepositoryInvalidEvent",
+    "RepositoryLimitExceeded",
+    "RepositoryInternalInvariant",
+    "MalformedExternalInput",
+]
+PLATFORM_CONTROL_EVIDENCE_TESTS = (
+    "session_events_project_one_to_one_without_credential_evidence",
+    "request_admission_event_retains_only_stable_control_fields",
+    "control_errors_map_every_domain_admission_repository_and_boundary_class",
+    "control_event_serde_is_closed_redacted_and_data_only",
+    "control_evidence_fake_is_idempotent_conflict_safe_and_atomic",
+    "control_evidence_ports_distinguish_absent_unavailable_corrupt_and_limit",
+)
+PLATFORM_CONTROL_EVIDENCE_DOC_FRAGMENTS = {
+    "docs/contracts/platform-session.md": ("platform-control-evidence/v0", "B4b"),
+    "docs/contracts/platform-session-port.md": ("platform-control-evidence/v0", "B4b"),
+    "docs/contracts/module-boundaries.md": ("platform-control-evidence/v0", "AUTH-022"),
+    "docs/coverage-matrix.md": ("platform-control-evidence.md", "active:AUTH-022"),
+    "docs/overview/architecture.md": (
+        "B4b redacted evidence ports",
+        "one Affairs B5 composition persists admitted-request evidence before M71",
+    ),
+    "docs/plan/modules/00-module-map.md": ("platform-control-evidence/v0", "AUTH-022"),
+    "docs/plan/modules/10-platform-control-identity.md": ("platform-control-evidence/v0", "AUTH-022", "B5 composition planned"),
+    "docs/tasks/01-execution-roadmap.md": ("platform-control-evidence/v0", "AUTH-022", "production evidence persistence"),
+    "README.md": ("B4b stable redacted control-event/error", "data-only"),
+}
+
+
+def check_platform_control_evidence(issues: list[str]) -> None:
+    """Bind B4b's redacted data projections, mappings, journal ports and status truth."""
+    carriers = (
+        PLATFORM_CONTROL_EVIDENCE_CONTRACT,
+        PLATFORM_CONTROL_EVIDENCE_TASK,
+        PLATFORM_CONTROL_EVIDENCE_SOURCE,
+        PLATFORM_CONTROL_EVIDENCE_TEST,
+        "crates/platform-core/src/lib.rs",
+        "docs/acceptance/matrix.tsv",
+        "docs/acceptance/platform-baseline.md",
+        *PLATFORM_CONTROL_EVIDENCE_DOC_FRAGMENTS,
+    )
+    texts: dict[str, str] = {}
+    for rel in dict.fromkeys(carriers):
+        path = ROOT / rel
+        if not path.is_file():
+            fail(f"platform control evidence required carrier missing: {rel}", issues)
+            continue
+        text = path.read_text(encoding="utf-8")
+        if not text.strip():
+            fail(f"platform control evidence required carrier empty: {rel}", issues)
+            continue
+        texts[rel] = text
+    if len(texts) != len(set(carriers)):
+        return
+
+    for rel in (PLATFORM_CONTROL_EVIDENCE_CONTRACT, PLATFORM_CONTROL_EVIDENCE_TASK):
+        if rel not in KEY_FILES:
+            fail(f"platform control evidence authority carrier unregistered: {rel}", issues)
+
+    contract = texts[PLATFORM_CONTROL_EVIDENCE_CONTRACT]
+    for fragment in (
+        "# Platform control-evidence contract (`platform-control-evidence/v0`)",
+        "- **Acceptance:** `AUTH-022`",
+        "exactly 36",
+        "exactly six tests",
+        "data-shape evidence only",
+        "No result claims product/evidence transaction atomicity.",
+        "python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_control_evidence && cargo test --locked -p ustc-campus-agent-core --doc control_evidence",
+    ):
+        if contract.count(fragment) != 1:
+            fail(f"platform control evidence contract drift: missing/duplicate {fragment!r}", issues)
+
+    task = texts[PLATFORM_CONTROL_EVIDENCE_TASK]
+    for fragment in (
+        "`IMPLEMENTED_BOUNDED_SLICE`",
+        "`6cecbb47c480f3c01b35e0cefe122ec724d806618f1f668a9ab7832e7c39e2c2`",
+        "no production evidence store",
+        "B5 may consume these carriers",
+    ):
+        if task.count(fragment) != 1:
+            fail(f"platform control evidence task receipt drift: missing/duplicate {fragment!r}", issues)
+
+    lib_code = strip_rust_comments_and_literals(texts["crates/platform-core/src/lib.rs"])
+    lib_items, unresolved = rust_item_declarations(lib_code)
+    if unresolved or lib_items.count("pub mod control_evidence;") != 1:
+        fail("platform control evidence module declaration drift", issues)
+
+    source = texts[PLATFORM_CONTROL_EVIDENCE_SOURCE]
+    source_code = strip_rust_comments_and_literals(source)
+    public_items = set(re.findall(
+        r"\bpub\s+(?:struct|enum|trait)\s+([A-Za-z_][A-Za-z0-9_]*)",
+        source_code,
+        flags=re.ASCII,
+    ))
+    if public_items != PLATFORM_CONTROL_EVIDENCE_PUBLIC_ITEMS:
+        fail(
+            "platform control evidence exact public item inventory drift "
+            f"(missing={sorted(PLATFORM_CONTROL_EVIDENCE_PUBLIC_ITEMS - public_items)} "
+            f"extra={sorted(public_items - PLATFORM_CONTROL_EVIDENCE_PUBLIC_ITEMS)})",
+            issues,
+        )
+    public_functions = set(re.findall(
+        r"\bpub\s+(?:const\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)",
+        source_code,
+        flags=re.ASCII,
+    ))
+    if public_functions != PLATFORM_CONTROL_EVIDENCE_PUBLIC_FUNCTIONS:
+        fail("platform control evidence exact public function inventory drift", issues)
+    if _extract_unit_variants(source_code, "pub enum PlatformControlEventKind {") != PLATFORM_CONTROL_EVIDENCE_EVENT_KINDS:
+        fail("platform control evidence event-kind enum drift", issues)
+    if _extract_unit_variants(source_code, "pub enum PlatformControlErrorCode {") != PLATFORM_CONTROL_EVIDENCE_ERROR_CODES:
+        fail("platform control evidence 36-code enum drift", issues)
+    if _extract_unit_variants(source_code, "pub enum ControlEvidenceJournalError {") != [
+        "Unavailable", "Corrupt", "LimitExceeded", "InternalInvariant"
+    ]:
+        fail("platform control evidence journal error enum drift", issues)
+    if _extract_unit_variants(source_code, "pub enum ControlEvidenceAppendOutcome {") != [
+        "Appended", "AlreadySame", "Conflict"
+    ]:
+        fail("platform control evidence append outcome drift", issues)
+
+    normalized = re.sub(r"\s+", " ", source_code).strip()
+    for fragment in (
+        "pub enum PlatformControlActor { Public, Authenticated { tenant_id: TenantId, user_id: UserId, session_id: SessionId, }, }",
+        "pub enum ControlEvidenceKey { Session { session_id: SessionId, sequence: u64, }, Request { command_id: CommandId, }, }",
+        "SessionOpened { session_id: SessionId, sequence: u64, tenant_id: TenantId, user_id: UserId, auth_adapter_id: AuthAdapterId, opened_at: SessionInstant, }",
+        "SessionRefreshed { session_id: SessionId, sequence: u64, refreshed_at: SessionInstant, effective_expires_at: SessionInstant, }",
+        "SessionExpired { session_id: SessionId, sequence: u64, expired_at: SessionInstant, observed_at: SessionInstant, cause: SessionExpiryCause, }",
+        "SessionRevoked { session_id: SessionId, sequence: u64, revoked_at: SessionInstant, }",
+        "pub trait ControlEvidenceAppendPort: ControlEvidenceReadPort",
+    ):
+        if fragment not in normalized:
+            fail(f"platform control evidence exact schema/trait drift: {fragment!r}", issues)
+
+    impls, unresolved_impls = rust_impl_declarations(source_code)
+    if unresolved_impls or impls != ["impl PlatformControlError", "impl PlatformControlEvent"]:
+        fail("platform control evidence exact impl inventory drift", issues)
+    for forbidden in (
+        "CredentialEvidenceDigest",
+        "SecretRef",
+        "PayloadDigest",
+        "IdempotencyKey",
+        "ClientProvenance",
+        "OperationSnapshot",
+        "serde_json::Error",
+        "io::Error",
+        "impl fmt::Display for PlatformControlError",
+        "impl Error for PlatformControlError",
+    ):
+        if forbidden in source_code:
+            fail(f"platform control evidence forbidden carrier present: {forbidden!r}", issues)
+    if source.count("```compile_fail") != 4:
+        fail("platform control evidence must retain exactly four compile-fail proofs", issues)
+
+    mapping_specs = (
+        ("from_session_event", ("Opened", "Refreshed", "Expired", "Revoked"), "SessionEvent::"),
+        ("from_session_domain", tuple(code.removeprefix("Lifecycle") for code in PLATFORM_CONTROL_EVIDENCE_ERROR_CODES[:16]), "SessionDomainError::"),
+        ("from_admission_rejection", tuple(code.removeprefix("Admission") for code in PLATFORM_CONTROL_EVIDENCE_ERROR_CODES[16:30]), "AdmissionRejectionClass::"),
+        ("from_session_repository", ("Unavailable", "Corrupt", "InvalidEvent", "LimitExceeded", "InternalInvariant"), "SessionRepositoryError::"),
+    )
+    for function, variants, prefix in mapping_specs:
+        body = _rust_function_body(source_code, function)
+        if body is None:
+            fail(f"platform control evidence mapping body missing: {function}", issues)
+            continue
+        for variant in variants:
+            if body.count(prefix + variant) != 1:
+                fail(f"platform control evidence mapping arm drift: {function}:{variant}", issues)
+        if "_ =>" in body:
+            fail(f"platform control evidence mapping must remain exhaustive: {function}", issues)
+
+    test_code = strip_rust_comments_and_literals(texts[PLATFORM_CONTROL_EVIDENCE_TEST])
+    actual_tests = tuple(re.findall(r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)", test_code))
+    if actual_tests != PLATFORM_CONTROL_EVIDENCE_TESTS:
+        fail(f"platform control evidence exact test inventory drift: {actual_tests}", issues)
+    fake_start = test_code.find("impl ControlEvidenceAppendPort for FakeJournal")
+    fake_body = _rust_function_body(test_code[fake_start:], "append_once") if fake_start >= 0 else None
+    if fake_body is None:
+        fail("platform control evidence fake append_once body missing", issues)
+    else:
+        fake_normalized = re.sub(r"\s+", " ", fake_body).strip()
+        for fragment in (
+            "if self.unavailable { return Err(ControlEvidenceJournalError::Unavailable); }",
+            "if self.corrupt { return Err(ControlEvidenceJournalError::Corrupt); }",
+            "if self.events.len() >= self.max_records { return Err(ControlEvidenceJournalError::LimitExceeded); }",
+            "let mut candidate = self.events.clone();",
+            "if candidate.insert(key, event.clone()).is_some() || self.fail_commit { return Err(ControlEvidenceJournalError::InternalInvariant); }",
+            "self.events = candidate;",
+        ):
+            if fragment not in fake_normalized:
+                fail(f"platform control evidence fake semantic body drift: {fragment!r}", issues)
+        ordered = [
+            "self.unavailable",
+            "self.corrupt",
+            "self.events.get",
+            "self.events.len() >= self.max_records",
+            "self.events.clone()",
+            "self.fail_commit",
+            "self.events = candidate",
+        ]
+        positions = [fake_body.find(marker) for marker in ordered]
+        if any(position < 0 for position in positions) or positions != sorted(positions):
+            fail("platform control evidence fake precedence/atomicity body drift", issues)
+
+    matrix_line = (
+        "AUTH-022\tplatform-control-evidence\tM00 projects every session transition and admitted request into stable redacted data-only evidence maps all lifecycle admission repository and malformed-boundary failures into 36 bounded codes and exposes exact read append-once journal ports with deterministic fail-closed fakes while B5 production persistence SSO and Affairs publication remain unclaimed\t"
+        "python3 scripts/check_repo_contracts.py && cargo test --locked -p ustc-campus-agent-core --test platform_control_evidence && cargo test --locked -p ustc-campus-agent-core --doc control_evidence\tpr\timplemented\tbackend"
+    )
+    if texts["docs/acceptance/matrix.tsv"].count(matrix_line) != 1:
+        fail("platform control evidence AUTH-022 acceptance row drift", issues)
+    baseline = texts["docs/acceptance/platform-baseline.md"]
+    if baseline.count("`AUTH-022`") != 1 or "production persistence, B5" not in baseline:
+        fail("platform control evidence baseline projection drift", issues)
+    for rel, fragments in PLATFORM_CONTROL_EVIDENCE_DOC_FRAGMENTS.items():
+        for fragment in fragments:
+            if fragment not in texts[rel]:
+                fail(f"platform control evidence projection missing in {rel}: {fragment!r}", issues)
+
 
 EXPECTED_MAIN_CALLS = (
     "check_key_files_present_and_nonempty(issues)",
@@ -12157,6 +13081,8 @@ EXPECTED_MAIN_CALLS = (
     "check_platform_session_contract(issues)",
     "check_platform_session_implementation(issues)",
     "check_platform_request_context(issues)",
+    "check_platform_session_port(issues)",
+    "check_platform_control_evidence(issues)",
     "check_p1_source_revision_contract(issues)",
     "check_p1_source_registry_implementation(issues)",
     "check_m60_b2_packet_digest(issues)",
@@ -12229,8 +13155,9 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_ci_v2_active_workflow": {"digest": "c930a3611b4e805be69ae4e965be4355bc56b08b490d6e7dd0d315c08b51ea7a", "status": "active"},
     "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
     "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
+    "check_course_fixture": {"digest": "f4dda0f63c4550edfa0a913e6f0ef84f4358c29a8ca789f404ae5bdf539c16e2", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
-    "check_external_agent_access_contract": {"digest": "0895a4b944369629f088134365ddb128cfde0da3ed40b70aab4e12cee8cdf0d2", "status": "active"},
+    "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
@@ -12242,8 +13169,10 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_p1_source_revision_contract": {"digest": "f413cb4f58e9e0d17205583ca69105d3bc171e5dfb5cc1031cc4debc135fa992", "status": "active"},
     "check_platform_authority_implementation": {"digest": "64b767f09d0d29268af33e15bdf60d6fd879b61365abd45c1be2caa2319b92f4", "status": "active"},
     "check_platform_core_manifest": {"digest": "3082cf7fedfaf39080d287a036c8875f762751bb8832121ca2d7cd81d5947d62", "status": "active"},
+    "check_platform_control_evidence": {"digest": "29ab55813d5c6872937c9753d53dac607e7f27436ce00a8297c665d2e37c9a94", "status": "active"},
     "check_platform_identity_implementation": {"digest": "b30158e2721bb04582b6dced31eb4328b493ba13d0f9153347388ad1ccd91c29", "status": "active"},
-    "check_platform_request_context": {"digest": "bfadbc26ce42b040412dab1e7d7ac4402c43eec31c6b85bd6fa62799b044ae83", "status": "active"},
+    "check_platform_request_context": {"digest": "716b2414ce325537cd03c1c1abdee12a12fcf61f43773a894ebf021d9a6c3fbc", "status": "active"},
+    "check_platform_session_port": {"digest": "bb77b840e9bd9270cb335ee3a37cda794e40b456b2d2e0f9487e4de4765dedc7", "status": "active"},
     "check_platform_session_contract": {"digest": "e3a2e5ef5ca953bdf2739ac3072df8bcfed0ebece4a893f52980fb7ca3b15c1b", "status": "active"},
     "check_platform_session_implementation": {"digest": "f1a25036ae6940b332c258af80f2e23815071ca19cb1d5db79d7a4f8b844be8f", "status": "active"},
     "check_rust_doctest_gate": {"digest": "372200f9ce289b3af148b7e7001408498b3d817098d7013692f016b766d2ec58", "status": "active"},
@@ -12376,6 +13305,8 @@ def main() -> int:
     check_platform_session_contract(issues)
     check_platform_session_implementation(issues)
     check_platform_request_context(issues)
+    check_platform_session_port(issues)
+    check_platform_control_evidence(issues)
     check_p1_source_revision_contract(issues)
     check_p1_source_registry_implementation(issues)
     check_m60_b2_packet_digest(issues)

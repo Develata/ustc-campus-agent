@@ -15,6 +15,6 @@
 
 - `packages/ustc.affairs-navigator/package.json` — USTC Affairs Navigator; planned structured-procedure product.
 - `packages/ustc.change-radar/package.json` — USTC ChangeRadar; planned source/revision/diff and approved-feed product.
-- `packages/ustc.opportunity-graph/package.json` — Campus Opportunity Graph; Course Planning exists as a bounded offline development spike.
+- `packages/ustc.opportunity-graph/package.json` — Campus Opportunity Graph; declares public plus explicit-consent private capabilities and component/resource descriptors for the active bounded composition candidate.
 
 The three package identities are equally formal. Their implementation sequence is ChangeRadar foundation → Affairs Navigator → ChangeRadar feed → Opportunity Graph integration; implementation priority does not collapse the catalog to one flagship package.

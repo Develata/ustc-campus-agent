@@ -4,11 +4,13 @@
 
 - `Module ID`: `M70`
 - `Package ID`: `ustc.change-radar`
-- `Status`: Accepted blueprint; manifest/design only
-- `Implementation State`: `design-only`
+- `Status`: Accepted blueprint; bounded semantic-diff/review/feed evidence
+- `Implementation State`: `partial-evidence`
 - `Version`: `m70-change-radar/v0`
-- `Last Review`: `2026-07-25`
-- `Primary code area`: `plugins/first-party/change-radar/` plus a cohesive Rust domain module when implementation begins
+- `Last Review`: `2026-08-27`
+- `Primary code area`: `crates/change-radar/`, with M60-owned immutable revision values in `crates/platform-core/src/source_revision.rs`; package resources remain under `plugins/first-party/change-radar/`
+
+Current retained evidence covers exact-source-pinned board-policy validation, deterministic typed field comparison, M60-owned source-health denial outcomes, complete-policy-bound candidate identity, explicit administrator approve/reject receipts, one coherent transaction-current M60 publication decision, exactly-once in-memory publication, stable event GUIDs and deterministic Atom rendering with before/after, effective/observed time, source evidence, freshness and provenance. One no-personal-data `DemoReviewed` fixture now crosses M00 public admission, M10 `change.list`, current Market projection/recheck, bounded Harness/ToolGateway, the fixed owning Plugin adapter and loopback Web/Atom projection, including disable/revoke denial and Affairs isolation. It deliberately does not claim M00-authorized administration, durable storage/restart, an approved live source, M80 peer-client composition, real retrieval, or the module exit gate.
 
 ## 1. Purpose
 

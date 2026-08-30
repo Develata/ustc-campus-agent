@@ -4,10 +4,10 @@
 
 - `Module ID`: `M71`
 - `Package ID`: `ustc.affairs-navigator`
-- `Status`: Accepted blueprint with bounded executable product-kernel, source-grounded fixture-backed exact-query evidence and one loopback thin-Web projection; real source/admin lifecycle and production Web remain planned
+- `Status`: Accepted blueprint with bounded `PROC-011` core-demo evidence: M00-authorized fixed administrator publication, durable control evidence, checked M71 recovery records, strict process-restart recovery and separate Market/Harness/ToolGateway ordinary query read-back
 - `Implementation State`: `partial-evidence`
 - `Version`: `m71-affairs-navigator/v0`
-- `Last Review`: `2026-08-24`
+- `Last Review`: `2026-08-29`
 - `Primary code area`: `crates/affairs-navigator/`, `plugins/first-party/affairs-navigator/` and the bounded composition fixture under `apps/ustc-agentd/`
 
 ## 1. Purpose
@@ -18,9 +18,9 @@ Its default truth path is exact/structured lookup over reviewed material, not fr
 
 ### Current bounded evidence
 
-`crates/affairs-navigator` retains checked stable procedure/artifact/source identities, typed drafts and artifacts, board-policy validation, ordered conditions/steps/time/entry projections, freshness/conflict/uncertainty outcomes and deterministic exact lookup. The bounded `ustc-agentd` composition loads one source-grounded noncanonical fixture from a retained public USTC Academic Affairs page and maps an admitted exact stable-ID request to that kernel; integration tests cover found, unavailable/corrupted source, stale/conflicting authority and lineage/provenance outcomes, while the loopback page displays the safe public projection.
+`crates/affairs-navigator` retains checked stable procedure/artifact/source identities, typed drafts and artifacts, board-policy validation, deterministic exact lookup and the storage-neutral publication kernel. Its recovery anchor/record reconstruct sealed commits only when fixture-bound source/draft/reviewer/time/M60 facts, deterministic review/artifact/receipt identities, CAS revisions and chronology agree. `apps/ustc-agentd` owns the private canonical-JSON adapter: one fixed administrator republish command follows `M10 → M00 admission → durable control evidence → M71`; persistence succeeds before the in-memory candidate becomes visible, and strict reopen rebuilds the M71 repository without turning Serde DTOs into domain authority. Ordinary reads remain on the separate M10 → Market → Harness → ToolGateway → M71 path. Real-process, CLI, HTTP and browser evidence recover revision 2, the exact receipt and one durable control event after restart.
 
-The fixture is proof infrastructure, not an approved production source or administrator publication system. Retained source bytes and normalized bytes are hash-accounted, but their fixture verifier is not administrator review/publish authority and the page publication time is not used as `known_at` or `valid_at`. No real M60 retrieval/import, board repository, administrator review/publish/archive receipt, supersession projection, broad structured search, production Web or external campus transaction is claimed. `PROC-011` therefore remains planned until its complete administrator-import → review/publish → application query → thin-Web assertions are bound.
+The fixture is proof infrastructure, not an approved production source. `DemoReviewed` is an honest non-personal demo label, not real-time official data or legal approval. The loopback HTTP/Web and `ustc-agentctl affairs publish-demo` projection require explicit demo confirmation but are not production authentication; M00 still owns the retained demo administrator/session/grant/permission decision. No live retrieval/source approval, generic import editor, public-network API, supersession projection, broad structured search, production Dioxus Web or external campus transaction is claimed. Bounded `PROC-011` is implemented while those production and peer-client rows remain separate.
 
 ## 2. Non-goals
 
