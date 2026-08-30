@@ -1508,8 +1508,7 @@ mod tests {
                     Ok(())
                 },
                 |_| {
-                    Err(PersistFailure::PreCommit(StoreError::Io(io::Error::new(
-                        io::ErrorKind::Other,
+                    Err(PersistFailure::PreCommit(StoreError::Io(io::Error::other(
                         "injected pre-rename failure",
                     ))))
                 },
@@ -1550,8 +1549,7 @@ mod tests {
                 |state| {
                     persist_candidate(&path, state).map_err(PersistFailure::PreCommit)?;
                     Err(PersistFailure::CommitUncertain(
-                        StoreError::CommitUncertain(io::Error::new(
-                            io::ErrorKind::Other,
+                        StoreError::CommitUncertain(io::Error::other(
                             "injected parent-directory sync failure",
                         )),
                     ))
