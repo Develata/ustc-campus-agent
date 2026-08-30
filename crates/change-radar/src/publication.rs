@@ -501,6 +501,138 @@ impl ChangePublicationCommit {
     }
 }
 
+/// Storage-neutral projection of one persisted review. It carries no decision
+/// authority: checked recovery recomputes the receipt from the exact candidate
+/// and rejects every identity mismatch before exposing a sealed commit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangeReviewRecoveryProjection {
+    reviewer: UserId,
+    reviewed_at: RevisionTimestamp,
+    decision: ChangeReviewDecision,
+    expected_receipt_id: String,
+}
+
+impl ChangeReviewRecoveryProjection {
+    #[must_use]
+    pub fn new(
+        reviewer: UserId,
+        reviewed_at: RevisionTimestamp,
+        decision: ChangeReviewDecision,
+        expected_receipt_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            reviewer,
+            reviewed_at,
+            decision,
+            expected_receipt_id: expected_receipt_id.into(),
+        }
+    }
+}
+
+/// Storage-neutral projection of an optional persisted publication. This value
+/// carries no authority by itself: only [`ChangePublicationRecoveryRecord::try_recover`]
+/// can turn it into sealed repository commits, and that entry point recomputes
+/// every deterministic identity from the exact candidate and review.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangePublicationRecoveryProjection {
+    feed_policy: BoardFeedPolicy,
+    evidence_set_digest: RevisionSha256,
+    published_at: RevisionTimestamp,
+    expected_receipt_id: String,
+    expected_stable_guid: String,
+}
+
+impl ChangePublicationRecoveryProjection {
+    #[must_use]
+    pub fn new(
+        feed_policy: BoardFeedPolicy,
+        evidence_set_digest: RevisionSha256,
+        published_at: RevisionTimestamp,
+        expected_receipt_id: impl Into<String>,
+        expected_stable_guid: impl Into<String>,
+    ) -> Self {
+        Self {
+            feed_policy,
+            evidence_set_digest,
+            published_at,
+            expected_receipt_id: expected_receipt_id.into(),
+            expected_stable_guid: expected_stable_guid.into(),
+        }
+    }
+}
+
+/// Checked recovery-only carrier for one exact reviewed candidate and its
+/// optional publication. It performs no M60 I/O, authorizes no new review,
+/// and exposes only sealed commits after all stored identities have been
+/// recomputed and matched byte-for-byte.
+pub struct ChangePublicationRecoveryRecord {
+    review_commit: ChangeReviewCommit,
+    publication_commit: Option<ChangePublicationCommit>,
+}
+
+impl ChangePublicationRecoveryRecord {
+    /// Reconstructs sealed repository commits from adapter-validated persisted
+    /// state. This is the sole M70 recovery entry point; normal publication must
+    /// continue through [`ChangePublicationService::record_review`] and
+    /// [`ChangePublicationService::publish`].
+    pub fn try_recover(
+        candidate: SemanticChangeCandidate,
+        review: ChangeReviewRecoveryProjection,
+        publication: Option<ChangePublicationRecoveryProjection>,
+    ) -> Result<Self, ChangePublicationError> {
+        validate_candidate_atom_projection(&candidate)?;
+        validate_atom_timestamp(review.reviewed_at)?;
+        let recovered_review = match review.decision {
+            ChangeReviewDecision::Approved => {
+                ChangeReviewReceipt::approve(&candidate, review.reviewer, review.reviewed_at)?
+            }
+            ChangeReviewDecision::Rejected(reason) => ChangeReviewReceipt::reject(
+                &candidate,
+                review.reviewer,
+                review.reviewed_at,
+                reason,
+            )?,
+        };
+        if recovered_review.receipt_id().as_str() != review.expected_receipt_id {
+            return Err(ChangePublicationError::RecoveryMismatch);
+        }
+        let review_commit = ChangeReviewCommit::new(candidate.clone(), recovered_review.clone())?;
+        let publication_commit = publication
+            .map(|projection| {
+                let verified = M60VerifiedChangeEvidence::for_revisions(
+                    candidate.old_revision(),
+                    candidate.new_revision(),
+                );
+                if verified.evidence_set_digest() != &projection.evidence_set_digest {
+                    return Err(ChangePublicationError::RecoveryMismatch);
+                }
+                let recovered = PublishedChangeEvent::new(
+                    candidate,
+                    recovered_review,
+                    projection.feed_policy,
+                    verified,
+                    projection.published_at,
+                )?;
+                if recovered.receipt_id().as_str() != projection.expected_receipt_id
+                    || recovered.stable_guid().as_str() != projection.expected_stable_guid
+                {
+                    return Err(ChangePublicationError::RecoveryMismatch);
+                }
+                Ok(ChangePublicationCommit::new(recovered))
+            })
+            .transpose()?;
+        Ok(Self {
+            review_commit,
+            publication_commit,
+        })
+    }
+
+    #[must_use]
+    pub fn into_commits(self) -> (ChangeReviewCommit, Option<ChangePublicationCommit>) {
+        (self.review_commit, self.publication_commit)
+    }
+}
+
 pub trait ChangePublicationRepository {
     fn find_candidate(
         &self,
@@ -1012,6 +1144,7 @@ pub enum ChangePublicationError {
     FeedPolicyMismatch,
     PublishBeforeReview,
     PublicationReplayConflict,
+    RecoveryMismatch,
     SourceNotCurrent(SourceRevisionHealth),
     M60EvidenceUnverified,
     M60EvidenceMismatch,

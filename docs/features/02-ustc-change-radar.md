@@ -1,7 +1,7 @@
 # USTC ChangeRadar
 
 - `Package ID`: `ustc.change-radar`
-- `Status`: Partial executable evidence; source/revision/diff/review/Atom kernel now has one fixture-backed M10/Market/Harness/ToolGateway/loopback-Web board path, while durable restart and M00-authorized administration remain planned
+- `Status`: Partial executable evidence; one fixed M00-admitted administrator command now durably publishes the reviewed semantic change behind loopback CLI/HTTP/Web while ordinary JSON/Atom reads retain M10/Market/Harness/ToolGateway
 - `Owning plan`: `docs/plan/06-first-party-plugins.md`
 - `Contracts`: `docs/contracts/source-import.md`, `docs/contracts/permissions.md`
 - `Acceptance`: `FP-002`, `RADAR-*`, `SRC-*`
@@ -36,7 +36,7 @@ reviewed source is fetched under policy
 
 The initial user may consume public per-board feeds without a tenant-private profile. Personalized impact comes only after Opportunity Graph/profile consent semantics exist.
 
-The retained Rust kernel currently proves two honestly labelled, canonical-URL-bound `DemoReviewed` revisions for one policy-pinned source identity, deterministic field-level before/after comparison, duplicate/no-change/out-of-order/stale/conflict/unavailable outcomes, digest-bound administrator approve/reject receipts, a coherent transaction-current M60 publication decision, exactly-once in-memory publication and deterministic Atom entries with stable GUID, changed fields, effective/observed time, source evidence, freshness and provenance. A retained no-personal-data fixture now projects that published event through `Web → M10 change.list → bounded Harness → current Market authorization → ToolGateway → fixed ChangeRadar adapter → owning query service → M10 wire projection → Web/Atom`; disabled installation or revoked grant denies before intent/executor, unknown boards return a stable Plugin-owned result, and disabling Affairs does not disable ChangeRadar. It still has no M00-authorized administrator command, durable repository/restart, real source retrieval or M80 peer-client composition; none of the acceptance rows is promoted by this supporting slice.
+The retained Rust kernel proves two honestly labelled, canonical-URL-bound `DemoReviewed` revisions for one policy-pinned source identity, deterministic field-level comparison, digest-bound administrator review, coherent transaction-current M60 verification and one stable JSON/Atom item. A fixed administrator command recomputes its M10 payload digest, passes current M00 admission, durably persists or verifies admitted-request evidence, then calls only the owning M70 application port. Review/publication state is strict owner-only canonical JSON: exact retry returns one receipt, checked restart recovery performs zero M60 calls, post-rename parent-sync uncertainty reconciles the canonical file, and corrupt/replaced/unsafe state fails closed rather than becoming an empty feed. Ordinary reads still cross `M10 change.list → bounded Harness → current Market authorization → ToolGateway → owning M70 query`; real two-process/browser restart preserves the same GUID and Atom bytes. Production SSO/administration, approved live retrieval, maintainer leases and M80 peer clients remain unimplemented; `RADAR-002` remains planned.
 
 ## States
 
@@ -53,9 +53,9 @@ Source stale/suspended
 
 - Fetch/parser/evidence failure: retain the last accepted baseline and publish nothing.
 - Layout-only/hash noise: record diagnostics if useful; do not emit a semantic event.
-- Duplicate/retry: deterministic IDs produce at most one candidate/event.
+- Duplicate/retry: deterministic IDs plus durable exact-retry identity produce one review, publication, M00 evidence event, receipt and feed item.
 - Conflicting official sources: show conflict and block definitive publication until policy/admin resolution.
-- Feed publication partial failure: retry by stable event GUID without duplicating the item.
+- Durable write or recovery failure: fail closed with no partial item; an uncertain post-rename commit is reconciled from the canonical file before retry.
 
 ## Non-goals
 

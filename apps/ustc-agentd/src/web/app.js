@@ -9,6 +9,10 @@ const errorMessage = document.querySelector("#error-message");
 const radarButton = document.querySelector("#radar-load");
 const radarStatus = document.querySelector("#radar-status");
 const radarResult = document.querySelector("#radar-result");
+const radarPublicationRefresh = document.querySelector("#radar-publication-refresh");
+const radarPublicationConfirm = document.querySelector("#radar-publication-confirm");
+const radarPublicationPublish = document.querySelector("#radar-publication-publish");
+const radarPublicationStatus = document.querySelector("#radar-publication-status");
 const publicationRefresh = document.querySelector("#publication-refresh");
 const publicationConfirm = document.querySelector("#publication-confirm");
 const publicationPublish = document.querySelector("#publication-publish");
@@ -379,6 +383,83 @@ async function publishAffairsDemo() {
     publicationStatus.textContent = `发布失败：${error instanceof Error ? error.message : "未知错误"}`;
   } finally {
     publicationPublish.disabled = !publicationConfirm.checked;
+  }
+}
+
+async function requestChangePublication(method, body) {
+  const response = await fetch("/api/v1/demo/administrator/changes/publication", {
+    method,
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-USTC-Agent-Administrator-Demo": "confirm-v1"
+    },
+    body,
+    cache: "no-store"
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error ?? `HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+function renderChangePublicationStatus(payload) {
+  if (payload?.schema !== "ustc-change-publication-status/v1") {
+    throw new Error("ChangeRadar publication status schema 不匹配");
+  }
+  text(document.querySelector("#radar-publication-review-count"), payload.review_count);
+  text(document.querySelector("#radar-publication-count"), payload.publication_count);
+  text(
+    document.querySelector("#radar-publication-receipt"),
+    payload.publication_receipt_id ?? "尚未发布"
+  );
+  text(
+    document.querySelector("#radar-publication-evidence-count"),
+    payload.control_evidence_event_count
+  );
+  radarPublicationStatus.textContent = payload.publication_count === 0
+    ? "固定 candidate 已准备，但尚未发布；public JSON/Atom 仍为空。"
+    : `已恢复 durable ChangeRadar publication ${payload.publication_receipt_id}。`;
+}
+
+async function loadChangePublicationStatus() {
+  radarPublicationRefresh.disabled = true;
+  radarPublicationStatus.textContent = "正在读取 ChangeRadar durable state…";
+  try {
+    renderChangePublicationStatus(await requestChangePublication("GET"));
+  } catch (error) {
+    radarPublicationStatus.textContent = `状态读取失败：${error instanceof Error ? error.message : "未知错误"}`;
+  } finally {
+    radarPublicationRefresh.disabled = false;
+  }
+}
+
+async function publishChangeDemo() {
+  if (!radarPublicationConfirm.checked) {
+    radarPublicationStatus.textContent = "必须先显式确认固定 ChangeRadar demo publication。";
+    return;
+  }
+  radarPublicationPublish.disabled = true;
+  radarPublicationStatus.textContent = "正在执行 M10 → M00 durable evidence → owning M70 publication…";
+  try {
+    const payload = await requestChangePublication(
+      "POST",
+      JSON.stringify({ confirm_publish: true })
+    );
+    if (
+      payload?.schema !== "ustc-change-publication-response/v1" ||
+      payload?.outcome?.kind !== "published"
+    ) {
+      throw new Error("ChangeRadar publication response schema 无法呈现");
+    }
+    radarPublicationStatus.textContent = "M70 已返回 typed publication receipt；正在回读 durable state 与 public feed…";
+    await loadChangePublicationStatus();
+    await loadChangeFeed();
+  } catch (error) {
+    radarPublicationStatus.textContent = `发布失败：${error instanceof Error ? error.message : "未知错误"}`;
+  } finally {
+    radarPublicationPublish.disabled = !radarPublicationConfirm.checked;
   }
 }
 
@@ -914,6 +995,16 @@ publicationPublish.addEventListener("click", () => {
   void publishAffairsDemo();
 });
 
+radarPublicationConfirm.addEventListener("change", () => {
+  radarPublicationPublish.disabled = !radarPublicationConfirm.checked;
+});
+radarPublicationRefresh.addEventListener("click", () => {
+  void loadChangePublicationStatus();
+});
+radarPublicationPublish.addEventListener("click", () => {
+  void publishChangeDemo();
+});
+
 opportunityCreate.addEventListener("click", () => {
   void createOpportunityProfile();
 });
@@ -951,4 +1042,5 @@ if (opportunityProfileId) {
 
 void lookup();
 void loadPublicationStatus();
+void loadChangePublicationStatus();
 void loadChangeFeed();

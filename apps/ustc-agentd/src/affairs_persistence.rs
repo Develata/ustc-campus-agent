@@ -85,6 +85,7 @@ pub(crate) struct DurablePublishedAffairsRepository {
     max_records: usize,
     max_bytes: u64,
     fail_next_persist: bool,
+    fail_next_parent_sync_after_rename: bool,
 }
 
 impl DurablePublishedAffairsRepository {
@@ -143,6 +144,7 @@ impl DurablePublishedAffairsRepository {
             max_records,
             max_bytes,
             fail_next_persist: false,
+            fail_next_parent_sync_after_rename: false,
         })
     }
 
@@ -165,6 +167,10 @@ impl DurablePublishedAffairsRepository {
 
     pub(crate) fn fail_next_persist(&mut self) {
         self.fail_next_persist = true;
+    }
+
+    pub(crate) fn fail_next_parent_sync_after_rename(&mut self) {
+        self.fail_next_parent_sync_after_rename = true;
     }
 
     fn state_with(&self, records: Vec<PersistedPublicationRecord>) -> PersistedPublicationState {
@@ -235,6 +241,7 @@ impl DurablePublishedAffairsRepository {
             temporary.ok_or(ProcedurePublicationRepositoryError::PersistenceUnavailable)?;
         let mut file =
             file.ok_or(ProcedurePublicationRepositoryError::StoredPublicationCorrupted)?;
+        let mut renamed = false;
         let result = (|| {
             validate_primary_metadata(
                 &file
@@ -249,6 +256,11 @@ impl DurablePublishedAffairsRepository {
             drop(file);
             fs::rename(&temporary, &self.path)
                 .map_err(|_| ProcedurePublicationRepositoryError::PersistenceUnavailable)?;
+            renamed = true;
+            if self.fail_next_parent_sync_after_rename {
+                self.fail_next_parent_sync_after_rename = false;
+                return Err(ProcedurePublicationRepositoryError::PersistenceUnavailable);
+            }
             File::open(parent)
                 .and_then(|directory| directory.sync_all())
                 .map_err(|_| ProcedurePublicationRepositoryError::PersistenceUnavailable)?;
@@ -256,6 +268,11 @@ impl DurablePublishedAffairsRepository {
         })();
         if result.is_err() {
             let _ = fs::remove_file(&temporary);
+            if renamed
+                && matches!(read_existing(&self.path, self.max_bytes), Ok(Some(actual)) if actual == bytes)
+            {
+                return Ok(());
+            }
         }
         result
     }
@@ -486,6 +503,7 @@ fn read_existing(
     path: &Path,
     max_bytes: u64,
 ) -> Result<Option<Vec<u8>>, ProcedurePublicationRepositoryError> {
+    validate_secure_parent(path)?;
     let metadata = match fs::symlink_metadata(path) {
         Ok(value) => value,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -544,16 +562,8 @@ fn validate_primary_metadata(
 }
 
 fn validate_secure_parent(path: &Path) -> Result<(), ProcedurePublicationRepositoryError> {
-    let parent = direct_parent(path)?;
-    let metadata = fs::symlink_metadata(parent)
-        .map_err(|_| ProcedurePublicationRepositoryError::PersistenceUnavailable)?;
-    if !metadata.file_type().is_dir()
-        || metadata.permissions().mode() & 0o777 != 0o700
-        || metadata.uid() != current_uid()?
-    {
-        return Err(ProcedurePublicationRepositoryError::StoredPublicationCorrupted);
-    }
-    Ok(())
+    crate::durable_path::ensure_secure_parent(path, false)
+        .map_err(|_| ProcedurePublicationRepositoryError::StoredPublicationCorrupted)
 }
 
 fn direct_parent(path: &Path) -> Result<&Path, ProcedurePublicationRepositoryError> {

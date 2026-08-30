@@ -721,7 +721,39 @@ fn unknown_affairs_http_path_returns_public_not_found_without_bearer() {
 
 #[test]
 fn reviewed_change_radar_http_and_atom_paths_are_source_grounded() {
+    const PUBLICATION_PATH: &str = "/api/v1/demo/administrator/changes/publication";
     let server = WebServer::start();
+    let initial = server.get_admin(PUBLICATION_PATH);
+    assert!(initial.status.contains(" 200 "), "{}", initial.status);
+    let initial: Value =
+        serde_json::from_str(&initial.body).expect("ChangeRadar publication status JSON");
+    assert_eq!(initial["schema"], "ustc-change-publication-status/v1");
+    assert_eq!(initial["review_count"], 0);
+    assert_eq!(initial["publication_count"], 0);
+    assert!(initial["publication_receipt_id"].is_null());
+
+    let before = server.get("/api/v1/changes/board%3Austc%3Aacademic-calendar");
+    let before: Value = serde_json::from_str(&before.body).expect("empty change JSON");
+    assert_eq!(before["terminal"]["outcome"]["kind"], "found");
+    assert_eq!(before["terminal"]["outcome"]["view"]["entries"], json!([]));
+    assert!(
+        before["terminal"]["outcome"]["view"]["atom"]
+            .as_str()
+            .is_some_and(|atom| !atom.contains("<entry>"))
+    );
+
+    let published = server.post_admin_json(PUBLICATION_PATH, &json!({"confirm_publish": true}));
+    assert!(
+        published.status.contains(" 200 "),
+        "{}: {}",
+        published.status,
+        published.body
+    );
+    let published: Value =
+        serde_json::from_str(&published.body).expect("ChangeRadar publication response JSON");
+    assert_eq!(published["schema"], "ustc-change-publication-response/v1");
+    assert_eq!(published["outcome"]["kind"], "published");
+
     let response = server.get("/api/v1/changes/board%3Austc%3Aacademic-calendar");
     assert!(response.status.contains(" 200 "), "{}", response.status);
     assert!(response.headers.contains("content-type: application/json"));
@@ -1133,6 +1165,8 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(page.body.contains("办理条件"));
     assert!(page.body.contains("时间边界"));
     assert!(page.body.contains("证据集摘要"));
+    assert!(page.body.contains("管理员发布 · 非生产演示"));
+    assert!(page.body.contains("radar-publication-confirm"));
     assert!(page.body.contains("procedure-id-preview"));
     assert!(page.body.contains("CHANGE RADAR"));
     assert!(page.body.contains("radar-fields"));
@@ -1162,6 +1196,8 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(script.status.contains(" 200 "), "{}", script.status);
     assert!(script.headers.contains("content-type: text/javascript"));
     assert!(!script.body.contains("innerHTML"));
+    assert!(script.body.contains("ustc-change-publication-status/v1"));
+    assert!(script.body.contains("publishChangeDemo"));
     assert!(script.body.contains("textContent"));
     assert!(script.body.contains("syncProcedurePreview"));
     assert!(script.body.contains("renderChangeFeed"));

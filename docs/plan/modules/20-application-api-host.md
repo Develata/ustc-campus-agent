@@ -3,10 +3,10 @@
 ## Metadata
 
 - `Module ID`: `M10`
-- `Status`: Accepted blueprint with bounded executable evidence for M10-owned client-protocol/application-ingress carriers and one loopback three-plugin HTTP/Web composition; production public HTTP/Dioxus/stream hosting remains planned
+- `Status`: Accepted blueprint with bounded executable evidence for M10-owned client-protocol/application-ingress carriers, fixed Affairs/ChangeRadar administrator commands and one loopback three-plugin HTTP/Web composition; production public HTTP/Dioxus/stream hosting remains planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m10-application-ingress/v2.1`
-- `Last Review`: `2026-08-24`
+- `Last Review`: `2026-08-30`
 - `Composition`: `apps/ustc-agentd`
 - `Primary code area`: `apps/ustc-agentd/`, M10-owned `crates/client-protocol/` and `crates/application-ingress/`, plus future shared Dioxus server-function declarations in the Fullstack application boundary
 
@@ -29,7 +29,7 @@ M10 owns the versioned public wire schema and compatibility carrier (`client-pro
 
 ### Current bounded evidence
 
-The retained `client-protocol` and `application-ingress` carriers prove checked request/value/error envelopes, M00 admission, capability and owner/operator lookup projections, idempotent submit/finalize behavior and typed M71 result mapping. `apps/ustc-agentd` composes one fixture-backed Affairs operation over numeric loopback TCP, with durable fixture record/idempotency files and real subprocess coverage through `ustc-agent`. It also hosts one loopback-only Axum route and embedded page for the exact `affairs.get` result; the route consumes the submit capability internally and emits only the public-redacted typed lookup result.
+The retained `client-protocol` and `application-ingress` carriers prove checked request/value/error envelopes, M00 admission, capability and owner/operator lookup projections, idempotent submit/finalize behavior and typed M71 result mapping. They also own fixed typed Affairs and ChangeRadar administrator commands whose payload digests are recomputed before M00 admission and whose admitted-request evidence is durable before the owning product port is called. `apps/ustc-agentd` composes the fixture-backed three-plugin surface over numeric loopback TCP, including owner-only canonical Affairs and ChangeRadar publication state, operator CLI/HTTP/Web calls and public JSON/Atom read-back after restart. These are bounded demo surfaces, not production remote administration or a generic operation registry.
 
 This evidence is deliberately narrower than the module exit gate. It does not establish remotely exposed production HTTP/TLS, a Dioxus server-function surface, broad operation registry, stream cursor/reconnect semantics, supported-version matrix, graceful drain, Docker Compose deployment, inbound MCP projection or Web/Android parity journey. The loopback fixture transports are integration proof surfaces, not the final heterogeneous-client transport contract.
 

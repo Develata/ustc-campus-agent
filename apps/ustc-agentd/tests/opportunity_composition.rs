@@ -45,6 +45,7 @@ fn wire(value: impl Into<String>) -> WireText {
 struct TestEnv {
     dir: PathBuf,
     affairs_fixture: PathBuf,
+    change_fixture: PathBuf,
     opportunity_fixture: PathBuf,
     catalog: PathBuf,
     store: PathBuf,
@@ -57,12 +58,34 @@ impl TestEnv {
     fn new(label: &str) -> Self {
         let dir = temp_dir(label);
         let affairs_fixture = dir.join("affairs.json");
+        let change_fixture = dir.join("change.json");
         let opportunity_fixture = dir.join("opportunity.json");
         fs::copy(
             workspace().join("fixtures/affairs/proc-011-reviewed.json"),
             &affairs_fixture,
         )
         .expect("copy affairs fixture");
+        fs::copy(
+            workspace().join("fixtures/change-radar/academic-calendar-demo-reviewed.json"),
+            &change_fixture,
+        )
+        .expect("copy change fixture");
+        let change_evidence = dir.join("evidence");
+        fs::create_dir_all(&change_evidence).expect("create change evidence");
+        for name in [
+            "academic-calendar-r1.reviewed.txt",
+            "academic-calendar-r1.normalized.json",
+            "academic-calendar-r2.reviewed.txt",
+            "academic-calendar-r2.normalized.json",
+        ] {
+            fs::copy(
+                workspace()
+                    .join("fixtures/change-radar/evidence")
+                    .join(name),
+                change_evidence.join(name),
+            )
+            .expect("copy change evidence");
+        }
         fs::copy(
             workspace().join("fixtures/opportunity-graph/course-planning-demo-reviewed.json"),
             &opportunity_fixture,
@@ -76,6 +99,7 @@ impl TestEnv {
             sessions: dir.join("sessions.json"),
             dir,
             affairs_fixture,
+            change_fixture,
             opportunity_fixture,
         }
     }
@@ -111,6 +135,19 @@ impl TestEnv {
             &self.sessions,
         )
         .expect("open Opportunity composition")
+    }
+
+    fn open_all(&self) -> Result<AffairsComposition, String> {
+        AffairsComposition::open_with_change_and_opportunity(
+            &self.affairs_fixture,
+            &self.change_fixture,
+            &self.opportunity_fixture,
+            &self.catalog,
+            &self.profiles,
+            &self.store,
+            &self.idempotency,
+            &self.sessions,
+        )
     }
 }
 
@@ -223,6 +260,137 @@ fn plan_command(profile_id: &WireText) -> OpportunityCommandDto {
 fn view_command(profile_id: &WireText) -> OpportunityCommandDto {
     OpportunityCommandDto::ViewProfile {
         profile_snapshot_id: profile_id.clone(),
+    }
+}
+
+#[test]
+fn fresh_open_persists_empty_profile_member_and_missing_member_fails_closed() {
+    let env = TestEnv::new("complete-profile-state-set");
+    let composition = env.open();
+    assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
+    assert!(env.profiles.is_file());
+    assert_eq!(
+        fs::metadata(&env.profiles)
+            .expect("empty profile state metadata")
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
+    drop(composition);
+
+    fs::remove_file(&env.profiles).expect("remove one required profile state member");
+    let reopened = AffairsComposition::open_with_opportunity(
+        &env.affairs_fixture,
+        &env.opportunity_fixture,
+        &env.catalog,
+        &env.profiles,
+        &env.store,
+        &env.idempotency,
+        &env.sessions,
+    );
+    assert_eq!(
+        reopened.err().as_deref(),
+        Some("durable_state_set_incomplete")
+    );
+}
+
+#[test]
+fn opportunity_profile_state_reopen_requires_canonical_bytes() {
+    let env = TestEnv::new("profile-state-canonical-bytes");
+    drop(env.open());
+    let mut bytes = fs::read(&env.profiles).expect("read canonical profile state");
+    bytes.push(b'\n');
+    fs::write(&env.profiles, bytes).expect("write noncanonical profile state");
+    assert!(
+        AffairsComposition::open_with_opportunity(
+            &env.affairs_fixture,
+            &env.opportunity_fixture,
+            &env.catalog,
+            &env.profiles,
+            &env.store,
+            &env.idempotency,
+            &env.sessions,
+        )
+        .is_err(),
+        "noncanonical profile state must fail closed"
+    );
+}
+
+#[test]
+fn opportunity_profile_state_reopen_rejects_noncanonical_inner_ordering() {
+    let env = TestEnv::new("profile-state-canonical-order");
+    let composition = env.open();
+    create_profile(&composition, "canonical-order");
+    drop(composition);
+
+    let canonical = fs::read_to_string(&env.profiles).expect("read profile state");
+    let reordered = canonical.replacen(
+        r#"["CS1001","MATH1001","MATH1002","PHYS1001"]"#,
+        r#"["PHYS1001","MATH1002","MATH1001","CS1001"]"#,
+        1,
+    );
+    assert_ne!(reordered, canonical, "expected retained course array");
+    fs::write(&env.profiles, reordered).expect("write reordered profile state");
+
+    let error = AffairsComposition::open_with_opportunity(
+        &env.affairs_fixture,
+        &env.opportunity_fixture,
+        &env.catalog,
+        &env.profiles,
+        &env.store,
+        &env.idempotency,
+        &env.sessions,
+    )
+    .err();
+    assert_eq!(
+        error.as_deref(),
+        Some("persisted completed courses are not in canonical order")
+    );
+}
+
+#[test]
+fn production_three_plugin_state_set_persists_every_member_and_missing_members_fail_closed() {
+    let env = TestEnv::new("three-plugin-state-inventory");
+    let composition = env
+        .open_all()
+        .expect("open complete three-plugin state set");
+    drop(composition);
+    for member in [
+        "records.json",
+        "idempotency.json",
+        "sessions.json",
+        "idempotency.affairs-publication.json",
+        "idempotency.control-evidence.json",
+        "idempotency.change-publication.json",
+        "opportunity-profiles.json",
+    ] {
+        let path = env.dir.join(member);
+        assert!(path.is_file(), "missing persisted state member {member}");
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600,
+            "wrong mode for {member}"
+        );
+    }
+
+    for member in [
+        "records.json",
+        "idempotency.json",
+        "sessions.json",
+        "idempotency.affairs-publication.json",
+        "idempotency.control-evidence.json",
+        "idempotency.change-publication.json",
+        "opportunity-profiles.json",
+    ] {
+        let env = TestEnv::new(member);
+        drop(env.open_all().expect("bootstrap complete state set"));
+        fs::remove_file(env.dir.join(member)).expect("remove one required state member");
+        assert_eq!(
+            env.open_all().err().as_deref(),
+            Some("durable_state_set_incomplete"),
+            "missing member did not fail closed: {member}"
+        );
     }
 }
 
@@ -392,6 +560,43 @@ fn consent_profile_plan_delete_and_restart_cross_the_full_bounded_spine() {
 }
 
 #[test]
+fn opportunity_parent_sync_uncertainty_reconciles_tombstone_before_memory_publish() {
+    let env = TestEnv::new("profile-parent-sync-reconcile");
+    let composition = env.open();
+    let profile_id = create_profile(&composition, "create-before-parent-sync-failure");
+    composition.fail_next_opportunity_parent_sync_after_rename_for_test();
+
+    let deleted = composition.handle_opportunity_submit(&request(
+        OpportunityCommandDto::RevokeConsentAndDeleteProfile {
+            profile_snapshot_id: profile_id.clone(),
+            revoked_at: UnixMillis::new(1_787_792_500_000),
+        },
+        "delete-with-parent-sync-failure",
+        authenticated_actor("session:proc011-web-demo"),
+    ));
+    assert!(matches!(
+        deleted,
+        ClientResponseDto::OpportunityAccepted { .. }
+    ));
+    assert_eq!(composition.opportunity_private_state_counts(), (0, 1));
+    drop(composition);
+
+    let reopened = env.open();
+    assert_eq!(reopened.opportunity_private_state_counts(), (0, 1));
+    assert!(matches!(
+        reopened.handle_opportunity_submit(&request(
+            view_command(&profile_id),
+            "view-after-parent-sync-reconcile",
+            authenticated_actor("session:proc011-web-demo"),
+        )),
+        ClientResponseDto::OpportunityRejected {
+            rejection: OpportunityRejectionDto::ProfileDeleted,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn identical_command_and_identity_replays_committed_create_terminal() {
     let env = TestEnv::new("create-replay");
     let composition = env.open();
@@ -442,14 +647,30 @@ fn different_tenant_cannot_read_profile_or_reach_m60() {
         "tenant:opportunity-other",
         "user:opportunity-other",
     );
+    let other_store = env.dir.join("other-records.json");
+    let other_profiles = env.dir.join("other-opportunity-profiles.json");
     let other_idempotency = env.dir.join("other-idempotency.json");
     let other_sessions = env.dir.join("other-sessions.json");
+    let seeded_other = AffairsComposition::open_with_opportunity(
+        &env.affairs_fixture,
+        &env.opportunity_fixture,
+        &env.catalog,
+        &other_profiles,
+        &other_store,
+        &other_idempotency,
+        &other_sessions,
+    )
+    .expect("bootstrap complete other-tenant state set");
+    drop(seeded_other);
+    fs::copy(&env.profiles, &other_profiles).expect("copy owner profile into other state set");
+    fs::set_permissions(&other_profiles, fs::Permissions::from_mode(0o600))
+        .expect("retain private profile mode");
     let other = AffairsComposition::open_with_opportunity(
         &env.affairs_fixture,
         &env.opportunity_fixture,
         &env.catalog,
-        &env.profiles,
-        &env.store,
+        &other_profiles,
+        &other_store,
         &other_idempotency,
         &other_sessions,
     )
@@ -871,6 +1092,41 @@ fn oversized_state_and_preexisting_temporary_symlink_fail_closed() {
     );
     assert!(opened.is_err(), "0644 private state must fail closed");
 
+    let insecure_parent = TestEnv::new("insecure-profile-parent");
+    let profile_parent = insecure_parent.dir.join("custom-opportunity-state");
+    fs::create_dir(&profile_parent).expect("create custom profile parent");
+    fs::set_permissions(&profile_parent, fs::Permissions::from_mode(0o755))
+        .expect("set insecure profile parent mode");
+    let profile_path = profile_parent.join("profiles.json");
+    let opened = AffairsComposition::open_with_opportunity(
+        &insecure_parent.affairs_fixture,
+        &insecure_parent.opportunity_fixture,
+        &insecure_parent.catalog,
+        &profile_path,
+        &insecure_parent.store,
+        &insecure_parent.idempotency,
+        &insecure_parent.sessions,
+    );
+    assert!(opened.is_err(), "0755 profile parent must fail closed");
+
+    let hardlinked = TestEnv::new("hardlinked-profile-state");
+    drop(hardlinked.open());
+    let hardlink_alias = hardlinked.dir.join("opportunity-profile-hardlink.json");
+    fs::hard_link(&hardlinked.profiles, &hardlink_alias).expect("create profile hardlink");
+    let opened = AffairsComposition::open_with_opportunity(
+        &hardlinked.affairs_fixture,
+        &hardlinked.opportunity_fixture,
+        &hardlinked.catalog,
+        &hardlinked.profiles,
+        &hardlinked.store,
+        &hardlinked.idempotency,
+        &hardlinked.sessions,
+    );
+    assert!(
+        opened.is_err(),
+        "multiply linked profile state must fail closed"
+    );
+
     let primary_symlink = TestEnv::new("primary-state-symlink");
     let primary_sentinel = primary_symlink.dir.join("primary-sentinel.txt");
     fs::write(&primary_sentinel, "UNCHANGED").expect("write primary sentinel");
@@ -899,22 +1155,28 @@ fn oversized_state_and_preexisting_temporary_symlink_fail_closed() {
         std::process::id()
     ));
     std::os::unix::fs::symlink(&sentinel, &temporary).expect("create temporary symlink");
-    let composition = symlinked.open();
-    let response = composition.handle_opportunity_submit(&request(
-        create_command(),
-        "temporary-symlink",
-        authenticated_actor("session:proc011-web-demo"),
-    ));
-    assert!(matches!(
-        response,
-        ClientResponseDto::Error {
-            error: ClientErrorDto::Infrastructure { .. }
-        }
-    ));
-    assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
+    let opened = AffairsComposition::open_with_opportunity(
+        &symlinked.affairs_fixture,
+        &symlinked.opportunity_fixture,
+        &symlinked.catalog,
+        &symlinked.profiles,
+        &symlinked.store,
+        &symlinked.idempotency,
+        &symlinked.sessions,
+    );
+    assert!(
+        opened.is_err(),
+        "preexisting temp symlink must block startup"
+    );
     assert_eq!(
         fs::read_to_string(&sentinel).expect("read sentinel"),
         "UNCHANGED"
+    );
+    assert!(
+        fs::symlink_metadata(&temporary)
+            .expect("pre-existing profile temp symlink remains")
+            .file_type()
+            .is_symlink()
     );
 }
 

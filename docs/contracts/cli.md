@@ -2,12 +2,12 @@
 
 ## Metadata
 
-- `Status`: current operator CLI contract plus bounded fixture-backed ordinary-user Affairs evidence; production user/automation transport, auth and streaming remain planned
-- `Version`: `cli/v2.1`
-- `Last Review`: `2026-08-24`
+- `Status`: current operator CLI contract with bounded fixed Affairs/ChangeRadar administrator publication callers plus fixture-backed ordinary-user Affairs evidence; production user/automation transport, auth and streaming remain planned
+- `Version`: `cli/v2.2`
+- `Last Review`: `2026-08-30`
 - `Owning plans`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md), [`M90 Infrastructure and Operations`](../plan/modules/90-infrastructure-operations.md)
 - `Counterpart contract`: [`client-shell/v2.1`](client-shell.md)
-- `Acceptance`: implemented command-specific evidence below plus bounded non-production Affairs CLI evidence; `CLIENT-008` and `CLIENT-009` remain planned/non-pass
+- `Acceptance`: implemented command-specific evidence below, fixed bounded Affairs/ChangeRadar administrator callers and bounded non-production Affairs ordinary-user evidence; `CLIENT-008` and `CLIENT-009` remain planned/non-pass
 
 ## 1. Binary and privilege split
 
@@ -35,6 +35,11 @@ ustc-agentctl market validate
 ustc-agentctl course plan \
   --fixture market/fixtures/course-planning/minimal-v0.json \
   --format json
+ustc-agentctl affairs publication-status --server 127.0.0.1:8787
+ustc-agentctl affairs publish-demo --server 127.0.0.1:8787 --confirm
+ustc-agentctl change publication-status --server 127.0.0.1:8787
+ustc-agentctl change publish-demo --server 127.0.0.1:8787 --confirm
+# `changes` is accepted as an alias for both bounded ChangeRadar commands.
 ```
 
 ### `course plan`
@@ -52,6 +57,10 @@ Output:
 - diagnostic on stderr and exit code `2` for invalid options, unreadable/invalid fixtures or no feasible plan.
 
 The command is a bounded offline spike. It is read-only: it does not access the network, store credentials, modify external systems or enroll a user in courses. It is not evidence for `ustc-agent`, M10 or client-core.
+
+### Fixed loopback publication callers
+
+`affairs publication-status`/`changes publication-status` read the matching loopback administrator status endpoint. `affairs publish-demo`/`changes publish-demo` require literal `--confirm`, send only the fixed demo confirmation header/body to a numeric loopback server, and print the server's typed JSON response. They expose no arbitrary payload, identity, capability, URL or generic product-operation surface. The server remains authoritative: ChangeRadar publication recomputes the command digest, passes M00 admission and durable evidence, then calls the direct owning M70 port. These are bounded local administrator demonstrations, not production remote administration or ordinary-user commands.
 
 ## 3. Planned `ustc-agentctl` commands
 
@@ -102,9 +111,9 @@ ustc-agent market packages list --format json
 
 These planned commands project `server.info`, `capability.list` and `market.package.list` from [`interfaces.md`](interfaces.md). Exact options, DTO schema versions and route bindings are fixed in the first accepted production command-registry slice before implementation. Product-specific query/command/event families are added only after their owning M10/application contracts and active acceptance rows exist. Command spelling never creates an operation absent from that registry.
 
-The initial CLI does not include install/grant/source-publish/operator actions, an embedded model loop or a generic arbitrary HTTP/tool invocation command.
+The initial CLI does not include generic install/grant/source-crawl/source-apply actions, an embedded model loop or a generic arbitrary HTTP/tool invocation command. Its only product mutations are the two fixed loopback demo publication callers above.
 
-The fixture-backed `affairs get/lookup` evidence does not activate broad `affairs search`, production auth/HTTP, inbound MCP or another product family. Later read-only projections retain the product order: approved ChangeRadar and Opportunity Graph operations only after their contracts; cultivation programs use `program`; tenant-local planning drafts use `planner draft`. An ambiguous `plan` namespace is not admitted.
+The fixture-backed ordinary-user `affairs get/lookup` evidence does not activate broad `affairs search`, production auth/HTTP, inbound MCP or another ordinary-user product family. The separate operator-only ChangeRadar demo caller does not add ChangeRadar to `ustc-agent` or M80 client-core. Later read-only projections retain the product order; cultivation programs use `program`, tenant-local planning drafts use `planner draft`, and an ambiguous `plan` namespace is not admitted.
 
 The inbound MCP adapter's executable/subcommand packaging is intentionally not fixed by this command table. Its first accepted slice may choose a dedicated binary or `ustc-agent mcp serve`; either choice must preserve the same client-core and privilege contract and cannot change the user CLI command semantics by implication.
 

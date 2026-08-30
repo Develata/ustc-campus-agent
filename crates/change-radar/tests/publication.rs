@@ -6,11 +6,12 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::reader::Reader;
 use ustc_campus_agent_change_radar::{
     AcceptedObservation, BoardFeedPolicy, BoardId, BoardPolicy, ChangePublicationError,
-    ChangePublicationRepositoryError, ChangePublicationService, ChangeRadarService,
-    ChangeRejectionReason, ChangeReviewReceipt, InMemoryChangeRadarRepository,
-    M60ChangePublicationOutcome, M60ChangePublicationPort, M60ChangePublicationPortError,
-    M60VerifiedChangeEvidence, NormalizedFacts, ObservationOutcome, SemanticChangeCandidate,
-    SemanticField, SemanticValue, render_atom,
+    ChangePublicationRecoveryProjection, ChangePublicationRecoveryRecord,
+    ChangePublicationRepository, ChangePublicationRepositoryError, ChangePublicationService,
+    ChangeRadarService, ChangeRejectionReason, ChangeReviewReceipt, ChangeReviewRecoveryProjection,
+    InMemoryChangeRadarRepository, M60ChangePublicationOutcome, M60ChangePublicationPort,
+    M60ChangePublicationPortError, M60VerifiedChangeEvidence, NormalizedFacts, ObservationOutcome,
+    SemanticChangeCandidate, SemanticField, SemanticValue, render_atom,
 };
 use ustc_campus_agent_core::identity::UserId;
 use ustc_campus_agent_core::source_registry::{
@@ -384,6 +385,81 @@ fn approved_candidate_publishes_exactly_once_and_renders_deterministic_atom() {
     assert_eq!(m60.calls(), 1);
     assert_eq!(repository.review_count(), 1);
     assert_eq!(repository.publication_count(), 1);
+}
+
+#[test]
+fn checked_recovery_restores_sealed_commits_without_m60_io() {
+    let (candidate, mut published_repository) = candidate_and_repository();
+    let approval = ChangeReviewReceipt::approve(
+        &candidate,
+        reviewer("user:admin"),
+        RevisionTimestamp::from_unix_seconds(250),
+    )
+    .expect("approval");
+    let m60 = FixtureM60::new(MODE_CURRENT);
+    let publication = {
+        let mut service =
+            ChangePublicationService::new(&mut published_repository, &m60, feed_policy());
+        service.record_review(approval.clone()).expect("review");
+        service
+            .publish(
+                candidate.event_id(),
+                RevisionTimestamp::from_unix_seconds(300),
+            )
+            .expect("publication")
+    };
+    assert_eq!(m60.calls(), 1);
+
+    let (_, mut recovered_repository) = candidate_and_repository();
+    let projection = ChangePublicationRecoveryProjection::new(
+        publication.feed_policy().clone(),
+        publication.evidence_set_digest().clone(),
+        publication.published_at(),
+        publication.receipt_id().as_str(),
+        publication.stable_guid().as_str(),
+    );
+    let recovered = ChangePublicationRecoveryRecord::try_recover(
+        candidate,
+        ChangeReviewRecoveryProjection::new(
+            approval.reviewer().clone(),
+            approval.reviewed_at(),
+            approval.decision(),
+            approval.receipt_id().as_str(),
+        ),
+        Some(projection),
+    )
+    .expect("checked recovery");
+    let (review_commit, publication_commit) = recovered.into_commits();
+    recovered_repository
+        .apply_review(review_commit)
+        .expect("apply recovered review");
+    recovered_repository
+        .apply_publication(publication_commit.expect("publication commit"))
+        .expect("apply recovered publication");
+    assert_eq!(recovered_repository.review_count(), 1);
+    assert_eq!(recovered_repository.publication_count(), 1);
+    assert_eq!(m60.calls(), 1, "recovery must not perform M60 I/O");
+
+    let mismatched = ChangePublicationRecoveryProjection::new(
+        publication.feed_policy().clone(),
+        RevisionSha256::parse(format!("sha256:{}", "f".repeat(64))).expect("digest"),
+        publication.published_at(),
+        publication.receipt_id().as_str(),
+        publication.stable_guid().as_str(),
+    );
+    assert!(matches!(
+        ChangePublicationRecoveryRecord::try_recover(
+            publication.candidate().clone(),
+            ChangeReviewRecoveryProjection::new(
+                approval.reviewer().clone(),
+                approval.reviewed_at(),
+                approval.decision(),
+                approval.receipt_id().as_str(),
+            ),
+            Some(mismatched),
+        ),
+        Err(ChangePublicationError::RecoveryMismatch)
+    ));
 }
 
 #[test]

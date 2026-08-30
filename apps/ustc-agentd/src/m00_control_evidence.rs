@@ -1,7 +1,11 @@
 use std::collections::BTreeSet;
-use std::fs::{self, DirBuilder, File, OpenOptions};
+#[cfg(test)]
+use std::fs::DirBuilder;
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
-use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+#[cfg(test)]
+use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -35,6 +39,7 @@ impl Default for ControlEvidenceState {
 pub(crate) struct DurableControlEvidenceJournal {
     path: PathBuf,
     state: Arc<Mutex<ControlEvidenceState>>,
+    fail_next_parent_sync_after_rename: Arc<Mutex<bool>>,
     max_events: usize,
     max_bytes: u64,
 }
@@ -42,6 +47,25 @@ pub(crate) struct DurableControlEvidenceJournal {
 impl DurableControlEvidenceJournal {
     pub(crate) fn open(path: &Path) -> Result<Self, ControlEvidenceJournalError> {
         Self::open_with_limits(path, DEFAULT_MAX_EVENTS, DEFAULT_MAX_BYTES)
+    }
+
+    pub(crate) fn open_for_state_set(
+        path: &Path,
+        bootstrap_is_fresh: bool,
+    ) -> Result<Self, ControlEvidenceJournalError> {
+        let existed = match fs::symlink_metadata(path) {
+            Ok(_) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+            Err(_) => return Err(ControlEvidenceJournalError::Unavailable),
+        };
+        if !existed && !bootstrap_is_fresh {
+            return Err(ControlEvidenceJournalError::Corrupt);
+        }
+        let journal = Self::open(path)?;
+        if !existed {
+            journal.persist(&ControlEvidenceState::default())?;
+        }
+        Ok(journal)
     }
 
     fn open_with_limits(
@@ -70,6 +94,7 @@ impl DurableControlEvidenceJournal {
         Ok(Self {
             path: path.to_owned(),
             state: Arc::new(Mutex::new(state)),
+            fail_next_parent_sync_after_rename: Arc::new(Mutex::new(false)),
             max_events,
             max_bytes,
         })
@@ -108,6 +133,7 @@ impl DurableControlEvidenceJournal {
         }
         let temporary = temporary.ok_or(ControlEvidenceJournalError::Unavailable)?;
         let mut file = file.ok_or(ControlEvidenceJournalError::InternalInvariant)?;
+        let mut renamed = false;
         let result = (|| {
             let metadata = file
                 .metadata()
@@ -126,6 +152,19 @@ impl DurableControlEvidenceJournal {
             drop(file);
             fs::rename(&temporary, &self.path)
                 .map_err(|_| ControlEvidenceJournalError::Unavailable)?;
+            renamed = true;
+            let injected = {
+                let mut fail = self
+                    .fail_next_parent_sync_after_rename
+                    .lock()
+                    .map_err(|_| ControlEvidenceJournalError::InternalInvariant)?;
+                let injected = *fail;
+                *fail = false;
+                injected
+            };
+            if injected {
+                return Err(ControlEvidenceJournalError::Unavailable);
+            }
             File::open(parent)
                 .and_then(|directory| directory.sync_all())
                 .map_err(|_| ControlEvidenceJournalError::Unavailable)?;
@@ -133,6 +172,11 @@ impl DurableControlEvidenceJournal {
         })();
         if result.is_err() {
             let _ = fs::remove_file(&temporary);
+            if renamed
+                && matches!(read_existing(&self.path, self.max_bytes), Ok(Some(actual)) if actual == bytes)
+            {
+                return Ok(());
+            }
         }
         result
     }
@@ -152,6 +196,14 @@ impl DurableControlEvidenceJournal {
 
     pub(crate) fn event_count(&self) -> usize {
         self.state.lock().map_or(0, |state| state.events.len())
+    }
+
+    #[cfg(test)]
+    fn fail_next_parent_sync_after_rename(&self) {
+        *self
+            .fail_next_parent_sync_after_rename
+            .lock()
+            .expect("parent-sync failure injection lock") = true;
     }
 }
 
@@ -211,22 +263,8 @@ impl ControlEvidenceAppendPort for DurableControlEvidenceJournal {
 }
 
 pub(crate) fn ensure_secure_state_parent(path: &Path) -> Result<(), String> {
-    let parent = path
-        .parent()
-        .filter(|value| !value.as_os_str().is_empty())
-        .ok_or_else(|| "state path requires a direct parent".to_owned())?;
-    match fs::symlink_metadata(parent) {
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            let mut builder = DirBuilder::new();
-            builder.mode(0o700);
-            builder
-                .create(parent)
-                .map_err(|error| format!("state parent create failed: {error}"))?;
-        }
-        Err(error) => return Err(format!("state parent metadata failed: {error}")),
-    }
-    validate_secure_parent(path).map_err(|error| format!("unsafe state parent: {error:?}"))
+    crate::durable_path::ensure_secure_parent(path, true)
+        .map_err(|error| format!("unsafe state parent: {error}"))
 }
 
 fn validate_state(
@@ -255,6 +293,7 @@ fn read_existing(
     path: &Path,
     max_bytes: u64,
 ) -> Result<Option<Vec<u8>>, ControlEvidenceJournalError> {
+    validate_secure_parent(path)?;
     let metadata = match fs::symlink_metadata(path) {
         Ok(value) => value,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -313,16 +352,8 @@ fn validate_primary_metadata(
 }
 
 fn validate_secure_parent(path: &Path) -> Result<(), ControlEvidenceJournalError> {
-    let parent = direct_parent(path)?;
-    let metadata =
-        fs::symlink_metadata(parent).map_err(|_| ControlEvidenceJournalError::Unavailable)?;
-    if !metadata.file_type().is_dir()
-        || metadata.permissions().mode() & 0o777 != 0o700
-        || metadata.uid() != current_uid()?
-    {
-        return Err(ControlEvidenceJournalError::Corrupt);
-    }
-    Ok(())
+    crate::durable_path::ensure_secure_parent(path, false)
+        .map_err(|_| ControlEvidenceJournalError::Corrupt)
 }
 
 fn direct_parent(path: &Path) -> Result<&Path, ControlEvidenceJournalError> {
@@ -422,6 +453,45 @@ mod tests {
             reopened.load_control_event(&event.key()).unwrap(),
             Some(event)
         );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn parent_sync_uncertainty_reconciles_exact_evidence_before_memory_publish() {
+        let dir = directory("parent-sync-reconcile");
+        let path = dir.join("evidence.json");
+        let event = request_event(&"b".repeat(64));
+        let mut journal = DurableControlEvidenceJournal::open(&path).unwrap();
+        journal.fail_next_parent_sync_after_rename();
+        assert_eq!(
+            journal.append_once(&event).unwrap(),
+            ControlEvidenceAppendOutcome::Appended
+        );
+        assert_eq!(journal.event_count(), 1);
+        let mut reopened = DurableControlEvidenceJournal::open(&path).unwrap();
+        assert_eq!(
+            reopened.load_control_event(&event.key()).unwrap(),
+            Some(event)
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn fresh_state_set_persists_empty_and_nonfresh_missing_fails_closed() {
+        let dir = directory("fresh-state-set");
+        let path = dir.join("evidence.json");
+        let journal = DurableControlEvidenceJournal::open_for_state_set(&path, true).unwrap();
+        assert_eq!(journal.event_count(), 0);
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        drop(journal);
+        fs::remove_file(&path).unwrap();
+        assert!(matches!(
+            DurableControlEvidenceJournal::open_for_state_set(&path, false),
+            Err(ControlEvidenceJournalError::Corrupt)
+        ));
         fs::remove_dir_all(dir).unwrap();
     }
 

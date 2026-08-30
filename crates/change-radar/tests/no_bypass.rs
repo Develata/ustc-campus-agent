@@ -25,7 +25,7 @@ fn change_radar_domain_has_no_client_web_storage_or_executor_dependency() {
             "domain manifest must not depend on {forbidden}"
         );
     }
-    for path in ["src/lib.rs", "src/publication.rs"] {
+    for path in ["src/lib.rs", "src/publication.rs", "src/query.rs"] {
         let source = fs::read_to_string(root.join(path)).expect("source");
         for forbidden in [
             "std::fs",

@@ -3,15 +3,16 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use ustc_campus_agent_change_radar::{
-    AcceptedObservation, BoardFeedPolicy, BoardId, BoardPolicy, ChangeFeedQueryService,
-    ChangePublicationService, ChangeRadarService, ChangeReviewReceipt,
-    InMemoryChangeRadarRepository, M60ChangePublicationOutcome, M60ChangePublicationPort,
-    M60ChangePublicationPortError, M60VerifiedChangeEvidence, NormalizedFacts, ObservationOutcome,
-    SemanticField, SemanticValue,
+    AcceptedObservation, BoardFeedPolicy, BoardId, BoardPolicy, ChangeRadarService,
+    ChangeReviewReceipt, InMemoryChangeRadarRepository, M60ChangePublicationOutcome,
+    M60ChangePublicationPort, M60ChangePublicationPortError, M60VerifiedChangeEvidence,
+    NormalizedFacts, ObservationOutcome, SemanticChangeCandidate, SemanticField, SemanticValue,
 };
 use ustc_campus_agent_core::identity::UserId;
 use ustc_campus_agent_core::request_context::{
@@ -28,6 +29,7 @@ use ustc_campus_agent_core::source_revision::{
 
 use crate::affairs_fixture::FixtureDescriptor;
 use crate::change_invocation::ChangeInvocationCounters;
+use crate::change_persistence::{ChangePublicationBootstrap, DurableChangeRadarRepository};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -74,17 +76,27 @@ struct ChangeRevisionDto {
 }
 
 pub(crate) struct ChangeRadarFixture {
-    pub(crate) repository: InMemoryChangeRadarRepository,
+    pub(crate) repository: DurableChangeRadarRepository,
     pub(crate) feed_policy: BoardFeedPolicy,
+    pub(crate) candidate: SemanticChangeCandidate,
+    pub(crate) review: ChangeReviewReceipt,
+    pub(crate) published_at: RevisionTimestamp,
+    pub(crate) m60: FixtureM60,
+    pub(crate) m60_calls: Arc<AtomicU64>,
     pub(crate) source_evidence_digest: String,
     pub(crate) market_enabled: bool,
     pub(crate) market_grant_active: bool,
     pub(crate) invocation_counters: ChangeInvocationCounters,
     pub(crate) descriptor: OperationSnapshot,
+    pub(crate) publication_descriptor: OperationSnapshot,
 }
 
 impl ChangeRadarFixture {
-    pub(crate) fn load(path: &Path) -> Result<Self, String> {
+    pub(crate) fn load(
+        path: &Path,
+        publication_path: &Path,
+        allow_fresh_publication_bootstrap: bool,
+    ) -> Result<Self, String> {
         let bytes =
             fs::read(path).map_err(|error| format!("change fixture read failed: {error}"))?;
         let dto: ChangeFixtureDto = serde_json::from_slice(&bytes)
@@ -92,10 +104,20 @@ impl ChangeRadarFixture {
         let root = path
             .parent()
             .ok_or_else(|| "change fixture has no parent".to_owned())?;
-        Self::build(root, dto)
+        Self::build(
+            root,
+            publication_path,
+            allow_fresh_publication_bootstrap,
+            dto,
+        )
     }
 
-    fn build(root: &Path, dto: ChangeFixtureDto) -> Result<Self, String> {
+    fn build(
+        root: &Path,
+        publication_path: &Path,
+        allow_fresh_publication_bootstrap: bool,
+        dto: ChangeFixtureDto,
+    ) -> Result<Self, String> {
         let board_id = BoardId::parse(&dto.board_id)
             .map_err(|error| format!("change board_id invalid: {error}"))?;
         let source_id = SourceId::parse(&dto.source_id)
@@ -147,22 +169,22 @@ impl ChangeRadarFixture {
             &dto.affected_scope,
         )
         .map_err(|error| format!("change board policy invalid: {error}"))?;
-        let mut radar = ChangeRadarService::new(board_policy, InMemoryChangeRadarRepository::new());
+        let mut radar =
+            ChangeRadarService::new(board_policy.clone(), InMemoryChangeRadarRepository::new());
         match radar
-            .observe(old)
+            .observe(old.clone())
             .map_err(|error| format!("change baseline failed: {error}"))?
         {
             ObservationOutcome::BaselineEstablished { .. } => {}
             other => return Err(format!("change baseline unexpected: {other:?}")),
         }
         let candidate = match radar
-            .observe(new)
+            .observe(new.clone())
             .map_err(|error| format!("change candidate failed: {error}"))?
         {
             ObservationOutcome::SemanticChange(candidate) => *candidate,
             other => return Err(format!("change candidate unexpected: {other:?}")),
         };
-        let mut repository = radar.into_repository();
         let feed_policy = BoardFeedPolicy::new(
             board_id,
             dto.board_policy_revision,
@@ -178,27 +200,32 @@ impl ChangeRadarFixture {
             RevisionTimestamp::from_unix_seconds(dto.reviewed_at_secs),
         )
         .map_err(|error| format!("change review invalid: {error}"))?;
-        let m60 = FixtureM60;
-        let published = {
-            let mut publication =
-                ChangePublicationService::new(&mut repository, &m60, feed_policy.clone());
-            publication
-                .record_review(review)
-                .map_err(|error| format!("change review persistence failed: {error}"))?;
-            publication
-                .publish(
-                    candidate.event_id(),
-                    RevisionTimestamp::from_unix_seconds(dto.published_at_secs),
-                )
-                .map_err(|error| format!("change publication failed: {error}"))?
+        let published_at = RevisionTimestamp::from_unix_seconds(dto.published_at_secs);
+        let source_evidence_digest = M60VerifiedChangeEvidence::for_revisions(
+            candidate.old_revision(),
+            candidate.new_revision(),
+        )
+        .evidence_set_digest()
+        .as_str()
+        .to_owned();
+        let bootstrap = ChangePublicationBootstrap {
+            board_policy,
+            old_observation: old,
+            new_observation: new,
+            candidate: candidate.clone(),
+            review: review.clone(),
+            feed_policy: feed_policy.clone(),
+            published_at,
         };
-        let source_evidence_digest = published.evidence_set_digest().as_str().to_owned();
-        let query = ChangeFeedQueryService::new(&repository)
-            .execute(&feed_policy)
-            .map_err(|error| format!("change feed query failed: {error}"))?;
-        if query.items().len() != 1 || query.atom().is_empty() {
-            return Err("change feed fixture did not publish exactly one event".to_owned());
-        }
+        let repository = DurableChangeRadarRepository::open(
+            publication_path,
+            bootstrap,
+            allow_fresh_publication_bootstrap,
+        )?;
+        let m60_calls = Arc::new(AtomicU64::new(0));
+        let m60 = FixtureM60 {
+            calls: Arc::clone(&m60_calls),
+        };
         let schema_digest = SchemaDigest::parse(&dto.schema_digest)
             .map_err(|error| format!("change schema digest invalid: {error}"))?;
         let snapshot_identity = DescriptorSnapshotId::from_canonical_identity(
@@ -206,7 +233,7 @@ impl ChangeRadarFixture {
             dto.descriptor_snapshot_version,
         )
         .map_err(|error| format!("change descriptor identity invalid: {error}"))?;
-        let descriptor: OperationSnapshot = std::sync::Arc::new(FixtureDescriptor {
+        let descriptor: OperationSnapshot = Arc::new(FixtureDescriptor {
             operation_id: OperationId::parse("change.list")
                 .map_err(|error| format!("change operation invalid: {error}"))?,
             schema_identity: SchemaIdentity::parse("schema:change-feed-fixture")
@@ -225,14 +252,48 @@ impl ChangeRadarFixture {
             .map_err(|error| format!("change adapter allowlist invalid: {error:?}"))?,
             snapshot_identity,
         });
+        let publication_schema_digest = SchemaDigest::parse("c".repeat(64))
+            .map_err(|error| format!("change publication schema digest invalid: {error}"))?;
+        let publication_snapshot_identity = DescriptorSnapshotId::from_canonical_identity(
+            &publication_schema_digest,
+            dto.descriptor_snapshot_version
+                .checked_add(2)
+                .ok_or_else(|| "change publication descriptor version overflow".to_owned())?,
+        )
+        .map_err(|error| format!("change publication descriptor identity invalid: {error}"))?;
+        let publication_descriptor: OperationSnapshot = Arc::new(FixtureDescriptor {
+            operation_id: OperationId::parse("change.publish")
+                .map_err(|error| format!("change publication operation invalid: {error}"))?,
+            schema_identity: SchemaIdentity::parse("schema:change-publication-fixture")
+                .map_err(|error| format!("change publication schema identity invalid: {error}"))?,
+            schema_digest: publication_schema_digest,
+            permission_class: PermissionClass::TenantPrivateWrite,
+            effect_class: EffectClass::TenantLocalMutation,
+            decoder_identity: DecoderIdentity::parse("decoder:change-publication:v1")
+                .map_err(|error| format!("change publication decoder invalid: {error}"))?,
+            dispatcher_identity: DispatcherIdentity::parse("dispatcher:change-publication:v1")
+                .map_err(|error| format!("change publication dispatcher invalid: {error}"))?,
+            adapter_allowlist: AdapterAllowlist::try_from_iter(vec![
+                AdapterIdentity::parse("fixture.change-publication.adapter")
+                    .map_err(|error| format!("change publication adapter invalid: {error}"))?,
+            ])
+            .map_err(|error| format!("change publication adapter allowlist invalid: {error:?}"))?,
+            snapshot_identity: publication_snapshot_identity,
+        });
         Ok(Self {
             repository,
             feed_policy,
+            candidate,
+            review,
+            published_at,
+            m60,
+            m60_calls,
             source_evidence_digest,
             market_enabled: dto.market_enabled,
             market_grant_active: dto.market_grant_active,
             invocation_counters: ChangeInvocationCounters::default(),
             descriptor,
+            publication_descriptor,
         })
     }
 }
@@ -343,7 +404,9 @@ fn sha256_hex(bytes: &[u8]) -> String {
     output
 }
 
-struct FixtureM60;
+pub(crate) struct FixtureM60 {
+    calls: Arc<AtomicU64>,
+}
 
 impl M60ChangePublicationPort for FixtureM60 {
     fn verify_publication(
@@ -351,6 +414,7 @@ impl M60ChangePublicationPort for FixtureM60 {
         old_revision: &SourceRevision,
         new_revision: &SourceRevision,
     ) -> Result<M60ChangePublicationOutcome, M60ChangePublicationPortError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(M60ChangePublicationOutcome::CurrentVerified(
             M60VerifiedChangeEvidence::for_revisions(old_revision, new_revision),
         ))
