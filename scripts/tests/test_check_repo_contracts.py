@@ -575,11 +575,20 @@ class DocsTopologyContractTests(unittest.TestCase):
         )
 
     def test_duplicate_campaign_taskbook_field_fails_closed(self) -> None:
-        self.replace_once(
-            checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M00-B3"],
-            "- `Status`: `queued`",
-            "- `Status`: `queued`\n- `Status`: `active`",
+        rel = checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M00-B3"]
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        status_pattern = re.compile(r"^- `Status`:\s*(.+?)\s*$", re.MULTILINE)
+        matches = list(status_pattern.finditer(text))
+        self.assertEqual(len(matches), 1, "missing or ambiguous taskbook status")
+
+        updated = status_pattern.sub(
+            lambda match: match.group(0) + "\n" + match.group(0),
+            text,
+            count=1,
         )
+        self.assertNotEqual(updated, text, "fixture mutation must alter a campaign carrier")
+        path.write_text(updated, encoding="utf-8")
         self.assertTrue(
             any(
                 "campaign taskbook field count drift for M00-B3 Status" in issue
