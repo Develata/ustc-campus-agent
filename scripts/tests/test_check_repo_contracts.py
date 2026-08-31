@@ -639,16 +639,35 @@ class DocsTopologyContractTests(unittest.TestCase):
         )
 
     def test_campaign_taskbook_round_two_requires_pause(self) -> None:
-        self.replace_once(
-            checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M40-B0"],
-            "- `Repair round`: `0`",
-            "- `Repair round`: `2`",
+        rel = checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M40-B0"]
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        status_pattern = re.compile(r"^- `Status`:\s*(.+?)\s*$", re.MULTILINE)
+        round_pattern = re.compile(r"^- `Repair round`:\s*(.+?)\s*$", re.MULTILINE)
+        blocker_pattern = re.compile(
+            r"^- `Current blocker identity`:\s*(.+?)\s*$",
+            re.MULTILINE,
         )
-        self.replace_once(
-            checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M40-B0"],
-            "- `Current blocker identity`: `none`",
+        for label, pattern in (
+            ("status", status_pattern),
+            ("repair round", round_pattern),
+            ("blocker identity", blocker_pattern),
+        ):
+            self.assertEqual(
+                len(list(pattern.finditer(text))),
+                1,
+                f"missing or ambiguous taskbook {label}",
+            )
+
+        updated = status_pattern.sub("- `Status`: `active`", text, count=1)
+        updated = round_pattern.sub("- `Repair round`: `2`", updated, count=1)
+        updated = blocker_pattern.sub(
             "- `Current blocker identity`: `still-open-after-two-rounds`",
+            updated,
+            count=1,
         )
+        self.assertNotEqual(updated, text, "fixture mutation must alter a campaign carrier")
+        path.write_text(updated, encoding="utf-8")
         self.assertTrue(
             any(
                 "campaign taskbook round 2 must be paused for M40-B0" in issue
@@ -658,7 +677,25 @@ class DocsTopologyContractTests(unittest.TestCase):
 
     def test_paused_campaign_taskbook_requires_stop_reason(self) -> None:
         rel = checker.AUTONOMOUS_CAMPAIGN_TASKBOOKS["M40-B0"]
-        self.replace_once(rel, "- `Status`: `queued`", "- `Status`: `paused`")
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        status_pattern = re.compile(r"^- `Status`:\s*(.+?)\s*$", re.MULTILINE)
+        stop_pattern = re.compile(r"^- `Stop reason`:\s*(.+?)\s*$", re.MULTILINE)
+        self.assertEqual(
+            len(list(status_pattern.finditer(text))),
+            1,
+            "missing or ambiguous taskbook status",
+        )
+        self.assertEqual(
+            len(list(stop_pattern.finditer(text))),
+            1,
+            "missing or ambiguous taskbook stop reason",
+        )
+
+        updated = status_pattern.sub("- `Status`: `paused`", text, count=1)
+        updated = stop_pattern.sub("- `Stop reason`: `none`", updated, count=1)
+        self.assertNotEqual(updated, text, "fixture mutation must alter a campaign carrier")
+        path.write_text(updated, encoding="utf-8")
         self.assertTrue(
             any(
                 "campaign taskbook paused lane has no stop reason for M40-B0" in issue
