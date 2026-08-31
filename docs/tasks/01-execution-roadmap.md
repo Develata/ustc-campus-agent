@@ -68,6 +68,16 @@ Campaign-authorized work MUST NOT alter this grant block, the campaign-authoriza
 The controller pauses before further mutation upon any user-choice request; reviewer disagreement on public behavior/authority not resolved by contract; debugging that needs live interaction, unplanned instrumentation/data, or out-of-scope paths; the same blocker/gate failure after two recorded rounds; or inability to prove a mechanical prospective merge tree against unchanged live `main`. This grant does not approve a new product topology, authority owner, permission semantic, lifecycle state machine, runtime state machine or protocol behavior.
 <!-- AUTONOMOUS_CAMPAIGN_GRANT:END -->
 
+### W1 terminal projection
+
+- `M00-B3`: `completed` — bounded request-context output integrated through PR #55.
+- `M20-B6`: `completed` — bounded package-update lifecycle integrated through PR #33.
+- `M30-B0`: `completed` — audit disposition ADOPT integrated through PR #48.
+- `M40-B0`: `paused` — audit disposition AMEND; R2-F11 Opportunity boundary remains unresolved.
+
+The marker-internal completion predicate is therefore reached and W1 admits no automatic roll-forward. This ordinary projection does **not** mutate the protected grant block: its marker-internal `Status: active` token can be retired only by a separate operation-specific Develata authority action. Until then it is a historical authorization marker, not permission to start another W1 mutation.
+
+
 ## 2. Assembly shape
 
 ```text
@@ -101,7 +111,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 | `M10` Application Ingress Host | `partial-evidence` | M10-owned client-protocol/application-ingress carriers plus one fixture-backed three-plugin loopback-Web composition; fixed Affairs/ChangeRadar administrator commands cross M00 durable evidence into owning ports, while ordinary product calls pass through actor-aware invocation ports before bounded Market/Harness/ToolGateway/owning-Plugin paths | production server-function queries and authenticated remote administration while preserving typed operation/denial semantics; inbound MCP, SSE and full compatibility hosting stay deferred | Hermes/default Integration Authority Owner; bounded OMO module lanes implement disjoint carriers | bounded MVP rows have black-box HTTP/restart evidence; production administration and peer-client stream/version conformance remain separate |
 | `M20` Market/Package | `partial-evidence` | typed package/catalog + capability-registry + bounded managed-installation fake + bounded reviewed-grant aggregate/replay/semantic repository + bounded package-update aggregate/semantic repository + pure resolver evidence | hold current bounded evidence; durable installation/grant adapters activate only with the first production installation, while artifact switching and update/rollback composition stay deferred | unassigned | `MARKET-*` current-scope rows |
 | `M30` Agent Harness/Runtime | `partial-evidence` | node kernel plus provider-free deterministic Harness-turn paths for all three MVP Plugins, with replay and zero fabricated model usage | finite user-task harness/graph/context/review and durable generic journal composition | unassigned | `HARNESS-*` + owned `AGENT-*` |
-| `M40` Tool Gateway/Execution | `partial-evidence` | protocol/fake proof plus bounded owning adapters for Affairs, ChangeRadar and Opportunity, ordered behind transaction-current Market projection/recheck and Agent effect intent/receipt | durable generic intent/receipt journal, package-portable gateway and out-of-process executor host | unassigned | `AGENT-018/019`, `MARKET-007` |
+| `M40` Tool Gateway/Execution | `partial-evidence` | protocol/fake proof plus bounded plan-recognized owning adapters for Affairs and ChangeRadar; current source also contains an Opportunity in-process tenant-private adapter classified by M40-B0 as a contract/projection conflict and not admitted as current M40 evidence | choose and repair the Opportunity contract-versus-implementation boundary under a new accepted slice before durable generic intent/receipt journal, package-portable gateway or out-of-process executor-host work | unassigned | `AGENT-018/019`, `MARKET-007`; W1 M40-B0 remains paused |
 | `M50` Model Provider | `planned` | planned | typed profiles + one provider adapter | unassigned | provider conformance + real bounded turn |
 | `M51` MCP Binding/Executor | `planned` | planned | one reviewed read-only remote binding | unassigned | MCP lifecycle/security/executor proof |
 | `M60` Campus Trust/Source | `planned` | `source-import/v1` and `source-retrieval/v0` accepted contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); bounded B1 registry plus canonical-URL-bound, deterministic-ID `DemoReviewed` revision values and an M60-owned health type; no v1/B2 retrieval, parser, durable baseline or publication composition; lifecycle precondition applies; superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only | one reviewed source/revision/baseline | Hermes/default for three-plugin critical path | `SRC-*` current-scope rows |

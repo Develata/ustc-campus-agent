@@ -9,15 +9,17 @@
 
 ## Mutable campaign state
 
-- `Status`: `active`
+- `Status`: `completed`
 - `Bound source commit`: `f62018326bbc180ec79cc04ec3dde214d7007094`
 - `Bound source tree`: `a9c5529f9deada0992c26a07c5d6e4a3fcdc5585`
+- `Bound source role`: `historical exact audit input; not the terminal main integration receipt`
+- `Terminal main commit`: `cd0172afffa60b0481beeb5154cba89780212d17`
 - `Worker branch`: `campaign/w1-m30-b0-audit-v2`
 - `Repair round`: `2`
 - `Current blocker identity`: `none`
 - `Stop reason`: `none`
-- `Last transition evidence`: `PR #48 exact head bba936bda8bf217c4ebbd54d20dfa7631a814e97 passed CI run 32966961512; late GitHub findings R2-F9/R2-F10 were source-confirmed and repaired; final focused gates/review required before amend`
-- `Next allowed mutation`: `run focused full checker gates and exact-delta review on F9/F10, amend the same semantic commit, force-with-lease the PR head, resolve review threads, and require replacement exact-head CI before merge`
+- `Last transition evidence`: `PR #48 final reviewed head 67bc063b12961e38133ac33ad74fd945d48c097a; squash/main cd0172afffa60b0481beeb5154cba89780212d17; reviewed-tree-equals-main-tree a6d401b3c86ffead206c77f5983f6de5c679855b; exact-main CI 32973283144=PASS; late R2-F9/R2-F10 corrections included in the reviewed tree; audit disposition ADOPT; W1 M30-B0 terminal disposition completed with no lifecycle/runtime/readiness promotion`
+- `Next allowed mutation`: `none within USTC-MODULES-2026-07-W1; any M30 harness, graph, context, review or durable-journal implementation requires a separately accepted slice`
 
 ## Output contract
 
@@ -266,8 +268,8 @@ This report does NOT claim:
 - that `M30` is `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted`;
 - that any `harness-run`, `task-contract`, `task-graph`, `scheduler`, `context-budget`, `context-projection`, `evidence-review`, `runtime-ports` or `run-projection` implementation exists;
 - that any acceptance posture, lifecycle state machine, runtime state machine, protocol behavior, authority ownership, boundary, permission semantic or public API has changed;
-- any unverified or future PR/CI/merge claim; historical PR #47 and exact-main CI run 32961865331 appear only as source-bound R2-F7 resolution receipts;
+- any unverified or future PR/CI/merge claim; historical PR #47 and exact-main CI run 32961865331 remain source-bound R2-F7 receipts, while verified integration PR #48 / main `cd0172afffa60b0481beeb5154cba89780212d17` / exact-main CI `32973283144` are the terminal audit receipts;
 
 #### Next gate
 
-The candidate now awaits Hermes exact-bytes review of this report and the taskbook mutation, an independent blocker review bound to the exact commit/changed-path set/outgoing range, the authoritative gates above, and then a source-control decision under the `USTC-MODULES-2026-07-W1` campaign grant. This lane does not merge, accept, promote or release; the `audit-only` auto-merge boundary in the campaign grant admits merge only when the result changes no acceptance posture, Agent/Harness lifecycle or runtime state-machine behavior, which this candidate satisfies.
+The audit report was reviewed and merged through PR #48 with exact-main CI; M30-B0 is terminal `completed` under W1. This closeout does not accept, promote, release or implement any planned M30 surface, and W1 admits no further M30 mutation.
