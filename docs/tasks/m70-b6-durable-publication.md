@@ -2,20 +2,24 @@
 
 ## Task authority
 
-- `Stage`: `IMPLEMENTED_AWAITING_FINAL_REVIEW`
+- `Stage`: `MERGED_MAIN_VERIFIED`
 - `Owning module`: `M70 ChangeRadar`
 - `Batch identity`: bounded durable-publication sub-slice of existing `M70-B6 M60/M10/M80 integration`; this file does **not** create `M70-B7` and does not claim all of B6 complete
 - `Path`: Path A coupled large-module integration
 - `Source commit`: `e6fcf2423a2b438708b2573f4616161cc95aa08e`
 - `Source tree`: `348b85475d0ca5b7c4ea68a4942ce57a4ac09887`
 - `Source PR`: `#55`
-- `Branch`: `work/m70-durable-publication-v1`
+- `Merged branch`: `work/m70-durable-publication-v1`
 - `Review generation`: `POSTEDIT-V39-CLIPPY-CLEAN-CANDIDATE`
 - `Repair round`: `17`
-- `Current blocker`: `none in source`; safe ordered `File::lock` bootstrap ownership and reopen parent-sync recovery are implemented with Clippy-clean control flow.
-- `Stop reason`: exact-current v39 gates, runtime proof, independent review and PR CI/governance remain pending
+- `Current blocker`: `none`; safe ordered `File::lock` bootstrap ownership and reopen parent-sync recovery are implemented with Clippy-clean control flow.
+- `Stop reason`: `none`; PR #56 exact-head CI/governance, squash merge with reviewed-tree equality and exact-main post-merge CI all passed.
 - `Acceptance`: implemented `AUTH-024` plus implemented `RADAR-001`; `RADAR-002` remains planned and out of scope
 - `Composition owners`: M00 Platform Control/Identity, M10 Application Ingress Host and `apps/ustc-agentd`
+- `Integration PR`: `#56`
+- `Merged main commit`: `ab9ed4534710c2fafff214168af7a03b6319d622`
+- `Merged tree`: `6078ef2cbd8e4decf9be6fbee9bea0b5e9fbead8`
+- `Post-merge CI`: run `33351267096`, exact main head, `rust` and `docs-and-contracts` successful
 
 This task authority schedules one concrete integration slice under already accepted M00/M10/M70 boundaries. It does not redefine product topology, permission/effect semantics, M70 lifecycle, M60 source authority or the public-read ToolGateway contract. It grants no remote operation by itself.
 
