@@ -1,6 +1,7 @@
-use std::fs::{self, DirBuilder};
+use std::collections::BTreeSet;
+use std::fs::{self, DirBuilder, File};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn current_uid() -> Result<u32, String> {
     fs::metadata("/proc/self")
@@ -84,6 +85,89 @@ pub(crate) fn ensure_secure_parent(path: &Path, allow_create: bool) -> Result<()
         return Err("durable state parent must be a current-owner 0700 directory".to_owned());
     }
     Ok(())
+}
+
+/// Removes only owner-private canonical members created by a fresh
+/// composition bootstrap and durably syncs each affected parent directory.
+pub(crate) fn rollback_fresh_state_paths(paths: &[std::path::PathBuf]) -> Result<(), String> {
+    let uid = current_uid()?;
+    let mut parents = BTreeSet::new();
+    for path in paths.iter().rev() {
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(format!("fresh rollback metadata failed: {error}")),
+        };
+        ensure_secure_parent(path, false)?;
+        let mode = metadata.permissions().mode() & 0o7777;
+        if !metadata.file_type().is_file()
+            || metadata.uid() != uid
+            || metadata.nlink() != 1
+            || mode != 0o600
+        {
+            return Err("fresh rollback member is not an owner-private regular file".to_owned());
+        }
+        fs::remove_file(path).map_err(|error| format!("fresh rollback remove failed: {error}"))?;
+        parents.insert(
+            path.parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .ok_or_else(|| "fresh rollback path has no parent".to_owned())?
+                .to_path_buf(),
+        );
+    }
+    for parent in parents {
+        File::open(&parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|error| format!("fresh rollback parent sync failed: {error}"))?;
+    }
+    for path in paths {
+        if fs::symlink_metadata(path).is_ok() {
+            return Err("fresh rollback left a durable state member".to_owned());
+        }
+    }
+    Ok(())
+}
+
+/// Cross-process ownership for one complete durable state set. Directory
+/// locks avoid introducing another canonical member and are acquired in path
+/// order so overlapping state sets cannot deadlock.
+pub(crate) struct StateSetBootstrapLock {
+    _directories: Vec<File>,
+}
+
+impl StateSetBootstrapLock {
+    pub(crate) fn acquire(paths: &[PathBuf]) -> Result<Self, String> {
+        let uid = current_uid()?;
+        let mut parents = BTreeSet::new();
+        for path in paths {
+            ensure_secure_parent(path, true)?;
+            parents.insert(
+                path.parent()
+                    .filter(|parent| !parent.as_os_str().is_empty())
+                    .ok_or_else(|| "durable state path has no parent".to_owned())?
+                    .to_path_buf(),
+            );
+        }
+        let mut directories = Vec::with_capacity(parents.len());
+        for parent in parents {
+            let directory = File::open(&parent)
+                .map_err(|error| format!("bootstrap lock directory open failed: {error}"))?;
+            let metadata = directory
+                .metadata()
+                .map_err(|error| format!("bootstrap lock metadata failed: {error}"))?;
+            let parent_mode = metadata.permissions().mode() & 0o7777;
+            if !metadata.file_type().is_dir() || metadata.uid() != uid || parent_mode != 0o700 {
+                return Err("bootstrap lock directory is not owner-private".to_owned());
+            }
+            directory
+                .lock()
+                .map_err(|error| format!("bootstrap directory lock failed: {error}"))?;
+            directories.push(directory);
+        }
+        Ok(Self {
+            _directories: directories,
+        })
+    }
 }
 
 #[cfg(test)]

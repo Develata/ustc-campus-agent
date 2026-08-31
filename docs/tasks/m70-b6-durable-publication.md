@@ -10,10 +10,10 @@
 - `Source tree`: `348b85475d0ca5b7c4ea68a4942ce57a4ac09887`
 - `Source PR`: `#55`
 - `Branch`: `work/m70-durable-publication-v1`
-- `Review generation`: `POSTEDIT-V34_REPAIR_CANDIDATE`
-- `Repair round`: `12`
-- `Current blocker`: `none in source`; v33 Codex's M00-session post-publication temporary-unlink uncertainty blocker is repaired with exact reconciliation and an injected hardlink-residue regression, pending exact-current gates and dual re-review.
-- `Stop reason`: `none`
+- `Review generation`: `POSTEDIT-V39-CLIPPY-CLEAN-CANDIDATE`
+- `Repair round`: `17`
+- `Current blocker`: `none in source`; safe ordered `File::lock` bootstrap ownership and reopen parent-sync recovery are implemented with Clippy-clean control flow.
+- `Stop reason`: exact-current v39 gates, runtime proof, independent review and PR CI/governance remain pending
 - `Acceptance`: implemented `AUTH-024` plus implemented `RADAR-001`; `RADAR-002` remains planned and out of scope
 - `Composition owners`: M00 Platform Control/Identity, M10 Application Ingress Host and `apps/ustc-agentd`
 

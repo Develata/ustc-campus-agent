@@ -516,6 +516,95 @@ fn disabled_or_revoked_change_plugin_denies_before_intent_and_executor() {
 }
 
 #[test]
+fn failed_fresh_change_bootstrap_rolls_back_every_state_member_and_retry_succeeds() {
+    let env = TestEnv::new();
+    let valid_fixture = fs::read(&env.change_fixture).expect("read valid change fixture");
+    fs::write(&env.change_fixture, b"{").expect("install malformed change fixture");
+
+    assert!(
+        AffairsComposition::open_with_change(
+            &env.affairs_fixture,
+            &env.change_fixture,
+            &env.store,
+            &env.idempotency,
+            &env.sessions,
+        )
+        .is_err()
+    );
+    for path in [
+        env.store.clone(),
+        env.idempotency.clone(),
+        env.sessions.clone(),
+        env.idempotency.with_extension("affairs-publication.json"),
+        env.control_evidence_path(),
+        env.change_publication_state_path(),
+    ] {
+        assert!(
+            !path.exists(),
+            "failed fresh bootstrap left {}",
+            path.display()
+        );
+    }
+
+    fs::write(&env.change_fixture, valid_fixture).expect("restore valid change fixture");
+    drop(env.open());
+    for path in [
+        env.store.clone(),
+        env.idempotency.clone(),
+        env.sessions.clone(),
+        env.idempotency.with_extension("affairs-publication.json"),
+        env.control_evidence_path(),
+        env.change_publication_state_path(),
+    ] {
+        assert!(path.exists(), "successful retry omitted {}", path.display());
+    }
+}
+
+#[test]
+fn concurrent_fresh_change_bootstraps_cannot_rollback_a_successful_peer() {
+    let env = TestEnv::new();
+    let malformed = env.dir.join("malformed-change.json");
+    fs::write(&malformed, b"{").expect("write malformed fixture");
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+
+    let spawn_open = |change_fixture: PathBuf| {
+        let barrier = std::sync::Arc::clone(&barrier);
+        let affairs_fixture = env.affairs_fixture.clone();
+        let store = env.store.clone();
+        let idempotency = env.idempotency.clone();
+        let sessions = env.sessions.clone();
+        std::thread::spawn(move || {
+            barrier.wait();
+            AffairsComposition::open_with_change(
+                &affairs_fixture,
+                &change_fixture,
+                &store,
+                &idempotency,
+                &sessions,
+            )
+            .is_ok()
+        })
+    };
+    let malformed_open = spawn_open(malformed);
+    let valid_open = spawn_open(env.change_fixture.clone());
+    barrier.wait();
+
+    assert!(!malformed_open.join().expect("malformed join"));
+    assert!(valid_open.join().expect("valid join"));
+    drop(env.open());
+    for path in [
+        env.store.clone(),
+        env.idempotency.clone(),
+        env.sessions.clone(),
+        env.idempotency.with_extension("affairs-publication.json"),
+        env.control_evidence_path(),
+        env.change_publication_state_path(),
+    ] {
+        assert!(path.exists(), "successful peer lost {}", path.display());
+    }
+}
+
+#[test]
 fn malformed_change_digest_reaches_no_plugin_execution() {
     let env = TestEnv::new();
     let composition = env.open();

@@ -335,26 +335,26 @@ fn bootstrap(
     #[cfg(test)]
     if fault(control) == Some(BootstrapFault::AfterPublishBeforeTempUnlink) {
         let _ = std::fs::remove_file(&temporary);
-        return reconcile_published(path, &bytes);
+        return preserve_uncertain_published_error(path, &bytes);
     }
 
     #[cfg(test)]
     if fault(control) == Some(BootstrapFault::TempUnlinkFailure) {
-        return reconcile_published(path, &bytes);
+        return preserve_uncertain_published_error(path, &bytes);
     }
     if std::fs::remove_file(&temporary).is_err() {
-        return reconcile_published(path, &bytes);
+        return preserve_uncertain_published_error(path, &bytes);
     }
     #[cfg(test)]
     if fault(control) == Some(BootstrapFault::AfterTempUnlinkBeforeParentSync) {
-        return reconcile_published(path, &bytes);
+        return preserve_uncertain_published_error(path, &bytes);
     }
     let sync_result = std::fs::File::open(parent)
         .and_then(|directory| directory.sync_all())
         .map_err(|_| SessionRepositoryError::Unavailable);
     match sync_result {
         Ok(()) => Ok(()),
-        Err(_) => reconcile_published(path, &bytes),
+        Err(_) => preserve_uncertain_published_error(path, &bytes),
     }
 }
 
@@ -365,6 +365,15 @@ fn reconcile_published(path: &Path, expected: &[u8]) -> Result<(), SessionReposi
         Ok(_) => Err(SessionRepositoryError::Corrupt),
         Err(error) => Err(error),
     }
+}
+
+#[cfg(unix)]
+fn preserve_uncertain_published_error(
+    path: &Path,
+    expected: &[u8],
+) -> Result<(), SessionRepositoryError> {
+    reconcile_published(path, expected)?;
+    Err(SessionRepositoryError::Unavailable)
 }
 
 #[cfg(unix)]
@@ -793,8 +802,8 @@ mod tests {
                     true,
                     Some(&control(Some(fault)))
                 )
-                .is_ok(),
-                "published exact session bytes must reconcile after an uncertain parent sync"
+                .is_err(),
+                "published exact session bytes must preserve the pre-directory-sync error"
             );
             assert!(path.exists());
             assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);

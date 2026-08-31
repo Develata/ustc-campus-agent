@@ -19,6 +19,12 @@ const DEFAULT_MAX_EVENTS: usize = 4096;
 const DEFAULT_MAX_BYTES: u64 = 16 * 1024 * 1024;
 const TEMP_ATTEMPTS: usize = 16;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PersistOutcome {
+    Durable,
+    UncertainExact,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ControlEvidenceState {
@@ -40,6 +46,7 @@ pub(crate) struct DurableControlEvidenceJournal {
     path: PathBuf,
     state: Arc<Mutex<ControlEvidenceState>>,
     fail_next_parent_sync_after_rename: Arc<Mutex<bool>>,
+    durability_uncertain: Arc<Mutex<bool>>,
     max_events: usize,
     max_bytes: u64,
 }
@@ -62,8 +69,9 @@ impl DurableControlEvidenceJournal {
             return Err(ControlEvidenceJournalError::Corrupt);
         }
         let journal = Self::open(path)?;
-        if !existed {
-            journal.persist(&ControlEvidenceState::default())?;
+        if !existed && journal.persist(&ControlEvidenceState::default())? != PersistOutcome::Durable
+        {
+            return Err(ControlEvidenceJournalError::Unavailable);
         }
         Ok(journal)
     }
@@ -91,16 +99,24 @@ impl DurableControlEvidenceJournal {
                 state
             }
         };
+        let parent = direct_parent(path)?;
+        File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|_| ControlEvidenceJournalError::Unavailable)?;
         Ok(Self {
             path: path.to_owned(),
             state: Arc::new(Mutex::new(state)),
             fail_next_parent_sync_after_rename: Arc::new(Mutex::new(false)),
+            durability_uncertain: Arc::new(Mutex::new(false)),
             max_events,
             max_bytes,
         })
     }
 
-    fn persist(&self, state: &ControlEvidenceState) -> Result<(), ControlEvidenceJournalError> {
+    fn persist(
+        &self,
+        state: &ControlEvidenceState,
+    ) -> Result<PersistOutcome, ControlEvidenceJournalError> {
         validate_state(state, self.max_events)?;
         let bytes = serde_json::to_vec(state)
             .map_err(|_| ControlEvidenceJournalError::InternalInvariant)?;
@@ -168,17 +184,33 @@ impl DurableControlEvidenceJournal {
             File::open(parent)
                 .and_then(|directory| directory.sync_all())
                 .map_err(|_| ControlEvidenceJournalError::Unavailable)?;
-            Ok(())
+            Ok(PersistOutcome::Durable)
         })();
         if result.is_err() {
             let _ = fs::remove_file(&temporary);
             if renamed
                 && matches!(read_existing(&self.path, self.max_bytes), Ok(Some(actual)) if actual == bytes)
             {
-                return Ok(());
+                return Ok(PersistOutcome::UncertainExact);
             }
         }
         result
+    }
+
+    fn resolve_uncertain_durability(&self) -> Result<(), ControlEvidenceJournalError> {
+        let mut uncertain = self
+            .durability_uncertain
+            .lock()
+            .map_err(|_| ControlEvidenceJournalError::InternalInvariant)?;
+        if !*uncertain {
+            return Ok(());
+        }
+        let parent = direct_parent(&self.path)?;
+        File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|_| ControlEvidenceJournalError::Unavailable)?;
+        *uncertain = false;
+        Ok(())
     }
 
     fn verify_durable_matches(
@@ -212,6 +244,7 @@ impl ControlEvidenceReadPort for DurableControlEvidenceJournal {
         &mut self,
         key: &ControlEvidenceKey,
     ) -> Result<Option<PlatformControlEvent>, ControlEvidenceJournalError> {
+        self.resolve_uncertain_durability()?;
         let state = self
             .state
             .lock()
@@ -230,6 +263,7 @@ impl ControlEvidenceAppendPort for DurableControlEvidenceJournal {
         &mut self,
         event: &PlatformControlEvent,
     ) -> Result<ControlEvidenceAppendOutcome, ControlEvidenceJournalError> {
+        self.resolve_uncertain_durability()?;
         let key = event.key();
         let mut state = self
             .state
@@ -256,9 +290,21 @@ impl ControlEvidenceAppendPort for DurableControlEvidenceJournal {
         let mut next = state.clone();
         next.events.push(event.clone());
         next.events.sort_by_key(PlatformControlEvent::key);
-        self.persist(&next)?;
-        *state = next;
-        Ok(ControlEvidenceAppendOutcome::Appended)
+        match self.persist(&next)? {
+            PersistOutcome::Durable => {
+                *state = next;
+                Ok(ControlEvidenceAppendOutcome::Appended)
+            }
+            PersistOutcome::UncertainExact => {
+                *state = next;
+                drop(state);
+                *self
+                    .durability_uncertain
+                    .lock()
+                    .map_err(|_| ControlEvidenceJournalError::InternalInvariant)? = true;
+                Err(ControlEvidenceJournalError::Unavailable)
+            }
+        }
     }
 }
 
@@ -463,11 +509,36 @@ mod tests {
         let event = request_event(&"b".repeat(64));
         let mut journal = DurableControlEvidenceJournal::open(&path).unwrap();
         journal.fail_next_parent_sync_after_rename();
+        assert!(matches!(
+            journal.append_once(&event),
+            Err(ControlEvidenceJournalError::Unavailable)
+        ));
+        assert_eq!(journal.event_count(), 1);
         assert_eq!(
             journal.append_once(&event).unwrap(),
-            ControlEvidenceAppendOutcome::Appended
+            ControlEvidenceAppendOutcome::AlreadySame
         );
-        assert_eq!(journal.event_count(), 1);
+        let mut reopened = DurableControlEvidenceJournal::open(&path).unwrap();
+        assert_eq!(
+            reopened.load_control_event(&event.key()).unwrap(),
+            Some(event)
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn reopen_resolves_prior_exact_parent_sync_uncertainty_before_read() {
+        let dir = directory("parent-sync-reopen");
+        let path = dir.join("evidence.json");
+        let event = request_event(&"c".repeat(64));
+        let mut journal = DurableControlEvidenceJournal::open(&path).unwrap();
+        journal.fail_next_parent_sync_after_rename();
+        assert!(matches!(
+            journal.append_once(&event),
+            Err(ControlEvidenceJournalError::Unavailable)
+        ));
+        drop(journal);
+
         let mut reopened = DurableControlEvidenceJournal::open(&path).unwrap();
         assert_eq!(
             reopened.load_control_event(&event.key()).unwrap(),

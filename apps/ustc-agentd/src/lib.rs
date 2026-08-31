@@ -110,22 +110,39 @@ fn path_entry_exists(path: &Path) -> Result<bool, String> {
     }
 }
 
+fn durable_state_paths(
+    store_path: &Path,
+    idempotency_path: &Path,
+    session_store_path: &Path,
+    additional_state_paths: &[&Path],
+) -> Vec<std::path::PathBuf> {
+    let mut paths = vec![
+        idempotency_path.with_extension("affairs-publication.json"),
+        idempotency_path.with_extension("control-evidence.json"),
+        store_path.to_path_buf(),
+        idempotency_path.to_path_buf(),
+        session_store_path.to_path_buf(),
+    ];
+    paths.extend(
+        additional_state_paths
+            .iter()
+            .map(|path| (*path).to_path_buf()),
+    );
+    paths
+}
+
 fn state_set_bootstrap_is_fresh(
     store_path: &Path,
     idempotency_path: &Path,
     session_store_path: &Path,
     additional_state_paths: &[&Path],
 ) -> Result<bool, String> {
-    let publication_path = idempotency_path.with_extension("affairs-publication.json");
-    let control_evidence_path = idempotency_path.with_extension("control-evidence.json");
-    let mut paths = vec![
-        publication_path.as_path(),
-        control_evidence_path.as_path(),
+    let paths = durable_state_paths(
         store_path,
         idempotency_path,
         session_store_path,
-    ];
-    paths.extend_from_slice(additional_state_paths);
+        additional_state_paths,
+    );
     let mut present = 0_usize;
     for path in &paths {
         present += usize::from(path_entry_exists(path)?);
@@ -136,6 +153,22 @@ fn state_set_bootstrap_is_fresh(
         Ok(false)
     } else {
         Err("durable_state_set_incomplete".to_owned())
+    }
+}
+
+fn rollback_failed_fresh_bootstrap<T>(
+    result: Result<T, String>,
+    bootstrap_is_fresh: bool,
+    paths: &[std::path::PathBuf],
+) -> Result<T, String> {
+    match result {
+        Err(original) if bootstrap_is_fresh => {
+            durable_path::rollback_fresh_state_paths(paths).map_err(|rollback| {
+                format!("fresh_bootstrap_rollback_failed: {rollback}; original: {original}")
+            })?;
+            Err(original)
+        }
+        other => other,
     }
 }
 
@@ -152,15 +185,18 @@ impl AffairsComposition {
         idempotency_path: &Path,
         session_store_path: &Path,
     ) -> Result<Self, String> {
+        let paths = durable_state_paths(store_path, idempotency_path, session_store_path, &[]);
+        let _bootstrap_lock = durable_path::StateSetBootstrapLock::acquire(&paths)?;
         let bootstrap_is_fresh =
             state_set_bootstrap_is_fresh(store_path, idempotency_path, session_store_path, &[])?;
-        Self::open_with_required_state_paths(
+        let result = Self::open_with_required_state_paths(
             fixture_path,
             store_path,
             idempotency_path,
             session_store_path,
             bootstrap_is_fresh,
-        )
+        );
+        rollback_failed_fresh_bootstrap(result, bootstrap_is_fresh, &paths)
     }
 
     fn open_with_required_state_paths(
@@ -235,7 +271,15 @@ impl AffairsComposition {
         idempotency_path: &Path,
         session_store_path: &Path,
     ) -> Result<Self, String> {
-        let (composition, _) = Self::open_with_change_required_state_paths(
+        let change_publication_path = idempotency_path.with_extension("change-publication.json");
+        let paths = durable_state_paths(
+            store_path,
+            idempotency_path,
+            session_store_path,
+            &[change_publication_path.as_path()],
+        );
+        let _bootstrap_lock = durable_path::StateSetBootstrapLock::acquire(&paths)?;
+        let (composition, _) = Self::open_with_change_required_state_paths_unlocked(
             fixture_path,
             change_fixture_path,
             store_path,
@@ -246,7 +290,7 @@ impl AffairsComposition {
         Ok(composition)
     }
 
-    fn open_with_change_required_state_paths(
+    fn open_with_change_required_state_paths_unlocked(
         fixture_path: &Path,
         change_fixture_path: &Path,
         store_path: &Path,
@@ -263,19 +307,28 @@ impl AffairsComposition {
             session_store_path,
             &required_state_paths,
         )?;
-        let mut composition = Self::open_with_required_state_paths(
-            fixture_path,
+        let paths = durable_state_paths(
             store_path,
             idempotency_path,
             session_store_path,
-            bootstrap_is_fresh,
-        )?;
-        composition.change = Some(ChangeRadarFixture::load(
-            change_fixture_path,
-            &change_publication_path,
-            bootstrap_is_fresh,
-        )?);
-        Ok((composition, bootstrap_is_fresh))
+            &required_state_paths,
+        );
+        let result = (|| {
+            let mut composition = Self::open_with_required_state_paths(
+                fixture_path,
+                store_path,
+                idempotency_path,
+                session_store_path,
+                bootstrap_is_fresh,
+            )?;
+            composition.change = Some(ChangeRadarFixture::load(
+                change_fixture_path,
+                &change_publication_path,
+                bootstrap_is_fresh,
+            )?);
+            Ok((composition, bootstrap_is_fresh))
+        })();
+        rollback_failed_fresh_bootstrap(result, bootstrap_is_fresh, &paths)
     }
 
     /// Opens the shared Affairs + Opportunity Graph composition. This remains
@@ -290,26 +343,36 @@ impl AffairsComposition {
         idempotency_path: &Path,
         session_store_path: &Path,
     ) -> Result<Self, String> {
+        let paths = durable_state_paths(
+            store_path,
+            idempotency_path,
+            session_store_path,
+            &[opportunity_profile_store_path],
+        );
+        let _bootstrap_lock = durable_path::StateSetBootstrapLock::acquire(&paths)?;
         let bootstrap_is_fresh = state_set_bootstrap_is_fresh(
             store_path,
             idempotency_path,
             session_store_path,
             &[opportunity_profile_store_path],
         )?;
-        let mut composition = Self::open_with_required_state_paths(
-            fixture_path,
-            store_path,
-            idempotency_path,
-            session_store_path,
-            bootstrap_is_fresh,
-        )?;
-        composition.attach_opportunity(
-            opportunity_fixture_path,
-            opportunity_catalog_path,
-            opportunity_profile_store_path,
-            bootstrap_is_fresh,
-        )?;
-        Ok(composition)
+        let result = (|| {
+            let mut composition = Self::open_with_required_state_paths(
+                fixture_path,
+                store_path,
+                idempotency_path,
+                session_store_path,
+                bootstrap_is_fresh,
+            )?;
+            composition.attach_opportunity(
+                opportunity_fixture_path,
+                opportunity_catalog_path,
+                opportunity_profile_store_path,
+                bootstrap_is_fresh,
+            )?;
+            Ok(composition)
+        })();
+        rollback_failed_fresh_bootstrap(result, bootstrap_is_fresh, &paths)
     }
 
     /// Opens all three first-party Plugin product paths in one composition.
@@ -324,21 +387,35 @@ impl AffairsComposition {
         idempotency_path: &Path,
         session_store_path: &Path,
     ) -> Result<Self, String> {
-        let (mut composition, bootstrap_is_fresh) = Self::open_with_change_required_state_paths(
-            fixture_path,
-            change_fixture_path,
+        let change_publication_path = idempotency_path.with_extension("change-publication.json");
+        let paths = durable_state_paths(
             store_path,
             idempotency_path,
             session_store_path,
-            &[opportunity_profile_store_path],
-        )?;
-        composition.attach_opportunity(
-            opportunity_fixture_path,
-            opportunity_catalog_path,
-            opportunity_profile_store_path,
-            bootstrap_is_fresh,
-        )?;
-        Ok(composition)
+            &[
+                change_publication_path.as_path(),
+                opportunity_profile_store_path,
+            ],
+        );
+        let _bootstrap_lock = durable_path::StateSetBootstrapLock::acquire(&paths)?;
+        let (mut composition, bootstrap_is_fresh) =
+            Self::open_with_change_required_state_paths_unlocked(
+                fixture_path,
+                change_fixture_path,
+                store_path,
+                idempotency_path,
+                session_store_path,
+                &[opportunity_profile_store_path],
+            )?;
+        let result = composition
+            .attach_opportunity(
+                opportunity_fixture_path,
+                opportunity_catalog_path,
+                opportunity_profile_store_path,
+                bootstrap_is_fresh,
+            )
+            .map(|()| composition);
+        rollback_failed_fresh_bootstrap(result, bootstrap_is_fresh, &paths)
     }
 
     fn attach_opportunity(
