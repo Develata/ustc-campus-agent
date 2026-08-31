@@ -74,9 +74,22 @@ pub(crate) struct DurableOpportunityProfileRepository {
     active: BTreeMap<ProfileSnapshotId, PersistedProfile>,
     tombstones: BTreeMap<ProfileSnapshotId, PersistedTombstone>,
     max_tombstones: usize,
+    fail_next_parent_sync_after_rename: bool,
+}
+
+fn current_uid() -> Result<u32, String> {
+    fs::metadata("/proc/self")
+        .map(|metadata| metadata.uid())
+        .map_err(|error| format!("profile state current uid: {error}"))
+}
+
+fn ensure_secure_parent(path: &Path, allow_create: bool) -> Result<(), String> {
+    crate::durable_path::ensure_secure_parent(path, allow_create)
+        .map_err(|error| format!("profile state parent: {error}"))
 }
 
 fn read_existing_private_state(path: &Path) -> Result<Option<Vec<u8>>, String> {
+    ensure_secure_parent(path, false)?;
     let path_metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -85,7 +98,10 @@ fn read_existing_private_state(path: &Path) -> Result<Option<Vec<u8>>, String> {
     if !path_metadata.file_type().is_file() {
         return Err("profile state must be a regular non-symlink file".to_owned());
     }
-    if path_metadata.permissions().mode() & 0o777 != 0o600 {
+    if path_metadata.permissions().mode() & 0o7777 != 0o600
+        || path_metadata.uid() != current_uid()?
+        || path_metadata.nlink() != 1
+    {
         return Err("profile state permissions must be 0600".to_owned());
     }
     if path_metadata.len() > MAX_PROFILE_STATE_BYTES {
@@ -103,7 +119,9 @@ fn read_existing_private_state(path: &Path) -> Result<Option<Vec<u8>>, String> {
     if !opened_metadata.file_type().is_file()
         || opened_metadata.dev() != path_metadata.dev()
         || opened_metadata.ino() != path_metadata.ino()
-        || opened_metadata.permissions().mode() & 0o777 != 0o600
+        || opened_metadata.permissions().mode() & 0o7777 != 0o600
+        || opened_metadata.uid() != current_uid()?
+        || opened_metadata.nlink() != 1
     {
         return Err("profile state changed or became unsafe during open".to_owned());
     }
@@ -124,12 +142,24 @@ impl DurableOpportunityProfileRepository {
         path: &Path,
         max_profiles: usize,
         max_tombstones: usize,
+        bootstrap_is_fresh: bool,
     ) -> Result<Self, String> {
-        let state = if let Some(bytes) = read_existing_private_state(path)? {
-            serde_json::from_slice::<PersistedState>(&bytes)
-                .map_err(|error| format!("profile state decode: {error}"))?
-        } else {
-            PersistedState::default()
+        ensure_secure_parent(path, bootstrap_is_fresh)?;
+        let existing = read_existing_private_state(path)?;
+        let should_bootstrap = existing.is_none();
+        let state = match existing.as_deref() {
+            Some(bytes) => {
+                let state = serde_json::from_slice::<PersistedState>(bytes)
+                    .map_err(|error| format!("profile state decode: {error}"))?;
+                let canonical = serde_json::to_vec(&state)
+                    .map_err(|error| format!("profile state canonical encode: {error}"))?;
+                if canonical != bytes {
+                    return Err("profile state is not canonical JSON".to_owned());
+                }
+                state
+            }
+            None if bootstrap_is_fresh => PersistedState::default(),
+            None => return Err("profile state missing from non-fresh state set".to_owned()),
         };
         if state.schema_version != STATE_SCHEMA_VERSION {
             return Err(format!(
@@ -145,13 +175,27 @@ impl DurableOpportunityProfileRepository {
             .map_err(|error| format!("profile repository capacity: {error}"))?;
         let mut active = BTreeMap::new();
         let mut active_principals = BTreeSet::new();
+        let mut previous_active_id: Option<ProfileSnapshotId> = None;
         for persisted in state.active {
             let principal = principal(&persisted.tenant_id, &persisted.user_id)?;
             let expected_profile_id = ProfileSnapshotId::parse(&persisted.profile_snapshot_id)
                 .map_err(|error| format!("persisted profile id: {error}"))?;
+            if previous_active_id
+                .as_ref()
+                .is_some_and(|previous| previous >= &expected_profile_id)
+            {
+                return Err("persisted profiles are not in canonical order".to_owned());
+            }
+            previous_active_id = Some(expected_profile_id.clone());
             let expected_consent_id = ConsentId::parse(&persisted.consent_id)
                 .map_err(|error| format!("persisted consent id: {error}"))?;
             let consented_at = timestamp_nanos(&persisted.consented_at_unix_nanos)?;
+            if !strictly_sorted_unique(&persisted.consent_fields) {
+                return Err("persisted consent fields are not in canonical order".to_owned());
+            }
+            if !strictly_sorted_unique(&persisted.completed_courses) {
+                return Err("persisted completed courses are not in canonical order".to_owned());
+            }
             let consent = ConsentGrant::new(
                 consent_purpose(&persisted.consent_purpose)?,
                 consent_fields(&persisted.consent_fields)?,
@@ -185,9 +229,17 @@ impl DurableOpportunityProfileRepository {
         }
 
         let mut tombstones = BTreeMap::new();
+        let mut previous_tombstone_id: Option<ProfileSnapshotId> = None;
         for persisted in state.tombstones {
             let profile_id = ProfileSnapshotId::parse(&persisted.profile_snapshot_id)
                 .map_err(|error| format!("persisted tombstone profile id: {error}"))?;
+            if previous_tombstone_id
+                .as_ref()
+                .is_some_and(|previous| previous >= &profile_id)
+            {
+                return Err("persisted tombstones are not in canonical order".to_owned());
+            }
+            previous_tombstone_id = Some(profile_id.clone());
             if active.contains_key(&profile_id) || tombstones.contains_key(&profile_id) {
                 return Err("persisted tombstone identity duplicate".to_owned());
             }
@@ -195,13 +247,22 @@ impl DurableOpportunityProfileRepository {
             tombstones.insert(profile_id, persisted);
         }
 
-        Ok(Self {
+        let mut repository = Self {
             path: path.to_owned(),
             inner,
             active,
             tombstones,
             max_tombstones,
-        })
+            fail_next_parent_sync_after_rename: false,
+        };
+        if should_bootstrap {
+            let active = repository.active.clone();
+            let tombstones = repository.tombstones.clone();
+            repository
+                .persist(&active, &tombstones)
+                .map_err(|error| format!("profile state bootstrap persist: {error:?}"))?;
+        }
+        Ok(repository)
     }
 
     #[must_use]
@@ -214,8 +275,12 @@ impl DurableOpportunityProfileRepository {
         self.tombstones.len()
     }
 
+    pub(crate) fn fail_next_parent_sync_after_rename_for_test(&mut self) {
+        self.fail_next_parent_sync_after_rename = true;
+    }
+
     fn persist(
-        &self,
+        &mut self,
         active: &BTreeMap<ProfileSnapshotId, PersistedProfile>,
         tombstones: &BTreeMap<ProfileSnapshotId, PersistedTombstone>,
     ) -> Result<(), OpportunityRepositoryError> {
@@ -231,8 +296,9 @@ impl DurableOpportunityProfileRepository {
         if length > MAX_PROFILE_STATE_BYTES {
             return Err(OpportunityRepositoryError::CapacityExceeded);
         }
+        ensure_secure_parent(&self.path, false)
+            .map_err(|_| OpportunityRepositoryError::Unavailable)?;
         let parent = self.path.parent().unwrap_or_else(|| Path::new("."));
-        fs::create_dir_all(parent).map_err(|_| OpportunityRepositoryError::Unavailable)?;
         let temporary = parent.join(format!(
             ".{}.tmp-{}",
             self.path
@@ -241,20 +307,40 @@ impl DurableOpportunityProfileRepository {
                 .unwrap_or("opportunity-profiles"),
             std::process::id()
         ));
-        let write_result = (|| {
+        let mut temporary_created = false;
+        let write_result: std::io::Result<()> = (|| {
             let mut file = OpenOptions::new()
                 .create_new(true)
                 .write(true)
                 .mode(0o600)
                 .open(&temporary)?;
+            temporary_created = true;
+            file.set_permissions(fs::Permissions::from_mode(0o600))?;
             file.write_all(&bytes)?;
             file.sync_all()?;
             fs::rename(&temporary, &self.path)?;
-            let parent_file = fs::File::open(parent)?;
-            parent_file.sync_all()
+            let parent_sync = if self.fail_next_parent_sync_after_rename {
+                self.fail_next_parent_sync_after_rename = false;
+                Err(std::io::Error::other(
+                    "injected profile parent sync failure",
+                ))
+            } else {
+                fs::File::open(parent).and_then(|parent_file| parent_file.sync_all())
+            };
+            if parent_sync.is_err() {
+                return match read_existing_private_state(&self.path) {
+                    Ok(Some(actual)) if actual == bytes => Ok(()),
+                    _ => Err(std::io::Error::other(
+                        "profile state parent sync failed without exact read-back",
+                    )),
+                };
+            }
+            Ok(())
         })();
         if write_result.is_err() {
-            let _ = fs::remove_file(&temporary);
+            if temporary_created {
+                let _ = fs::remove_file(&temporary);
+            }
             return Err(OpportunityRepositoryError::Unavailable);
         }
         Ok(())
@@ -277,7 +363,8 @@ impl OpportunityProfileRepository for DurableOpportunityProfileRepository {
                 candidate_active.insert(record.profile_snapshot_id().clone(), persisted);
             }
         }
-        self.persist(&candidate_active, &self.tombstones)?;
+        let candidate_tombstones = self.tombstones.clone();
+        self.persist(&candidate_active, &candidate_tombstones)?;
         self.inner = candidate_inner;
         self.active = candidate_active;
         Ok(())
@@ -416,6 +503,10 @@ fn persisted_profile_eq(left: &PersistedProfile, right: &PersistedProfile) -> bo
         && left.min_credits == right.min_credits
         && left.max_credits == right.max_credits
         && left.preference_weights == right.preference_weights
+}
+
+fn strictly_sorted_unique(values: &[String]) -> bool {
+    values.windows(2).all(|pair| pair[0] < pair[1])
 }
 
 fn principal(tenant_id: &str, user_id: &str) -> Result<AuthenticatedPrincipal, String> {

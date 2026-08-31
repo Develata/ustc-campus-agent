@@ -14,6 +14,9 @@ mod affairs_persistence;
 mod affairs_publication;
 mod change_fixture;
 mod change_invocation;
+mod change_persistence;
+mod change_publication;
+mod durable_path;
 mod m00_control_evidence;
 mod m00_session;
 mod opportunity_fixture;
@@ -35,15 +38,17 @@ use affairs_navigator::{AffairsGetService, ProcedurePublicationRepository};
 use affairs_publication::{AffairsPublicationCounters, FixtureAffairsPublicationPort};
 use change_fixture::ChangeRadarFixture;
 use change_invocation::ChangeInvocationSpine;
+use change_publication::{ChangePublicationCounters, FixtureChangePublicationPort};
 use m00_control_evidence::{DurableControlEvidenceJournal, ensure_secure_state_parent};
 use m00_session::DurableCurrentSessionStore;
 use opportunity_fixture::OpportunityFixture;
 use opportunity_invocation::{OpportunityAuthorityStore, OpportunityInvocationSpine};
 use opportunity_persistence::DurableOpportunityProfileRepository;
 use ustc_campus_agent_application_ingress::{
-    AffairsPublicationCommand, AffairsPublicationOutcome, FileRecordStore,
-    M10AffairsPublicationService, M10ChangeFeedService, M10OpportunityService, M10Service,
-    affairs_publication_payload_digest,
+    AffairsPublicationCommand, AffairsPublicationOutcome, ChangePublicationCommand,
+    ChangePublicationOutcome, FileRecordStore, M10AffairsPublicationService, M10ChangeFeedService,
+    M10ChangePublicationService, M10OpportunityService, M10Service,
+    affairs_publication_payload_digest, change_publication_payload_digest,
 };
 use ustc_campus_agent_client_protocol::{
     ClientIntentDto, ClientResponseDto, SubmitAffairsGetDto, SubmitChangeFeedDto,
@@ -74,6 +79,8 @@ pub struct AffairsComposition {
     sessions: DurableCurrentSessionStore,
     publication_counters: AffairsPublicationCounters,
     publication_capability: CapabilityDisposition,
+    change_publication_counters: ChangePublicationCounters,
+    change_publication_capability: CapabilityDisposition,
     current_tenant_id: TenantId,
     current_user_id: UserId,
 }
@@ -103,6 +110,68 @@ fn path_entry_exists(path: &Path) -> Result<bool, String> {
     }
 }
 
+fn durable_state_paths(
+    store_path: &Path,
+    idempotency_path: &Path,
+    session_store_path: &Path,
+    additional_state_paths: &[&Path],
+) -> Vec<std::path::PathBuf> {
+    let mut paths = vec![
+        idempotency_path.with_extension("affairs-publication.json"),
+        idempotency_path.with_extension("control-evidence.json"),
+        store_path.to_path_buf(),
+        idempotency_path.to_path_buf(),
+        session_store_path.to_path_buf(),
+    ];
+    paths.extend(
+        additional_state_paths
+            .iter()
+            .map(|path| (*path).to_path_buf()),
+    );
+    paths
+}
+
+fn state_set_bootstrap_is_fresh(
+    store_path: &Path,
+    idempotency_path: &Path,
+    session_store_path: &Path,
+    additional_state_paths: &[&Path],
+) -> Result<bool, String> {
+    let paths = durable_state_paths(
+        store_path,
+        idempotency_path,
+        session_store_path,
+        additional_state_paths,
+    );
+    let mut present = 0_usize;
+    for path in &paths {
+        present += usize::from(path_entry_exists(path)?);
+    }
+    if present == 0 {
+        Ok(true)
+    } else if present == paths.len() {
+        Ok(false)
+    } else {
+        Err("durable_state_set_incomplete".to_owned())
+    }
+}
+
+fn rollback_failed_fresh_bootstrap<T>(
+    result: Result<T, String>,
+    bootstrap_is_fresh: bool,
+    paths: &[std::path::PathBuf],
+) -> Result<T, String> {
+    match result {
+        Err(original) if bootstrap_is_fresh => {
+            durable_path::rollback_fresh_state_paths(paths).map_err(|rollback| {
+                format!("fresh_bootstrap_rollback_failed: {rollback}; original: {original}")
+            })?;
+            Err(original)
+        }
+        other => other,
+    }
+}
+
 impl AffairsComposition {
     /// Opens the composition from durable fixture, record-store and
     /// idempotency-store paths.
@@ -116,32 +185,53 @@ impl AffairsComposition {
         idempotency_path: &Path,
         session_store_path: &Path,
     ) -> Result<Self, String> {
+        let paths = durable_state_paths(store_path, idempotency_path, session_store_path, &[]);
+        let _bootstrap_lock = durable_path::StateSetBootstrapLock::acquire(&paths)?;
+        let bootstrap_is_fresh =
+            state_set_bootstrap_is_fresh(store_path, idempotency_path, session_store_path, &[])?;
+        let result = Self::open_with_required_state_paths(
+            fixture_path,
+            store_path,
+            idempotency_path,
+            session_store_path,
+            bootstrap_is_fresh,
+        );
+        rollback_failed_fresh_bootstrap(result, bootstrap_is_fresh, &paths)
+    }
+
+    fn open_with_required_state_paths(
+        fixture_path: &Path,
+        store_path: &Path,
+        idempotency_path: &Path,
+        session_store_path: &Path,
+        publication_bootstrap_is_fresh: bool,
+    ) -> Result<Self, String> {
         ensure_secure_state_parent(idempotency_path)?;
         let publication_path = idempotency_path.with_extension("affairs-publication.json");
         let control_evidence_path = idempotency_path.with_extension("control-evidence.json");
-        let publication_bootstrap_is_fresh = !path_entry_exists(&publication_path)?
-            && !path_entry_exists(store_path)?
-            && !path_entry_exists(idempotency_path)?
-            && !path_entry_exists(session_store_path)?
-            && !path_entry_exists(&control_evidence_path)?;
         let fixture = AffairsFixture::load(
             fixture_path,
             &publication_path,
             publication_bootstrap_is_fresh,
         )?;
-        let control_evidence = DurableControlEvidenceJournal::open(&control_evidence_path)
-            .map_err(|error| format!("control evidence open failed: {error:?}"))?;
-        let store =
-            FileRecordStore::open(store_path).map_err(|e| format!("store open failed: {e:?}"))?;
+        let control_evidence = DurableControlEvidenceJournal::open_for_state_set(
+            &control_evidence_path,
+            publication_bootstrap_is_fresh,
+        )
+        .map_err(|error| format!("control evidence open failed: {error:?}"))?;
+        let store = FileRecordStore::open_for_state_set(store_path, publication_bootstrap_is_fresh)
+            .map_err(|e| format!("store open failed: {e:?}"))?;
         let now_ms = fixture.now.as_unix_millis();
-        let idempotency = DurableIdempotencyStore::open(
+        let idempotency = DurableIdempotencyStore::open_for_state_set(
             idempotency_path,
             now_ms,
             fixture.idempotency_deadline_ms,
+            publication_bootstrap_is_fresh,
         )?;
-        let mut sessions = DurableCurrentSessionStore::open_or_bootstrap(
+        let mut sessions = DurableCurrentSessionStore::open_or_bootstrap_for_state_set(
             session_store_path,
             &fixture.session_events,
+            publication_bootstrap_is_fresh,
         )
         .map_err(map_session_store_error)?;
         let current = sessions
@@ -165,6 +255,8 @@ impl AffairsComposition {
             sessions,
             publication_counters: AffairsPublicationCounters::default(),
             publication_capability: CapabilityDisposition::Enabled,
+            change_publication_counters: ChangePublicationCounters::default(),
+            change_publication_capability: CapabilityDisposition::Enabled,
             current_tenant_id,
             current_user_id,
         })
@@ -179,14 +271,64 @@ impl AffairsComposition {
         idempotency_path: &Path,
         session_store_path: &Path,
     ) -> Result<Self, String> {
-        let mut composition = Self::open(
-            fixture_path,
+        let change_publication_path = idempotency_path.with_extension("change-publication.json");
+        let paths = durable_state_paths(
             store_path,
             idempotency_path,
             session_store_path,
+            &[change_publication_path.as_path()],
+        );
+        let _bootstrap_lock = durable_path::StateSetBootstrapLock::acquire(&paths)?;
+        let (composition, _) = Self::open_with_change_required_state_paths_unlocked(
+            fixture_path,
+            change_fixture_path,
+            store_path,
+            idempotency_path,
+            session_store_path,
+            &[],
         )?;
-        composition.change = Some(ChangeRadarFixture::load(change_fixture_path)?);
         Ok(composition)
+    }
+
+    fn open_with_change_required_state_paths_unlocked(
+        fixture_path: &Path,
+        change_fixture_path: &Path,
+        store_path: &Path,
+        idempotency_path: &Path,
+        session_store_path: &Path,
+        additional_state_paths: &[&Path],
+    ) -> Result<(Self, bool), String> {
+        let change_publication_path = idempotency_path.with_extension("change-publication.json");
+        let mut required_state_paths = vec![change_publication_path.as_path()];
+        required_state_paths.extend_from_slice(additional_state_paths);
+        let bootstrap_is_fresh = state_set_bootstrap_is_fresh(
+            store_path,
+            idempotency_path,
+            session_store_path,
+            &required_state_paths,
+        )?;
+        let paths = durable_state_paths(
+            store_path,
+            idempotency_path,
+            session_store_path,
+            &required_state_paths,
+        );
+        let result = (|| {
+            let mut composition = Self::open_with_required_state_paths(
+                fixture_path,
+                store_path,
+                idempotency_path,
+                session_store_path,
+                bootstrap_is_fresh,
+            )?;
+            composition.change = Some(ChangeRadarFixture::load(
+                change_fixture_path,
+                &change_publication_path,
+                bootstrap_is_fresh,
+            )?);
+            Ok((composition, bootstrap_is_fresh))
+        })();
+        rollback_failed_fresh_bootstrap(result, bootstrap_is_fresh, &paths)
     }
 
     /// Opens the shared Affairs + Opportunity Graph composition. This remains
@@ -201,18 +343,36 @@ impl AffairsComposition {
         idempotency_path: &Path,
         session_store_path: &Path,
     ) -> Result<Self, String> {
-        let mut composition = Self::open(
-            fixture_path,
+        let paths = durable_state_paths(
             store_path,
             idempotency_path,
             session_store_path,
+            &[opportunity_profile_store_path],
+        );
+        let _bootstrap_lock = durable_path::StateSetBootstrapLock::acquire(&paths)?;
+        let bootstrap_is_fresh = state_set_bootstrap_is_fresh(
+            store_path,
+            idempotency_path,
+            session_store_path,
+            &[opportunity_profile_store_path],
         )?;
-        composition.attach_opportunity(
-            opportunity_fixture_path,
-            opportunity_catalog_path,
-            opportunity_profile_store_path,
-        )?;
-        Ok(composition)
+        let result = (|| {
+            let mut composition = Self::open_with_required_state_paths(
+                fixture_path,
+                store_path,
+                idempotency_path,
+                session_store_path,
+                bootstrap_is_fresh,
+            )?;
+            composition.attach_opportunity(
+                opportunity_fixture_path,
+                opportunity_catalog_path,
+                opportunity_profile_store_path,
+                bootstrap_is_fresh,
+            )?;
+            Ok(composition)
+        })();
+        rollback_failed_fresh_bootstrap(result, bootstrap_is_fresh, &paths)
     }
 
     /// Opens all three first-party Plugin product paths in one composition.
@@ -227,19 +387,35 @@ impl AffairsComposition {
         idempotency_path: &Path,
         session_store_path: &Path,
     ) -> Result<Self, String> {
-        let mut composition = Self::open_with_change(
-            fixture_path,
-            change_fixture_path,
+        let change_publication_path = idempotency_path.with_extension("change-publication.json");
+        let paths = durable_state_paths(
             store_path,
             idempotency_path,
             session_store_path,
-        )?;
-        composition.attach_opportunity(
-            opportunity_fixture_path,
-            opportunity_catalog_path,
-            opportunity_profile_store_path,
-        )?;
-        Ok(composition)
+            &[
+                change_publication_path.as_path(),
+                opportunity_profile_store_path,
+            ],
+        );
+        let _bootstrap_lock = durable_path::StateSetBootstrapLock::acquire(&paths)?;
+        let (mut composition, bootstrap_is_fresh) =
+            Self::open_with_change_required_state_paths_unlocked(
+                fixture_path,
+                change_fixture_path,
+                store_path,
+                idempotency_path,
+                session_store_path,
+                &[opportunity_profile_store_path],
+            )?;
+        let result = composition
+            .attach_opportunity(
+                opportunity_fixture_path,
+                opportunity_catalog_path,
+                opportunity_profile_store_path,
+                bootstrap_is_fresh,
+            )
+            .map(|()| composition);
+        rollback_failed_fresh_bootstrap(result, bootstrap_is_fresh, &paths)
     }
 
     fn attach_opportunity(
@@ -247,6 +423,7 @@ impl AffairsComposition {
         fixture_path: &Path,
         catalog_path: &Path,
         profile_store_path: &Path,
+        bootstrap_is_fresh: bool,
     ) -> Result<(), String> {
         let fixture = OpportunityFixture::load(fixture_path, catalog_path)?;
         let authority = OpportunityAuthorityStore::new(
@@ -258,7 +435,12 @@ impl AffairsComposition {
             fixture.authority_mutation,
         )
         .map_err(|error| format!("opportunity Market authority open failed: {error:?}"))?;
-        let profiles = DurableOpportunityProfileRepository::open(profile_store_path, 64, 256)?;
+        let profiles = DurableOpportunityProfileRepository::open(
+            profile_store_path,
+            64,
+            256,
+            bootstrap_is_fresh,
+        )?;
         self.opportunity = Some(OpportunityComposition {
             fixture,
             authority,
@@ -381,6 +563,13 @@ impl AffairsComposition {
         self.fixture.repo.fail_next_persist();
     }
 
+    /// Injects one post-rename parent-sync uncertainty. Exact destination
+    /// read-back must reconcile it before the durable candidate becomes visible.
+    #[doc(hidden)]
+    pub fn fail_next_publication_parent_sync_after_rename_for_test(&mut self) {
+        self.fixture.repo.fail_next_parent_sync_after_rename();
+    }
+
     #[must_use]
     pub fn publication_application_call_count(&self) -> u64 {
         self.publication_counters.applications()
@@ -396,6 +585,180 @@ impl AffairsComposition {
         self.fixture
             .repo
             .publication_revision(self.fixture.publication_draft.procedure_id())
+    }
+
+    /// Publishes the fixed reviewed ChangeRadar event through M10 admission,
+    /// durable M00 control evidence, and the direct owning M70 application port.
+    #[must_use]
+    pub fn publish_change_demo_as_administrator(&mut self) -> ChangePublicationOutcome {
+        let Some(published_at) = self.change.as_ref().map(|change| change.published_at) else {
+            return ChangePublicationOutcome::InternalInvariant;
+        };
+        self.publish_change_demo_at(published_at)
+    }
+
+    /// Test-only identity-conflict seam. Production callers use the fixed command above.
+    #[doc(hidden)]
+    pub fn publish_change_demo_at_for_test(
+        &mut self,
+        published_at: ustc_campus_agent_core::source_revision::RevisionTimestamp,
+    ) -> ChangePublicationOutcome {
+        self.publish_change_demo_at(published_at)
+    }
+
+    fn publish_change_demo_at(
+        &mut self,
+        published_at: ustc_campus_agent_core::source_revision::RevisionTimestamp,
+    ) -> ChangePublicationOutcome {
+        let Some(change) = self.change.as_mut() else {
+            return ChangePublicationOutcome::InternalInvariant;
+        };
+        let event_id = change.candidate.event_id().clone();
+        let review_receipt_id = change.review.receipt_id().clone();
+        let payload_digest = change_publication_payload_digest(
+            &event_id,
+            review_receipt_id.as_str(),
+            change.review.reviewed_at(),
+            published_at,
+        );
+        let request_id = match RequestId::parse("request:change-publication-demo") {
+            Ok(value) => value,
+            Err(_) => return ChangePublicationOutcome::InternalInvariant,
+        };
+        let correlation_id = match CorrelationId::parse("correlation:change-publication-demo") {
+            Ok(value) => value,
+            Err(_) => return ChangePublicationOutcome::InternalInvariant,
+        };
+        let idempotency_key = match IdempotencyKey::parse("idempotency:change-publication-demo") {
+            Ok(value) => value,
+            Err(_) => return ChangePublicationOutcome::InternalInvariant,
+        };
+        let provenance = match ClientProvenance::new(
+            "ustc-agentd",
+            "internal-change-administrator",
+            "rust-v1",
+        ) {
+            Ok(value) => value,
+            Err(_) => return ChangePublicationOutcome::InternalInvariant,
+        };
+        let command = ChangePublicationCommand::new(
+            request_id,
+            ActorReference::Authenticated {
+                session_id: self.fixture.session.session_id().clone(),
+            },
+            correlation_id,
+            None,
+            Some(idempotency_key),
+            provenance,
+            payload_digest,
+            event_id,
+            &review_receipt_id,
+            change.review.reviewed_at(),
+            published_at,
+        );
+        let expected_tenant = self.current_tenant_id.clone();
+        let expected_user = self.current_user_id.clone();
+        let expected_session = self.fixture.session.session_id().clone();
+        let mut ports = FixturePorts::new(
+            self.idempotency.clone(),
+            Arc::clone(&change.publication_descriptor),
+            self.fixture.now,
+            self.fixture.policy_snapshot_id.clone(),
+            self.sessions.clone(),
+        )
+        .with_capability(self.change_publication_capability);
+        let mut publication = FixtureChangePublicationPort::new(
+            &mut change.repository,
+            &change.m60,
+            &change.candidate,
+            &change.review,
+            &change.feed_policy,
+            change.published_at,
+            &expected_tenant,
+            &expected_user,
+            &expected_session,
+            self.change_publication_counters.clone(),
+        );
+        let mut service =
+            M10ChangePublicationService::new(&mut publication, &mut self.control_evidence);
+        service.submit(&command, &mut ports)
+    }
+
+    /// Configures only the M00 capability fact for the ChangeRadar publication command.
+    pub fn set_change_publication_capability(&mut self, capability: CapabilityDisposition) {
+        self.change_publication_capability = capability;
+    }
+
+    /// Injects one bounded ChangeRadar persistence failure after durable M00 evidence.
+    #[doc(hidden)]
+    pub fn fail_next_change_publication_persistence_for_test(&mut self) {
+        if let Some(change) = self.change.as_mut() {
+            change.repository.fail_next_persist();
+        }
+    }
+
+    /// Injects a post-review publication persistence failure after one durable review commit.
+    #[doc(hidden)]
+    pub fn fail_change_publication_final_persistence_for_test(&mut self) {
+        if let Some(change) = self.change.as_mut() {
+            change.repository.fail_publication_persist_after_review();
+        }
+    }
+
+    /// Injects a post-rename parent-directory sync failure for reconciliation tests.
+    #[doc(hidden)]
+    pub fn fail_next_change_publication_parent_sync_after_rename_for_test(&mut self) {
+        if let Some(change) = self.change.as_mut() {
+            change.repository.fail_next_parent_sync_after_rename();
+        }
+    }
+
+    /// Injects parent-sync uncertainty on the final publication commit, after durable review.
+    #[doc(hidden)]
+    pub fn fail_change_publication_final_parent_sync_for_test(&mut self) {
+        if let Some(change) = self.change.as_mut() {
+            change
+                .repository
+                .fail_publication_parent_sync_after_review();
+        }
+    }
+
+    #[must_use]
+    pub fn change_publication_application_call_count(&self) -> u64 {
+        self.change_publication_counters.applications()
+    }
+
+    pub fn change_publication_counts(&self) -> Result<(usize, usize), String> {
+        let Some(change) = self.change.as_ref() else {
+            return Err("ChangeRadar fixture is unavailable".to_owned());
+        };
+        Ok((
+            change
+                .repository
+                .review_count()
+                .map_err(|error| format!("{error:?}"))?,
+            change
+                .repository
+                .publication_count()
+                .map_err(|error| format!("{error:?}"))?,
+        ))
+    }
+
+    pub fn change_publication_receipt_id(&self) -> Result<Option<&str>, String> {
+        let Some(change) = self.change.as_ref() else {
+            return Err("ChangeRadar fixture is unavailable".to_owned());
+        };
+        change
+            .repository
+            .publication_receipt_id()
+            .map_err(|error| format!("{error:?}"))
+    }
+
+    #[must_use]
+    pub fn change_publication_m60_call_count(&self) -> u64 {
+        self.change.as_ref().map_or(0, |change| {
+            change.m60_calls.load(std::sync::atomic::Ordering::SeqCst)
+        })
     }
 
     /// Handles one public ChangeRadar board query through M00, M10 and the
@@ -498,6 +861,17 @@ impl AffairsComposition {
         opportunity.profiles.lock().map_or((0, 0), |profiles| {
             (profiles.private_payload_count(), profiles.tombstone_count())
         })
+    }
+
+    /// Injects one post-rename Opportunity parent-sync failure. The next
+    /// mutation must reconcile exact canonical bytes before publishing memory.
+    #[doc(hidden)]
+    pub fn fail_next_opportunity_parent_sync_after_rename_for_test(&self) {
+        if let Some(opportunity) = &self.opportunity
+            && let Ok(mut profiles) = opportunity.profiles.lock()
+        {
+            profiles.fail_next_parent_sync_after_rename_for_test();
+        }
     }
 
     /// Handles one `Lookup` intent through the M10 record store. The M71

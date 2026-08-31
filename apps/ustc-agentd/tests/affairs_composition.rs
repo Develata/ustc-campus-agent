@@ -363,6 +363,29 @@ fn administrator_publication_survives_real_process_restart() {
 }
 
 #[test]
+fn publication_parent_sync_uncertainty_reconciles_before_memory_publish() {
+    let env = TestEnv::new();
+    let mut comp = env.open();
+    comp.fail_next_publication_parent_sync_after_rename_for_test();
+
+    let AffairsPublicationOutcome::Published(receipt) = comp.publish_demo_as_administrator() else {
+        panic!("exact read-back must reconcile a post-rename parent-sync failure");
+    };
+    let receipt_id = receipt.receipt_id().clone();
+    assert_eq!(comp.current_publication_revision(), Some(2));
+    drop(comp);
+
+    let mut reopened = env.open();
+    assert_eq!(reopened.current_publication_revision(), Some(2));
+    let AffairsPublicationOutcome::Published(replayed) = reopened.publish_demo_as_administrator()
+    else {
+        panic!("restart retry must replay the reconciled publication");
+    };
+    assert_eq!(replayed.receipt_id(), &receipt_id);
+    assert_eq!(reopened.m60_call_count(), 0);
+}
+
+#[test]
 fn publication_persistence_failure_is_not_visible_and_restart_keeps_prior_revision() {
     let env = TestEnv::new();
     let mut comp = env.open();
@@ -447,17 +470,29 @@ fn publication_state_corruption_matrix_fails_open_closed() {
 }
 
 #[test]
-fn missing_publication_state_in_an_existing_state_set_fails_closed() {
-    let env = TestEnv::new();
-    drop(env.open());
-    fs::remove_file(env.publication_state()).expect("remove publication state");
+fn every_missing_base_state_member_fails_closed() {
+    for member in [
+        "store.json",
+        "idempotency.json",
+        "sessions.json",
+        "idempotency.affairs-publication.json",
+        "idempotency.control-evidence.json",
+    ] {
+        let env = TestEnv::new();
+        drop(env.open());
+        fs::remove_file(env._dir.join(member)).expect("remove required base state member");
 
-    let error =
-        match AffairsComposition::open(&env.fixture, &env.store, &env.idempotency, &env.sessions) {
-            Ok(_) => panic!("missing publication state must not be treated as a fresh bootstrap"),
+        let error = match AffairsComposition::open(
+            &env.fixture,
+            &env.store,
+            &env.idempotency,
+            &env.sessions,
+        ) {
+            Ok(_) => panic!("missing {member} must fail closed"),
             Err(error) => error,
         };
-    assert!(error.contains("publication state is missing"), "{error}");
+        assert_eq!(error, "durable_state_set_incomplete", "member={member}");
+    }
 }
 
 #[test]
@@ -616,6 +651,7 @@ fn evidence_destination_attack_blocks_before_m71() {
     let target = env._dir.join("evidence-sentinel");
     write_private_state(&target, b"sentinel");
     let evidence_path = env.idempotency.with_extension("control-evidence.json");
+    fs::remove_file(&evidence_path).expect("remove canonical evidence state");
     symlink(&target, &evidence_path).expect("install evidence symlink");
 
     let outcome = comp.publish_demo_as_administrator();
@@ -1390,6 +1426,7 @@ fn reserve_persist_failure_leaves_no_phantom() {
 
     let env = TestEnv::new();
     let comp = env.open();
+    let idempotency_before = fs::read(&env.idempotency).expect("read canonical empty state");
 
     let parent = env.idempotency.parent().unwrap();
     let original_mode = fs::metadata(parent).unwrap().permissions().mode();
@@ -1412,9 +1449,10 @@ fn reserve_persist_failure_leaves_no_phantom() {
         _ => panic!("expected IdempotencyStoreUnavailable, got {response:?}"),
     }
 
-    assert!(
-        !env.idempotency.exists(),
-        "no idempotency file must be written after persist failure"
+    assert_eq!(
+        fs::read(&env.idempotency).expect("read state after failed reserve"),
+        idempotency_before,
+        "persist failure must leave the canonical empty state unchanged"
     );
 
     fs::set_permissions(parent, fs::Permissions::from_mode(original_mode)).unwrap();

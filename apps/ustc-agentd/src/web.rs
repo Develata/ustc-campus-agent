@@ -17,6 +17,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use ustc_campus_agent_application_ingress::{
     AffairsPublicationApplicationError, AffairsPublicationOutcome,
+    ChangePublicationApplicationError, ChangePublicationOutcome,
 };
 use ustc_campus_agent_client_protocol::{
     ActorIntentDto, ClientErrorDto, ClientProvenanceDto, ClientResponseDto, OpportunityCommandDto,
@@ -297,6 +298,92 @@ impl WebState {
             },
         ))
     }
+
+    fn change_publication_status(
+        &self,
+    ) -> Result<ChangePublicationStatusEnvelope, WebRequestError> {
+        let composition = self.lock()?;
+        let (review_count, publication_count) = composition
+            .change_publication_counts()
+            .map_err(|_| WebRequestError::CompositionUnavailable)?;
+        Ok(ChangePublicationStatusEnvelope {
+            schema: "ustc-change-publication-status/v1",
+            review_count,
+            publication_count,
+            publication_receipt_id: composition
+                .change_publication_receipt_id()
+                .map_err(|_| WebRequestError::CompositionUnavailable)?
+                .map(str::to_owned),
+            control_evidence_event_count: composition.control_evidence_event_count(),
+        })
+    }
+
+    fn publish_change_demo(
+        &self,
+    ) -> Result<(StatusCode, ChangePublicationResponseEnvelope), WebRequestError> {
+        let mut composition = self.lock()?;
+        let (status, outcome) = match composition.publish_change_demo_as_administrator() {
+            ChangePublicationOutcome::Published(publication) => (
+                StatusCode::OK,
+                ChangePublicationResponseKind::Published {
+                    receipt_id: publication.receipt_id().as_str().to_owned(),
+                    stable_guid: publication.stable_guid().as_str().to_owned(),
+                    event_id: publication.event_id().as_str().to_owned(),
+                },
+            ),
+            ChangePublicationOutcome::Rejected(_) => (
+                StatusCode::FORBIDDEN,
+                ChangePublicationResponseKind::Rejected {
+                    error: "m00_admission_denied",
+                },
+            ),
+            ChangePublicationOutcome::Incomplete { .. } => (
+                StatusCode::CONFLICT,
+                ChangePublicationResponseKind::Rejected {
+                    error: "m00_session_incomplete",
+                },
+            ),
+            ChangePublicationOutcome::MalformedCommand => (
+                StatusCode::BAD_REQUEST,
+                ChangePublicationResponseKind::Rejected {
+                    error: "malformed_change_publication_command",
+                },
+            ),
+            ChangePublicationOutcome::EvidenceRejected(_) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                ChangePublicationResponseKind::Rejected {
+                    error: "control_evidence_unavailable",
+                },
+            ),
+            ChangePublicationOutcome::PublicationRejected(
+                ChangePublicationApplicationError::Denied,
+            ) => (
+                StatusCode::CONFLICT,
+                ChangePublicationResponseKind::Rejected {
+                    error: "change_publication_denied",
+                },
+            ),
+            ChangePublicationOutcome::PublicationRejected(_) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                ChangePublicationResponseKind::Rejected {
+                    error: "change_publication_unavailable",
+                },
+            ),
+            ChangePublicationOutcome::InternalInvariant => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ChangePublicationResponseKind::Rejected {
+                    error: "internal_change_publication_invariant",
+                },
+            ),
+        };
+        Ok((
+            status,
+            ChangePublicationResponseEnvelope {
+                schema: "ustc-change-publication-response/v1",
+                outcome,
+            },
+        ))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -395,6 +482,40 @@ struct PublishAffairsDemoBody {
     confirm_publish: bool,
 }
 
+#[derive(Serialize)]
+struct ChangePublicationStatusEnvelope {
+    schema: &'static str,
+    review_count: usize,
+    publication_count: usize,
+    publication_receipt_id: Option<String>,
+    control_evidence_event_count: usize,
+}
+
+#[derive(Serialize)]
+struct ChangePublicationResponseEnvelope {
+    schema: &'static str,
+    outcome: ChangePublicationResponseKind,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum ChangePublicationResponseKind {
+    Published {
+        receipt_id: String,
+        stable_guid: String,
+        event_id: String,
+    },
+    Rejected {
+        error: &'static str,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PublishChangeDemoBody {
+    confirm_publish: bool,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateOpportunityProfileBody {
@@ -445,6 +566,10 @@ pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
         .route(
             "/api/v1/demo/administrator/affairs/publication",
             get(affairs_publication_status).post(affairs_publication_publish),
+        )
+        .route(
+            "/api/v1/demo/administrator/changes/publication",
+            get(change_publication_status).post(change_publication_publish),
         )
         .route("/api/v1/changes/{board_id}", get(change_feed_get))
         .route("/api/v1/changes/{board_id}/atom", get(change_feed_atom))
@@ -610,6 +735,52 @@ fn administrator_demo_header_authorized(headers: &HeaderMap) -> bool {
         .get(ADMINISTRATOR_DEMO_HEADER)
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value == ADMINISTRATOR_DEMO_CONFIRMATION)
+}
+
+async fn change_publication_status(State(state): State<WebState>, headers: HeaderMap) -> Response {
+    if !administrator_demo_header_authorized(&headers) {
+        return web_error(
+            StatusCode::FORBIDDEN,
+            "administrator_demo_confirmation_required",
+        );
+    }
+    match state.change_publication_status() {
+        Ok(status) => typed_json_response(StatusCode::OK, status),
+        Err(_) => web_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "change_publication_status_unavailable",
+        ),
+    }
+}
+
+async fn change_publication_publish(
+    State(state): State<WebState>,
+    headers: HeaderMap,
+    body: Result<Json<PublishChangeDemoBody>, JsonRejection>,
+) -> Response {
+    if !administrator_demo_header_authorized(&headers) {
+        return web_error(
+            StatusCode::FORBIDDEN,
+            "administrator_demo_confirmation_required",
+        );
+    }
+    let Json(body) = match body {
+        Ok(body) => body,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_change_publication_json"),
+    };
+    if !body.confirm_publish {
+        return web_error(
+            StatusCode::BAD_REQUEST,
+            "explicit_publish_confirmation_required",
+        );
+    }
+    match state.publish_change_demo() {
+        Ok((status, envelope)) => typed_json_response(status, envelope),
+        Err(_) => web_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "change_publication_unavailable",
+        ),
+    }
 }
 
 async fn change_feed_get(

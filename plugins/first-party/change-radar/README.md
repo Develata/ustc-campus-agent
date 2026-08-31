@@ -1,7 +1,7 @@
 # USTC ChangeRadar
 
 - Package ID: `ustc.change-radar`
-- Status: partial executable source-revision/semantic-diff/review/Atom plus fixture-backed M10/Market/Harness/ToolGateway/loopback-Web evidence; durable restart remains planned
+- Status: partial executable durable administrator-publication plus M10/Market/Harness/ToolGateway/loopback-Web JSON/Atom evidence; production SSO/live source/M80 peers remain planned
 - Product question: What changed, and does it affect me?
 
 Canonical documentation:
@@ -10,4 +10,4 @@ Canonical documentation:
 - engineering contract: [`docs/plan/06-first-party-plugins.md`](../../../docs/plan/06-first-party-plugins.md)
 - source authority: [`docs/plan/05-campus-trust-kernel.md`](../../../docs/plan/05-campus-trust-kernel.md)
 
-The package-owned Rust kernel lives at `crates/change-radar`; M60-owned immutable revision values and revision-health type live at `crates/platform-core/src/source_revision.rs`. It currently proves canonical-URL-bound deterministic `DemoReviewed` revisions, exact-source-pinned semantic comparison, complete-policy-bound candidate identity, administrator approve/reject receipts, coherent transaction-current M60 verification, exactly-once in-memory publication and deterministic Atom rendering. `apps/ustc-agentd` now supplies one fixed first-party `change.list` adapter behind current Market projection/recheck, the bounded Harness/ToolGateway sequence and a thin loopback Web/Atom projection. M00-authorized administration, durable restart, M80 peer clients and real source retrieval remain absent; approved semantic changes alone enter Atom.
+The package-owned Rust kernel lives at `crates/change-radar`; M60-owned immutable revision values and revision-health type live at `crates/platform-core/src/source_revision.rs`. It proves source-pinned semantic comparison, digest-bound review, coherent M60 verification and deterministic JSON/Atom. `apps/ustc-agentd` adds one fixed `M10 → M00 durable evidence → owning M70` administrator publication path over a strict owner-only canonical repository; exact retry, checked zero-M60 restart recovery, uncertain-rename reconciliation and fail-closed corruption handling preserve one receipt/GUID/item across real process and browser restart. Ordinary `change.list` remains behind current Market/Harness/ToolGateway. Production SSO/admin, M80 peers, maintainer leases and approved live retrieval remain absent; only reviewed semantic changes enter Atom.

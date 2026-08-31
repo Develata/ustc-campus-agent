@@ -2644,6 +2644,7 @@ PLATFORM_SESSION_TEST = "crates/platform-core/tests/platform_session.rs"
 PLATFORM_SESSION_PORT_SOURCE = "crates/platform-core/src/session_port.rs"
 PLATFORM_SESSION_PORT_TEST = "crates/platform-core/tests/platform_session_port.rs"
 APP_M00_SESSION_SOURCE = "apps/ustc-agentd/src/m00_session.rs"
+APP_DURABLE_PATH_SOURCE = "apps/ustc-agentd/src/durable_path.rs"
 APP_OPPORTUNITY_TEST = "apps/ustc-agentd/tests/opportunity_composition.rs"
 APP_CLI_PRODUCT_TEST = "apps/ustc-agent/tests/affairs_get_product_path.rs"
 PLATFORM_SESSION_PORT_CONTRACT = "docs/contracts/platform-session-port.md"
@@ -12498,11 +12499,16 @@ def check_platform_session_port(issues: list[str]) -> None:
         PLATFORM_SESSION_PORT_SOURCE,
         PLATFORM_SESSION_PORT_TEST,
         APP_M00_SESSION_SOURCE,
+        APP_DURABLE_PATH_SOURCE,
         APP_OPPORTUNITY_TEST,
         APP_CLI_PRODUCT_TEST,
         "crates/platform-core/src/lib.rs",
         "apps/ustc-agentd/src/lib.rs",
         "apps/ustc-agentd/src/affairs_fixture.rs",
+        "apps/ustc-agentd/src/m00_control_evidence.rs",
+        "apps/ustc-agentd/src/affairs_persistence.rs",
+        "apps/ustc-agentd/src/change_persistence.rs",
+        "apps/ustc-agentd/src/opportunity_persistence.rs",
         "scripts/run_three_plugin_mvp.sh",
         "scripts/run_affairs_web_demo.sh",
         "docs/acceptance/matrix.tsv",
@@ -12674,8 +12680,32 @@ def check_platform_session_port(issues: list[str]) -> None:
         fail("platform session port write/sync failure cleanup binding drift", issues)
     if app_source.count("permissions().mode() & 0o7777 != 0o600") != 2:
         fail("platform session port exact file mode mask drift", issues)
-    if app_source.count("permissions().mode() & 0o7777 != 0o700") != 1:
-        fail("platform session port exact parent mode mask drift", issues)
+    if app_source.count("crate::durable_path::ensure_secure_parent(path, false)") != 1:
+        fail("platform session port shared traversal-parent binding drift", issues)
+
+    durable_path_source = texts[APP_DURABLE_PATH_SOURCE]
+    for fragment in (
+        "for ancestor in start.ancestors()",
+        "let metadata = fs::symlink_metadata(ancestor)",
+        "owner_uid != current_uid && owner_uid != 0",
+        "owner_uid == 0 && mode & 0o1000 != 0",
+        "mode & 0o022 != 0 && !root_owned_sticky",
+        "metadata.permissions().mode() & 0o7777 != 0o700",
+        "builder.recursive(true).mode(0o700)",
+    ):
+        if durable_path_source.count(fragment) != 1:
+            fail(f"daemon durable traversal invariant drift: {fragment!r}", issues)
+    durable_parent_bindings = {
+        APP_M00_SESSION_SOURCE: 1,
+        "apps/ustc-agentd/src/m00_control_evidence.rs": 2,
+        "apps/ustc-agentd/src/affairs_fixture.rs": 2,
+        "apps/ustc-agentd/src/affairs_persistence.rs": 1,
+        "apps/ustc-agentd/src/change_persistence.rs": 1,
+        "apps/ustc-agentd/src/opportunity_persistence.rs": 1,
+    }
+    for rel, minimum in durable_parent_bindings.items():
+        if texts[rel].count("crate::durable_path::ensure_secure_parent") < minimum:
+            fail(f"daemon durable traversal-parent binding missing: {rel}", issues)
     app_impls, unresolved_app_impls = rust_impl_declarations(app_code)
     if unresolved_app_impls:
         fail(f"platform session port durable-vendor impl inventory unresolved: {unresolved_app_impls}", issues)
@@ -12861,10 +12891,10 @@ PLATFORM_CONTROL_EVIDENCE_DOC_FRAGMENTS = {
     "docs/coverage-matrix.md": ("platform-control-evidence.md", "active:AUTH-022"),
     "docs/overview/architecture.md": (
         "B4b redacted evidence ports",
-        "one Affairs B5 composition persists admitted-request evidence before M71",
+        "fixed Affairs/ChangeRadar B5 compositions persist admitted-request evidence before owning M71/M70 effects",
     ),
     "docs/plan/modules/00-module-map.md": ("platform-control-evidence/v0", "AUTH-022"),
-    "docs/plan/modules/10-platform-control-identity.md": ("platform-control-evidence/v0", "AUTH-022", "B5 composition planned"),
+    "docs/plan/modules/10-platform-control-identity.md": ("platform-control-evidence/v0", "AUTH-022", "generic B5 composition planned"),
     "docs/tasks/01-execution-roadmap.md": ("platform-control-evidence/v0", "AUTH-022", "production evidence persistence"),
     "README.md": ("B4b stable redacted control-event/error", "data-only"),
 }
@@ -13172,7 +13202,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_platform_control_evidence": {"digest": "29ab55813d5c6872937c9753d53dac607e7f27436ce00a8297c665d2e37c9a94", "status": "active"},
     "check_platform_identity_implementation": {"digest": "b30158e2721bb04582b6dced31eb4328b493ba13d0f9153347388ad1ccd91c29", "status": "active"},
     "check_platform_request_context": {"digest": "716b2414ce325537cd03c1c1abdee12a12fcf61f43773a894ebf021d9a6c3fbc", "status": "active"},
-    "check_platform_session_port": {"digest": "bb77b840e9bd9270cb335ee3a37cda794e40b456b2d2e0f9487e4de4765dedc7", "status": "active"},
+    "check_platform_session_port": {"digest": "cd83696316ed74a4aa15dfdf861a4c5b3b9b397056d06c44e1a13e3def4667a6", "status": "active"},
     "check_platform_session_contract": {"digest": "e3a2e5ef5ca953bdf2739ac3072df8bcfed0ebece4a893f52980fb7ca3b15c1b", "status": "active"},
     "check_platform_session_implementation": {"digest": "f1a25036ae6940b332c258af80f2e23815071ca19cb1d5db79d7a4f8b844be8f", "status": "active"},
     "check_rust_doctest_gate": {"digest": "372200f9ce289b3af148b7e7001408498b3d817098d7013692f016b766d2ec58", "status": "active"},

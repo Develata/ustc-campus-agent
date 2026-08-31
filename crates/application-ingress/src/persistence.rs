@@ -1,10 +1,11 @@
 use std::collections::BTreeMap;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::num::NonZeroU64;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -13,6 +14,7 @@ use ustc_campus_agent_client_protocol::{AdmittedActorDto, DispatchCapsuleBodyV2,
 use crate::capability::StoredPublicAuthorization;
 
 const MAX_STORE_BYTES: u64 = 16 * 1024 * 1024;
+const TEMPORARY_ATTEMPTS: u32 = 16;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -198,10 +200,15 @@ pub struct FileRecordStore {
 impl FileRecordStore {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self, StoreError> {
         let path = path.into();
+        ensure_secure_parent(&path, true)?;
         let state = if let Some(bytes) = read_existing_private_state(&path)? {
             let state: StoreState =
                 serde_json::from_slice(&bytes).map_err(StoreError::Corrupted)?;
             validate_state(&state)?;
+            let canonical = serde_json::to_vec(&state).map_err(StoreError::Corrupted)?;
+            if canonical != bytes {
+                return Err(StoreError::Invariant);
+            }
             state
         } else {
             StoreState {
@@ -213,6 +220,23 @@ impl FileRecordStore {
             path,
             state: Arc::new(Mutex::new(state)),
         })
+    }
+
+    pub fn open_for_state_set(
+        path: impl Into<PathBuf>,
+        bootstrap_is_fresh: bool,
+    ) -> Result<Self, StoreError> {
+        let path = path.into();
+        ensure_secure_parent(&path, bootstrap_is_fresh)?;
+        let existed = read_existing_private_state(&path)?.is_some();
+        if !existed && !bootstrap_is_fresh {
+            return Err(StoreError::Invariant);
+        }
+        let store = Self::open(path)?;
+        if !existed {
+            store.transaction(|_| Ok(()))?;
+        }
+        Ok(store)
     }
 
     pub(crate) fn insert_admitted_once(
@@ -483,7 +507,100 @@ impl FileRecordStore {
     }
 }
 
+fn current_uid() -> Result<u32, StoreError> {
+    fs::metadata("/proc/self")
+        .map(|metadata| metadata.uid())
+        .map_err(StoreError::Io)
+}
+
+fn traversal_exposure_after(
+    owner_uid: u32,
+    mode: u32,
+    current_uid: u32,
+    exposed_by_writable_ancestor: bool,
+) -> Result<bool, StoreError> {
+    if owner_uid != current_uid && owner_uid != 0 {
+        return Err(StoreError::Invariant);
+    }
+    let owner_private_boundary = owner_uid == current_uid && mode & 0o077 == 0;
+    let root_owned_sticky = owner_uid == 0 && mode & 0o1000 != 0;
+    if owner_private_boundary {
+        Ok(false)
+    } else if mode & 0o022 != 0 && !root_owned_sticky {
+        Ok(true)
+    } else {
+        Ok(exposed_by_writable_ancestor)
+    }
+}
+
+fn validate_traversal_chain(start: &Path) -> Result<(), StoreError> {
+    let current_uid = current_uid()?;
+    let mut exposed_by_writable_ancestor = false;
+    for ancestor in start.ancestors() {
+        let metadata = fs::symlink_metadata(ancestor).map_err(StoreError::Io)?;
+        if !metadata.file_type().is_dir() {
+            return Err(StoreError::Invariant);
+        }
+        let mode = metadata.permissions().mode() & 0o7777;
+        exposed_by_writable_ancestor = traversal_exposure_after(
+            metadata.uid(),
+            mode,
+            current_uid,
+            exposed_by_writable_ancestor,
+        )?;
+    }
+    if exposed_by_writable_ancestor {
+        return Err(StoreError::Invariant);
+    }
+    Ok(())
+}
+
+fn ensure_secure_parent(path: &Path, allow_create: bool) -> Result<(), StoreError> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .ok_or(StoreError::Invariant)?;
+    match fs::symlink_metadata(parent) {
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound && allow_create => {
+            let mut existing = parent.parent();
+            loop {
+                let ancestor = existing.ok_or(StoreError::Invariant)?;
+                match fs::symlink_metadata(ancestor) {
+                    Ok(_) => {
+                        validate_traversal_chain(ancestor)?;
+                        break;
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                        existing = ancestor.parent();
+                    }
+                    Err(error) => return Err(StoreError::Io(error)),
+                }
+            }
+            let mut builder = DirBuilder::new();
+            builder.recursive(true).mode(0o700);
+            builder.create(parent).map_err(StoreError::Io)?;
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Err(StoreError::Invariant);
+        }
+        Err(error) => return Err(StoreError::Io(error)),
+    }
+    let metadata = fs::symlink_metadata(parent).map_err(StoreError::Io)?;
+    if !metadata.file_type().is_dir()
+        || metadata.permissions().mode() & 0o777 != 0o700
+        || metadata.uid() != current_uid()?
+    {
+        return Err(StoreError::Invariant);
+    }
+    if let Some(ancestor) = parent.parent() {
+        validate_traversal_chain(ancestor)?;
+    }
+    Ok(())
+}
+
 fn read_existing_private_state(path: &Path) -> Result<Option<Vec<u8>>, StoreError> {
+    ensure_secure_parent(path, false)?;
     let path_metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -491,6 +608,8 @@ fn read_existing_private_state(path: &Path) -> Result<Option<Vec<u8>>, StoreErro
     };
     if !path_metadata.file_type().is_file()
         || path_metadata.permissions().mode() & 0o777 != 0o600
+        || path_metadata.uid() != current_uid()?
+        || path_metadata.nlink() != 1
         || path_metadata.len() > MAX_STORE_BYTES
     {
         return Err(StoreError::Invariant);
@@ -506,6 +625,8 @@ fn read_existing_private_state(path: &Path) -> Result<Option<Vec<u8>>, StoreErro
         || opened_metadata.dev() != path_metadata.dev()
         || opened_metadata.ino() != path_metadata.ino()
         || opened_metadata.permissions().mode() & 0o777 != 0o600
+        || opened_metadata.uid() != current_uid()?
+        || opened_metadata.nlink() != 1
         || opened_metadata.len() > MAX_STORE_BYTES
     {
         return Err(StoreError::Invariant);
@@ -542,30 +663,61 @@ fn persist_with_parent_sync(path: &Path, state: &StoreState) -> Result<(), Persi
 }
 
 fn persist_candidate(path: &Path, state: &StoreState) -> Result<(), StoreError> {
-    if let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    {
-        fs::create_dir_all(parent).map_err(StoreError::Io)?;
-    }
+    ensure_secure_parent(path, true)?;
     let bytes = serde_json::to_vec(state).map_err(StoreError::Corrupted)?;
     if bytes.len() as u64 > MAX_STORE_BYTES {
         return Err(StoreError::Invariant);
     }
-    let temporary = path.with_extension("tmp");
-    let result = (|| {
-        let mut file = OpenOptions::new()
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .ok_or(StoreError::Invariant)?;
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(StoreError::Invariant)?;
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| StoreError::Invariant)?
+        .as_nanos();
+    let mut temporary = None;
+    let mut file = None;
+    for attempt in 0..TEMPORARY_ATTEMPTS {
+        let candidate = parent.join(format!(
+            ".{file_name}.{}.{}.{}.tmp",
+            std::process::id(),
+            nonce,
+            attempt
+        ));
+        match OpenOptions::new()
             .write(true)
             .create_new(true)
             .mode(0o600)
-            .open(&temporary)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&candidate)
+        {
+            Ok(opened) => {
+                temporary = Some(candidate);
+                file = Some(opened);
+                break;
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(StoreError::Io(error)),
+        }
+    }
+    let temporary = temporary.ok_or(StoreError::Invariant)?;
+    let mut file = file.ok_or(StoreError::Invariant)?;
+    let mut temporary_created = true;
+    let result = (|| {
+        file.set_permissions(fs::Permissions::from_mode(0o600))
             .map_err(StoreError::Io)?;
         file.write_all(&bytes).map_err(StoreError::Io)?;
         file.sync_all().map_err(StoreError::Io)?;
         fs::rename(&temporary, path).map_err(StoreError::Io)?;
+        temporary_created = false;
         Ok(())
     })();
-    if result.is_err() {
+    if result.is_err() && temporary_created {
         let _ = fs::remove_file(&temporary);
     }
     result
@@ -732,6 +884,8 @@ mod tests {
             .join("store.json");
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).expect("create temp dir");
+            std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))
+                .expect("secure temp dir");
         }
         path
     }
@@ -835,6 +989,13 @@ mod tests {
 
     #[test]
     fn private_store_rejects_unsafe_primary_and_temporary_files() {
+        let synthetic_uid = current_uid().expect("current uid");
+        assert!(
+            traversal_exposure_after(synthetic_uid.saturating_add(1), 0o755, synthetic_uid, false)
+                .is_err(),
+            "non-root foreign-owned traversal ancestor must fail closed"
+        );
+
         let path = temp_path();
         let store = FileRecordStore::open(&path).expect("open empty store");
         assert!(matches!(
@@ -867,6 +1028,79 @@ mod tests {
             Err(StoreError::Invariant)
         ));
 
+        let noncanonical = temp_path();
+        fs::write(&noncanonical, b"{\"schema_version\":1,\"records\":{}}\n")
+            .expect("write noncanonical store");
+        fs::set_permissions(&noncanonical, fs::Permissions::from_mode(0o600))
+            .expect("secure noncanonical store");
+        assert!(matches!(
+            FileRecordStore::open(&noncanonical),
+            Err(StoreError::Invariant)
+        ));
+
+        let insecure_parent = temp_path();
+        fs::set_permissions(
+            insecure_parent.parent().expect("insecure parent"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .expect("set insecure parent mode");
+        assert!(matches!(
+            FileRecordStore::open(&insecure_parent),
+            Err(StoreError::Invariant)
+        ));
+
+        let unsafe_ancestor_id = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let unsafe_ancestor = PathBuf::from("/tmp").join(format!(
+            "m10-unsafe-ancestor-{}-{unsafe_ancestor_id}",
+            std::process::id()
+        ));
+        fs::create_dir(&unsafe_ancestor).expect("create unsafe ancestor");
+        fs::set_permissions(&unsafe_ancestor, fs::Permissions::from_mode(0o777))
+            .expect("set unsafe ancestor mode");
+        let private_child = unsafe_ancestor.join("private-child");
+        fs::create_dir(&private_child).expect("create private child");
+        fs::set_permissions(&private_child, fs::Permissions::from_mode(0o700))
+            .expect("secure private child");
+        assert!(matches!(
+            FileRecordStore::open(private_child.join("store.json")),
+            Err(StoreError::Invariant)
+        ));
+        fs::set_permissions(&unsafe_ancestor, fs::Permissions::from_mode(0o700))
+            .expect("restore unsafe ancestor mode");
+        fs::remove_dir_all(&unsafe_ancestor).expect("remove unsafe ancestor fixture");
+
+        let symlink_ancestor_probe = temp_path();
+        let symlink_root = symlink_ancestor_probe
+            .parent()
+            .expect("symlink ancestor root")
+            .to_owned();
+        let real_ancestor = symlink_root.join("real-ancestor");
+        let linked_ancestor = symlink_root.join("linked-ancestor");
+        fs::create_dir(&real_ancestor).expect("create real ancestor");
+        fs::set_permissions(&real_ancestor, fs::Permissions::from_mode(0o700))
+            .expect("secure real ancestor");
+        symlink(&real_ancestor, &linked_ancestor).expect("create ancestor symlink");
+        let linked_parent = linked_ancestor.join("private-child");
+        fs::create_dir(&linked_parent).expect("create child through symlink");
+        fs::set_permissions(&linked_parent, fs::Permissions::from_mode(0o700))
+            .expect("secure linked child");
+        assert!(matches!(
+            FileRecordStore::open(linked_parent.join("store.json")),
+            Err(StoreError::Invariant)
+        ));
+
+        let hardlinked = temp_path();
+        fs::write(&hardlinked, br#"{"schema_version":1,"records":{}}"#)
+            .expect("write hardlinked store");
+        fs::set_permissions(&hardlinked, fs::Permissions::from_mode(0o600))
+            .expect("secure hardlinked store");
+        fs::hard_link(&hardlinked, hardlinked.with_extension("alias"))
+            .expect("create store hardlink");
+        assert!(matches!(
+            FileRecordStore::open(&hardlinked),
+            Err(StoreError::Invariant)
+        ));
+
         let symlink_path = temp_path();
         let sentinel = symlink_path.with_extension("sentinel");
         fs::write(&sentinel, br#"{"schema_version":1,"records":{}}"#)
@@ -891,11 +1125,17 @@ mod tests {
         assert!(
             temporary_store
                 .insert_admitted_once("cmd:002", public_capsule("cmd:002"), public_policy())
-                .is_err()
+                .is_ok()
         );
         assert_eq!(
             fs::read(&temporary_sentinel).expect("read temp sentinel"),
             b"do-not-overwrite"
+        );
+        assert!(
+            fs::symlink_metadata(temporary_path.with_extension("tmp"))
+                .expect("unrelated legacy temp symlink remains")
+                .file_type()
+                .is_symlink()
         );
 
         let oversized = temp_path();

@@ -4,13 +4,13 @@
 
 - `Module ID`: `M70`
 - `Package ID`: `ustc.change-radar`
-- `Status`: Accepted blueprint; bounded semantic-diff/review/feed evidence
+- `Status`: Accepted blueprint; bounded durable administrator-publication evidence
 - `Implementation State`: `partial-evidence`
 - `Version`: `m70-change-radar/v0`
-- `Last Review`: `2026-08-27`
+- `Last Review`: `2026-08-30`
 - `Primary code area`: `crates/change-radar/`, with M60-owned immutable revision values in `crates/platform-core/src/source_revision.rs`; package resources remain under `plugins/first-party/change-radar/`
 
-Current retained evidence covers exact-source-pinned board-policy validation, deterministic typed field comparison, M60-owned source-health denial outcomes, complete-policy-bound candidate identity, explicit administrator approve/reject receipts, one coherent transaction-current M60 publication decision, exactly-once in-memory publication, stable event GUIDs and deterministic Atom rendering with before/after, effective/observed time, source evidence, freshness and provenance. One no-personal-data `DemoReviewed` fixture now crosses M00 public admission, M10 `change.list`, current Market projection/recheck, bounded Harness/ToolGateway, the fixed owning Plugin adapter and loopback Web/Atom projection, including disable/revoke denial and Affairs isolation. It deliberately does not claim M00-authorized administration, durable storage/restart, an approved live source, M80 peer-client composition, real retrieval, or the module exit gate.
+Current retained evidence covers exact-source-pinned board-policy validation, deterministic typed field comparison, M60-owned source-health denial outcomes, complete-policy-bound candidate identity, explicit administrator approve/reject receipts, one coherent transaction-current M60 publication decision, stable event GUIDs and deterministic JSON/Atom rendering with before/after, effective/observed time, source evidence, freshness and provenance. One fixed no-personal-data `DemoReviewed` administrator command now crosses `M10 → M00 admission/durable evidence → owning M70 port`; review and publication records persist as strict owner-only canonical JSON, exact retry returns the same receipt, recovery rehydrates only a checked persisted record with zero M60 calls, and corrupt/replaced/unsafe state fails closed rather than becoming an empty feed. Ordinary board reads remain behind current Market/Harness/ToolGateway and share the same durable state with JSON/Atom. Real two-process and browser restart evidence preserves one GUID, receipt and Atom item. This deliberately does not claim an approved live source, production SSO/administration, M80 peer-client composition, real retrieval, maintainer leases or the module exit gate.
 
 ## 1. Purpose
 
@@ -99,7 +99,9 @@ A maintainer Agent may propose a candidate under board/source/policy scope. It c
 - Candidate/evidence write failure: no baseline/publication acknowledgement.
 - Concurrent duplicate candidate/publish: deterministic event/GUID and one winner.
 - Conflicting authority/effective time: explicit conflict; no publication.
-- Feed render/delivery failure: approved event remains canonical; projection retries idempotently.
+- Durable review/publication failure: preserve only the last canonical committed state; exact retry reuses M00 evidence and never exposes a partial item.
+- Post-rename parent-sync uncertainty: read back the canonical renamed file and reconcile memory before returning failure, so retry cannot duplicate M60 work or roll back visible state.
+- Feed projection failure: retry by stable event GUID without duplicating the item; repository corruption is infrastructure failure, not empty feed/NotFound.
 - Revoked source/policy: block new candidates/publication and preserve policy-compliant history.
 
 ## 8. Configuration and secrets

@@ -39,18 +39,28 @@ struct SessionStoreRecord {
 }
 
 impl DurableCurrentSessionStore {
-    #[cfg(unix)]
+    #[cfg(all(test, unix))]
     pub(crate) fn open_or_bootstrap(
         path: &Path,
         bootstrap_events: &[SessionEvent],
     ) -> Result<Self, SessionRepositoryError> {
-        Self::open_or_bootstrap_inner(path, bootstrap_events, None)
+        Self::open_or_bootstrap_inner(path, bootstrap_events, true, None)
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn open_or_bootstrap_for_state_set(
+        path: &Path,
+        bootstrap_events: &[SessionEvent],
+        bootstrap_is_fresh: bool,
+    ) -> Result<Self, SessionRepositoryError> {
+        Self::open_or_bootstrap_inner(path, bootstrap_events, bootstrap_is_fresh, None)
     }
 
     #[cfg(not(unix))]
-    pub(crate) fn open_or_bootstrap(
+    pub(crate) fn open_or_bootstrap_for_state_set(
         _path: &Path,
         _bootstrap_events: &[SessionEvent],
+        _bootstrap_is_fresh: bool,
     ) -> Result<Self, SessionRepositoryError> {
         Err(SessionRepositoryError::Unavailable)
     }
@@ -59,12 +69,16 @@ impl DurableCurrentSessionStore {
     fn open_or_bootstrap_inner(
         path: &Path,
         bootstrap_events: &[SessionEvent],
+        bootstrap_is_fresh: bool,
         control: Option<&BootstrapControl>,
     ) -> Result<Self, SessionRepositoryError> {
         validate_parent(path)?;
         match std::fs::symlink_metadata(path) {
             Ok(_) => read_existing(path, control),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if !bootstrap_is_fresh {
+                    return Err(SessionRepositoryError::Corrupt);
+                }
                 bootstrap(path, bootstrap_events, control)?;
                 read_existing(path, control)
             }
@@ -125,21 +139,8 @@ fn validate_state(
 
 #[cfg(unix)]
 fn validate_parent(path: &Path) -> Result<(), SessionRepositoryError> {
-    use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
-
-    let parent = path.parent().ok_or(SessionRepositoryError::Unavailable)?;
-    let metadata =
-        std::fs::symlink_metadata(parent).map_err(|_| SessionRepositoryError::Unavailable)?;
-    if metadata.file_type().is_symlink()
-        || !metadata.file_type().is_dir()
-        || metadata.file_type().is_file()
-        || metadata.file_type().is_socket()
-        || metadata.permissions().mode() & 0o7777 != 0o700
-        || metadata.uid() != current_uid()?
-    {
-        return Err(SessionRepositoryError::Unavailable);
-    }
-    Ok(())
+    crate::durable_path::ensure_secure_parent(path, false)
+        .map_err(|_| SessionRepositoryError::Unavailable)
 }
 
 #[cfg(unix)]
@@ -155,6 +156,18 @@ fn read_existing(
     path: &Path,
     control: Option<&BootstrapControl>,
 ) -> Result<DurableCurrentSessionStore, SessionRepositoryError> {
+    let bytes = read_existing_bytes(path, control)?;
+    let state: SessionStoreFile =
+        serde_json::from_slice(&bytes).map_err(|_| SessionRepositoryError::Corrupt)?;
+    validate_state(state, &bytes)
+}
+
+#[cfg(unix)]
+fn read_existing_bytes(
+    path: &Path,
+    control: Option<&BootstrapControl>,
+) -> Result<Vec<u8>, SessionRepositoryError> {
+    validate_parent(path)?;
     use std::fs::OpenOptions;
     use std::io::Read;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
@@ -209,9 +222,7 @@ fn read_existing(
     if bytes.is_empty() || u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_FILE_BYTES {
         return Err(SessionRepositoryError::Corrupt);
     }
-    let state: SessionStoreFile =
-        serde_json::from_slice(&bytes).map_err(|_| SessionRepositoryError::Corrupt)?;
-    validate_state(state, &bytes)
+    Ok(bytes)
 }
 
 #[cfg(unix)]
@@ -324,17 +335,45 @@ fn bootstrap(
     #[cfg(test)]
     if fault(control) == Some(BootstrapFault::AfterPublishBeforeTempUnlink) {
         let _ = std::fs::remove_file(&temporary);
-        return Err(SessionRepositoryError::Unavailable);
+        return preserve_uncertain_published_error(path, &bytes);
     }
 
-    std::fs::remove_file(&temporary).map_err(|_| SessionRepositoryError::Unavailable)?;
+    #[cfg(test)]
+    if fault(control) == Some(BootstrapFault::TempUnlinkFailure) {
+        return preserve_uncertain_published_error(path, &bytes);
+    }
+    if std::fs::remove_file(&temporary).is_err() {
+        return preserve_uncertain_published_error(path, &bytes);
+    }
     #[cfg(test)]
     if fault(control) == Some(BootstrapFault::AfterTempUnlinkBeforeParentSync) {
-        return Err(SessionRepositoryError::Unavailable);
+        return preserve_uncertain_published_error(path, &bytes);
     }
-    std::fs::File::open(parent)
+    let sync_result = std::fs::File::open(parent)
         .and_then(|directory| directory.sync_all())
-        .map_err(|_| SessionRepositoryError::Unavailable)
+        .map_err(|_| SessionRepositoryError::Unavailable);
+    match sync_result {
+        Ok(()) => Ok(()),
+        Err(_) => preserve_uncertain_published_error(path, &bytes),
+    }
+}
+
+#[cfg(unix)]
+fn reconcile_published(path: &Path, expected: &[u8]) -> Result<(), SessionRepositoryError> {
+    match read_existing_bytes(path, None) {
+        Ok(actual) if actual == expected => Ok(()),
+        Ok(_) => Err(SessionRepositoryError::Corrupt),
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(unix)]
+fn preserve_uncertain_published_error(
+    path: &Path,
+    expected: &[u8],
+) -> Result<(), SessionRepositoryError> {
+    reconcile_published(path, expected)?;
+    Err(SessionRepositoryError::Unavailable)
 }
 
 #[cfg(unix)]
@@ -362,6 +401,7 @@ enum BootstrapFault {
     AfterFileSync,
     BeforePublish,
     AfterPublishBeforeTempUnlink,
+    TempUnlinkFailure,
     AfterTempUnlinkBeforeParentSync,
     CleanupRemoveFailure,
 }
@@ -713,6 +753,7 @@ mod tests {
                 DurableCurrentSessionStore::open_or_bootstrap_inner(
                     &path,
                     &events,
+                    true,
                     Some(&control(Some(fault)))
                 )
                 .is_err()
@@ -728,6 +769,7 @@ mod tests {
             DurableCurrentSessionStore::open_or_bootstrap_inner(
                 &path,
                 &events,
+                true,
                 Some(&control(Some(BootstrapFault::CleanupRemoveFailure)))
             )
             .is_err()
@@ -757,13 +799,39 @@ mod tests {
                 DurableCurrentSessionStore::open_or_bootstrap_inner(
                     &path,
                     &events,
+                    true,
                     Some(&control(Some(fault)))
                 )
-                .is_err()
+                .is_err(),
+                "published exact session bytes must preserve the pre-directory-sync error"
             );
             assert!(path.exists());
             assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
             assert!(DurableCurrentSessionStore::open_or_bootstrap(&path, &events).is_ok());
+        }
+
+        let dir = test_dir("temp-unlink-failure");
+        let path = dir.join("sessions.json");
+        let events = bootstrap_events("session:one", "tenant:one", "user:one");
+        assert!(
+            DurableCurrentSessionStore::open_or_bootstrap_inner(
+                &path,
+                &events,
+                true,
+                Some(&control(Some(BootstrapFault::TempUnlinkFailure)))
+            )
+            .is_err(),
+            "a remaining second hard link must fail exact reconciliation"
+        );
+        assert!(path.exists());
+        let residue: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        assert_eq!(residue.len(), 2);
+        assert!(DurableCurrentSessionStore::open_or_bootstrap(&path, &events).is_err());
+        for entry in residue {
+            fs::remove_file(entry).unwrap();
         }
 
         let dir = test_dir("concurrent");
@@ -780,7 +848,12 @@ mod tests {
                     before_publish: Some(barrier),
                     swap_after_open: None,
                 };
-                DurableCurrentSessionStore::open_or_bootstrap_inner(&path, &events, Some(&control))
+                DurableCurrentSessionStore::open_or_bootstrap_inner(
+                    &path,
+                    &events,
+                    true,
+                    Some(&control),
+                )
             }));
         }
         let outcomes: Vec<_> = joins.into_iter().map(|join| join.join().unwrap()).collect();

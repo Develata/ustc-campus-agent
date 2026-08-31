@@ -2,6 +2,7 @@
 #![allow(clippy::unwrap_used)]
 
 use std::collections::BTreeMap;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -14,6 +15,8 @@ pub fn temp_path() -> PathBuf {
         .join("store.json");
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).expect("create temp dir");
+        std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))
+            .expect("secure temp dir");
     }
     path
 }
@@ -388,6 +391,9 @@ impl Descriptor {
     }
     pub fn affairs_publication() -> Self {
         Self::new("affairs.publish", PermissionClass::TenantPrivateWrite)
+    }
+    pub fn change_publication() -> Self {
+        Self::new("change.publish", PermissionClass::TenantPrivateWrite)
     }
     pub fn wrong_operation() -> Self {
         Self::new("wrong.operation", PermissionClass::PublicRead)

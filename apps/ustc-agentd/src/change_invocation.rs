@@ -18,7 +18,7 @@ use ustc_campus_agent_application_ingress::{
 };
 use ustc_campus_agent_change_radar::{
     BoardFeedPolicy, BoardId, ChangeFeedQueryError, ChangeFeedQueryService,
-    InMemoryChangeRadarRepository,
+    ChangePublicationRepository,
 };
 use ustc_campus_agent_core::identity::{TenantId, UserId};
 use ustc_campus_agent_core::invocation::{
@@ -63,8 +63,8 @@ impl ChangeInvocationCounters {
     }
 }
 
-pub(crate) struct ChangeInvocationSpine<'a> {
-    repository: &'a InMemoryChangeRadarRepository,
+pub(crate) struct ChangeInvocationSpine<'a, R> {
+    repository: &'a R,
     policy: &'a BoardFeedPolicy,
     market_enabled: bool,
     market_grant_active: bool,
@@ -72,9 +72,12 @@ pub(crate) struct ChangeInvocationSpine<'a> {
     counters: ChangeInvocationCounters,
 }
 
-impl<'a> ChangeInvocationSpine<'a> {
+impl<'a, R> ChangeInvocationSpine<'a, R>
+where
+    R: ChangePublicationRepository + Sync,
+{
     pub(crate) fn new(
-        repository: &'a InMemoryChangeRadarRepository,
+        repository: &'a R,
         policy: &'a BoardFeedPolicy,
         market_enabled: bool,
         market_grant_active: bool,
@@ -92,7 +95,10 @@ impl<'a> ChangeInvocationSpine<'a> {
     }
 }
 
-impl ChangeFeedInvocationPort for ChangeInvocationSpine<'_> {
+impl<R> ChangeFeedInvocationPort for ChangeInvocationSpine<'_, R>
+where
+    R: ChangePublicationRepository + Sync,
+{
     fn invoke(
         &self,
         actor: &M00AdmittedActor,

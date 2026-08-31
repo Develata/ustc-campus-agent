@@ -1,6 +1,6 @@
 {
   "schema_version": "checker-test-inventory/v1",
-  "expected_count": 719,
+  "expected_count": 720,
   "test_ids": [
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_count_mismatch",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_duplicates",
@@ -273,6 +273,7 @@
     "test_check_repo_contracts.PlatformControlEvidenceContractTests.test_control_evidence_exact_test_rename_fails_closed",
     "test_check_repo_contracts.PlatformControlEvidenceContractTests.test_control_evidence_extra_public_surface_fails_closed",
     "test_check_repo_contracts.PlatformControlEvidenceContractTests.test_control_evidence_fake_precedence_weakening_fails_closed",
+    "test_check_repo_contracts.PlatformControlEvidenceContractTests.test_control_evidence_fixed_admin_projection_drift_fails_closed",
     "test_check_repo_contracts.PlatformControlEvidenceContractTests.test_control_evidence_main_invocation_removal_fails_closed",
     "test_check_repo_contracts.PlatformControlEvidenceContractTests.test_control_evidence_mapping_arm_drift_fails_closed",
     "test_check_repo_contracts.PlatformControlEvidenceContractTests.test_control_evidence_raw_display_surface_fails_closed",

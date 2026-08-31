@@ -51,7 +51,7 @@ cargo run --locked -p ustc-agentctl -- course plan \
 
 The command must emit `course-plan-result/v0`, at least two candidates for the canonical fixture and `hard_constraint_violations: 0`.
 
-This validates only the retained offline spike inside Opportunity Graph. It does not prove Market installation/runtime integration. The platform now has an R0 framework-neutral runtime kernel; the next first-party product mainline remains ChangeRadar source/revision/diff.
+This validates only the retained offline spike inside Opportunity Graph. It does not prove Market installation/runtime integration. The bounded ChangeRadar mainline now also has durable fixed-administrator publication; approved live-source retrieval and production administration remain separate.
 
 ## Operator smokes
 
@@ -60,6 +60,27 @@ cargo run --locked -p ustc-agentctl -- doctor
 cargo run --locked -p ustc-agentctl -- market validate
 cargo run --locked -p ustc-agentd -- --version
 ```
+
+For the loopback three-plugin demo, start `./scripts/run_three_plugin_mvp.sh` and exercise both fixed administrator callers from another process:
+
+```bash
+cargo run --locked -p ustc-agentctl -- affairs publication-status --server 127.0.0.1:8787
+cargo run --locked -p ustc-agentctl -- affairs publish-demo --server 127.0.0.1:8787 --confirm
+cargo run --locked -p ustc-agentctl -- changes publication-status --server 127.0.0.1:8787
+cargo run --locked -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --confirm
+```
+
+The ChangeRadar focused acceptance closure is:
+
+```bash
+cargo test --locked -p ustc-campus-agent-change-radar --all-features
+cargo test --locked -p ustc-campus-agent-application-ingress --test change_publication
+cargo test --locked -p ustc-agentd --test change_composition
+cargo test --locked -p ustc-agentd --test affairs_web
+cargo test --locked -p ustc-agentctl
+```
+
+Publication requires explicit confirmation and only numeric loopback servers are accepted. Stop the daemon, restart it with the same owner-only state directory, and verify `changes publication-status`, public JSON and Atom retain one identical receipt/GUID/item. This is bounded demo evidence, not production SSO, remote administration or live-source proof.
 
 ## CodeGraph
 

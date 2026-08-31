@@ -125,6 +125,11 @@ impl NormalizedFacts {
         self.0.is_empty()
     }
 
+    /// Iterates the canonical field order without exposing mutable storage.
+    pub fn iter(&self) -> impl Iterator<Item = (&SemanticField, &SemanticValue)> {
+        self.0.iter()
+    }
+
     /// Computes a stable digest over a length-prefixed canonical encoding.
     #[must_use]
     pub fn sha256(&self) -> RevisionSha256 {
@@ -254,6 +259,11 @@ impl BoardPolicy {
     #[must_use]
     pub fn affected_scope(&self) -> &str {
         &self.affected_scope
+    }
+
+    /// Iterates the canonical tracked-field order without exposing mutable policy state.
+    pub fn tracked_fields(&self) -> impl Iterator<Item = &SemanticField> {
+        self.tracked_fields.iter()
     }
 }
 
@@ -461,7 +471,7 @@ pub trait ChangeRadarRepository {
 }
 
 /// Deterministic bounded in-memory repository with preflight-then-publish updates.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InMemoryChangeRadarRepository {
     baselines: BTreeMap<SourceId, AcceptedObservation>,
     pub(crate) candidates: BTreeMap<ChangeEventId, SemanticChangeCandidate>,

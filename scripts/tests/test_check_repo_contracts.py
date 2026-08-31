@@ -10111,6 +10111,14 @@ class PlatformControlEvidenceContractTests(unittest.TestCase):
         issues = self.check_control_evidence()
         self.assertTrue(any(fragment in issue for issue in issues), issues)
 
+    def test_control_evidence_fixed_admin_projection_drift_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/overview/architecture.md",
+            "fixed Affairs/ChangeRadar B5 compositions persist admitted-request evidence before owning M71/M70 effects",
+            "only one unbound administrator composition remains",
+        )
+        self.assert_issue("platform control evidence projection missing")
+
     def test_control_evidence_contract_missing_fails_closed(self) -> None:
         (self.root / self.CONTRACT_REL).unlink()
         self.assert_issue("required carrier missing")

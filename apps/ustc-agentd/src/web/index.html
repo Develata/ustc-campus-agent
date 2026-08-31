@@ -189,6 +189,27 @@
           <a href="/api/v1/changes/board%3Austc%3Aacademic-calendar/atom">Atom feed ↗</a>
         </div>
       </div>
+      <div class="opportunity-consent radar-admin-panel">
+        <div>
+          <strong>管理员发布 · 非生产演示</strong>
+          <p>仅固定 DemoReviewed candidate；显式确认后跨越 M10 → M00 durable evidence → owning M70 port。</p>
+        </div>
+        <label class="consent-check" for="radar-publication-confirm">
+          <input id="radar-publication-confirm" type="checkbox">
+          <span>我确认发布这一个固定 semantic change；exact retry 必须返回同一 receipt。</span>
+        </label>
+        <div class="opportunity-actions">
+          <button id="radar-publication-refresh" type="button">读取发布状态</button>
+          <button id="radar-publication-publish" type="button" disabled>发布固定变更</button>
+        </div>
+      </div>
+      <p id="radar-publication-status" class="status" role="status" aria-live="polite">等待读取 ChangeRadar durable publication state…</p>
+      <dl class="radar-evidence radar-publication-evidence">
+        <div><dt>Review records</dt><dd id="radar-publication-review-count">—</dd></div>
+        <div><dt>Publication records</dt><dd id="radar-publication-count">—</dd></div>
+        <div><dt>Publication receipt</dt><dd id="radar-publication-receipt">—</dd></div>
+        <div><dt>Control evidence events</dt><dd id="radar-publication-evidence-count">—</dd></div>
+      </dl>
       <p id="radar-status" class="status" role="status" aria-live="polite">等待读取 source-grounded feed…</p>
       <div id="radar-result" class="radar-result" hidden>
         <div class="radar-meta">

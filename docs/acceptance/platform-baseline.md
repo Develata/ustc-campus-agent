@@ -5,7 +5,7 @@
 - `Layer`: `Acceptance / Coverage / Evidence`
 - `Status`: **Planning baseline; only `matrix.tsv` is the active competition gate registry**
 - `Version`: `0.7.0`
-- `Last Review`: `2026-08-15`
+- `Last Review`: `2026-08-30`
 - `Authority Owns`: stable long-horizon case IDs, planned assertions and evidence-binding classes
 - `Authority Defers To`: `docs/plan/`, `docs/contracts/` and `docs/acceptance/matrix.tsv` for current scope/status
 
@@ -187,6 +187,7 @@ ustc-agentctl acceptance matrix-check --strict --format json
 | `AUTH-021` | exact replay-only B4a session history ports deterministic fakes and a secure durable DemoReviewed current-session read/bootstrap vendor preserve retained session scope across restart without raw secret/path/error echo; B4b B5 SSO and durable lifecycle mutation remain unclaimed | rust-unit + rust-doc-test + app integration + contract-check | PR |
 | `AUTH-022` | exact B4b session/request control-event projections and 36 bounded error codes retain only stable redacted data, remain non-authoritative under Serde, and expose fail-closed read/append-once journal ports with deterministic fakes; production persistence, B5 and Affairs publication remain unclaimed | rust-unit + rust-doc-test + contract-check | PR |
 | `AUTH-023` | one fixed authenticated DemoReviewed Affairs administrator command recomputes its M10 payload digest, passes current M00 descriptor/session/permission/capability/policy admission and persists or verifies durable request-admitted evidence before M71; every denial or evidence failure reaches no M60 publication decision or repository mutation | rust-integration + process-restart + HTTP/CLI/Web | demo |
+| `AUTH-024` | one fixed authenticated DemoReviewed ChangeRadar administrator command recomputes its M10 payload digest, passes current M00 descriptor/session/permission/capability/policy admission, persists or verifies durable request-admitted evidence before any M70 review, M60 verification or publication mutation, invokes only the direct owning-M70 application port without PublicRead ToolGateway/query-counter use, preserves Affairs/Opportunity isolation, and leaves zero downstream mutation on every denial or evidence failure | rust-integration + process-restart + HTTP/CLI/Web | demo |
 
 ## 9. Capability registry and ControlledCLI — `SEC-*`
 
