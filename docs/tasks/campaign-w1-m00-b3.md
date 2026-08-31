@@ -9,13 +9,15 @@
 
 ## Mutable campaign state
 
-- `Status`: `queued`
+- `Status`: `completed`
 - `Bound source commit`: `3bd622d98f1e11f8d39ba88334ac5fc0b737c301`
+- `Bound source role`: `historical exact implementation input; not the terminal main integration receipt`
+- `Terminal main commit`: `e6fcf2423a2b438708b2573f4616161cc95aa08e`
 - `Repair round`: `0`
 - `Current blocker identity`: `none`
 - `Stop reason`: `none`
-- `Last transition evidence`: `M00-v12-reaccepted-and-bounded-kernel-gates-pass`
-- `Next allowed mutation`: production B4 vendor or B5 M10 composition only under a separately accepted contract-bound slice
+- `Last transition evidence`: `M00-v12-reaccepted-and-bounded-kernel-gates-pass; bounded request-context output later integrated by PR #55 reviewed head 1accc2c75c69a24c3f6dee54ecc9166eac38dd36; squash/main e6fcf2423a2b438708b2573f4616161cc95aa08e; reviewed-tree-equals-main-tree 348b85475d0ca5b7c4ea68a4942ce57a4ac09887; exact-main CI 33295591462=PASS; W1 M00-B3 terminal disposition completed with no readiness promotion`
+- `Next allowed mutation`: `none within USTC-MODULES-2026-07-W1; a production B4 vendor or B5 M10 composition requires a separately accepted contract-bound slice`
 
 ## Implemented bounded output
 
@@ -34,7 +36,7 @@
 
 ## Honest non-goals
 
-M00 remains `partial-evidence`. This taskbook does not claim production B4 database/auth/policy/capability/clock/idempotency vendors, real crash/reopen/CAS evidence, B5 M10-v17 runtime composition, downstream domain E2E, source-control publication, release, or deployment.
+M00 remains `partial-evidence`. This M00-B3 closure claims only the bounded request-context kernel integrated by PR #55; it does not claim production B4 database/auth/policy/capability/clock/idempotency vendors, broader M00 authority, release or deployment. Later downstream product E2E belongs to owning modules and is not promoted here as M00-B3 evidence.
 
 ## Required evidence
 
