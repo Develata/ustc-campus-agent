@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current delivery and task-splitting order
-- `Version`: `module-roadmap/v2.6`
-- `Last Review`: `2026-08-15`
+- `Version`: `module-roadmap/v2.7`
+- `Last Review`: `2026-09-01`
 - `Owning product plan`: [`../plan/02-product-positioning.md`](../plan/02-product-positioning.md)
 - `Engineering constitution`: [`../plan/00-engineering-constitution.md`](../plan/00-engineering-constitution.md)
 - `Module map`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
@@ -254,13 +254,13 @@ Arbitrary central `stdio` command execution is outside this lane.
 
 ## 12. M60 lane — Campus Trust and Source Pipeline
 
-**Status**: accepted-contract `source-import/v1` and `source-retrieval/v0` (R11 two-layer M60/M90 transport architecture; `ACCEPT_EXACT_M60_B2_R11_PACKET`); M60 overall remains `planned`; no v1 retrieval/policy implementation; operational `Suspended`/`Revoked` lifecycle and `SourceAuthorityRevision` precondition enforced; no approved concrete USTC source; superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only. Bounded `M60-B1 source-registry`, canonical-URL-bound deterministic-ID `DemoReviewed` `M60-B5` revision values and an M60-owned revision-health type exist, without parser, durable baseline or publication authority.
+**Status**: accepted-contract `source-import/v1` and `source-retrieval/v0` (R11 two-layer M60/M90 transport architecture; `ACCEPT_EXACT_M60_B2_R11_PACKET`); M60 overall remains `planned`; bounded M60-B1 implements the pure v1 operational lifecycle and `SourceAuthorityRevision` prerequisite; M60-B2 retrieval/policy remains unimplemented and separately gated; no approved concrete USTC source; superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only. Canonical-URL-bound deterministic-ID `DemoReviewed` `M60-B5` revision values and an M60-owned revision-health type also exist, without parser, durable baseline or publication authority.
 
 **Prerequisite**: one concrete public source receives owner, URL/retrieval, permission/rate and parser-fixture review.
 
 `P1-0` now carries the accepted, construction-ready `source-import/v0` contract and a concrete `ustc-teach-calendar-fall` review candidate under [`p1-source-revision-readiness-proposal.md`](p1-source-revision-readiness-proposal.md). The source remains `Proposed`; raw HTML remains outside Git; no acceptance row or module state is promoted by P1-0. Exact-candidate review is `GO`, so the bounded local P1-1 B1 implementation lane is admitted. This is not part of the older W1 campaign grant. Develata's later operation-specific instructions authorize the feature-branch push, PR, Actions CI/run and workflow dispatch; merge, tag, release, source approval and retrieval remain unauthorized.
 
-- `M60-B1 source-registry`: stable identity, owner, policy and status; exact P1-1 boundary is `source-import/v0` §§3–7 and the P1 proposal packet.
+- `M60-B1 source-registry`: `implemented` bounded pure `source-import/v1` lifecycle—stable identity, owner, URL, authority, six-field policy including `PublicIpPolicyVersion`, `Proposed | Approved | Suspended | Revoked`, initial proposal at revision `1`, exact CAS on every post-proposal mutation and approved-only sealed `RetrievalSubject`; P1-1 v0 remains historical predecessor evidence.
 - `M60-B2 retrieval-policy`: safe exact host/path, redirects, content/time/size/rate. Contract accepted (`source-import/v1` + `source-retrieval/v0`, R11 exact packet); no implementation; lifecycle precondition applies.
 - `M60-B3 lease-snapshot`: deterministic lease and immutable raw evidence.
 - `M60-B4 normalize-parser`: deterministic peers with exact identity/fixtures.
@@ -271,7 +271,7 @@ Arbitrary central `stdio` command execution is outside this lane.
 
 This lane precedes real product source integration, but each product can develop against exact M60 fixtures.
 
-`P1-1` has implemented bounded `M60-B1 source-registry` under `source-import/v0`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` are present, `SRC-001` is promoted to `implemented` bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`, and the dedicated checker/test carriers are extended. `crates/platform-core/src/source_revision.rs` now adds canonical-URL-bound, deterministic-ID immutable revision values for honestly labelled `DemoReviewed` snapshots plus an M60-owned revision-health type as supporting `M60-B5/B6` evidence. `source-import/v1` and `source-retrieval/v0` remain the accepted contract authority under R11; no v1 retrieval implementation exists. `M60` overall, M60 parser/retrieval/durable-baseline/publication composition, and `SRC-010`, `SRC-011`, `SRC-012` remain `planned`. The `ustc-teach-calendar-fall` candidate remains `Proposed`. The superseded V10 packet digest (`sha256:ba36425adc164ca9b3ec75addd4be2e4b299b5f8a8cfb75cf6a710679acd32ab`) is mechanically checked as historical evidence. Operational `Suspended`/`Revoked` lifecycle, source approval, network retrieval, and publication remain unauthorized.
+`P1-1` remains the historical bounded `source-import/v0` review slice. The same `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` carriers now implement bounded M60-B1 under `source-import/v1`; `SRC-001` remains `implemented` with the unchanged exact command `cargo test --locked -p ustc-campus-agent-core --test source_registry`, and the checker/test carriers close the exact v1 surface. `crates/platform-core/src/source_revision.rs` separately retains canonical-URL-bound, deterministic-ID immutable revision values for honestly labelled `DemoReviewed` snapshots plus an M60-owned revision-health type as supporting `M60-B5/B6` evidence. `source-retrieval/v0` remains accepted contract authority only; no M60-B2 retrieval implementation exists. `M60` overall, M60 parser/retrieval/durable-baseline/publication composition, and `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; `SRC-014` remains catalog-only/non-admitted. The `ustc-teach-calendar-fall` candidate remains `Proposed`. The superseded V10 packet digest (`sha256:ba36425adc164ca9b3ec75addd4be2e4b299b5f8a8cfb75cf6a710679acd32ab`) is mechanically checked as historical evidence. Source approval, network retrieval and publication remain unauthorized.
 
 ## 13. First-party product lanes
 
@@ -417,7 +417,7 @@ This section projects the competition delivery posture from [`../plan/02-product
 | `M40` Tool Gateway/Execution | protocol/fake proof | durable intent/executor/receipt | full recovery composition | first real executor path (`A2`) |
 | `M50` Model Provider | — | typed profiles + one provider adapter | multi-provider peers | first bounded model turn |
 | `M51` MCP Binding/Executor | — | one reviewed read-only binding | outbound MCP productization | first external MCP tool |
-| `M60` Campus Trust/Source | source-registry (`B1` implemented) | one reviewed source/revision | `B3`–`B8` pipeline | first approved concrete source |
+| `M60` Campus Trust/Source | bounded `source-import/v1` lifecycle (`B1` implemented; no I/O) | separately gated `B2` retrieval, then one reviewed source/revision | `B3`–`B8` pipeline | first approved concrete source |
 | `M70` ChangeRadar | bounded board-policy + typed semantic-diff + coherent M60 verification + fixed M00-admitted durable administrator publication + exact-retry JSON/Atom process/browser restart (`partial-evidence`) | approved live source + production administration | maintainer leases, broader boards/subscriptions and M80 peers | bounded durable-publication MVP complete; production source/admin remain |
 | `M71` Affairs Navigator | M60 `DemoReviewed` draft import + coherent source-health/retained-evidence decision + digest-bound review + durable CAS/idempotent publication composed with fixture-backed M10/CLI/loopback-Web queries and restart read-back (`partial-evidence`) | M00-authorized operator publication | broad tree/search/targeted refresh | bounded MVP complete; production administration remains |
 | `M72` Opportunity Graph | consent-bound tenant-private profile/planning/delete through Market/Harness/ToolGateway/M10/Web with restart-persistent active/tombstone state (`partial-evidence`) | production M00/SSO + approved M60 course source | broader opportunity types and explanation | bounded MVP complete; production identity/source remains |

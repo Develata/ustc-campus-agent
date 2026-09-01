@@ -2,15 +2,15 @@
 
 ## Metadata
 
-- `Status`: Accepted contract as `source-import/v1` under the R11 M60-B2 two-layer transport architecture; supersedes the accepted V10 `DEC-M60-B2-ACCEPTANCE`; `source-import/v0` retained as explicitly historical (see §15)
+- `Status`: Accepted contract as `source-import/v1` under the R11 M60-B2 two-layer transport architecture and implemented as the bounded pure `M60-B1 source-registry` lifecycle prerequisite; supersedes the accepted V10 `DEC-M60-B2-ACCEPTANCE`; `source-import/v0` retained as explicitly historical (see §15)
 - `Version`: `source-import/v1`
-- `Last Review`: `2026-08-12`
-- `Predecessor`: [`source-import/v0`](#15-source-importv0-historical-evidence-retained) — accepted for bounded `M60-B1 source-registry` (P1-1), remains the authority for the existing `crates/platform-core/src/source_registry.rs` B1 implementation
+- `Last Review`: `2026-09-01`
+- `Predecessor`: [`source-import/v0`](#15-source-importv0-historical-evidence-retained) — accepted for the historical P1-1 bounded `M60-B1 source-registry`; retained as immutable evidence and superseded by the current v1 B1 implementation
 - `Accepted Per`: `ACCEPT_EXACT_M60_B2_R11_PACKET` — Develata accepted the exact `33046`-byte semantic packet (`sha256:34cd911e6120646a0e2e410de9987efd167e519f43e5bf64a43c96d9c3654f1e`) on 2026-08-13; prior V10 `DEC-M60-B2-ACCEPTANCE` is explicitly superseded historical evidence
 - `Owning Blueprint`: [`M60 Campus Trust and Source Pipeline`](../plan/modules/70-campus-trust-source-pipeline.md)
 - `Depends On`: [`module-boundaries.md`](module-boundaries.md), [`source-retrieval.md`](source-retrieval.md), and the existing crate-root `SourceAuthority` comparison policy
 - `Acceptance`: `SRC-001` is `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted; `SRC-014` remains catalog-only/non-admitted
-- `Primary Code`: `crates/platform-core/src/source_registry.rs` for bounded B1 (P1-1 review candidate, still under `source-import/v0`); no v1 Rust implementation exists
+- `Primary Code`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` implement bounded pure B1 under `source-import/v1`; M60-B2 retrieval remains unimplemented and separately gated
 
 ## 1. Scope and authority
 
@@ -18,7 +18,7 @@
 
 - stable source identity, owner, authority class and exact canonical URL;
 - one operational `SourceStatus`: `Proposed | Approved | Suspended | Revoked`;
-- one non-zero monotone `SourceAuthorityRevision` checked by compare-and-swap on every retrievability-affecting transition;
+- one non-zero monotone `SourceAuthorityRevision` initialized to `1` by initial proposal and checked by compare-and-swap on every post-proposal retrievability-affecting transition;
 - retrieval-policy metadata with six fields whose limits later adapters must enforce;
 - `RetrievalSubject` — a sealed snapshot of an approved source available only from current `Approved` state;
 - immutable revision identity and provenance requirements for later M60 slices;
@@ -46,7 +46,7 @@ Proposed SourceDefinition (authority_revision=1)
 → typed publication candidate
 ```
 
-Source status transitions, all with `expected_authority_revision` CAS:
+Initial proposal followed by source-status transitions; every post-proposal transition uses `expected_authority_revision` CAS:
 
 ```text
 propose(full definition)                          -> Proposed(authority_revision=1)
@@ -78,7 +78,7 @@ Normative consequences:
 
 ## 3. Stable identity values
 
-Five nominal string values exist in `crates/platform-core/src/source_registry.rs` as the current B1 v0 implementation:
+Five nominal string values exist in `crates/platform-core/src/source_registry.rs` as part of the current B1 v1 implementation:
 
 ```text
 SourceId
@@ -90,13 +90,13 @@ SourceReviewEvidenceId
 
 Each is a named-field struct with a private backing string. It has one checked constructor, exact `as_str`, exact `Display`, `TryFrom<String>`, `TryFrom<&str>`, `FromStr`, validating Serde decode and exact Serde string encode. It derives `Debug`, `Clone`, `PartialEq`, `Eq`, `PartialOrd`, `Ord` and `Hash`. It has no `Default`, mutable backing access, unchecked constructor, cross-kind conversion, normalization or semantic segment accessor.
 
-`SourceStatusEvidenceId` is an accepted future v1 nominal identifier using the same grammar/bound as `SourceId`. No v1 Rust implementation exists. When implemented it will have checked `new(String) -> Result<SourceStatusEvidenceId, SourceValueError>`, `as_str(&self) -> &str`, `into_inner(self) -> String`; `Clone + Debug + Eq + Ord + Hash`; no `Default`, Serde, `Display`, `TryFrom`, `FromStr` or unchecked constructor. It represents an opaque reference to transition evidence retained by an owning operator/governance surface. It is never interpreted as a credential, does not contain the evidence and is not self-proving authorization.
+`SourceStatusEvidenceId` is the implemented v1 nominal identifier using the same grammar/bound as `SourceId`. It has checked `new(String) -> Result<SourceStatusEvidenceId, SourceValueError>`, `as_str(&self) -> &str`, `into_inner(self) -> String`; `Clone + Debug + Eq + Ord + Hash`; no `Default`, Serde, `Display`, `TryFrom`, `FromStr` or unchecked constructor. It represents an opaque reference to transition evidence retained by an owning operator/governance surface. It is never interpreted as a credential, does not contain the evidence and is not self-proving authorization.
 
 `SourceMediaType` is the media-type value with checked `parse(&str) -> Result<SourceMediaType, SourceValueError>`, no `Display`, `TryFrom`, `FromStr` or Serde. It is a private-field struct implementing `Clone + Debug + Eq`. Grammar: lowercase ASCII `type/subtype`, each side `1..=64`, RFC token bytes only, no whitespace, parameter, wildcard or structured fallback; total `3..=129` bytes.
 
 ### 3.1 `SourceAuthorityRevision`
 
-`SourceAuthorityRevision(u64)` is non-zero (initial value `1`). It is the single current-authority generation for a stable `SourceId`. Every mutation that can affect retrievability — `propose`, `approve`, `suspend`, `reinstate`, `revoke`, `revise` — increments it with checked arithmetic (u64 overflow is `RevisionExhausted`). There is no peer definition/status revision and no reset while the `SourceId` exists. `Copy + Clone + Debug + Eq + Ord + Hash`; private field, `get()` accessor; no `Default`, Serde or unchecked constructor.
+`SourceAuthorityRevision(u64)` is non-zero (initial value `1`). It is the single current-authority generation for a stable `SourceId`. Initial `propose` is the constructor/admission exception: it takes no caller-supplied expected revision and initializes revision `1`. Every post-proposal mutation that can affect retrievability — `approve`, `suspend`, `reinstate`, `revoke`, `revise` — requires exact-revision CAS and increments it with checked arithmetic (u64 overflow is `RevisionExhausted`). There is no peer definition/status revision and no reset while the `SourceId` exists. `Copy + Clone + Debug + Eq + Ord + Hash`; private field, `get()` accessor; no `Default`, Serde or unchecked constructor.
 
 ### 3.2 `SourceId`
 
@@ -133,6 +133,7 @@ SourceStatusEvidenceId
 SourceAuthorityRevision
 SourceMediaType
 SourceRetrievalProtocolVersion
+PublicIpPolicyVersion
 SourceRetrievalPolicy
 SourceReviewReceipt
 SourceStatus
@@ -288,7 +289,8 @@ approved(&self, id: &SourceId) -> Result<&SourceDefinition, SourceRegistryError>
 
 Required behavior:
 - duplicate `SourceId` or duplicate canonical `SourceUrl` is rejected without replacing the first definition;
-- every mutation requires an exact `expected_authority_revision` CAS; stale revision rejects as `StaleAuthorityRevision`;
+- after duplicate checks, `propose` canonicalizes the consumed definition to fresh revision `1` plus `Proposed { revision_evidence: None }`; a clone obtained from another registry cannot transplant `Approved`, `Suspended` or `Revoked` authority, evidence, receipt or revision into the receiving registry;
+- every post-proposal lifecycle mutation requires an exact `expected_authority_revision` CAS; initial `propose(definition)` takes no expected revision and creates revision `1`; stale post-proposal revision rejects as `StaleAuthorityRevision`;
 - `propose` precedence: `DuplicateSource` then `DuplicateUrl`;
 - revision overflow on any mutation is `RevisionExhausted`;
 - illegal transition is `IllegalTransition { status, command }`;
@@ -413,34 +415,35 @@ P1-0 records one reviewed **candidate family**, not an approved registry row:
 
 This candidate family stays `Proposed`. No concrete USTC source is approved. The family label is research/product metadata, not a registry ID; each exact URL would require its own stable SourceId. Approval requires a separate operator review receipt per definition and is not inferred from this document.
 
-## 13. P1-1 implementation slice (historical)
+## 13. M60-B1 implementation slices
 
-P1-1 implemented bounded `M60-B1 source-registry` as a review candidate under `source-import/v0`:
+P1-1 is retained as the historical bounded `source-import/v0` predecessor. It established the module declaration, source/test carriers and the exact `SRC-001` binding without approving a source or adding effects.
 
-- added `crates/platform-core/src/source_registry.rs`;
-- added `pub mod source_registry;` in `crates/platform-core/src/lib.rs`;
-- added `crates/platform-core/tests/source_registry.rs`;
-- promoted `SRC-001` to `implemented` bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`;
-- kept `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row unchanged.
+The current M60-B1 lifecycle successor implements `source-import/v1` in the same two Rust carriers:
 
-This implementation under `source-import/v0` remains the authoritative B1 evidence. It has not been updated to v1 and there is no v1 Rust code. Migration from v0 to v1 is compile-time only because no production durable source rows exist.
+- operational `SourceStatus = Proposed | Approved | Suspended | Revoked`;
+- initial proposal at `SourceAuthorityRevision(1)` and exact CAS on every post-proposal mutation;
+- six-field retrieval policy, including the one-variant `PublicIpPolicyVersion` inventory;
+- evidence-bearing revise/approve/suspend/reinstate/revoke transitions;
+- approved-only sealed `RetrievalSubject` projection;
+- fail-closed duplicate, stale-revision, illegal-transition, revision-exhaustion and non-mutation-on-error behavior.
+
+Migration from v0 to v1 is compile-time only because no production durable source rows exist. The historical P1-1 record and immutable §15 remain evidence, not current implementation authority.
 
 ## 14. Acceptance projection
 
-The bounded B1 evidence — stable identity, owner, exact canonical URL, retrieval-policy value, proposed/approved review state and pure registry transitions — is implemented under `source-import/v0` and proven by `cargo test --locked -p ustc-campus-agent-core --test source_registry`.
-
-The accepted `source-import/v1` contract projection (R11, `ACCEPT_EXACT_M60_B2_R11_PACKET`) changes no acceptance-row or implementation status:
+The bounded B1 evidence — stable identity, owner, exact canonical URL, six-field retrieval policy, operational lifecycle, monotone authority revision and pure registry transitions — is implemented under `source-import/v1` and remains proven by the same active binding: `cargo test --locked -p ustc-campus-agent-core --test source_registry`.
 
 ```text
-SRC-001 implemented (unchanged bounded B1 evidence; still under v0 implementation)
+SRC-001 implemented (bounded B1 source-import/v1 lifecycle evidence)
 SRC-010 planned
 SRC-011 planned
 SRC-012 planned
 SRC-014 catalog-only / non-admitted
-M60 planned (B2 contract accepted; no implementation)
+M60 planned (B1 lifecycle prerequisite implemented; B2 retrieval unimplemented)
 ```
 
-`SRC-010` does not become `pass` merely from contract acceptance. `SRC-014` (`suspended/revoked source blocks new fetch`) remains catalog-only/non-admitted per the existing `platform-baseline.md` long-horizon catalog; the lifecycle precondition and the capability (planned, not running) are both honest.
+`SRC-010` does not become `pass` from B1 lifecycle implementation or contract acceptance. `SRC-014` (`suspended/revoked source blocks new fetch`) remains catalog-only/non-admitted per the existing `platform-baseline.md` long-horizon catalog: B1 proves lifecycle and retrievability gating inside the pure registry, not the separately gated fetch integration.
 
 ## 15. `source-import/v0` — historical evidence retained
 

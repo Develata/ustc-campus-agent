@@ -1,11 +1,14 @@
-//! The pure `source-import/v0` M60-B1 source-registry kernel.
+//! The pure `source-import/v1` M60-B1 source-registry kernel.
 //!
-//! Owns the typed boundary between a reviewed source catalog and later retrieval,
-//! parsing, revision and baseline adapters (M60-B2 onward). It defines stable
-//! source identity, owner, authority class and exact canonical URL; proposed
-//! versus approved review state; retrieval-budget metadata whose limits later
-//! adapters must enforce; and the in-memory registry that admits, approves and
-//! looks up definitions.
+//! Owns the typed boundary between a reviewed source catalog and later
+//! retrieval, parsing, revision and baseline adapters (M60-B2 onward). It
+//! defines stable source identity, owner, authority class and exact canonical
+//! URL; one operational `SourceStatus` (`Proposed | Approved | Suspended |
+//! Revoked`); a non-zero monotone `SourceAuthorityRevision` guarded by
+//! exact-revision compare-and-swap on every post-proposal lifecycle mutation;
+//! the six-field retrieval-policy value surface; the sealed `RetrievalSubject`
+//! projection available only from current `Approved` state; and the in-memory
+//! registry that admits, transitions and looks up definitions.
 //!
 //! A syntactically valid source definition or review receipt proves shape only.
 //! It does not prove that the URL is safe now, that permission exists, that an
@@ -55,11 +58,20 @@ const MAX_MINIMUM_INTERVAL_SECONDS: u32 = 604_800;
 /// Ceiling for `SourceRetrievalPolicy::maximum_response_bytes`.
 const MAX_MAXIMUM_RESPONSE_BYTES: u32 = 1_048_576;
 
+/// Ceiling for `SourceRetrievalPolicy::maximum_elapsed_seconds`.
+const MAX_MAXIMUM_ELAPSED_SECONDS: u32 = 60;
+
+/// Maximum bytes per `type` or `subtype` component of a `SourceMediaType`.
+const MAX_MEDIA_TYPE_COMPONENT_BYTES: usize = 64;
+
+/// Maximum total encoded length, in bytes, of a `SourceMediaType` value.
+const MAX_MEDIA_TYPE_BYTES: usize = 129;
+
 // ---------------------------------------------------------------------------
-// Value-error taxonomy (§7).
+// Value-error taxonomy (§8).
 // ---------------------------------------------------------------------------
 
-/// Which grammar rule rejected a candidate `source-import/v0` value.
+/// Which grammar rule rejected a candidate `source-import/v1` value.
 ///
 /// Each variant carries a fixed bound or a byte offset only. No variant carries
 /// the rejected input, a fragment of it, or the offending byte itself. The one
@@ -104,6 +116,22 @@ pub enum SourceValueErrorKind {
         /// The fixed ceiling, in bytes.
         max_bytes: u32,
     },
+    /// `SourceRetrievalPolicy`: `maximum_elapsed_seconds` was zero.
+    ZeroMaximumElapsedSeconds,
+    /// `SourceRetrievalPolicy`: `maximum_elapsed_seconds` exceeded the ceiling.
+    MaximumElapsedSecondsTooLarge {
+        /// The fixed ceiling, in seconds.
+        max_seconds: u32,
+    },
+    /// `SourceMediaType`: the value was not an admitted lowercase
+    /// `type/subtype` token pair.
+    InvalidMediaType,
+    /// Reserved operator override-window evidence rule for later M60 slices.
+    ///
+    /// `source-import/v1` adds the variant to the closed taxonomy; no v1
+    /// constructor emits it, because override evidence is an M60-B2 transport
+    /// decision, not a registry value.
+    InvalidOverrideWindow,
     /// `SourceOwner`: the value began or ended with whitespace.
     OwnerBoundaryWhitespace,
     /// `SourceOwner`: the value contained a control character.
@@ -111,7 +139,7 @@ pub enum SourceValueErrorKind {
         /// Zero-based index of the first offending byte within the rejected UTF-8 bytes.
         byte_index: usize,
     },
-    /// `SourceDefinition::proposed`: the authority was `ModelInference`.
+    /// `SourceDefinition` construction: the authority was `ModelInference`.
     ///
     /// An explanation class cannot become a source definition or approval
     /// candidate. The variant carries no payload: the rejected authority is a
@@ -120,7 +148,7 @@ pub enum SourceValueErrorKind {
     NonSourceAuthority,
 }
 
-/// Why one `source-import/v0` construction failed.
+/// Why one `source-import/v1` construction failed.
 ///
 /// The error names the Rust value kind that rejected the input and the grammar
 /// rule that rejected it. It deliberately has no `source`, so no rejected input
@@ -206,6 +234,28 @@ impl fmt::Display for SourceValueError {
                 formatter,
                 "{value_kind} rejected: maximum response bytes exceeds {max_bytes} bytes"
             ),
+            SourceValueErrorKind::ZeroMaximumElapsedSeconds => {
+                write!(
+                    formatter,
+                    "{value_kind} rejected: maximum elapsed seconds is zero"
+                )
+            }
+            SourceValueErrorKind::MaximumElapsedSecondsTooLarge { max_seconds } => write!(
+                formatter,
+                "{value_kind} rejected: maximum elapsed seconds exceeds {max_seconds} seconds"
+            ),
+            SourceValueErrorKind::InvalidMediaType => {
+                write!(
+                    formatter,
+                    "{value_kind} rejected: media type is not an admitted lowercase token pair"
+                )
+            }
+            SourceValueErrorKind::InvalidOverrideWindow => {
+                write!(
+                    formatter,
+                    "{value_kind} rejected: override window is not admitted"
+                )
+            }
             SourceValueErrorKind::OwnerBoundaryWhitespace => {
                 write!(
                     formatter,
@@ -236,9 +286,9 @@ const fn value_error(value_kind: &'static str, kind: SourceValueErrorKind) -> So
 }
 
 // ---------------------------------------------------------------------------
-// `SourceId`-family grammar (§3.1, §3.3). Shared by `SourceId`,
-// `SourceReviewerId` and `SourceReviewEvidenceId`: identical byte grammar and
-// bound, nominally distinct types.
+// `SourceId`-family grammar (§3). Shared by `SourceId`, `SourceReviewerId`,
+// `SourceReviewEvidenceId` and `SourceStatusEvidenceId`: identical byte
+// grammar and bound, nominally distinct types.
 // ---------------------------------------------------------------------------
 
 /// Boundary bytes of a `SourceId`-family value are lowercase ASCII alphanumeric.
@@ -251,8 +301,8 @@ const fn is_source_id_interior(byte: u8) -> bool {
     byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'.' | b'_' | b':')
 }
 
-/// Applies the `SourceId`-family grammar in the exact precedence frozen by
-/// `source-import/v0` §7: empty; length; then first byte; then interior
+/// Applies the `SourceId`-family grammar in the exact precedence frozen by the
+/// accepted contract: empty; length; then first byte; then interior
 /// left-to-right; then final byte.
 ///
 /// Postcondition: `Ok(())` exactly when `value` matches
@@ -291,13 +341,13 @@ fn classify_source_id(value: &str) -> Result<(), SourceValueErrorKind> {
 }
 
 // ---------------------------------------------------------------------------
-// `SourceOwner` grammar (§3.2). 1..=128 UTF-8 bytes, rejects leading/trailing
+// `SourceOwner` grammar (§3.3). 1..=128 UTF-8 bytes, rejects leading/trailing
 // whitespace and every control character, preserves accepted text exactly.
 // ---------------------------------------------------------------------------
 
-/// Applies the `SourceOwner` grammar in the exact precedence frozen by §7:
-/// empty; length; then boundary whitespace; then control characters left to
-/// right.
+/// Applies the `SourceOwner` grammar in the exact precedence frozen by the
+/// accepted contract: empty; length; then boundary whitespace; then control
+/// characters left to right.
 ///
 /// `char::is_whitespace` matches Unicode whitespace, which is wider than ASCII
 /// — a deliberate choice, because an owner label that begins or ends with a
@@ -473,8 +523,8 @@ fn classify_percent_hex(byte: u8) -> bool {
     byte.is_ascii_digit() || (b'A'..=b'F').contains(&byte)
 }
 
-/// Applies the `SourceUrl` grammar in the exact precedence frozen by §7:
-/// empty; length; scheme; host; then path.
+/// Applies the `SourceUrl` grammar in the exact precedence frozen by the
+/// accepted contract: empty; length; scheme; host; then path.
 ///
 /// Postcondition: `Ok(())` exactly when `value` is exactly
 /// `https://<host>/<path>` with `host` admitted by `is_admitted_host` and
@@ -516,6 +566,69 @@ fn classify_source_url(value: &str) -> Result<(), SourceValueErrorKind> {
 }
 
 // ---------------------------------------------------------------------------
+// `SourceMediaType` grammar (§3). Lowercase ASCII `type/subtype`, each side
+// `1..=64` bytes, RFC token bytes only, no whitespace, parameter, wildcard or
+// structured fallback; total `3..=129` bytes.
+// ---------------------------------------------------------------------------
+
+/// True when `byte` is an admitted media-type token byte.
+///
+/// The set is the RFC token byte set minus the wildcard `*`: the contract
+/// forbids wildcard media types, and the simplest deterministic boundary is to
+/// exclude the byte entirely rather than re-derive `*/*` special cases.
+const fn is_media_token_byte(byte: u8) -> bool {
+    byte.is_ascii_lowercase()
+        || byte.is_ascii_digit()
+        || matches!(
+            byte,
+            b'!' | b'#'
+                | b'$'
+                | b'%'
+                | b'&'
+                | b'\''
+                | b'+'
+                | b'-'
+                | b'.'
+                | b'^'
+                | b'_'
+                | b'`'
+                | b'|'
+                | b'~'
+        )
+}
+
+/// Applies the `SourceMediaType` grammar: total length; then exactly one `/`
+/// splitting a non-empty lowercase token `type` and `subtype`, each `1..=64`
+/// bytes.
+///
+/// Postcondition: `Ok(())` exactly when `value` is
+/// `<type>/<subtype>` with both components admitted by `is_media_token_byte`,
+/// total length `3..=129` bytes.
+fn classify_media_type(value: &str) -> Result<(), SourceValueErrorKind> {
+    if value.len() < 3 || value.len() > MAX_MEDIA_TYPE_BYTES {
+        return Err(SourceValueErrorKind::InvalidMediaType);
+    }
+    let Some((media_type, media_subtype)) = value.split_once('/') else {
+        return Err(SourceValueErrorKind::InvalidMediaType);
+    };
+    // Exactly one `/`: a second slash is a parameter-or-fallback shape.
+    if media_subtype.contains('/') {
+        return Err(SourceValueErrorKind::InvalidMediaType);
+    }
+    for component in [media_type, media_subtype] {
+        if component.is_empty() || component.len() > MAX_MEDIA_TYPE_COMPONENT_BYTES {
+            return Err(SourceValueErrorKind::InvalidMediaType);
+        }
+        for &byte in component.as_bytes() {
+            if !is_media_token_byte(byte) {
+                return Err(SourceValueErrorKind::InvalidMediaType);
+            }
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Nominal string value generator (§3). Defines one named-field struct with a
 // private backing string, one checked `parse`, `as_str`, `Display`,
 // `TryFrom<String>`, `TryFrom<&str>`, `FromStr`, validating Serde decode and
@@ -527,13 +640,12 @@ macro_rules! source_value {
     ($(#[$attribute:meta])* $name:ident, $classifier:ident) => {
         $(#[$attribute])*
         #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        // A NAMED-FIELD struct, deliberately not a tuple struct. See the
-        // identity module for the full rationale: a tuple struct's constructor
-        // is a VALUE that can be bound, aliased, passed and returned before it
-        // is ever called, so counting construction expressions is not a
-        // closure. A named-field struct has no constructor function item at
-        // all, leaving a struct literal as the only way to produce one, and a
-        // struct literal is syntax that cannot be bound.
+        // A NAMED-FIELD struct, deliberately not a tuple struct. A tuple
+        // struct's constructor is a VALUE that can be bound, aliased, passed
+        // and returned before it is ever called, so counting construction
+        // expressions is not a closure. A named-field struct has no constructor
+        // function item at all, leaving a struct literal as the only way to
+        // produce one, and a struct literal is syntax that cannot be bound.
         pub struct $name {
             value: String,
         }
@@ -548,8 +660,8 @@ macro_rules! source_value {
             /// # Errors
             ///
             /// Returns [`SourceValueError`] when `value` does not match the
-            /// `source-import/v0` grammar for this kind. The error names this
-            /// kind and the failing rule and never contains the rejected input.
+            /// accepted grammar for this kind. The error names this kind and
+            /// the failing rule and never contains the rejected input.
             pub fn parse(value: impl Into<String>) -> Result<Self, SourceValueError> {
                 let value = value.into();
                 match $classifier(&value) {
@@ -726,15 +838,143 @@ source_value! {
 }
 
 // ---------------------------------------------------------------------------
-// `SourceRetrievalPolicy` (§4). Both fields non-zero, bounded operator
-// ceilings consumed by M60-B2.
+// `SourceStatusEvidenceId` (§3). Accepted v1 nominal identifier over the
+// `SourceId` grammar with a deliberately reduced trait surface.
 // ---------------------------------------------------------------------------
 
-/// Retrieval-budget metadata whose limits later adapters must enforce.
+/// One opaque reference to transition evidence retained by an owning operator
+/// or governance surface.
 ///
-/// Both fields are non-zero. `minimum_interval_seconds <= 604_800`;
-/// `maximum_response_bytes <= 1_048_576`. These are operator ceilings consumed
-/// by M60-B2, not evidence that an adapter enforced them.
+/// It uses the same byte grammar and bound as [`SourceId`] but is nominally
+/// distinct, and it intentionally exposes fewer traits than the five nominal
+/// string values: no `Serde`, no `Display`, no `TryFrom`, no `FromStr`, no
+/// `Default` and no unchecked constructor. It is never interpreted as a
+/// credential, does not contain the evidence and is not self-proving
+/// authorization.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SourceStatusEvidenceId {
+    value: String,
+}
+
+impl SourceStatusEvidenceId {
+    /// Builds one status-evidence reference over the `SourceId` grammar.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceValueError`] when `value` does not match the
+    /// `SourceId`-family grammar. The error names this kind and the failing
+    /// rule and never contains the rejected input.
+    pub fn new(value: String) -> Result<Self, SourceValueError> {
+        match classify_source_id(&value) {
+            Ok(()) => Ok(Self { value }),
+            Err(kind) => Err(SourceValueError {
+                value_kind: "SourceStatusEvidenceId",
+                kind,
+            }),
+        }
+    }
+
+    /// Returns the exact canonical bytes, with case and delimiters preserved.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+
+    /// Consumes the identifier and returns the canonical bytes.
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.value
+    }
+}
+
+// ---------------------------------------------------------------------------
+// `SourceAuthorityRevision` (§3.1). Non-zero monotone generation counter.
+// ---------------------------------------------------------------------------
+
+/// The single current-authority generation for one stable [`SourceId`].
+///
+/// It is non-zero: initial `propose` — the contract-defined constructor
+/// exception — takes no expected revision and initializes revision `1`. Every
+/// post-proposal lifecycle mutation (`revise`, `approve`, `suspend`,
+/// `reinstate`, `revoke`) requires an exact expected-revision compare-and-swap
+/// and increments with checked arithmetic; `u64` overflow is
+/// [`SourceRegistryError::RevisionExhausted`]. There is no peer
+/// definition/status revision and no reset while the `SourceId` exists.
+///
+/// The field is private and there is no public constructor, so a caller can
+/// only obtain a revision value from a definition or registry:
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::source_registry::SourceAuthorityRevision;
+///
+/// let revision = SourceAuthorityRevision { revision: 1 };
+/// ```
+///
+/// A defaulted revision does not exist:
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::source_registry::SourceAuthorityRevision;
+///
+/// let revision = SourceAuthorityRevision::default();
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SourceAuthorityRevision {
+    revision: u64,
+}
+
+impl SourceAuthorityRevision {
+    /// Returns the current generation.
+    #[must_use]
+    pub const fn get(&self) -> u64 {
+        self.revision
+    }
+
+    /// Returns the next generation, or `None` on `u64` overflow.
+    ///
+    /// Private: callers never construct revisions; the registry owns the
+    /// checked increment on every successful post-proposal mutation.
+    fn increment(self) -> Option<Self> {
+        let revision = self.revision.checked_add(1)?;
+        Some(Self { revision })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Closed policy-version enums (§4). Exactly one accepted variant each.
+// ---------------------------------------------------------------------------
+
+/// The closed retrieval protocol-version inventory.
+///
+/// Exactly one accepted variant; there is no compatibility, default or caller
+/// escape from the closed set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceRetrievalProtocolVersion {
+    /// Strict HTTPS-over-IPv4 with HTTP/1.1 framing.
+    V0StrictHttpsIpv4Http11_20260809,
+}
+
+/// The closed public-IP policy-version inventory.
+///
+/// Exactly one accepted variant; there is no compatibility, default or caller
+/// escape from the closed set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublicIpPolicyVersion {
+    /// Public IPv4 addresses only.
+    V0Ipv4Only20260809,
+}
+
+// ---------------------------------------------------------------------------
+// `SourceRetrievalPolicy` (§4). Six bounded operator ceilings consumed by
+// `source-retrieval/v0`.
+// ---------------------------------------------------------------------------
+
+/// Retrieval-policy metadata whose limits later adapters must enforce.
+///
+/// Exactly six fields. The three `u32` ceilings are non-zero and bounded;
+/// `expected_media_type` is a checked [`SourceMediaType`]; `protocol_version`
+/// and `public_ip_policy_version` are the closed one-variant enums. These are
+/// operator ceilings consumed by `source-retrieval/v0`, not evidence that an
+/// adapter enforced them.
 ///
 /// A policy cannot be defaulted into existence:
 ///
@@ -743,18 +983,22 @@ source_value! {
 ///
 /// let policy = SourceRetrievalPolicy::default();
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceRetrievalPolicy {
     minimum_interval_seconds: u32,
     maximum_response_bytes: u32,
+    maximum_elapsed_seconds: u32,
+    expected_media_type: SourceMediaType,
+    protocol_version: SourceRetrievalProtocolVersion,
+    public_ip_policy_version: PublicIpPolicyVersion,
 }
 
 impl SourceRetrievalPolicy {
-    /// Builds a retrieval policy, checking both bounds.
+    /// Builds a retrieval policy, checking the three `u32` ceilings.
     ///
-    /// Precedence (§7): `minimum_interval_seconds` is checked before
-    /// `maximum_response_bytes`. A zero minimum is reported before a too-large
-    /// minimum, and a zero maximum before a too-large maximum.
+    /// Precedence: policy fields in declaration order. A zero field is
+    /// reported before a too-large field, and an earlier field is reported
+    /// before a later one.
     ///
     /// # Errors
     ///
@@ -763,10 +1007,15 @@ impl SourceRetrievalPolicy {
     /// `minimum_interval_seconds` is zero, or
     /// [`SourceValueErrorKind::MinimumIntervalTooLarge`] when it exceeds
     /// `604_800`; then the equivalent pair for `maximum_response_bytes` against
-    /// `1_048_576`.
+    /// `1_048_576`; then the equivalent pair for `maximum_elapsed_seconds`
+    /// against `60`.
     pub fn new(
         minimum_interval_seconds: u32,
         maximum_response_bytes: u32,
+        maximum_elapsed_seconds: u32,
+        expected_media_type: SourceMediaType,
+        protocol_version: SourceRetrievalProtocolVersion,
+        public_ip_policy_version: PublicIpPolicyVersion,
     ) -> Result<Self, SourceValueError> {
         if minimum_interval_seconds == 0 {
             return Err(value_error(
@@ -796,9 +1045,27 @@ impl SourceRetrievalPolicy {
                 },
             ));
         }
+        if maximum_elapsed_seconds == 0 {
+            return Err(value_error(
+                "SourceRetrievalPolicy",
+                SourceValueErrorKind::ZeroMaximumElapsedSeconds,
+            ));
+        }
+        if maximum_elapsed_seconds > MAX_MAXIMUM_ELAPSED_SECONDS {
+            return Err(value_error(
+                "SourceRetrievalPolicy",
+                SourceValueErrorKind::MaximumElapsedSecondsTooLarge {
+                    max_seconds: MAX_MAXIMUM_ELAPSED_SECONDS,
+                },
+            ));
+        }
         Ok(Self {
             minimum_interval_seconds,
             maximum_response_bytes,
+            maximum_elapsed_seconds,
+            expected_media_type,
+            protocol_version,
+            public_ip_policy_version,
         })
     }
 
@@ -812,6 +1079,76 @@ impl SourceRetrievalPolicy {
     #[must_use]
     pub const fn maximum_response_bytes(&self) -> u32 {
         self.maximum_response_bytes
+    }
+
+    /// Returns the maximum elapsed retrieval time, in seconds.
+    #[must_use]
+    pub const fn maximum_elapsed_seconds(&self) -> u32 {
+        self.maximum_elapsed_seconds
+    }
+
+    /// Returns the expected media type of the response body.
+    #[must_use]
+    pub const fn expected_media_type(&self) -> &SourceMediaType {
+        &self.expected_media_type
+    }
+
+    /// Returns the closed retrieval protocol version.
+    #[must_use]
+    pub const fn protocol_version(&self) -> SourceRetrievalProtocolVersion {
+        self.protocol_version
+    }
+
+    /// Returns the closed public-IP policy version.
+    #[must_use]
+    pub const fn public_ip_policy_version(&self) -> PublicIpPolicyVersion {
+        self.public_ip_policy_version
+    }
+}
+
+// ---------------------------------------------------------------------------
+// `SourceMediaType` (§3). Checked `parse`, no `Display`, `TryFrom`, `FromStr`
+// or `Serde`; read-only use through policy.
+// ---------------------------------------------------------------------------
+
+/// The expected media-type value of one approved source.
+///
+/// Grammar: lowercase ASCII `type/subtype`, each side `1..=64` bytes, RFC
+/// token bytes only, no whitespace, parameter, wildcard or structured
+/// fallback; total `3..=129` bytes. There is no `Display`, `TryFrom`,
+/// `FromStr` or `Serde`; the only checked constructor is [`SourceMediaType::parse`]
+/// and the only read access is through [`SourceRetrievalPolicy::expected_media_type`].
+///
+/// There is no `FromStr` path:
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::source_registry::SourceMediaType;
+///
+/// let media: SourceMediaType = "text/html".parse().expect("parse");
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceMediaType {
+    value: String,
+}
+
+impl SourceMediaType {
+    /// Parses one canonical media type.
+    ///
+    /// This is the single validator for the type.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceValueError`] with
+    /// [`SourceValueErrorKind::InvalidMediaType`] when `value` is not an
+    /// admitted lowercase `type/subtype` token pair. The error never contains
+    /// the rejected input.
+    pub fn parse(value: &str) -> Result<Self, SourceValueError> {
+        match classify_media_type(value) {
+            Ok(()) => Ok(Self {
+                value: value.to_owned(),
+            }),
+            Err(kind) => Err(value_error("SourceMediaType", kind)),
+        }
     }
 }
 
@@ -898,53 +1235,182 @@ impl SourceReviewReceipt {
 }
 
 // ---------------------------------------------------------------------------
-// `SourceReviewState` (§4). Bounded B1 review-admission state only: not the
-// complete operational `SourceStatus`.
+// Operational status (§4).
 // ---------------------------------------------------------------------------
 
-/// The bounded B1 review-admission state of one source definition.
-///
-/// This is not the blueprint's complete operational `SourceStatus`: `Suspended`
-/// and `Revoked`, with their evidence-bearing transitions, must be accepted
-/// before any live M60-B2 retrieval adapter may consume an approved definition.
-/// B1 exposes no retrieval, so this deferral cannot leave a fetch path active.
-///
-/// Every new definition starts as `Proposed`. Approval is an explicit registry
-/// transition that consumes a complete receipt. There is no constructor for an
-/// already-approved definition and no implicit approval based on host suffix,
-/// owner text, authority rank or fixture presence.
-///
-/// The state cannot be defaulted into existence:
-///
-/// ```compile_fail
-/// use ustc_campus_agent_core::source_registry::SourceReviewState;
-///
-/// let state = SourceReviewState::default();
-/// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SourceReviewState {
-    /// The definition has been proposed but not yet approved.
+/// The evidence-free closed kind of one [`SourceStatus`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceStatusKind {
+    /// The definition is proposed and not yet approved.
     Proposed,
-    /// The definition has been approved against a complete review receipt.
+    /// The definition is currently approved.
+    Approved,
+    /// New retrieval is blocked while historical evidence is preserved.
+    Suspended,
+    /// Terminal revocation; no further transition exists.
+    Revoked,
+}
+
+/// The closed command inventory of the post-proposal lifecycle.
+///
+/// Initial `propose` is the creation exception and is not a transition
+/// command; it takes no expected revision and initializes revision `1`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceTransitionCommand {
+    /// Replace the full body and return to `Proposed`.
+    Revise,
+    /// Approve against a complete review receipt.
+    Approve,
+    /// Suspend an approved definition, preserving its approval receipt.
+    Suspend,
+    /// Reinstate a suspended definition against a complete new receipt.
+    Reinstate,
+    /// Revoke terminally.
+    Revoke,
+}
+
+/// The operational state of one source definition.
+///
+/// Every new definition starts as [`SourceStatus::Proposed`] with no
+/// revision evidence. Approval, suspension, reinstatement and revocation are
+/// explicit registry transitions; no constructor takes a `SourceStatus`, so no
+/// caller-built status can enter a definition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SourceStatus {
+    /// Proposed. Carries optional reference evidence for the proposal.
+    Proposed {
+        /// Opaque reference to proposal evidence retained by the operator.
+        revision_evidence: Option<SourceStatusEvidenceId>,
+    },
+    /// Approved against a complete review receipt.
     Approved {
         /// The receipt that authorized this approval.
         receipt: SourceReviewReceipt,
     },
+    /// Suspended: new retrieval is blocked while the approval receipt is
+    /// preserved.
+    Suspended {
+        /// The preserved approval receipt.
+        approval: SourceReviewReceipt,
+        /// Opaque reference to the suspension evidence.
+        evidence: SourceStatusEvidenceId,
+    },
+    /// Terminal revocation.
+    Revoked {
+        /// The prior approval receipt, when revocation ended an approval or a
+        /// suspension that carried one.
+        prior_approval: Option<SourceReviewReceipt>,
+        /// Opaque reference to the revocation evidence.
+        evidence: SourceStatusEvidenceId,
+    },
+}
+
+impl SourceStatus {
+    /// Returns the evidence-free closed kind of this status.
+    #[must_use]
+    pub const fn kind(&self) -> SourceStatusKind {
+        match self {
+            Self::Proposed { .. } => SourceStatusKind::Proposed,
+            Self::Approved { .. } => SourceStatusKind::Approved,
+            Self::Suspended { .. } => SourceStatusKind::Suspended,
+            Self::Revoked { .. } => SourceStatusKind::Revoked,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
-// `SourceDefinition` (§4). The exact B1 aggregate.
+// `SourceDefinitionBody` (§4). The full replacement body for `revise`.
 // ---------------------------------------------------------------------------
 
-/// One source definition: identity, owner, URL, authority, retrieval policy
-/// and review state.
+/// The full non-identity body of one source definition: owner, URL, authority
+/// and retrieval policy.
+///
+/// [`SourceDefinitionBody::new`] is the only full replacement-body
+/// constructor. `revise` atomically replaces a definition's body with one of
+/// these values while preserving its `SourceId`.
+///
+/// A body cannot be defaulted into existence:
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::source_registry::SourceDefinitionBody;
+///
+/// let body = SourceDefinitionBody::default();
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceDefinitionBody {
+    owner: SourceOwner,
+    url: SourceUrl,
+    authority: SourceAuthority,
+    retrieval_policy: SourceRetrievalPolicy,
+}
+
+impl SourceDefinitionBody {
+    /// Builds a full replacement body.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceValueError`] with
+    /// [`SourceValueErrorKind::NonSourceAuthority`] when `authority` is
+    /// [`SourceAuthority::ModelInference`].
+    pub fn new(
+        owner: SourceOwner,
+        url: SourceUrl,
+        authority: SourceAuthority,
+        retrieval_policy: SourceRetrievalPolicy,
+    ) -> Result<Self, SourceValueError> {
+        if matches!(authority, SourceAuthority::ModelInference) {
+            return Err(value_error(
+                "SourceDefinitionBody",
+                SourceValueErrorKind::NonSourceAuthority,
+            ));
+        }
+        Ok(Self {
+            owner,
+            url,
+            authority,
+            retrieval_policy,
+        })
+    }
+
+    /// Returns the human/governance owner label.
+    #[must_use]
+    pub fn owner(&self) -> &SourceOwner {
+        &self.owner
+    }
+
+    /// Returns the exact canonical URL.
+    #[must_use]
+    pub fn url(&self) -> &SourceUrl {
+        &self.url
+    }
+
+    /// Returns the source authority class.
+    #[must_use]
+    pub const fn authority(&self) -> SourceAuthority {
+        self.authority
+    }
+
+    /// Returns the retrieval-policy value.
+    #[must_use]
+    pub fn retrieval_policy(&self) -> &SourceRetrievalPolicy {
+        &self.retrieval_policy
+    }
+}
+
+// ---------------------------------------------------------------------------
+// `SourceDefinition` (§4). The exact v1 aggregate.
+// ---------------------------------------------------------------------------
+
+/// One source definition: identity, owner, URL, authority, retrieval policy,
+/// authority revision and operational status.
 ///
 /// The only public constructor is [`SourceDefinition::proposed`], which is
-/// fallible only because `SourceAuthority::ModelInference` is an explanation
-/// class, not a source, and must be rejected as `NonSourceAuthority`. Every
-/// other field has already passed its owning validator. No constructor takes
-/// `SourceReviewState`; no `approved`, `from_parts`, builder, `TryFrom` or
-/// Serde path may bypass the registry approval transition.
+/// fallible only because [`SourceAuthority::ModelInference`] is an explanation
+/// class, not a source, and must be rejected as
+/// [`SourceValueErrorKind::NonSourceAuthority`]. It always produces revision
+/// `1` and `Proposed` state with no revision evidence. No constructor takes a
+/// `SourceStatus`; no `approved`, `from_parts`, builder, `TryFrom` or `Serde`
+/// path may bypass the registry approval transition.
 ///
 /// A definition cannot be defaulted into existence:
 ///
@@ -968,19 +1434,21 @@ pub struct SourceDefinition {
     url: SourceUrl,
     authority: SourceAuthority,
     retrieval_policy: SourceRetrievalPolicy,
-    review_state: SourceReviewState,
+    authority_revision: SourceAuthorityRevision,
+    status: SourceStatus,
 }
 
 impl SourceDefinition {
-    /// Builds a proposed source definition.
+    /// Builds a proposed source definition at revision `1`.
     ///
     /// This is the only definition constructor. It is fallible only because
     /// [`SourceAuthority::ModelInference`] is an explanation class, not a
     /// source, and must be rejected as
     /// [`SourceValueErrorKind::NonSourceAuthority`]; every other field has
     /// already passed its owning validator. The definition starts as
-    /// [`SourceReviewState::Proposed`]; approval is an explicit registry
-    /// transition.
+    /// [`SourceStatus::Proposed`] with no revision evidence; approval and every
+    /// later transition are explicit registry mutations guarded by
+    /// compare-and-swap.
     ///
     /// # Errors
     ///
@@ -1006,7 +1474,10 @@ impl SourceDefinition {
             url,
             authority,
             retrieval_policy,
-            review_state: SourceReviewState::Proposed,
+            authority_revision: SourceAuthorityRevision { revision: 1 },
+            status: SourceStatus::Proposed {
+                revision_evidence: None,
+            },
         })
     }
 
@@ -1030,20 +1501,94 @@ impl SourceDefinition {
 
     /// Returns the source authority class.
     #[must_use]
-    pub fn authority(&self) -> SourceAuthority {
+    pub const fn authority(&self) -> SourceAuthority {
         self.authority
     }
 
-    /// Returns the retrieval-budget policy.
+    /// Returns the retrieval-policy value.
     #[must_use]
-    pub fn retrieval_policy(&self) -> SourceRetrievalPolicy {
-        self.retrieval_policy
+    pub fn retrieval_policy(&self) -> &SourceRetrievalPolicy {
+        &self.retrieval_policy
     }
 
-    /// Returns the review-admission state.
+    /// Returns the current-authority generation.
     #[must_use]
-    pub fn review_state(&self) -> &SourceReviewState {
-        &self.review_state
+    pub const fn authority_revision(&self) -> SourceAuthorityRevision {
+        self.authority_revision
+    }
+
+    /// Returns the operational status.
+    #[must_use]
+    pub const fn status(&self) -> &SourceStatus {
+        &self.status
+    }
+
+    /// Returns the prior approval receipt carried by the current status, if
+    /// any.
+    #[must_use]
+    pub fn prior_approval(&self) -> Option<&SourceReviewReceipt> {
+        match &self.status {
+            SourceStatus::Proposed { .. } => None,
+            SourceStatus::Approved { receipt } => Some(receipt),
+            SourceStatus::Suspended { approval, .. } => Some(approval),
+            SourceStatus::Revoked { prior_approval, .. } => prior_approval.as_ref(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// `RetrievalSubject` (§6). Sealed owned snapshot from current `Approved` state.
+// ---------------------------------------------------------------------------
+
+/// A sealed owned snapshot of one approved source, available only from current
+/// [`SourceStatusKind::Approved`] state.
+///
+/// Fields are private, accessors are read-only, and there is no public
+/// unchecked constructor, `Serde` or authority-bearing conversion from
+/// [`SourceDefinition`]. A subject is a policy input to `source-retrieval/v0`,
+/// not final effect authority; M60-B3 must later re-check the same source ID
+/// and authority revision atomically before any network effect.
+///
+/// There is no public construction path:
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::source_registry::{RetrievalSubject, SourceId, SourceUrl};
+///
+/// fn build(source_id: SourceId, source_url: SourceUrl) -> RetrievalSubject {
+///     RetrievalSubject { source_id, source_url }
+/// }
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetrievalSubject {
+    source_id: SourceId,
+    source_url: SourceUrl,
+    source_authority_revision: SourceAuthorityRevision,
+    source_retrieval_policy: SourceRetrievalPolicy,
+}
+
+impl RetrievalSubject {
+    /// Returns the approved source identity.
+    #[must_use]
+    pub fn source_id(&self) -> &SourceId {
+        &self.source_id
+    }
+
+    /// Returns the approved canonical URL.
+    #[must_use]
+    pub fn source_url(&self) -> &SourceUrl {
+        &self.source_url
+    }
+
+    /// Returns the authority generation this snapshot was taken at.
+    #[must_use]
+    pub const fn source_authority_revision(&self) -> SourceAuthorityRevision {
+        self.source_authority_revision
+    }
+
+    /// Returns the approved retrieval policy.
+    #[must_use]
+    pub fn source_retrieval_policy(&self) -> &SourceRetrievalPolicy {
+        &self.source_retrieval_policy
     }
 }
 
@@ -1058,8 +1603,7 @@ impl SourceDefinition {
 /// references, not secrets. No variant carries rejected owner text, evidence
 /// IDs or a review receipt.
 ///
-/// A failed operation leaves the whole registry byte-for-byte/structurally
-/// unchanged.
+/// A failed operation leaves the whole registry structurally unchanged.
 ///
 /// The error cannot be defaulted into existence:
 ///
@@ -1081,20 +1625,44 @@ pub enum SourceRegistryError {
         /// The canonical URL that was already present.
         url: SourceUrl,
     },
-    /// `approve` or `approved` rejected a missing `SourceId`.
+    /// A mutation or read rejected a missing `SourceId`.
     SourceNotFound {
         /// The source ID that was not present.
         source_id: SourceId,
     },
-    /// `approved` rejected a `Proposed` entry.
-    SourceNotApproved {
-        /// The source ID whose definition is still `Proposed`.
+    /// A retrievability-gated operation rejected a non-`Approved` entry.
+    SourceNotRetrievable {
+        /// The source ID whose definition is not `Approved`.
         source_id: SourceId,
+        /// The evidence-free kind of the current status.
+        status: SourceStatusKind,
     },
     /// `approve` rejected an already-approved ID and preserved the first
     /// receipt.
     SourceAlreadyApproved {
         /// The source ID that was already `Approved`.
+        source_id: SourceId,
+    },
+    /// A mutation rejected an expected revision that does not match the
+    /// current authority revision.
+    StaleAuthorityRevision {
+        /// The caller-supplied expected revision.
+        expected: SourceAuthorityRevision,
+        /// The current authority revision.
+        actual: SourceAuthorityRevision,
+    },
+    /// A mutation rejected a state/command pair the transition matrix does not
+    /// admit.
+    IllegalTransition {
+        /// The evidence-free kind of the current status.
+        status: SourceStatusKind,
+        /// The rejected transition command.
+        command: SourceTransitionCommand,
+    },
+    /// A mutation rejected because the authority revision is exhausted at
+    /// `u64::MAX`.
+    RevisionExhausted {
+        /// The source ID whose revision cannot increment further.
         source_id: SourceId,
     },
 }
@@ -1111,11 +1679,34 @@ impl fmt::Display for SourceRegistryError {
             Self::SourceNotFound { source_id } => {
                 write!(formatter, "source not found: {source_id}")
             }
-            Self::SourceNotApproved { source_id } => {
-                write!(formatter, "source not approved: {source_id}")
+            Self::SourceNotRetrievable { source_id, status } => {
+                write!(
+                    formatter,
+                    "source is not retrievable in state {status:?}: {source_id}"
+                )
             }
             Self::SourceAlreadyApproved { source_id } => {
                 write!(formatter, "source already approved: {source_id}")
+            }
+            Self::StaleAuthorityRevision { expected, actual } => {
+                write!(
+                    formatter,
+                    "stale authority revision: expected {}, actual {}",
+                    expected.get(),
+                    actual.get()
+                )
+            }
+            Self::IllegalTransition { status, command } => {
+                write!(
+                    formatter,
+                    "illegal transition: {status:?} does not admit {command:?}"
+                )
+            }
+            Self::RevisionExhausted { source_id } => {
+                write!(
+                    formatter,
+                    "source authority revision exhausted: {source_id}"
+                )
             }
         }
     }
@@ -1125,15 +1716,19 @@ impl Error for SourceRegistryError {}
 
 // ---------------------------------------------------------------------------
 // `SourceRegistry` (§5). Pure in-memory `BTreeMap<SourceId, SourceDefinition>`
-// with no `Default` and one `new()` constructor.
+// with no `Default` and one `new()` constructor. `Clone` is intentionally
+// dropped from the historical v0 aggregate.
 // ---------------------------------------------------------------------------
 
 /// A pure in-memory source registry.
 ///
-/// Backed by a `BTreeMap<SourceId, SourceDefinition>`. It owns six operations
-/// only: `propose`, `approve`, `get`, `approved`, `len` and `is_empty`. No
-/// operation performs I/O, reads time, computes a digest or infers review from
-/// source text. Failed operations leave the whole registry byte-for-byte /
+/// Backed by a `BTreeMap<SourceId, SourceDefinition>`. Initial `propose` is
+/// creation: it takes no expected revision and admits the definition at
+/// revision `1`. Every post-proposal lifecycle mutation — `revise`, `approve`,
+/// `suspend`, `reinstate`, `revoke` — requires an exact expected-revision
+/// compare-and-swap and increments the revision with checked arithmetic on
+/// success. No operation performs I/O, reads time, computes a digest or infers
+/// review from source text. Failed operations leave the whole registry
 /// structurally unchanged.
 ///
 /// The registry cannot be defaulted into existence:
@@ -1143,7 +1738,18 @@ impl Error for SourceRegistryError {}
 ///
 /// let registry = SourceRegistry::default();
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// …nor duplicated, because the registry is one mutable aggregate and `Clone`
+/// is intentionally not implemented:
+///
+/// ```compile_fail
+/// use ustc_campus_agent_core::source_registry::SourceRegistry;
+///
+/// fn duplicate(registry: &SourceRegistry) -> SourceRegistry {
+///     registry.clone()
+/// }
+/// ```
+#[derive(Debug, PartialEq, Eq)]
 pub struct SourceRegistry {
     definitions: BTreeMap<SourceId, SourceDefinition>,
 }
@@ -1158,64 +1764,287 @@ impl SourceRegistry {
         }
     }
 
-    /// Admits one proposed source definition.
+    /// Admits one proposed source definition at revision `1`.
     ///
-    /// Rejects a duplicate `SourceId` or duplicate canonical `SourceUrl`
-    /// without replacing the first definition. A failed operation leaves the
-    /// registry unchanged.
+    /// This is the creation exception: it takes no expected revision, because
+    /// no caller-supplied revision exists before a `SourceId` is admitted. The
+    /// registry always canonicalizes the consumed definition to fresh
+    /// `Proposed { revision_evidence: None }` at revision `1`; cloning a
+    /// definition from another registry never imports its lifecycle authority.
     ///
     /// # Errors
     ///
     /// Returns [`SourceRegistryError::DuplicateSource`] when `definition`'s
-    /// `source_id` is already present, or [`SourceRegistryError::DuplicateUrl`]
-    /// when its `url` is already present under any other `SourceId`.
-    pub fn propose(&mut self, definition: SourceDefinition) -> Result<(), SourceRegistryError> {
+    /// `source_id` is already present, or
+    /// [`SourceRegistryError::DuplicateUrl`] when its `url` is already present
+    /// under any other `SourceId`. Duplicate `SourceId` is checked before
+    /// duplicate `SourceUrl`. A failed operation leaves the registry
+    /// unchanged.
+    pub fn propose(&mut self, mut definition: SourceDefinition) -> Result<(), SourceRegistryError> {
         if self.definitions.contains_key(definition.source_id()) {
             return Err(SourceRegistryError::DuplicateSource {
                 source_id: definition.source_id().clone(),
             });
         }
-        for existing in self.definitions.values() {
-            if existing.url() == definition.url() {
-                return Err(SourceRegistryError::DuplicateUrl {
-                    url: definition.url().clone(),
-                });
-            }
+        if self.url_owner(definition.url()).is_some() {
+            return Err(SourceRegistryError::DuplicateUrl {
+                url: definition.url().clone(),
+            });
         }
+        definition.authority_revision = SourceAuthorityRevision { revision: 1 };
+        definition.status = SourceStatus::Proposed {
+            revision_evidence: None,
+        };
         self.definitions
             .insert(definition.source_id().clone(), definition);
         Ok(())
     }
 
-    /// Approves one proposed source definition against a complete receipt.
+    /// Replaces the full body of one definition and returns it to `Proposed`.
     ///
-    /// Rejects a missing ID, an already-approved ID (preserving the first
-    /// receipt), and leaves the registry unchanged on any failure.
+    /// The `SourceId` is preserved; owner, URL, authority and retrieval policy
+    /// are replaced as one atomic body; the transition records `Some(evidence)`
+    /// and increments the authority revision. Reusing the same source's
+    /// current URL is not a duplicate; a canonical URL already owned by
+    /// another source is rejected without mutation.
     ///
     /// # Errors
     ///
     /// Returns [`SourceRegistryError::SourceNotFound`] when `source_id` is not
-    /// present, or [`SourceRegistryError::SourceAlreadyApproved`] when it is
-    /// already `Approved` (the first receipt is preserved).
+    /// present, [`SourceRegistryError::StaleAuthorityRevision`] when
+    /// `expected` does not match the current authority revision,
+    /// [`SourceRegistryError::IllegalTransition`] from `Revoked`,
+    /// [`SourceRegistryError::DuplicateUrl`] when the replacement URL is
+    /// already owned by another source, or
+    /// [`SourceRegistryError::RevisionExhausted`] when the revision cannot
+    /// increment.
+    pub fn revise(
+        &mut self,
+        source_id: &SourceId,
+        expected: SourceAuthorityRevision,
+        replacement: SourceDefinitionBody,
+        evidence: SourceStatusEvidenceId,
+    ) -> Result<&SourceDefinition, SourceRegistryError> {
+        let current = self.current(source_id)?;
+        if current.authority_revision != expected {
+            return Err(SourceRegistryError::StaleAuthorityRevision {
+                expected,
+                actual: current.authority_revision,
+            });
+        }
+        if matches!(current.status, SourceStatus::Revoked { .. }) {
+            return Err(SourceRegistryError::IllegalTransition {
+                status: current.status.kind(),
+                command: SourceTransitionCommand::Revise,
+            });
+        }
+        if let Some(owner) = self.url_owner(replacement.url())
+            && owner != source_id
+        {
+            return Err(SourceRegistryError::DuplicateUrl {
+                url: replacement.url().clone(),
+            });
+        }
+        let Some(new_revision) = current.authority_revision.increment() else {
+            return Err(SourceRegistryError::RevisionExhausted {
+                source_id: source_id.clone(),
+            });
+        };
+        let definition = self.definitions.get_mut(source_id).expect("verified above");
+        definition.owner = replacement.owner;
+        definition.url = replacement.url;
+        definition.authority = replacement.authority;
+        definition.retrieval_policy = replacement.retrieval_policy;
+        definition.authority_revision = new_revision;
+        definition.status = SourceStatus::Proposed {
+            revision_evidence: Some(evidence),
+        };
+        Ok(definition)
+    }
+
+    /// Approves one proposed definition against a complete review receipt.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceRegistryError::SourceNotFound`] when `source_id` is not
+    /// present, [`SourceRegistryError::StaleAuthorityRevision`] when
+    /// `expected` does not match, [`SourceRegistryError::SourceAlreadyApproved`]
+    /// when the definition is already `Approved` (the first receipt is
+    /// preserved), [`SourceRegistryError::IllegalTransition`] from `Suspended`
+    /// or `Revoked`, or [`SourceRegistryError::RevisionExhausted`].
     pub fn approve(
         &mut self,
         source_id: &SourceId,
-        review_receipt: SourceReviewReceipt,
-    ) -> Result<(), SourceRegistryError> {
-        let Some(definition) = self.definitions.get_mut(source_id) else {
-            return Err(SourceRegistryError::SourceNotFound {
-                source_id: source_id.clone(),
-            });
-        };
-        if matches!(definition.review_state, SourceReviewState::Approved { .. }) {
-            return Err(SourceRegistryError::SourceAlreadyApproved {
-                source_id: source_id.clone(),
+        expected: SourceAuthorityRevision,
+        receipt: SourceReviewReceipt,
+    ) -> Result<&SourceDefinition, SourceRegistryError> {
+        let current = self.current(source_id)?;
+        if current.authority_revision != expected {
+            return Err(SourceRegistryError::StaleAuthorityRevision {
+                expected,
+                actual: current.authority_revision,
             });
         }
-        definition.review_state = SourceReviewState::Approved {
-            receipt: review_receipt,
+        let status_kind = current.status.kind();
+        match &current.status {
+            SourceStatus::Proposed { .. } => {}
+            SourceStatus::Approved { .. } => {
+                return Err(SourceRegistryError::SourceAlreadyApproved {
+                    source_id: source_id.clone(),
+                });
+            }
+            SourceStatus::Suspended { .. } | SourceStatus::Revoked { .. } => {
+                return Err(SourceRegistryError::IllegalTransition {
+                    status: status_kind,
+                    command: SourceTransitionCommand::Approve,
+                });
+            }
+        }
+        let Some(new_revision) = current.authority_revision.increment() else {
+            return Err(SourceRegistryError::RevisionExhausted {
+                source_id: source_id.clone(),
+            });
         };
-        Ok(())
+        let definition = self.definitions.get_mut(source_id).expect("verified above");
+        definition.authority_revision = new_revision;
+        definition.status = SourceStatus::Approved { receipt };
+        Ok(definition)
+    }
+
+    /// Suspends one approved definition while preserving its approval receipt.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceRegistryError::SourceNotFound`],
+    /// [`SourceRegistryError::StaleAuthorityRevision`],
+    /// [`SourceRegistryError::IllegalTransition`] from any state other than
+    /// `Approved`, or [`SourceRegistryError::RevisionExhausted`].
+    pub fn suspend(
+        &mut self,
+        source_id: &SourceId,
+        expected: SourceAuthorityRevision,
+        evidence: SourceStatusEvidenceId,
+    ) -> Result<&SourceDefinition, SourceRegistryError> {
+        let current = self.current(source_id)?;
+        if current.authority_revision != expected {
+            return Err(SourceRegistryError::StaleAuthorityRevision {
+                expected,
+                actual: current.authority_revision,
+            });
+        }
+        let status_kind = current.status.kind();
+        let approval = match &current.status {
+            SourceStatus::Approved { receipt } => receipt.clone(),
+            SourceStatus::Proposed { .. }
+            | SourceStatus::Suspended { .. }
+            | SourceStatus::Revoked { .. } => {
+                return Err(SourceRegistryError::IllegalTransition {
+                    status: status_kind,
+                    command: SourceTransitionCommand::Suspend,
+                });
+            }
+        };
+        let Some(new_revision) = current.authority_revision.increment() else {
+            return Err(SourceRegistryError::RevisionExhausted {
+                source_id: source_id.clone(),
+            });
+        };
+        let definition = self.definitions.get_mut(source_id).expect("verified above");
+        definition.authority_revision = new_revision;
+        definition.status = SourceStatus::Suspended { approval, evidence };
+        Ok(definition)
+    }
+
+    /// Reinstates one suspended definition against a complete new receipt.
+    ///
+    /// The preserved approval receipt is consumed and replaced by the new one.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceRegistryError::SourceNotFound`],
+    /// [`SourceRegistryError::StaleAuthorityRevision`],
+    /// [`SourceRegistryError::IllegalTransition`] from any state other than
+    /// `Suspended`, or [`SourceRegistryError::RevisionExhausted`].
+    pub fn reinstate(
+        &mut self,
+        source_id: &SourceId,
+        expected: SourceAuthorityRevision,
+        receipt: SourceReviewReceipt,
+    ) -> Result<&SourceDefinition, SourceRegistryError> {
+        let current = self.current(source_id)?;
+        if current.authority_revision != expected {
+            return Err(SourceRegistryError::StaleAuthorityRevision {
+                expected,
+                actual: current.authority_revision,
+            });
+        }
+        let status_kind = current.status.kind();
+        if !matches!(current.status, SourceStatus::Suspended { .. }) {
+            return Err(SourceRegistryError::IllegalTransition {
+                status: status_kind,
+                command: SourceTransitionCommand::Reinstate,
+            });
+        }
+        let Some(new_revision) = current.authority_revision.increment() else {
+            return Err(SourceRegistryError::RevisionExhausted {
+                source_id: source_id.clone(),
+            });
+        };
+        let definition = self.definitions.get_mut(source_id).expect("verified above");
+        definition.authority_revision = new_revision;
+        definition.status = SourceStatus::Approved { receipt };
+        Ok(definition)
+    }
+
+    /// Revokes one definition terminally.
+    ///
+    /// Revocation preserves `Some(prior_approval)` when an approval exists —
+    /// from `Approved` the current receipt, from `Suspended` the preserved
+    /// approval — and carries `None` from `Proposed`. `Revoked` is terminal.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceRegistryError::SourceNotFound`],
+    /// [`SourceRegistryError::StaleAuthorityRevision`],
+    /// [`SourceRegistryError::IllegalTransition`] from `Revoked`, or
+    /// [`SourceRegistryError::RevisionExhausted`].
+    pub fn revoke(
+        &mut self,
+        source_id: &SourceId,
+        expected: SourceAuthorityRevision,
+        evidence: SourceStatusEvidenceId,
+    ) -> Result<&SourceDefinition, SourceRegistryError> {
+        let current = self.current(source_id)?;
+        if current.authority_revision != expected {
+            return Err(SourceRegistryError::StaleAuthorityRevision {
+                expected,
+                actual: current.authority_revision,
+            });
+        }
+        let status_kind = current.status.kind();
+        let prior_approval = match &current.status {
+            SourceStatus::Proposed { .. } => None,
+            SourceStatus::Approved { receipt } => Some(receipt.clone()),
+            SourceStatus::Suspended { approval, .. } => Some(approval.clone()),
+            SourceStatus::Revoked { .. } => {
+                return Err(SourceRegistryError::IllegalTransition {
+                    status: status_kind,
+                    command: SourceTransitionCommand::Revoke,
+                });
+            }
+        };
+        let Some(new_revision) = current.authority_revision.increment() else {
+            return Err(SourceRegistryError::RevisionExhausted {
+                source_id: source_id.clone(),
+            });
+        };
+        let definition = self.definitions.get_mut(source_id).expect("verified above");
+        definition.authority_revision = new_revision;
+        definition.status = SourceStatus::Revoked {
+            prior_approval,
+            evidence,
+        };
+        Ok(definition)
     }
 
     /// Returns the definition for `source_id`, if present.
@@ -1229,20 +2058,43 @@ impl SourceRegistry {
     /// # Errors
     ///
     /// Returns [`SourceRegistryError::SourceNotFound`] when `source_id` is not
-    /// present, or [`SourceRegistryError::SourceNotApproved`] when its
-    /// definition is still `Proposed`.
+    /// present, or [`SourceRegistryError::SourceNotRetrievable`] with the
+    /// current status kind when the definition is not `Approved`.
     pub fn approved(&self, source_id: &SourceId) -> Result<&SourceDefinition, SourceRegistryError> {
-        let Some(definition) = self.definitions.get(source_id) else {
-            return Err(SourceRegistryError::SourceNotFound {
+        let definition = self.current(source_id)?;
+        let SourceStatus::Approved { .. } = &definition.status else {
+            return Err(SourceRegistryError::SourceNotRetrievable {
                 source_id: source_id.clone(),
+                status: definition.status.kind(),
             });
         };
-        if matches!(definition.review_state, SourceReviewState::Proposed) {
-            return Err(SourceRegistryError::SourceNotApproved {
-                source_id: source_id.clone(),
-            });
-        }
         Ok(definition)
+    }
+
+    /// Returns a sealed owned snapshot of one approved source.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SourceRegistryError::SourceNotFound`] when `source_id` is not
+    /// present, or [`SourceRegistryError::SourceNotRetrievable`] with the
+    /// current status kind when the definition is not `Approved`.
+    pub fn retrieval_subject(
+        &self,
+        source_id: &SourceId,
+    ) -> Result<RetrievalSubject, SourceRegistryError> {
+        let definition = self.current(source_id)?;
+        let SourceStatus::Approved { .. } = &definition.status else {
+            return Err(SourceRegistryError::SourceNotRetrievable {
+                source_id: source_id.clone(),
+                status: definition.status.kind(),
+            });
+        };
+        Ok(RetrievalSubject {
+            source_id: definition.source_id.clone(),
+            source_url: definition.url.clone(),
+            source_authority_revision: definition.authority_revision,
+            source_retrieval_policy: definition.retrieval_policy.clone(),
+        })
     }
 
     /// Returns the number of registered definitions.
@@ -1256,33 +2108,50 @@ impl SourceRegistry {
     pub fn is_empty(&self) -> bool {
         self.definitions.is_empty()
     }
+
+    /// Returns the definition for `source_id`, or the `SourceNotFound` error.
+    fn current(&self, source_id: &SourceId) -> Result<&SourceDefinition, SourceRegistryError> {
+        self.definitions
+            .get(source_id)
+            .ok_or_else(|| SourceRegistryError::SourceNotFound {
+                source_id: source_id.clone(),
+            })
+    }
+
+    /// Returns the `SourceId` that currently owns `url`, if any.
+    fn url_owner(&self, url: &SourceUrl) -> Option<&SourceId> {
+        self.definitions
+            .values()
+            .find(|definition| definition.url() == url)
+            .map(SourceDefinition::source_id)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// A shape-valid `SourceId` for fixtures.
-    fn id(value: &str) -> SourceId {
-        SourceId::parse(value).expect("fixture source id")
+    const EXHAUSTED_REVISION: u64 = u64::MAX;
+
+    /// A shape-valid media type for fixtures.
+    fn media() -> SourceMediaType {
+        SourceMediaType::parse("text/html").expect("fixture media type")
     }
 
-    /// A shape-valid `SourceOwner` for fixtures.
-    fn owner(value: &str) -> SourceOwner {
-        SourceOwner::parse(value).expect("fixture owner")
-    }
-
-    /// A shape-valid `SourceUrl` for fixtures.
-    fn url(value: &str) -> SourceUrl {
-        SourceUrl::parse(value).expect("fixture url")
-    }
-
-    /// A shape-valid `SourceRetrievalPolicy` for fixtures.
+    /// A shape-valid six-field retrieval policy for fixtures.
     fn policy() -> SourceRetrievalPolicy {
-        SourceRetrievalPolicy::new(21_600, 131_072).expect("fixture policy")
+        SourceRetrievalPolicy::new(
+            1,
+            1,
+            1,
+            media(),
+            SourceRetrievalProtocolVersion::V0StrictHttpsIpv4Http11_20260809,
+            PublicIpPolicyVersion::V0Ipv4Only20260809,
+        )
+        .expect("fixture policy")
     }
 
-    /// A shape-valid `SourceReviewReceipt` for fixtures.
+    /// A shape-valid review receipt for fixtures.
     fn receipt() -> SourceReviewReceipt {
         SourceReviewReceipt::new(
             SourceReviewerId::parse("reviewer:operator").expect("fixture"),
@@ -1293,38 +2162,144 @@ mod tests {
         )
     }
 
-    #[test]
-    fn propose_then_approve_round_trips() {
+    /// A shape-valid status-evidence reference for fixtures.
+    fn evidence() -> SourceStatusEvidenceId {
+        SourceStatusEvidenceId::new(String::from("evidence:status")).expect("fixture")
+    }
+
+    /// Inserts one proposed definition and forces its authority revision.
+    ///
+    /// Module-internal only: the public API correctly cannot construct an
+    /// arbitrary revision, which is exactly why the exhaustion case must be
+    /// exercised here.
+    fn registry_with_revision(revision: u64) -> (SourceRegistry, SourceId) {
         let mut registry = SourceRegistry::new();
-        assert!(registry.is_empty());
         let definition = SourceDefinition::proposed(
-            id("example:source"),
-            owner("Example Source Office"),
-            url("https://example.com/calendar"),
-            SourceAuthority::ReviewedOfficialSource,
+            SourceId::parse("example:source").expect("fixture id"),
+            SourceOwner::parse("Example Office").expect("fixture owner"),
+            SourceUrl::parse("https://example.invalid/calendar").expect("fixture url"),
+            crate::SourceAuthority::ReviewedOfficialSource,
             policy(),
         )
         .expect("fixture definition");
-        registry.propose(definition.clone()).expect("propose");
-        assert_eq!(registry.len(), 1);
-        assert!(matches!(
-            registry
-                .get(&id("example:source"))
-                .expect("present")
-                .review_state(),
-            SourceReviewState::Proposed
-        ));
-        assert!(matches!(
-            registry.approved(&id("example:source")),
-            Err(SourceRegistryError::SourceNotApproved { .. })
-        ));
+        let source_id = definition.source_id().clone();
+        registry.propose(definition).expect("propose");
+        if revision != 1 {
+            let stored = registry.definitions.get_mut(&source_id).expect("present");
+            stored.authority_revision = SourceAuthorityRevision { revision };
+        }
+        (registry, source_id)
+    }
+
+    /// Forces the definition's status inside the module-internal registry.
+    fn force_status(registry: &mut SourceRegistry, source_id: &SourceId, status: SourceStatus) {
+        let stored = registry.definitions.get_mut(source_id).expect("present");
+        stored.status = status;
+    }
+
+    fn current_revision(
+        registry: &SourceRegistry,
+        source_id: &SourceId,
+    ) -> SourceAuthorityRevision {
         registry
-            .approve(&id("example:source"), receipt())
-            .expect("approve");
-        let approved = registry.approved(&id("example:source")).expect("approved");
-        assert!(matches!(
-            approved.review_state(),
-            SourceReviewState::Approved { .. }
-        ));
+            .get(source_id)
+            .expect("present")
+            .authority_revision()
+    }
+
+    #[test]
+    fn revision_overflow_is_revision_exhausted_without_mutation() {
+        // approve, revise and revoke from `Proposed` at `u64::MAX`.
+        let (mut registry, source_id) = registry_with_revision(EXHAUSTED_REVISION);
+        let expected = current_revision(&registry, &source_id);
+        let error = registry
+            .approve(&source_id, expected, receipt())
+            .expect_err("approve must exhaust");
+        assert_eq!(
+            error,
+            SourceRegistryError::RevisionExhausted {
+                source_id: source_id.clone()
+            }
+        );
+
+        let error = registry
+            .revise(
+                &source_id,
+                expected,
+                SourceDefinitionBody::new(
+                    SourceOwner::parse("Example Office").expect("fixture owner"),
+                    SourceUrl::parse("https://example.invalid/other").expect("fixture url"),
+                    crate::SourceAuthority::ReviewedOfficialSource,
+                    policy(),
+                )
+                .expect("fixture body"),
+                evidence(),
+            )
+            .expect_err("revise must exhaust");
+        assert_eq!(
+            error,
+            SourceRegistryError::RevisionExhausted {
+                source_id: source_id.clone()
+            }
+        );
+
+        let error = registry
+            .revoke(&source_id, expected, evidence())
+            .expect_err("revoke must exhaust");
+        assert_eq!(
+            error,
+            SourceRegistryError::RevisionExhausted {
+                source_id: source_id.clone()
+            }
+        );
+
+        let stored = registry.get(&source_id).expect("present");
+        assert_eq!(stored.authority_revision().get(), EXHAUSTED_REVISION);
+        assert_eq!(stored.status().kind(), SourceStatusKind::Proposed);
+
+        // suspend from `Approved` at `u64::MAX`.
+        let (mut registry, source_id) = registry_with_revision(EXHAUSTED_REVISION);
+        force_status(
+            &mut registry,
+            &source_id,
+            SourceStatus::Approved { receipt: receipt() },
+        );
+        let expected = current_revision(&registry, &source_id);
+        let error = registry
+            .suspend(&source_id, expected, evidence())
+            .expect_err("suspend must exhaust");
+        assert_eq!(
+            error,
+            SourceRegistryError::RevisionExhausted {
+                source_id: source_id.clone()
+            }
+        );
+        let stored = registry.get(&source_id).expect("present");
+        assert_eq!(stored.authority_revision().get(), EXHAUSTED_REVISION);
+        assert_eq!(stored.status().kind(), SourceStatusKind::Approved);
+
+        // reinstate from `Suspended` at `u64::MAX`.
+        let (mut registry, source_id) = registry_with_revision(EXHAUSTED_REVISION);
+        force_status(
+            &mut registry,
+            &source_id,
+            SourceStatus::Suspended {
+                approval: receipt(),
+                evidence: evidence(),
+            },
+        );
+        let expected = current_revision(&registry, &source_id);
+        let error = registry
+            .reinstate(&source_id, expected, receipt())
+            .expect_err("reinstate must exhaust");
+        assert_eq!(
+            error,
+            SourceRegistryError::RevisionExhausted {
+                source_id: source_id.clone()
+            }
+        );
+        let stored = registry.get(&source_id).expect("present");
+        assert_eq!(stored.authority_revision().get(), EXHAUSTED_REVISION);
+        assert_eq!(stored.status().kind(), SourceStatusKind::Suspended);
     }
 }

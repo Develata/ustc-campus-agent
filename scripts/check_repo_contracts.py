@@ -3270,8 +3270,7 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'control_evidence.rs': (),
                       'write'),
  'session.rs': ('assert', 'assert_eq', 'matches', 'panic', 'write'),
  'session_port.rs': (),
- 'source_registry.rs': ('assert',
-                        'assert_eq',
+ 'source_registry.rs': ('assert_eq',
                         'concat',
                         'matches',
                         'source_value',
@@ -3522,11 +3521,17 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'control_evidence.rs': ('impl PlatformCo
                         'impl Error for SourceRegistryError',
                         'impl Error for SourceValueError',
                         'impl FromStr for $name',
+                        'impl RetrievalSubject',
                         'impl Serialize for $name',
+                        'impl SourceAuthorityRevision',
                         'impl SourceDefinition',
+                        'impl SourceDefinitionBody',
+                        'impl SourceMediaType',
                         'impl SourceRegistry',
                         'impl SourceRetrievalPolicy',
                         'impl SourceReviewReceipt',
+                        'impl SourceStatus',
+                        'impl SourceStatusEvidenceId',
                         'impl SourceValueError',
                         'impl TryFrom<&str> for $name',
                         'impl TryFrom<String> for $name',
@@ -10030,8 +10035,9 @@ def _check_m60_blueprint_status_projection(issues: list[str]) -> None:
     blueprint_path = ROOT / "docs/plan/modules/70-campus-trust-source-pipeline.md"
     blueprint_text = blueprint_path.read_text(encoding="utf-8")
     required = (
-        "operational Suspended/Revoked accepted as contract authority in source-import/v1, not implemented;",
-        "The accepted `source-import/v1` and `source-retrieval/v0` contracts (R11 two-layer edition) define current contract authority for modules 1–2. The lifecycle precondition (operational `Suspended`/`Revoked`) must be satisfied by module 1 before module 2 can be implemented. No implementation exists for v1 or retrieval-policy; retained implementation remains forbidden until a separately admitted implementation packet.",
+        "- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` implements the pure `source-import/v1` operational lifecycle prerequisite; M60-B2 retrieval remains unimplemented and separately gated; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only",
+        "1. `source-registry` — source identity, owner, six-field policy and operational lifecycle (v1 implemented as bounded pure M60-B1; v0 retained as historical P1-1 evidence).",
+        "The bounded lifecycle prerequisite (operational `Suspended`/`Revoked` with monotone `SourceAuthorityRevision`) is implemented, but no live retrieval adapter exists.",
     )
     for token in required:
         if blueprint_text.count(token) != 1:
@@ -10119,15 +10125,15 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
         fail("source-import contract missing '## Metadata' section", issues)
     else:
         required_metadata_lines = (
-            "- `Status`: Accepted contract as `source-import/v1` under the R11 M60-B2 two-layer transport architecture; supersedes the accepted V10 `DEC-M60-B2-ACCEPTANCE`; `source-import/v0` retained as explicitly historical (see §15)",
+            "- `Status`: Accepted contract as `source-import/v1` under the R11 M60-B2 two-layer transport architecture and implemented as the bounded pure `M60-B1 source-registry` lifecycle prerequisite; supersedes the accepted V10 `DEC-M60-B2-ACCEPTANCE`; `source-import/v0` retained as explicitly historical (see §15)",
             "- `Version`: `source-import/v1`",
-            "- `Last Review`: `2026-08-12`",
-            "- `Predecessor`: [`source-import/v0`](#15-source-importv0-historical-evidence-retained) — accepted for bounded `M60-B1 source-registry` (P1-1), remains the authority for the existing `crates/platform-core/src/source_registry.rs` B1 implementation",
+            "- `Last Review`: `2026-09-01`",
+            "- `Predecessor`: [`source-import/v0`](#15-source-importv0-historical-evidence-retained) — accepted for the historical P1-1 bounded `M60-B1 source-registry`; retained as immutable evidence and superseded by the current v1 B1 implementation",
             "- `Accepted Per`: `ACCEPT_EXACT_M60_B2_R11_PACKET` — Develata accepted the exact `33046`-byte semantic packet (`sha256:34cd911e6120646a0e2e410de9987efd167e519f43e5bf64a43c96d9c3654f1e`) on 2026-08-13; prior V10 `DEC-M60-B2-ACCEPTANCE` is explicitly superseded historical evidence",
             "- `Owning Blueprint`: [`M60 Campus Trust and Source Pipeline`](../plan/modules/70-campus-trust-source-pipeline.md)",
             "- `Depends On`: [`module-boundaries.md`](module-boundaries.md), [`source-retrieval.md`](source-retrieval.md), and the existing crate-root `SourceAuthority` comparison policy",
             "- `Acceptance`: `SRC-001` is `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted; `SRC-014` remains catalog-only/non-admitted",
-            "- `Primary Code`: `crates/platform-core/src/source_registry.rs` for bounded B1 (P1-1 review candidate, still under `source-import/v0`); no v1 Rust implementation exists",
+            "- `Primary Code`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` implement bounded pure B1 under `source-import/v1`; M60-B2 retrieval remains unimplemented and separately gated",
         )
         for line in required_metadata_lines:
             if metadata.count(line) != 1:
@@ -10241,32 +10247,29 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
         encoding="utf-8"
     )
     contract_tokens = (
-        "- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` is implemented under `source-import/v0` (P1-1); operational `Suspended`/`Revoked` lifecycle precondition applies before any live B2 retrieval adapter; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only",
+        "- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` implements the pure `source-import/v1` operational lifecycle prerequisite; M60-B2 retrieval remains unimplemented and separately gated; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only",
         "- `Implementation State`: `planned`",
-        "- `Version`: `m60-campus-trust/v0.3`",
-        "- `Current Contract`: accepted [`source-import/v1`](../../contracts/source-import.md) and [`source-retrieval/v0`](../../contracts/source-retrieval.md) under R11 (`ACCEPT_EXACT_M60_B2_R11_PACKET`); bounded B1 implementation remains under [`source-import/v0`](../../contracts/source-import.md#15-source-importv0--historical-evidence-retained) (P1-1 review candidate)",
-        "SourceStatus: Proposed | Approved | Suspended | Revoked",
-        "operational Suspended/Revoked accepted as contract authority in source-import/v1, not implemented;",
-        "The accepted `source-import/v1` and `source-retrieval/v0` contracts (R11 two-layer edition) define current contract authority for modules 1–2. The lifecycle precondition (operational `Suspended`/`Revoked`) must be satisfied by module 1 before module 2 can be implemented. No implementation exists for v1 or retrieval-policy; retained implementation remains forbidden until a separately admitted implementation packet.",
-        "SourceAuthorityRevision (non-zero monotone; CAS on every mutation)",
-        "Proposed  + approve(full receipt)                 -> Approved(revision+1)",
-        "Proposed  + revoke(evidence)                      -> Revoked(revision+1, prior_approval=None)",
-        "`SourceRetrievalPolicy` has exactly six fields (expanded from v0's two):",
+        "- `Version`: `m60-campus-trust/v0.4`",
+        "- `Current Contract`: accepted [`source-import/v1`](../../contracts/source-import.md) and [`source-retrieval/v0`](../../contracts/source-retrieval.md) under R11 (`ACCEPT_EXACT_M60_B2_R11_PACKET`); bounded B1 implements the v1 lifecycle while historical [`source-import/v0`](../../contracts/source-import.md#15-source-importv0--historical-evidence-retained) remains immutable predecessor evidence",
+        "The current M60-B1 lifecycle successor implements `source-import/v1` in the same two Rust carriers:",
+        "- operational `SourceStatus = Proposed | Approved | Suspended | Revoked`;",
+        "- initial proposal at `SourceAuthorityRevision(1)` and exact CAS on every post-proposal mutation;",
+        "- six-field retrieval policy, including the one-variant `PublicIpPolicyVersion` inventory;",
+        "- evidence-bearing revise/approve/suspend/reinstate/revoke transitions;",
+        "- approved-only sealed `RetrievalSubject` projection;",
+        "- fail-closed duplicate, stale-revision, illegal-transition, revision-exhaustion and non-mutation-on-error behavior.",
+        "Migration from v0 to v1 is compile-time only because no production durable source rows exist. The historical P1-1 record and immutable §15 remain evidence, not current implementation authority.",
+        "The bounded B1 evidence — stable identity, owner, exact canonical URL, six-field retrieval policy, operational lifecycle, monotone authority revision and pure registry transitions — is implemented under `source-import/v1` and remains proven by the same active binding: `cargo test --locked -p ustc-campus-agent-core --test source_registry`.",
+        "SRC-001 implemented (bounded B1 source-import/v1 lifecycle evidence)\nSRC-010 planned\nSRC-011 planned\nSRC-012 planned\nSRC-014 catalog-only / non-admitted\nM60 planned (B1 lifecycle prerequisite implemented; B2 retrieval unimplemented)",
+        "SourceDefinitionBody::new(\n    owner: SourceOwner,\n    url: SourceUrl,\n    authority: SourceAuthority,\n    retrieval_policy: SourceRetrievalPolicy,\n) -> Result<Self, SourceValueError>",
+        "SourceRetrievalPolicy::new(\n    minimum_interval_seconds: u32,\n    maximum_response_bytes: u32,\n    maximum_elapsed_seconds: u32,\n    expected_media_type: SourceMediaType,\n    protocol_version: SourceRetrievalProtocolVersion,\n    public_ip_policy_version: PublicIpPolicyVersion,\n) -> Result<Self, SourceValueError>",
         "No constructor takes `SourceStatus`; no `approved`, `from_parts`, builder, `TryFrom` or Serde path may bypass the registry approval transition.",
         "`ModelInference` is rejected by `SourceDefinition::proposed`.",
         "This candidate family stays `Proposed`. No concrete USTC source is approved.",
         "duplicate `SourceId` or duplicate canonical `SourceUrl` is rejected without replacing the first definition;",
-        "DuplicateUrl { url: SourceUrl }",
-        "P1-0 records one reviewed **candidate family**, not an approved registry row:",
-        "`SRC-001` is `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`",
-        "retrieval-policy metadata with six fields whose limits later adapters must enforce",
-        "SourceDefinitionBody::new(\n    owner: SourceOwner,\n    url: SourceUrl,\n    authority: SourceAuthority,\n    retrieval_policy: SourceRetrievalPolicy,\n) -> Result<Self, SourceValueError>",
-        "SourceRetrievalPolicy::new(\n    minimum_interval_seconds: u32,\n    maximum_response_bytes: u32,\n    maximum_elapsed_seconds: u32,\n    expected_media_type: SourceMediaType,\n    protocol_version: SourceRetrievalProtocolVersion,\n    public_ip_policy_version: PublicIpPolicyVersion,\n) -> Result<Self, SourceValueError>",
-        "P1-1 implemented bounded `M60-B1 source-registry` as a review candidate under `source-import/v0`",
-        "added `crates/platform-core/src/source_registry.rs`;",
-        "promoted `SRC-001` to `implemented` bound to `cargo test --locked -p ustc-campus-agent-core --test source_registry`;",
-        "kept `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only SRC row unchanged.",
-        "It does **not** fetch a URL, resolve DNS, follow a redirect, read a clock, parse HTML/PDF, persist raw bytes, normalize records, compute a semantic diff, advance a baseline or publish a product event.",
+        "after duplicate checks, `propose` canonicalizes the consumed definition to fresh revision `1` plus `Proposed { revision_evidence: None }`; a clone obtained from another registry cannot transplant `Approved`, `Suspended` or `Revoked` authority, evidence, receipt or revision into the receiving registry;",
+        "1. `source-registry` — source identity, owner, six-field policy and operational lifecycle (v1 implemented as bounded pure M60-B1; v0 retained as historical P1-1 evidence).",
+        "The bounded lifecycle prerequisite (operational `Suspended`/`Revoked` with monotone `SourceAuthorityRevision`) is implemented, but no live retrieval adapter exists.",
     )
     combined = contract + "\n" + blueprint
     for token in contract_tokens:
@@ -10290,7 +10293,7 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
                 )
 
     candidate_start = contract.find("## 12. Concrete source candidate: proposed only")
-    candidate_end = contract.find("## 13. P1-1 implementation slice", max(candidate_start, 0))
+    candidate_end = contract.find("## 13. M60-B1 implementation slices", max(candidate_start, 0))
     if candidate_start == -1 or candidate_end == -1:
         fail("P1 concrete source candidate section missing", issues)
     else:
@@ -10402,10 +10405,19 @@ P1_SOURCE_REGISTRY_IDENTITY_ITEM_EXPECTATION = '    "pub mod source_registry;",'
 P1_SOURCE_REGISTRY_PUB_TYPES = (
     "pub enum SourceValueErrorKind",
     "pub struct SourceValueError",
+    "pub struct SourceStatusEvidenceId",
+    "pub struct SourceAuthorityRevision",
+    "pub enum SourceRetrievalProtocolVersion",
+    "pub enum PublicIpPolicyVersion",
     "pub struct SourceRetrievalPolicy",
+    "pub struct SourceMediaType",
     "pub struct SourceReviewReceipt",
-    "pub enum SourceReviewState",
+    "pub enum SourceStatusKind",
+    "pub enum SourceTransitionCommand",
+    "pub enum SourceStatus",
+    "pub struct SourceDefinitionBody",
     "pub struct SourceDefinition",
+    "pub struct RetrievalSubject",
     "pub enum SourceRegistryError",
     "pub struct SourceRegistry",
 )
@@ -10414,8 +10426,8 @@ P1_SOURCE_REGISTRY_MACRO_TYPES = (
     "SourceId",
     "SourceOwner",
     "SourceUrl",
-    "SourceReviewerId",
     "SourceReviewEvidenceId",
+    "SourceReviewerId",
 )
 
 P1_SOURCE_REGISTRY_FORBIDDEN_CARRIERS = (
@@ -10438,47 +10450,55 @@ P1_SOURCE_REGISTRY_FORBIDDEN_CARRIERS = (
 )
 
 P1_SOURCE_REGISTRY_NO_SERDE_AGGREGATES = (
+    "SourceStatusEvidenceId",
+    "SourceAuthorityRevision",
+    "SourceRetrievalProtocolVersion",
+    "PublicIpPolicyVersion",
+    "SourceDefinitionBody",
     "SourceDefinition",
-    "SourceReviewState",
+    "SourceStatusKind",
+    "SourceTransitionCommand",
+    "SourceStatus",
     "SourceReviewReceipt",
+    "RetrievalSubject",
     "SourceRegistry",
     "SourceRegistryError",
     "SourceRetrievalPolicy",
+    "SourceMediaType",
     "SourceValueError",
     "SourceValueErrorKind",
 )
 
 P1_SOURCE_REGISTRY_EXPECTED_TEST_FUNCTIONS = frozenset({
-    "source_id_family_enforces_grammar_and_precedence",
-    "source_id_family_values_are_nominally_distinct",
-    "source_owner_enforces_grammar_and_precedence",
-    "source_url_enforces_grammar_and_precedence",
-    "source_url_rejects_non_ascii_in_correct_position",
-    "source_value_errors_never_echo_rejected_input",
-    "retrieval_policy_enforces_bounds_and_precedence",
-    "review_receipt_is_total_and_exposes_all_fields",
-    "proposed_rejects_model_inference",
-    "proposed_accepts_non_model_inference_authorities",
-    "definition_accessors_return_correct_types",
-    "registry_starts_empty",
-    "propose_then_get_works",
-    "propose_rejects_duplicate_source_id",
-    "propose_rejects_duplicate_url",
-    "approve_missing_rejects",
-    "approve_then_approved_works",
-    "approve_already_approved_preserves_first_receipt",
-    "approved_rejects_missing_and_proposed",
-    "failed_operations_preserve_registry_unchanged",
-    "registry_error_display_and_source_chain",
-    "no_aggregate_serde_decode_exists",
-    "no_concrete_approved_ustc_source_in_production_data",
+    "source_registry_accepts_valid_media_type_boundaries",
+    "source_registry_approves_with_cas_and_retrieval_gate",
+    "source_registry_exposes_only_the_approved_current_revision",
+    "source_registry_parses_strict_nominal_values",
+    "source_registry_proposes_with_exact_v1_state_and_revision",
+    "source_registry_reproposes_cloned_authority_as_fresh_proposed_definition",
+    "source_registry_reapproves_with_cas_and_new_receipt",
+    "source_registry_rejects_duplicate_id_and_url_atomically",
+    "source_registry_rejects_illegal_transitions_atomically",
+    "source_registry_rejects_invalid_media_type_boundaries",
+    "source_registry_rejects_invalid_nominal_values",
+    "source_registry_rejects_revise_url_collision_atomically",
+    "source_registry_rejects_revision_overflow_atomically",
+    "source_registry_rejects_stale_revision_atomically",
+    "source_registry_revises_from_allowed_states_and_resets_to_proposed",
+    "source_registry_revokes_from_allowed_states_and_is_terminal",
+    "source_registry_suspends_with_cas_and_preserves_approval",
 })
 
 P1_SOURCE_REGISTRY_NO_IO_DECLARATION = "performs no I/O, reads no clock, computes no digest, resolves no"
+M60_B1_V1_LIFECYCLE_TASK = "docs/tasks/m60-b1-v1-lifecycle.md"
+M60_B1_V1_LIFECYCLE_BEGIN = "<!-- M60_B1_V1_LIFECYCLE:BEGIN -->"
+M60_B1_V1_LIFECYCLE_END = "<!-- M60_B1_V1_LIFECYCLE:END -->"
+M60_B1_V1_LIFECYCLE_BYTES = 3547
+M60_B1_V1_LIFECYCLE_SHA256 = "755c6290845a4925d233c4ace4079a461a4bdecc820fbf48bb91d39ec210fa07"
 
 
 def check_p1_source_registry_implementation(issues: list[str]) -> None:
-    """Verify the bounded M60-B1 source-registry implementation against source-import/v0.
+    """Verify the bounded M60-B1 source-registry implementation against source-import/v1.
 
     This is the P1-1 implementation gate: it verifies that the Rust source-registry
     kernel and its acceptance test satisfy every invariant the contract freezes for
@@ -10490,11 +10510,13 @@ def check_p1_source_registry_implementation(issues: list[str]) -> None:
     test_path = ROOT / P1_SOURCE_REGISTRY_TEST
     lib_path = ROOT / P1_SOURCE_REGISTRY_LIB
     identity_test_path = ROOT / P1_SOURCE_REGISTRY_IDENTITY_TEST
+    lifecycle_path = ROOT / M60_B1_V1_LIFECYCLE_TASK
     for rel, path in (
         (P1_SOURCE_REGISTRY_SOURCE, source_path),
         (P1_SOURCE_REGISTRY_TEST, test_path),
         (P1_SOURCE_REGISTRY_LIB, lib_path),
         (P1_SOURCE_REGISTRY_IDENTITY_TEST, identity_test_path),
+        (M60_B1_V1_LIFECYCLE_TASK, lifecycle_path),
     ):
         if not path.is_file():
             fail(f"P1-1 source-registry carrier missing: {rel}", issues)
@@ -10504,7 +10526,93 @@ def check_p1_source_registry_implementation(issues: list[str]) -> None:
     test = test_path.read_text(encoding="utf-8")
     lib = lib_path.read_text(encoding="utf-8")
     identity_test = identity_test_path.read_text(encoding="utf-8")
+    lifecycle_bytes = lifecycle_path.read_bytes()
+    lifecycle = lifecycle_bytes.decode("utf-8")
     stripped = strip_rust_comments_and_literals(source)
+
+    begin = (M60_B1_V1_LIFECYCLE_BEGIN + "\n").encode("utf-8")
+    end = M60_B1_V1_LIFECYCLE_END.encode("utf-8")
+    if lifecycle_bytes.count(begin) != 1 or lifecycle_bytes.count(end) != 1:
+        fail("M60-B1 v1 lifecycle task markers must each occur exactly once", issues)
+    else:
+        block = lifecycle_bytes.split(begin, 1)[1].split(end, 1)[0]
+        digest = hashlib.sha256(block).hexdigest()
+        if len(block) != M60_B1_V1_LIFECYCLE_BYTES or digest != M60_B1_V1_LIFECYCLE_SHA256:
+            fail(
+                "M60-B1 v1 lifecycle semantic packet drift: "
+                f"expected bytes={M60_B1_V1_LIFECYCLE_BYTES} sha256={M60_B1_V1_LIFECYCLE_SHA256} "
+                f"actual bytes={len(block)} sha256={digest}",
+                issues,
+            )
+    lifecycle_stage_lines = [
+        line for line in lifecycle.splitlines() if line.startswith("- `Stage`: ")
+    ]
+    allowed_lifecycle_stages = {
+        "- `Stage`: `IMPLEMENTATION_COMPLETE_AWAITING_PARENT_GATES`",
+        "- `Stage`: `VERIFIED_READY_FOR_PR`",
+    }
+    if len(lifecycle_stage_lines) != 1 or lifecycle_stage_lines[0] not in allowed_lifecycle_stages:
+        fail(
+            "M60-B1 v1 lifecycle task must carry exactly one admitted Stage line",
+            issues,
+        )
+    lifecycle_tokens = (
+        "- `Disposition`: `GO`",
+        "- `B1 status`: bounded pure lifecycle prerequisite implemented",
+        "- `M60 status`: `planned`",
+        "- `M60-B2 status`: accepted contract, retained implementation separately gated and unimplemented",
+        "- `Concrete source`: `ustc-teach-calendar-fall` remains `Proposed`",
+        "M60-B1 source-registry implements source-import/v1 as a bounded pure lifecycle prerequisite.",
+        "No concrete USTC source is approved and no network path exists.",
+        "cargo test --locked -p ustc-campus-agent-core --test source_registry",
+    )
+    for token in lifecycle_tokens:
+        if lifecycle.count(token) != 1:
+            fail(f"M60-B1 v1 lifecycle task projection drifted: {token}", issues)
+
+    required_registry_methods = (
+        "pub fn propose(",
+        "pub fn revise(",
+        "pub fn approve(",
+        "pub fn suspend(",
+        "pub fn reinstate(",
+        "pub fn revoke(",
+        "pub fn retrieval_subject(",
+    )
+    for method in required_registry_methods:
+        if stripped.count(method) != 1:
+            fail(f"M60-B1 v1 source-registry method inventory drifted: {method}", issues)
+    cas_methods = ("revise", "approve", "suspend", "reinstate", "revoke")
+    for method in cas_methods:
+        if not re.search(
+            rf"pub fn {method}\([^)]*\bexpected: SourceAuthorityRevision",
+            stripped,
+            flags=re.DOTALL,
+        ):
+            fail(
+                f"M60-B1 v1 post-proposal mutation {method} must carry exact "
+                "authority-revision CAS",
+                issues,
+            )
+    if not re.search(
+        r"pub enum PublicIpPolicyVersion\s*\{\s*V0Ipv4Only20260809,?\s*\}",
+        stripped,
+    ):
+        fail(
+            "M60-B1 v1 PublicIpPolicyVersion inventory must remain exactly "
+            "{V0Ipv4Only20260809}",
+            issues,
+        )
+    for forbidden in (
+        "pub fn from_parts(",
+        "pub fn builder(",
+        "wrapping_add(",
+        "saturating_add(",
+        "SourceNotApproved",
+
+    ):
+        if forbidden in stripped:
+            fail(f"M60-B1 v1 forbidden compatibility/unchecked surface present: {forbidden}", issues)
 
     # lib.rs module declaration and the pre-existing external authority-test closure carrier.
     if "pub mod source_registry;" not in lib:
@@ -10611,19 +10719,19 @@ def check_p1_source_registry_implementation(issues: list[str]) -> None:
                             )
                     break
 
-    # No constructor takes SourceReviewState as a parameter: the review state
-    # is set only by the registry approval transition, never by a definition
-    # constructor.  Check that `SourceReviewState` does not appear as a
+    # No constructor takes SourceStatus as a parameter: lifecycle state
+    # is set only by registry transitions, never by a definition
+    # constructor. Check that `SourceStatus` does not appear as a
     # parameter type in `pub fn proposed`.
     proposed_match = re.search(r"pub fn proposed\(([^)]*)\)", source, re.DOTALL)
-    if proposed_match and "SourceReviewState" in proposed_match.group(1):
+    if proposed_match and "SourceStatus" in proposed_match.group(1):
         fail(
-            "P1-1 source-registry SourceDefinition::proposed must not take SourceReviewState",
+            "P1-1 source-registry SourceDefinition::proposed must not take SourceStatus",
             issues,
         )
 
     # Exact test function inventory: the acceptance test must carry exactly the
-    # 23 contract-mandated test functions.
+    # 16 contract-mandated integration test functions.
     test_functions = set(re.findall(r"#\[test\]\s*\n\s*fn (\w+)\(", test))
     missing = P1_SOURCE_REGISTRY_EXPECTED_TEST_FUNCTIONS - test_functions
     extra = test_functions - P1_SOURCE_REGISTRY_EXPECTED_TEST_FUNCTIONS
@@ -13156,7 +13264,7 @@ CHECKER_SOURCE_REL = "scripts/check_repo_contracts.py"
 SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "_check_bound_rust_test_file": {"digest": "7822293db5dfa565407409bdba528c656c53ce28f0af83efdc80176aa55069f9", "status": "active"},
     "_check_coverage_matrix_m60_projection": {"digest": "c850fe6abc43b6ca20c79ad5a7127ee8ff4d5dc470afb7a0a44bbf8882ffc65d", "status": "active"},
-    "_check_m60_blueprint_status_projection": {"digest": "e0282bf17f30094ce634687b110cbd5bcd9aa40e4925c5cba87fa2305468559f", "status": "active"},
+    "_check_m60_blueprint_status_projection": {"digest": "d99a15e1fd62cb54453e3ae15f64e605c9b4c470a26f4ba7545ccdff1d6c7b2a", "status": "active"},
     "_check_m60_roadmap_section_status": {"digest": "a16c63013807a3c3ab1eaadc6390df41c8538626aac19484be6b9b60e1b47213", "status": "active"},
     "_check_market_grant_surface": {"digest": "ff8dcbbfb94b444d72cfba57bbb04fb9260ab1396302dbb0568c347afb372b69", "status": "active"},
     "_check_market_installation_surface": {"digest": "1c68b54aba48bc26905ccbe84f3a7036bc7db9b0dddb981e88b1abfe1f5b4c84", "status": "active"},
@@ -13195,8 +13303,8 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},
     "check_no_obvious_secrets": {"digest": "43072df6164d2bc92e69015291368559f593a49fd2b39d813de034e5f50b2f79", "status": "active"},
     "check_no_retired_docs_references": {"digest": "64599f57afeb2ce5fb60ccaac747cfc8ddaefc6feaf2536ad32eb0c42afd1114", "status": "active"},
-    "check_p1_source_registry_implementation": {"digest": "7e04d788b46c0844256dc4184d667381206e544663de3b630dd4d50feefe4c1d", "status": "active"},
-    "check_p1_source_revision_contract": {"digest": "f413cb4f58e9e0d17205583ca69105d3bc171e5dfb5cc1031cc4debc135fa992", "status": "active"},
+    "check_p1_source_registry_implementation": {"digest": "dd6466937e0d400c7cd80a4678b1209fff1a7f9cdfad50e9f8f14749138dbf89", "status": "active"},
+    "check_p1_source_revision_contract": {"digest": "0e162f6d21342812ed054280a4613409b3f67e3fa5ea1fd0e88549b44821476f", "status": "active"},
     "check_platform_authority_implementation": {"digest": "64b767f09d0d29268af33e15bdf60d6fd879b61365abd45c1be2caa2319b92f4", "status": "active"},
     "check_platform_core_manifest": {"digest": "3082cf7fedfaf39080d287a036c8875f762751bb8832121ca2d7cd81d5947d62", "status": "active"},
     "check_platform_control_evidence": {"digest": "29ab55813d5c6872937c9753d53dac607e7f27436ce00a8297c665d2e37c9a94", "status": "active"},
