@@ -10,7 +10,7 @@
 - `Owning Blueprint`: [`M60 Campus Trust and Source Pipeline`](../plan/modules/70-campus-trust-source-pipeline.md)
 - `Depends On`: [`module-boundaries.md`](module-boundaries.md), [`source-retrieval.md`](source-retrieval.md), and the existing crate-root `SourceAuthority` comparison policy
 - `Acceptance`: `SRC-001` is `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted; `SRC-014` remains catalog-only/non-admitted
-- `Primary Code`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` implement bounded pure B1 under `source-import/v1`; M60-B2 retrieval remains unimplemented and separately gated
+- `Primary Code`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` implement bounded pure B1 under `source-import/v1`; `crates/platform-core/src/source_retrieval.rs` and `crates/platform-core/tests/source_retrieval.rs` implement the bounded offline pure-policy B2 projection under `source-retrieval/v0`; every transport/effect/B3+ path remains separately gated
 
 ## 1. Scope and authority
 
@@ -117,7 +117,13 @@ Same semantics as `source-import/v0` §§3.2–3.3.
 
 ### 3.4 `SourceUrl`
 
-Same exact constrained public-HTTPS grammar as `source-import/v0` §3.4.
+Same exact constrained public-HTTPS grammar as `source-import/v0` §3.4, with the
+canonical lowercase DNS host additionally bounded to `3..=253` presentation bytes
+while every label remains `1..=63` bytes. This closes representability with
+`source-retrieval/v0`: every admitted `SourceUrl` host can construct the exact
+`RetrievalDnsName`. Under the existing constructor precedence, a complete URL above
+`2048` bytes is `TooLong` before host parsing; otherwise a `254+` byte host is
+`InvalidHost`, not a later protocol mismatch.
 
 ## 4. Source definition v1
 
@@ -440,7 +446,7 @@ SRC-010 planned
 SRC-011 planned
 SRC-012 planned
 SRC-014 catalog-only / non-admitted
-M60 planned (B1 lifecycle prerequisite implemented; B2 retrieval unimplemented)
+M60 planned (B1 lifecycle prerequisite and bounded offline B2 pure policy implemented; no transport/effect path)
 ```
 
 `SRC-010` does not become `pass` from B1 lifecycle implementation or contract acceptance. `SRC-014` (`suspended/revoked source blocks new fetch`) remains catalog-only/non-admitted per the existing `platform-baseline.md` long-horizon catalog: B1 proves lifecycle and retrievability gating inside the pure registry, not the separately gated fetch integration.

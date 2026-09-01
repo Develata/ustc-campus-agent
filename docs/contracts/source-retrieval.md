@@ -2,15 +2,15 @@
 
 ## Metadata
 
-- `Status`: Accepted contract as `source-retrieval/v0` under the R11 M60-B2 two-layer transport architecture; supersedes the accepted V10 `DEC-M60-B2-ACCEPTANCE`
+- `Status`: Accepted contract as `source-retrieval/v0` under the R11 M60-B2 two-layer transport architecture, with the first bounded offline pure-policy implementation retained; supersedes the accepted V10 `DEC-M60-B2-ACCEPTANCE`
 - `Version`: `source-retrieval/v0`
-- `Last Review`: `2026-08-12`
+- `Last Review`: `2026-09-01`
 - `Accepted Per`: `ACCEPT_EXACT_M60_B2_R11_PACKET` — Develata accepted the exact `33046`-byte semantic packet (`sha256:34cd911e6120646a0e2e410de9987efd167e519f43e5bf64a43c96d9c3654f1e`) on 2026-08-13
 - `Owning Blueprint`: [`M60 Campus Trust and Source Pipeline`](../plan/modules/70-campus-trust-source-pipeline.md)
 - `Depends On`: [`source-import.md`](source-import.md), [`module-boundaries.md`](module-boundaries.md)
 - `Superseded Packet Digest`: `sha256:ba36425adc164ca9b3ec75addd4be2e4b299b5f8a8cfb75cf6a710679acd32ab` over `77276` bytes — historical evidence only; this R4 packet supersedes it
 - `Acceptance`: no acceptance rows promoted by this contract; `SRC-010` remains `planned`, `SRC-014` catalog-only/non-admitted
-- `Implementation`: none; retained implementation is forbidden until a separately admitted implementation packet exists
+- `Implementation`: `crates/platform-core/src/source_retrieval.rs` and `crates/platform-core/tests/source_retrieval.rs` retain the bounded offline pure-policy implementation admitted by `M60_B2_REPRESENTABILITY_CLARIFICATION_20260901` and the independently reviewed taskbook packet `sha256:19fb0e7696ffd298e34da0c52507f3b186fa50d9ee9ccc4b68657ec65cb1026e`; no transport port, network effect, real source approval or B3 admission carrier is implemented
 
 ## 1. Scope and authority
 
@@ -211,6 +211,19 @@ RetrievalPolicy::evaluate_rate(candidate, now, last_attempt_started_at, override
 
 Pure B2 helper; output is never accepted by `RetrievalAdmissionPort`. B3 reloads authoritative facts and recomputes it in the transaction.
 
+The exact pure decision table and branch-local precedence are:
+
+1. if `last_attempt_started_at = Some(last)` and `now < last`, return `ClockRegression`;
+2. if there is no prior attempt, or checked `now - last >= minimum_interval_seconds`, return `Allowed`; an unnecessary override request is ignored and cannot mint an override decision;
+3. otherwise the interval has not elapsed:
+   - no override request returns `RateLimitNotElapsed`;
+   - an override request with no `override_facts` returns `OverrideEvidenceUnavailable`;
+   - facts whose evidence ID, override ID, attempt ID, source ID or source-authority revision do not exactly match the request/candidate, or whose window does not satisfy `issued_at <= now <= not_after`, return `InvalidRateOverride`;
+   - exact valid facts with `override_consumed = true` return `RateOverrideAlreadyConsumed`;
+   - exact valid unconsumed facts return `AllowedWithOverride` carrying the exact requested `RateOverrideId`.
+
+This table is exhaustive. The helper neither consumes evidence nor changes concurrency. Future B3 loads authoritative facts and executes the same table inside its transaction.
+
 ## 7. V0 protocol and public-IP policy
 
 `SourceRetrievalProtocolVersion::V0StrictHttpsIpv4Http11_20260809` freezes:
@@ -298,20 +311,42 @@ Only HTTP status `200` is accepted in v0. Every `3xx` is `RedirectDenied`. Condi
 - exactly one empty `CRLF` terminator.
 
 Parser caps: status+headers ≤ 32768 raw bytes, ≤ 128 header fields, field name ≤ 64 bytes, field value ≤ 8192 bytes.
+Malformed grammar, including invalid UTF-8, is classified before the raw-byte cap; an
+oversized but otherwise well-formed head is `HeaderLimitExceeded`.
 
 ### 8.3 Framing and body validation
 
-`Content-Type`: exactly one syntactically valid `type/subtype` essence required. Parameters ≤ 16, name/value `1..=64`, no duplicates. Case-insensitive essence must equal `expected_media_type`.
+`Content-Type`: exactly one syntactically valid `type/subtype` essence required. Parameters ≤ 16, name/value `1..=64`, no duplicates. Optional ASCII space is admitted around `;`, but not on either side of a parameter `=`. An unquoted parameter value is an RFC `tchar` token and therefore contains no spaces; a quoted value may contain ASCII spaces in addition to `tchar` bytes. Case-insensitive essence must equal `expected_media_type`.
 
 Framing rules:
 - `Content-Encoding`: absent or exactly `identity`;
 - `Transfer-Encoding`: absent or exactly `chunked` (one token, no parameters/chains);
-- `Content-Length`: `0` or `[1-9][0-9]*`, no coexistence with `Transfer-Encoding`;
-- absent both means close-delimited under `Connection: close`;
+- `Content-Length`: `0` or `[1-9][0-9]*`, no coexistence with `Transfer-Encoding`; malformed decimal syntax is `AmbiguousFraming`, while a syntactically valid decimal above `u64::MAX` is already above every admitted body cap and therefore returns `DeclaredBodyTooLarge`;
+- absent both means close-delimited because the exact serialized request already fixes
+  `Connection: close`; a conforming response need not echo that hop-by-hop header;
 - `Trailer`: absent;
 - chunk-size lines ≤ 128 raw bytes, `1..=16` hex digits, non-final count ≤ 4096.
 
+`max_chunk_line_bytes` counts bytes before `CRLF` in the widest observed chunk-size line. Because any extension sets `saw_chunk_extension = true` and is rejected, an accepted line consists only of its hexadecimal size digits; the policy therefore rejects widths `0` and `> 16` directly, which also satisfies the broader 128-byte line cap.
+
 Body/wire counters operate independently. Wire ≤ `maximum_response_bytes + 65536`. Delivered entity body ≤ `maximum_response_bytes`. Adapter retains at most `maximum_response_bytes + 1` entity bytes.
+
+The only public body-observation constructor is:
+
+```rust
+BodyObservation::new(
+    bytes: Vec<u8>,
+    wire_bytes_after_headers: u64,
+    chunk_count: u32,
+    max_chunk_line_bytes: u16,
+    saw_chunk_extension: bool,
+    trailer_field_count: u16,
+    framing_complete: bool,
+    elapsed_milliseconds: u64,
+) -> Result<BodyObservation, SourceTransportError>
+```
+
+It is shape-only. It accepts every scalar value in the complete Rust type domain and imposes no shape restriction on either boolean. It accepts `bytes.len()` in `0..=1_048_577`, preserves the exact vector without truncation, and returns only `SourceTransportError::ObservationShapeRejected` for a larger vector while retaining none of the rejected bytes. The one-byte overflow sentinel makes the global `maximum_response_bytes = 1_048_576` failure representable without unbounded retention. Request-specific wire/body/chunk/trailer/framing/deadline rules are applied only by `finish_body`.
 
 ### 8.4 Deadline
 
@@ -426,7 +461,7 @@ pub(crate) trait SourceFetchPort: sealed::SourceFetchPortSealed + Send + Sync {
 
 M60 owns context mapping, command, admission, trusted-time use, plan, policy, result, error and conformance. M90 returns only raw non-authority transport observations or `SourceTransportError`; it cannot mint, broaden or reinterpret authority and never names `EffectReadyRetrievalPlan`, domain phase carriers, `TransportStopped`, attempt receipt, `SourceFetchFailure` or `BoundedFetch`. The internal M60 coordinator maps `SourceTransportError` into crate-private/domain `SourceFetchFailure`. All ports use only standard-library `Future`/`Pin`; no external runtime/framework type crosses the boundary.
 
-The first retained B2 implementation, if separately authorized, contains only pure registry/policy and non-authority observation fakes. It does not implement any of the four ports above.
+The first retained B2 implementation contains only pure registry/policy and non-authority observation values exercised by synthetic fakes. It implements none of the four ports above.
 
 ## 11. Error algebra
 
@@ -525,7 +560,7 @@ No variant carries rejected raw URL/header/body/DNS payload, credential, framewo
 | `SerializedRetrievalRequest` | no | no | no | no | no (owner-private) | yes | no |
 | `RetrievalAdmissionOutcome` | no | no | no | no | no (linear enum) | yes | no |
 
-All nominal identity values follow the rule stated in §2: `Clone + Debug + Eq + Ord + Hash`, no `Copy`/`Default`/Serde. `RetrievalEpochSeconds` carries `Copy`. Effect-authority carriers (those with no public constructor above) are in `Display` the scope required by safe operator reporting; they never render raw payload, credential, header or semantic content.
+All nominal identity values follow the rule stated in §2: `Clone + Debug + Eq + Ord + Hash`, no `Copy`/`Default`/Serde. `RetrievalEpochSeconds` carries `Copy`. `RetrievalPlanCandidate`, `ResolvedRetrievalCandidate`, `PeerBoundRetrievalCandidate`, `BodyAdmissionCandidate` and `ValidatedFetchCandidate` are public opaque non-authority output types with private fields and no public constructors. All five have safe payload-redacted `Debug` and no `Copy`, Serde, `Default` or `Display`; only `RetrievalPlanCandidate` is `Clone`, while the other four are non-Clone. Owner-private effect-authority carriers remain non-public and never render raw payload, credential, header or semantic content.
 
 ### 11.3 Closed enum families
 
@@ -588,7 +623,7 @@ RetrievalPolicy::finish_body(
 ) -> Result<ValidatedFetchCandidate, RetrievalPolicyError>
 ```
 
-All phase methods consume the non-clone carrier that precedes them and produce the next non-clone carrier or a terminal pure output.
+`RetrievalPlanCandidate` may be cloned only to exercise independent pure branches; `evaluate_rate` borrows it and `authorize_resolution` consumes one candidate. Every later phase method consumes its non-Clone predecessor and produces the next opaque non-Clone phase output. No phase output has a public constructor or effect-authority conversion.
 
 ### 11.5 Complete named Rust inventory
 
@@ -624,6 +659,11 @@ Public non-authority values (directly or through checked pure construction):
 | `SourceTransportError` | §11 |
 | `RetrievalPolicyError` | §11 |
 | `RetrievalPolicy` | §6 |
+| `RetrievalPlanCandidate` | §6 |
+| `ResolvedRetrievalCandidate` | §7 |
+| `PeerBoundRetrievalCandidate` | §7 |
+| `BodyAdmissionCandidate` | §8 |
+| `ValidatedFetchCandidate` | §9 |
 
 Crate-private/internal values (no public constructor, no Serde, no Clone unless specified):
 
@@ -635,12 +675,7 @@ Crate-private/internal values (no public constructor, no Serde, no Clone unless 
 | `RetrievalReplayIdentity` | §4 |
 | `RetrievalAttemptCompletion` | §5 |
 | `TransportStopped` | §5 |
-| `RetrievalPlanCandidate` | §6 |
 | `AdmittedRetrievalPlan` | §6 |
-| `ResolvedRetrievalCandidate` | §7 |
-| `PeerBoundRetrievalCandidate` | §7 |
-| `BodyAdmissionCandidate` | §8 |
-| `ValidatedFetchCandidate` | §9 |
 | `EffectReadyRetrievalPlan` | §6 |
 | `BoundedFetch` | §11 |
 | `DnsResolutionObservation` | §7 |
@@ -651,14 +686,14 @@ Crate-private/internal values (no public constructor, no Serde, no Clone unless 
 
 ## 12. Non-claims and stop conditions
 
-This contract:
+This contract and its retained bounded implementation:
 - does not approve a concrete USTC source;
 - does not authorize network retrieval;
-- does not implement Rust, `platform-core`, or any adapter;
+- implements only pure Rust policy/observation algebra in `platform-core`, not an adapter, port implementation, clock, lease, journal or effect carrier;
 - does not promote `SRC-010`, `SRC-014` or M60 status;
 - does not authorize push, PR, merge, tag, release or publication.
 
-Retained B2 implementation is forbidden until a separately admitted implementation packet exists. Operational `Suspended`/`Revoked` lifecycle and monotone `SourceAuthorityRevision` must be present before any live B2 retrieval adapter.
+The separately admitted implementation packet retains only the bounded offline pure policy and shape-only observations described above. Operational `Suspended`/`Revoked` lifecycle and monotone `SourceAuthorityRevision` must be present before any live B2 retrieval adapter; both prerequisites are already present, but every live B2 retrieval adapter, M60/M90 port implementation and B3 admission/effect carrier remains separately gated.
 
 ## 13. Change rule
 

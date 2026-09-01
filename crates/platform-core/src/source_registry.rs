@@ -52,6 +52,9 @@ const MAX_SOURCE_URL_BYTES: usize = 2048;
 /// Maximum number of bytes per DNS label inside a `SourceUrl` host.
 const MAX_DNS_LABEL_BYTES: usize = 63;
 
+/// Maximum presentation length of the canonical DNS host admitted by `SourceUrl`.
+const MAX_DNS_NAME_BYTES: usize = 253;
+
 /// Ceiling for `SourceRetrievalPolicy::minimum_interval_seconds`.
 const MAX_MINIMUM_INTERVAL_SECONDS: u32 = 604_800;
 
@@ -281,7 +284,10 @@ impl fmt::Display for SourceValueError {
 impl Error for SourceValueError {}
 
 /// Builds the one error shape this module reports from a rejecting validator.
-const fn value_error(value_kind: &'static str, kind: SourceValueErrorKind) -> SourceValueError {
+pub(crate) const fn value_error(
+    value_kind: &'static str,
+    kind: SourceValueErrorKind,
+) -> SourceValueError {
     SourceValueError { value_kind, kind }
 }
 
@@ -309,7 +315,7 @@ const fn is_source_id_interior(byte: u8) -> bool {
 /// `^[a-z0-9](?:[-a-z0-9._:]{0,126}[a-z0-9])?$` and has `1..=128` bytes.
 /// Invariant: exactly one left-to-right pass over the interior, and no
 /// allocation.
-fn classify_source_id(value: &str) -> Result<(), SourceValueErrorKind> {
+pub(crate) fn classify_source_id(value: &str) -> Result<(), SourceValueErrorKind> {
     let bytes = value.as_bytes();
     let Some((&first, after_first)) = bytes.split_first() else {
         return Err(SourceValueErrorKind::Empty);
@@ -424,7 +430,7 @@ fn classify_dns_label(label: &[u8]) -> bool {
 /// is the bare-IPv4 shape and is rejected. `localhost` is rejected by the
 /// single-label rule.
 fn is_admitted_host(host: &str) -> bool {
-    if host.is_empty() {
+    if host.is_empty() || host.len() > MAX_DNS_NAME_BYTES {
         return false;
     }
     // A trailing dot is forbidden.
@@ -527,7 +533,8 @@ fn classify_percent_hex(byte: u8) -> bool {
 /// accepted contract: empty; length; scheme; host; then path.
 ///
 /// Postcondition: `Ok(())` exactly when `value` is exactly
-/// `https://<host>/<path>` with `host` admitted by `is_admitted_host` and
+/// `https://<host>/<path>` with a `3..=253` byte `host` admitted by
+/// `is_admitted_host` and
 /// `path` admitted by `classify_path`, total length `1..=2048` ASCII bytes.
 fn classify_source_url(value: &str) -> Result<(), SourceValueErrorKind> {
     if value.is_empty() {
@@ -1149,6 +1156,11 @@ impl SourceMediaType {
             }),
             Err(kind) => Err(value_error("SourceMediaType", kind)),
         }
+    }
+
+    /// Returns the canonical media-type bytes to sibling policy modules.
+    pub(crate) fn as_bytes(&self) -> &[u8] {
+        self.value.as_bytes()
     }
 }
 

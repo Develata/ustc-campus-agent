@@ -2652,6 +2652,8 @@ PLATFORM_SESSION_PORT_TASK = "docs/tasks/campaign-w1-m00-b4a.md"
 PLATFORM_CONTROL_EVIDENCE_SOURCE = "crates/platform-core/src/control_evidence.rs"
 PLATFORM_CONTROL_EVIDENCE_TEST = "crates/platform-core/tests/platform_control_evidence.rs"
 PLATFORM_CONTROL_EVIDENCE_CONTRACT = "docs/contracts/platform-control-evidence.md"
+PLATFORM_SOURCE_RETRIEVAL_SOURCE = "crates/platform-core/src/source_retrieval.rs"
+PLATFORM_SOURCE_RETRIEVAL_TEST = "crates/platform-core/tests/source_retrieval.rs"
 PLATFORM_CONTROL_EVIDENCE_TASK = "docs/tasks/campaign-w1-m00-b4b.md"
 PLATFORM_CAPABILITY_TEST = "crates/platform-core/tests/market_capability_registry.rs"
 PLATFORM_INSTALLATION_TEST = 'crates/platform-core/tests/market_installation_lifecycle.rs'
@@ -2936,6 +2938,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/control_evidence.rs',
  'src/session.rs',
  'src/session_port.rs',
  'src/source_registry.rs',
+ 'src/source_retrieval.rs',
  'src/source_revision.rs',
  'tests/invocation_resolution.rs',
  'tests/market_authority_assembly.rs',
@@ -2950,6 +2953,7 @@ PLATFORM_CORE_SOURCE_FILES = ('src/control_evidence.rs',
  'tests/platform_session.rs',
  'tests/platform_session_port.rs',
  'tests/source_registry.rs',
+ 'tests/source_retrieval.rs',
  'tests/support/invocation_fixture.rs',
  'tests/support/invocation_fixture_executor.rs')
 PLATFORM_IDENTITY_ADMITTED_REEXPORT = "pub use crate::identity::{TenantId, UserId};"
@@ -2964,6 +2968,7 @@ PLATFORM_SESSION_PORT_ADMITTED_IDENTITY_IMPORT = "use crate::identity::SessionId
 PLATFORM_CONTROL_EVIDENCE_ADMITTED_IDENTITY_IMPORT = (
     "use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};"
 )
+PLATFORM_SOURCE_RETRIEVAL_ADMITTED_IDENTITY_IMPORT = "use crate::identity::CommandId;"
 # Cross-file bindings of an admitted kind are admitted by ENUMERATION, never by pattern, and
 # each entry is keyed by exact repository-relative file together with exact normalized text.
 # Relaxing this into a prefix, regex or predicate over `crate::identity::` would re-open
@@ -2981,6 +2986,7 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
     (PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_SESSION_PORT_SOURCE, PLATFORM_SESSION_PORT_ADMITTED_IDENTITY_IMPORT),
     (PLATFORM_CONTROL_EVIDENCE_SOURCE, PLATFORM_CONTROL_EVIDENCE_ADMITTED_IDENTITY_IMPORT),
+    (PLATFORM_SOURCE_RETRIEVAL_SOURCE, PLATFORM_SOURCE_RETRIEVAL_ADMITTED_IDENTITY_IMPORT),
 )
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
 # a file extension. Pinning the declarations pins the compiled set semantically, so no
@@ -2989,7 +2995,7 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
 PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'control_evidence.rs': (),
  'identity.rs': (),
  'invocation.rs': (),
- 'lib.rs': ('control_evidence', 'identity', 'invocation', 'market', 'request_context', 'session', 'session_port', 'source_registry', 'source_revision'),
+ 'lib.rs': ('control_evidence', 'identity', 'invocation', 'market', 'request_context', 'session', 'session_port', 'source_registry', 'source_retrieval', 'source_revision'),
  'market.rs': ('authority', 'capability', 'grant', 'installation', 'update'),
  'market/authority.rs': (),
  'market/capability.rs': (),
@@ -3000,6 +3006,7 @@ PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'control_evidence.rs': (),
  'session.rs': (),
  'session_port.rs': (),
  'source_registry.rs': (),
+ 'source_retrieval.rs': (),
  'source_revision.rs': ()}
 # Pinning module NAMES is not the same as pinning module SOURCES, and pinning a re-export by
 # the spelling `crate::identity` is not the same as accounting for the use tree that contains
@@ -3051,6 +3058,7 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
             'pub mod session;',
             'pub mod session_port;',
             'pub mod source_registry;',
+            'pub mod source_retrieval;',
             'pub mod source_revision;',
             '#[cfg(test)] mod tests',
             'use super::*;'),
@@ -3200,6 +3208,17 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
                         'type Err = SourceValueError;',
                         '#[cfg(test)] mod tests',
                         'use super::*;'),
+ 'source_retrieval.rs': ('use std::collections::BTreeSet;',
+                         'use std::error::Error;',
+                         'use std::fmt;',
+                         'use std::net::{Ipv4Addr, SocketAddr};',
+                         'use crate::identity::CommandId;',
+                         'use crate::source_registry::{ PublicIpPolicyVersion, RetrievalSubject, '
+                         'SourceAuthorityRevision, SourceId, SourceMediaType, '
+                         'SourceRetrievalProtocolVersion, SourceValueError, SourceValueErrorKind, '
+                         'classify_source_id, value_error, };',
+                         '#[cfg(test)] mod tests',
+                         'use super::*;'),
  'source_revision.rs': ('use std::error::Error;',
                         'use std::fmt;',
                         'use sha2::{Digest, Sha256};',
@@ -3225,6 +3244,7 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'control_evidence.rs': (),
  'session.rs': (),
  'session_port.rs': (),
  'source_registry.rs': ('source_value',),
+ 'source_retrieval.rs': ('redacted_phase_debug', 'retrieval_id'),
  'source_revision.rs': ('revision_id',)}
 # Macro INVOCATION names are pinned too, not screened for `include!`. A splicing macro can be
 # reached whatever the spelling — `include /* x */ !("f.rs")` contains no `include!` substring —
@@ -3276,6 +3296,15 @@ PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'control_evidence.rs': (),
                         'source_value',
                         'stringify',
                         'write'),
+ 'source_retrieval.rs': ('assert',
+                         'assert_eq',
+                         'concat',
+                         'format',
+                         'matches',
+                         'redacted_phase_debug',
+                         'retrieval_id',
+                         'stringify',
+                         'write'),
  'source_revision.rs': ('assert', 'format', 'matches', 'revision_id', 'stringify', 'write')}
 PLATFORM_IDENTITY_ADMITTED_TEST_MACRO_INVOCATIONS = (
     "assert",
@@ -3539,6 +3568,30 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'control_evidence.rs': ('impl PlatformCo
                         'impl fmt::Display for SourceRegistryError',
                         'impl fmt::Display for SourceValueError',
                         'impl-arg Into<String>'),
+ 'source_retrieval.rs': ('impl $name',
+                         'impl BodyObservation',
+                         'impl Clone for RetrievalPlanCandidate',
+                         'impl DnsTransportObservation',
+                         'impl Error for RetrievalPolicyError',
+                         'impl Error for SourceTransportError',
+                         'impl RetrievalAttemptCommand',
+                         'impl RetrievalDnsName',
+                         'impl RetrievalEpochSeconds',
+                         'impl RetrievalOverrideFacts',
+                         'impl RetrievalPolicy',
+                         'impl RetrievalRateOverrideRequest',
+                         'impl RetrievalTransportSuccess',
+                         'impl SerializedRetrievalRequest',
+                         'impl fmt::Debug for $name',
+                         'impl fmt::Debug for BodyObservation',
+                         'impl fmt::Debug for DnsTransportObservation',
+                         'impl fmt::Debug for ResponseHeadObservation',
+                         'impl fmt::Debug for RetrievalDnsName',
+                         'impl fmt::Debug for RetrievalTransportSuccess',
+                         'impl fmt::Debug for RetrievalTransportSuccessParts',
+                         'impl fmt::Debug for SerializedRetrievalRequest',
+                         'impl fmt::Display for RetrievalPolicyError',
+                         'impl fmt::Display for SourceTransportError'),
  'source_revision.rs': ('impl $name',
                         'impl EffectiveInterval',
                         'impl Error for SourceRevisionError',
@@ -4612,6 +4665,7 @@ PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'control_evidence.rs': ('derive', 'mus
  'session.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
  'session_port.rs': ('derive', 'must_use'),
  'source_registry.rs': ('$attribute', 'allow', 'cfg', 'derive', 'doc', 'must_use', 'test'),
+ 'source_retrieval.rs': ('$attribute', 'allow', 'cfg', 'derive', 'must_use', 'test'),
  'source_revision.rs': ('$attribute', 'allow', 'cfg', 'derive', 'must_use', 'non_exhaustive', 'test')}
 # `market/grant.rs` carries lint-affecting `allow` attributes, so names alone are not enough:
 # freeze the complete normalized attribute-body multiset. Counts are literal reviewed evidence,
@@ -9437,6 +9491,57 @@ M60_B2_REPLACEMENT_PACKET_BYTES = 33046
 M60_B2_REPLACEMENT_PACKET_SHA256 = "34cd911e6120646a0e2e410de9987efd167e519f43e5bf64a43c96d9c3654f1e"
 M60_B2_SOURCE_RETRIEVAL_PATH = "docs/contracts/source-retrieval.md"
 M60_B2_SOURCE_IMPORT_PATH = "docs/contracts/source-import.md"
+M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH = "docs/tasks/m60-b2-offline-retrieval-policy.md"
+M60_B2_OFFLINE_IMPLEMENTATION_BEGIN = "<!-- M60_B2_OFFLINE_IMPLEMENTATION_PACKET:BEGIN -->"
+M60_B2_OFFLINE_IMPLEMENTATION_END = "<!-- M60_B2_OFFLINE_IMPLEMENTATION_PACKET:END -->"
+M60_B2_OFFLINE_IMPLEMENTATION_BYTES = 26003
+M60_B2_OFFLINE_IMPLEMENTATION_SHA256 = (
+    "19fb0e7696ffd298e34da0c52507f3b186fa50d9ee9ccc4b68657ec65cb1026e"
+)
+M60_B2_FROZEN_EXECUTABLE_SHA256 = {
+    "crates/platform-core/src/lib.rs": "576943ba5914913fe925f0333712b83f7a429d14f04289fc3f34352f6f90759b",
+    "crates/platform-core/src/source_registry.rs": "3504fe9c470e123cf87af894fab37bb1095f33ba753b01818b9d16d9238e0a64",
+    "crates/platform-core/tests/source_registry.rs": "167510be70ff1a0ff019efeb7f6ab2b98ac815ffa15ab0ac4004f0f42d8393f2",
+    "crates/platform-core/src/source_retrieval.rs": "6cbbcd5277fcfe99389735dd1b97879b77267710cef5421894df80d9ee93b5e8",
+    "crates/platform-core/tests/source_retrieval.rs": "d52cba008bfc9bd271d6bea776ba0822086bd598f24355a185a27caeda5ab31f",
+}
+M60_B2_EXTERNAL_TEST_FUNCTIONS = (
+    "nominal_id_families_and_dns_names_are_exact_and_redacted",
+    "epoch_and_override_window_cover_boundaries_without_authority",
+    "derive_rejects_source_before_revision_and_retains_no_caller_url_knobs",
+    "rate_table_is_exhaustive_at_boundaries_and_checks_override_exactness",
+    "dns_observation_is_shape_only_and_has_exact_move_accessors",
+    "resolution_rejects_each_frozen_cidr_and_accepts_neighbors",
+    "resolution_and_peer_binding_fail_closed_on_host_alias_count_family_and_port",
+    "strict_response_parser_rejects_line_folding_limits_and_status_classes",
+    "response_authorization_enforces_content_codings_framing_and_trailers",
+    "body_shape_and_policy_bounds_are_independent_and_ordered",
+    "transport_success_is_shape_only_bounded_and_moves_parts_once",
+    "complete_error_families_are_payload_free_and_stable",
+)
+M60_B2_INTERNAL_TEST_FUNCTIONS = (
+    "private_helpers_enforce_exact_dns_and_public_ip_boundaries",
+    "parser_and_header_helpers_are_non_vacuous",
+    "exact_serialized_request_is_closed_and_byte_exact",
+)
+M60_B2_FORBIDDEN_EXECUTABLE_CARRIERS = (
+    "std::fs",
+    "std::process",
+    "std::thread",
+    "TcpStream",
+    "UdpSocket",
+    "SystemTime",
+    "Instant::now",
+    "SourceTransportPort",
+    "SourceOperatorPolicyPort",
+    "RetrievalClockPort",
+    "RetrievalAdmissionPort",
+    "SourceFetchPort",
+    "EffectReadyRetrievalPlan",
+    "AdmittedRetrievalPlan",
+    "RetrievalTransportRequest",
+    "SourceFetchFailure",
+)
 M60_B2_REPLACEMENT_STAGE = "`M60_B2_CONTRACT_ACCEPTED`"
 M60_B2_PACKET_STATUS = "`ACCEPTED`"
 M60_B2_REQUIRED_STAGE_LINE = "- `Stage`: `M60_B2_CONTRACT_ACCEPTED`"
@@ -9448,17 +9553,317 @@ M60_B2_REQUIRED_DIGEST_LINE = (
     "marker newline and ending immediately before the `END` marker token, including the "
     "final packet newline"
 )
-M60_B2_PROJECTED_PATHS = (
-    M60_B2_PROPOSAL_PATH,
-    "docs/contracts/source-import.md",
-    "docs/contracts/source-retrieval.md",
-    "docs/contracts/module-boundaries.md",
-    "docs/plan/05-campus-trust-kernel.md",
-    "docs/plan/modules/00-module-map.md",
-    "docs/plan/modules/70-campus-trust-source-pipeline.md",
-    "docs/tasks/01-execution-roadmap.md",
-    "docs/coverage-matrix.md",
-)
+M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS = {
+    "CLAUDE.md": (
+        "`source_retrieval.rs` owns only the first offline `source-retrieval/v0` B2 "
+        "policy/observation algebra",
+        "M60 overall and `SRC-010/011/012` remain `planned`; `SRC-014` remains catalog-only.",
+    ),
+    M60_B2_PROPOSAL_PATH: (
+        "Retained M60-B2 implementation",
+        "no transport/effect/B3+ authority",
+    ),
+    M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: (
+        "## Marker-external pull-request review repair R3",
+        "no public API, dependency, transport/effect, source approval, acceptance projection or shipping widening",
+    ),
+    "docs/acceptance/platform-baseline.md": (
+        "`SRC-015` binds the first bounded offline `M60-B2` pure-policy algebra",
+        "`SRC-010`, `SRC-011`, `SRC-012`",
+        "`SRC-014`",
+    ),
+    "docs/acceptance/matrix.tsv": (
+        "SRC-015\tsource\tbounded offline retrieval policy deterministically validates synthetic request rate DNS peer HTTP-head and body observations without I/O transport-port implementation or source approval",
+        "\tpr\timplemented\tsecurity",
+    ),
+    "docs/contracts/source-import.md": (
+        "implement the bounded offline pure-policy B2 projection under `source-retrieval/v0`",
+        "every transport/effect/B3+ path remains separately gated",
+    ),
+    "docs/contracts/source-retrieval.md": (
+        "with the first bounded offline pure-policy implementation retained",
+        "no transport port, network effect, real source approval or B3 admission carrier is implemented",
+        "It implements none of the four ports above.",
+    ),
+    "docs/contracts/module-boundaries.md": (
+        "`B-M60-M90-SOURCE-TRANSPORT`",
+        "accepted contract; implementation planned",
+    ),
+    "docs/overview/architecture.md": (
+        "bounded B1 registry, first retained bounded offline B2 pure policy/shape-only observations",
+        "no transport/network effect, approved source, parser or durable baseline",
+    ),
+    "docs/features/02-ustc-change-radar.md": (
+        "`SRC-015` separately binds the first bounded offline `source-retrieval/v0` policy algebra",
+        "performs no I/O, approves no source and does not promote effectful `SRC-010`",
+    ),
+    "docs/plan/05-campus-trust-kernel.md": (
+        "first bounded offline M60-B2 pure-policy implementation under `source-retrieval/v0`",
+        "there is no transport port implementation, network effect or approved source",
+    ),
+    "docs/plan/modules/00-module-map.md": (
+        "first offline-only B2 pure policy",
+        "no transport/network effect, approved source, parser, durable baseline or publication composition",
+    ),
+    "docs/plan/modules/70-campus-trust-source-pipeline.md": (
+        "`Implementation State`: `planned`",
+        "bounded offline M60-B2 pure policy",
+        "it implements no M60/M90 port, clock, journal, network effect, source approval or B3 carrier",
+    ),
+    "docs/tasks/01-execution-roadmap.md": (
+        "M60 overall remains `planned`",
+        "bounded M60-B2 implements only offline pure request/rate/DNS/head/body policy plus shape-only observations",
+        "`SRC-010`, `SRC-011`, `SRC-012` remain `planned`; `SRC-014` remains catalog-only/non-admitted",
+    ),
+    "docs/tasks/m60-b1-v1-lifecycle.md": (
+        "accepted contract plus first bounded offline pure-policy implementation",
+        "transport/effects remain separately gated and unimplemented",
+    ),
+    "docs/coverage-matrix.md": (
+        "`M60 Campus Trust/Source`",
+        "`B-M60-M90-SOURCE-TRANSPORT`",
+    ),
+}
+
+
+def check_m60_b2_offline_implementation(issues: list[str]) -> None:
+    """Pin the first retained B2 slice to its reviewed offline-only executable bytes."""
+
+    declared_projection_paths = (
+        "CLAUDE.md",
+        M60_B2_PROPOSAL_PATH,
+        M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH,
+        "docs/acceptance/platform-baseline.md",
+        "docs/acceptance/matrix.tsv",
+        "docs/contracts/source-import.md",
+        "docs/contracts/source-retrieval.md",
+        "docs/contracts/module-boundaries.md",
+        "docs/overview/architecture.md",
+        "docs/features/02-ustc-change-radar.md",
+        "docs/plan/05-campus-trust-kernel.md",
+        "docs/plan/modules/00-module-map.md",
+        "docs/plan/modules/70-campus-trust-source-pipeline.md",
+        "docs/tasks/01-execution-roadmap.md",
+        "docs/tasks/m60-b1-v1-lifecycle.md",
+        "docs/coverage-matrix.md",
+    )
+    if tuple(M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS) != declared_projection_paths:
+        fail(
+            "M60-B2 declared projection path registry drifted: "
+            f"expected={declared_projection_paths} "
+            f"actual={tuple(M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS)}",
+            issues,
+        )
+    frozen_projection_sha256 = {
+        "CLAUDE.md": "131b50b80b23bba24d565a4751b02be88f7ead4a4b1bad514abaf97282a465c4",
+        M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
+        M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "e6e4e7ecacc70d446eab6947f8a28e55b2d78a74a72523908a1bb8a46dd9e88c",
+        "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
+        "docs/acceptance/matrix.tsv": "aab5b2ab62463ae21200ca06868171b2d636177c79c72a0c2177de2989a52829",
+        "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
+        "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
+        "docs/contracts/module-boundaries.md": "fe8b2ba4f6c9bda834ee33a9c87188bfbdaefacb5f00da7cc297b240c4cb4f90",
+        "docs/overview/architecture.md": "99de3f5d93cf8d8cd7e516e0d00d4303d8cb2f0807c2a23ad2ad01b63bbf21a5",
+        "docs/features/02-ustc-change-radar.md": "27be5c7f4bebdd6bb2dc6938ecffa185b4d0cd53aeb050b031b46bf698478153",
+        "docs/plan/05-campus-trust-kernel.md": "26ebed21efb3cfcf09a08864ec890fd75dea7322d296433d120557b1614e26db",
+        "docs/plan/modules/00-module-map.md": "bafeece216c46cdd8d840e384d3a035834c1f2f9bc306d4b58a57907499b232c",
+        "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
+        "docs/tasks/01-execution-roadmap.md": "3b828a7167d6fb35eb0fab0defd5d3d6fac0f7bf2598124218176fe57507b556",
+        "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
+        "docs/coverage-matrix.md": "448205458cfa6e664e251af208fbc0f9529b6acfe708b2d55c383913c8d020e7",
+    }
+    if tuple(frozen_projection_sha256) != declared_projection_paths:
+        fail(
+            "M60-B2 projection digest registry drifted: "
+            f"expected={declared_projection_paths} "
+            f"actual={tuple(frozen_projection_sha256)}",
+            issues,
+        )
+
+    task_path = ROOT / M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH
+    if not task_path.is_file() or task_path.is_symlink():
+        fail(
+            f"M60-B2 offline implementation task missing or non-regular: "
+            f"{M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH}",
+            issues,
+        )
+        return
+    task_bytes = task_path.read_bytes()
+    begin = (M60_B2_OFFLINE_IMPLEMENTATION_BEGIN + "\n").encode("utf-8")
+    end = M60_B2_OFFLINE_IMPLEMENTATION_END.encode("utf-8")
+    if task_bytes.count(begin) != 1 or task_bytes.count(end) != 1:
+        fail("M60-B2 offline implementation packet marker count drift", issues)
+    else:
+        start = task_bytes.index(begin) + len(begin)
+        finish = task_bytes.index(end)
+        packet = task_bytes[start:finish]
+        packet_sha256 = hashlib.sha256(packet).hexdigest()
+        if len(packet) != M60_B2_OFFLINE_IMPLEMENTATION_BYTES:
+            fail(
+                "M60-B2 offline implementation packet byte count drift: "
+                f"expected={M60_B2_OFFLINE_IMPLEMENTATION_BYTES} actual={len(packet)}",
+                issues,
+            )
+        if packet_sha256 != M60_B2_OFFLINE_IMPLEMENTATION_SHA256:
+            fail(
+                "M60-B2 offline implementation packet digest drift: "
+                f"expected={M60_B2_OFFLINE_IMPLEMENTATION_SHA256} actual={packet_sha256}",
+                issues,
+            )
+
+    task_text = task_bytes.decode("utf-8")
+    task_tokens = (
+        "- `Stage`: `IMPLEMENTATION_COMPLETE_AWAITING_PARENT_GATES`",
+        "- `Disposition`: `SOURCE_PHASE_PASS`",
+        "- `Implementation`: remote source phase passed; exact-candidate repository gates, sabotage and formal review remain pending",
+        "- `Remote shipping`: not authorized by this taskbook",
+        "- `Exact candidate`: pending authoritative full gates, checker sabotage and formal review.",
+        "- `Repair`: `M60_B2_PLATFORM_IDENTITY_MODULE_INVENTORY_20260901`",
+        "## Marker-external formal-review repair R1",
+        "## Marker-external formal-review repair R2",
+        "## Marker-external pull-request review repair R3",
+        "## Marker-external pull-request review repair R4",
+        "## Marker-external pull-request review repair R5",
+        "## Marker-external pull-request review repair R6",
+        "## Marker-external pull-request review repair R7",
+        "## Marker-external pull-request review repair R8",
+        "## Marker-external exhaustive-review repair R9",
+        "## Marker-external final-review repair R10",
+        "controller-owned receipt `sha256:46fd36c88617c925739a80605fe291320b3cb33d0355b00db594da9c0e183b69`",
+        "controller-owned receipt `sha256:e9a7650111c0832e3583c56a12c69f4d0925000dc8554c5278c8814a1edc68ae`",
+        "controller-owned receipt `sha256:08270e618a32fc3f433971381c7fa9c01868ae84ec0e6b5188d08c6e91dfcaf9`",
+        "controller-owned receipt `sha256:70d30b20358be3967b242deabc7cb7251284a03a348ad245e6aa87d9a845c634`",
+        "controller-owned receipt `sha256:21a80de3a8763d5f4cb36a6aaca3d07d13924ff61722083d01cbb8ef63f75b3d`",
+        "controller-owned receipt `sha256:c2da2fa3e1683d71e4ce535fbb41753f75ba97f445a3717124db5c9d72ba1b7f`",
+    )
+    for token in task_tokens:
+        if task_text.count(token) != 1:
+            fail(f"M60-B2 offline implementation task projection drifted: {token}", issues)
+    if "/opt/data/" in task_text or "/home/pwh/" in task_text:
+        fail("M60-B2 offline implementation task must not retain ephemeral host paths", issues)
+
+    for rel, expected_sha256 in M60_B2_FROZEN_EXECUTABLE_SHA256.items():
+        path = ROOT / rel
+        if not path.is_file() or path.is_symlink():
+            fail(f"M60-B2 frozen executable carrier missing or non-regular: {rel}", issues)
+            continue
+        mode = path.stat().st_mode & 0o777
+        if mode & 0o111:
+            fail(
+                f"M60-B2 frozen executable carrier mode drift: {rel} "
+                f"executable_bits={oct(mode & 0o111)}",
+                issues,
+            )
+        actual_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual_sha256 != expected_sha256:
+            fail(
+                "M60-B2 frozen executable digest drift: "
+                f"{rel} expected={expected_sha256} actual={actual_sha256}",
+                issues,
+            )
+
+    source_path = ROOT / PLATFORM_SOURCE_RETRIEVAL_SOURCE
+    source_text = source_path.read_text(encoding="utf-8") if source_path.is_file() else ""
+    executable = strip_rust_comments_and_literals(source_text)
+    for carrier in M60_B2_FORBIDDEN_EXECUTABLE_CARRIERS:
+        if carrier in executable:
+            fail(f"M60-B2 offline source gained forbidden effect carrier: {carrier}", issues)
+    if executable.count("pub mod source_retrieval;") != 0:
+        fail("M60-B2 implementation module must be declared only from platform-core lib.rs", issues)
+    lib_path = ROOT / PLATFORM_CORE_LIB
+    lib_text = lib_path.read_text(encoding="utf-8") if lib_path.is_file() else ""
+    if lib_text.count("pub mod source_retrieval;") != 1:
+        fail("M60-B2 source_retrieval module declaration drifted", issues)
+
+    _check_bound_rust_test_file(
+        PLATFORM_SOURCE_RETRIEVAL_TEST,
+        M60_B2_EXTERNAL_TEST_FUNCTIONS,
+        "M60-B2 offline retrieval policy",
+        issues,
+    )
+    internal_tests = tuple(
+        re.findall(
+            r"#\s*\[\s*test\s*\]\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\)",
+            executable,
+        )
+    )
+    if internal_tests != M60_B2_INTERNAL_TEST_FUNCTIONS:
+        fail(
+            "M60-B2 private unit-test inventory drifted: "
+            f"expected={M60_B2_INTERNAL_TEST_FUNCTIONS} actual={internal_tests}",
+            issues,
+        )
+
+    for rel, tokens in M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS.items():
+        path = ROOT / rel
+        if not path.is_file() or path.is_symlink():
+            fail(f"M60-B2 implementation projection missing or non-regular: {rel}", issues)
+            continue
+        text = path.read_text(encoding="utf-8")
+        for token in tokens:
+            if token not in text:
+                fail(f"M60-B2 implementation projection drifted in {rel}: {token}", issues)
+        expected_projection_sha256 = frozen_projection_sha256.get(rel)
+        if expected_projection_sha256 is not None:
+            actual_projection_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+            if actual_projection_sha256 != expected_projection_sha256:
+                fail(
+                    "M60-B2 projection digest drifted in "
+                    f"{rel}: expected={expected_projection_sha256} "
+                    f"actual={actual_projection_sha256}",
+                    issues,
+                )
+
+    module_map_path = ROOT / "docs/plan/modules/00-module-map.md"
+    module_rows = (
+        [line for line in module_map_path.read_text(encoding="utf-8").splitlines() if line.startswith("| `M60` |")]
+        if module_map_path.is_file()
+        else []
+    )
+    if len(module_rows) != 1 or "| `planned` |" not in module_rows[0]:
+        fail("M60-B2 implementation must preserve the M60 module state key as planned", issues)
+
+    matrix_path = ROOT / "docs/acceptance/matrix.tsv"
+    matrix_lines = matrix_path.read_text(encoding="utf-8").splitlines() if matrix_path.is_file() else []
+    matrix_header = matrix_lines[0].split("\t") if matrix_lines else []
+    try:
+        case_index = matrix_header.index("case_id")
+        binding_index = matrix_header.index("binding")
+        gate_index = matrix_header.index("gate")
+        status_index = matrix_header.index("status")
+    except ValueError:
+        fail("M60-B2 implementation acceptance matrix header drifted", issues)
+    else:
+        matrix_rows = [line.split("\t") for line in matrix_lines[1:]]
+        src010 = [
+            fields
+            for fields in matrix_rows
+            if len(fields) == len(matrix_header) and fields[case_index] == "SRC-010"
+        ]
+        if len(src010) != 1 or src010[0][status_index] != "planned":
+            fail("M60-B2 implementation must preserve SRC-010 as planned", issues)
+        src015 = [
+            fields
+            for fields in matrix_rows
+            if len(fields) == len(matrix_header) and fields[case_index] == "SRC-015"
+        ]
+        expected_src015_binding = (
+            "python3 scripts/check_repo_contracts.py && cargo test --locked "
+            "-p ustc-campus-agent-core --test source_retrieval && cargo test --locked "
+            "-p ustc-campus-agent-core --doc source_retrieval"
+        )
+        if (
+            len(src015) != 1
+            or src015[0][status_index] != "implemented"
+            or src015[0][binding_index] != expected_src015_binding
+            or src015[0][gate_index] != "pr"
+        ):
+            fail("M60-B2 implementation SRC-015 acceptance binding drifted", issues)
+        if any(
+            len(fields) == len(matrix_header) and fields[case_index] == "SRC-014"
+            for fields in matrix_rows
+        ):
+            fail("M60-B2 implementation must preserve SRC-014 as catalog-only", issues)
 
 
 def check_m60_b2_packet_digest(issues: list[str]) -> None:
@@ -10035,7 +10440,7 @@ def _check_m60_blueprint_status_projection(issues: list[str]) -> None:
     blueprint_path = ROOT / "docs/plan/modules/70-campus-trust-source-pipeline.md"
     blueprint_text = blueprint_path.read_text(encoding="utf-8")
     required = (
-        "- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` implements the pure `source-import/v1` operational lifecycle prerequisite; M60-B2 retrieval remains unimplemented and separately gated; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only",
+        "- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` and the first offline-only M60-B2 pure policy are implemented; transport/network effects and B3+ admission remain separately gated; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only",
         "1. `source-registry` — source identity, owner, six-field policy and operational lifecycle (v1 implemented as bounded pure M60-B1; v0 retained as historical P1-1 evidence).",
         "The bounded lifecycle prerequisite (operational `Suspended`/`Revoked` with monotone `SourceAuthorityRevision`) is implemented, but no live retrieval adapter exists.",
     )
@@ -10133,7 +10538,7 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
             "- `Owning Blueprint`: [`M60 Campus Trust and Source Pipeline`](../plan/modules/70-campus-trust-source-pipeline.md)",
             "- `Depends On`: [`module-boundaries.md`](module-boundaries.md), [`source-retrieval.md`](source-retrieval.md), and the existing crate-root `SourceAuthority` comparison policy",
             "- `Acceptance`: `SRC-001` is `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted; `SRC-014` remains catalog-only/non-admitted",
-            "- `Primary Code`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` implement bounded pure B1 under `source-import/v1`; M60-B2 retrieval remains unimplemented and separately gated",
+            "- `Primary Code`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` implement bounded pure B1 under `source-import/v1`; `crates/platform-core/src/source_retrieval.rs` and `crates/platform-core/tests/source_retrieval.rs` implement the bounded offline pure-policy B2 projection under `source-retrieval/v0`; every transport/effect/B3+ path remains separately gated",
         )
         for line in required_metadata_lines:
             if metadata.count(line) != 1:
@@ -10247,7 +10652,7 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
         encoding="utf-8"
     )
     contract_tokens = (
-        "- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` implements the pure `source-import/v1` operational lifecycle prerequisite; M60-B2 retrieval remains unimplemented and separately gated; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only",
+        "- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` and the first offline-only M60-B2 pure policy are implemented; transport/network effects and B3+ admission remain separately gated; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only",
         "- `Implementation State`: `planned`",
         "- `Version`: `m60-campus-trust/v0.4`",
         "- `Current Contract`: accepted [`source-import/v1`](../../contracts/source-import.md) and [`source-retrieval/v0`](../../contracts/source-retrieval.md) under R11 (`ACCEPT_EXACT_M60_B2_R11_PACKET`); bounded B1 implements the v1 lifecycle while historical [`source-import/v0`](../../contracts/source-import.md#15-source-importv0--historical-evidence-retained) remains immutable predecessor evidence",
@@ -10260,7 +10665,7 @@ def check_p1_source_revision_contract(issues: list[str]) -> None:
         "- fail-closed duplicate, stale-revision, illegal-transition, revision-exhaustion and non-mutation-on-error behavior.",
         "Migration from v0 to v1 is compile-time only because no production durable source rows exist. The historical P1-1 record and immutable §15 remain evidence, not current implementation authority.",
         "The bounded B1 evidence — stable identity, owner, exact canonical URL, six-field retrieval policy, operational lifecycle, monotone authority revision and pure registry transitions — is implemented under `source-import/v1` and remains proven by the same active binding: `cargo test --locked -p ustc-campus-agent-core --test source_registry`.",
-        "SRC-001 implemented (bounded B1 source-import/v1 lifecycle evidence)\nSRC-010 planned\nSRC-011 planned\nSRC-012 planned\nSRC-014 catalog-only / non-admitted\nM60 planned (B1 lifecycle prerequisite implemented; B2 retrieval unimplemented)",
+        "SRC-001 implemented (bounded B1 source-import/v1 lifecycle evidence)\nSRC-010 planned\nSRC-011 planned\nSRC-012 planned\nSRC-014 catalog-only / non-admitted\nM60 planned (B1 lifecycle prerequisite and bounded offline B2 pure policy implemented; no transport/effect path)",
         "SourceDefinitionBody::new(\n    owner: SourceOwner,\n    url: SourceUrl,\n    authority: SourceAuthority,\n    retrieval_policy: SourceRetrievalPolicy,\n) -> Result<Self, SourceValueError>",
         "SourceRetrievalPolicy::new(\n    minimum_interval_seconds: u32,\n    maximum_response_bytes: u32,\n    maximum_elapsed_seconds: u32,\n    expected_media_type: SourceMediaType,\n    protocol_version: SourceRetrievalProtocolVersion,\n    public_ip_policy_version: PublicIpPolicyVersion,\n) -> Result<Self, SourceValueError>",
         "No constructor takes `SourceStatus`; no `approved`, `from_parts`, builder, `TryFrom` or Serde path may bypass the registry approval transition.",
@@ -10398,6 +10803,7 @@ P1_SOURCE_REGISTRY_IDENTITY_MODULE_EXPECTATION = """&[
                 "session",
                 "session_port",
                 "source_registry",
+                "source_retrieval",
                 "source_revision",
             ] as &[&str],"""
 P1_SOURCE_REGISTRY_IDENTITY_ITEM_EXPECTATION = '    "pub mod source_registry;",'
@@ -10560,7 +10966,7 @@ def check_p1_source_registry_implementation(issues: list[str]) -> None:
         "- `Disposition`: `GO`",
         "- `B1 status`: bounded pure lifecycle prerequisite implemented",
         "- `M60 status`: `planned`",
-        "- `M60-B2 status`: accepted contract, retained implementation separately gated and unimplemented",
+        "- `M60-B2 status`: accepted contract plus first bounded offline pure-policy implementation; transport/effects remain separately gated and unimplemented",
         "- `Concrete source`: `ustc-teach-calendar-fall` remains `Proposed`",
         "M60-B1 source-registry implements source-import/v1 as a bounded pure lifecycle prerequisite.",
         "No concrete USTC source is approved and no network path exists.",
@@ -13223,6 +13629,7 @@ EXPECTED_MAIN_CALLS = (
     "check_platform_control_evidence(issues)",
     "check_p1_source_revision_contract(issues)",
     "check_p1_source_registry_implementation(issues)",
+    "check_m60_b2_offline_implementation(issues)",
     "check_m60_b2_packet_digest(issues)",
     "check_external_agent_access_contract(issues)",
     "check_module_registry(issues)",
@@ -13264,7 +13671,7 @@ CHECKER_SOURCE_REL = "scripts/check_repo_contracts.py"
 SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "_check_bound_rust_test_file": {"digest": "7822293db5dfa565407409bdba528c656c53ce28f0af83efdc80176aa55069f9", "status": "active"},
     "_check_coverage_matrix_m60_projection": {"digest": "c850fe6abc43b6ca20c79ad5a7127ee8ff4d5dc470afb7a0a44bbf8882ffc65d", "status": "active"},
-    "_check_m60_blueprint_status_projection": {"digest": "d99a15e1fd62cb54453e3ae15f64e605c9b4c470a26f4ba7545ccdff1d6c7b2a", "status": "active"},
+    "_check_m60_blueprint_status_projection": {"digest": "651bb0f18a736acf4e6b6c4c63c6b79fd16c96b57c2fe27d6960741c5dbce9cc", "status": "active"},
     "_check_m60_roadmap_section_status": {"digest": "a16c63013807a3c3ab1eaadc6390df41c8538626aac19484be6b9b60e1b47213", "status": "active"},
     "_check_market_grant_surface": {"digest": "ff8dcbbfb94b444d72cfba57bbb04fb9260ab1396302dbb0568c347afb372b69", "status": "active"},
     "_check_market_installation_surface": {"digest": "1c68b54aba48bc26905ccbe84f3a7036bc7db9b0dddb981e88b1abfe1f5b4c84", "status": "active"},
@@ -13298,13 +13705,14 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "9819718e383ceaa0b7ea70ad37994c3acd401b517a8bee556051a0cd5747c41d", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},
     "check_no_obvious_secrets": {"digest": "43072df6164d2bc92e69015291368559f593a49fd2b39d813de034e5f50b2f79", "status": "active"},
     "check_no_retired_docs_references": {"digest": "64599f57afeb2ce5fb60ccaac747cfc8ddaefc6feaf2536ad32eb0c42afd1114", "status": "active"},
-    "check_p1_source_registry_implementation": {"digest": "dd6466937e0d400c7cd80a4678b1209fff1a7f9cdfad50e9f8f14749138dbf89", "status": "active"},
-    "check_p1_source_revision_contract": {"digest": "0e162f6d21342812ed054280a4613409b3f67e3fa5ea1fd0e88549b44821476f", "status": "active"},
+    "check_p1_source_registry_implementation": {"digest": "f9a94bb4ab25f1310b58cfd5f3146b0d91bd15d1ed0cebfab40490c6cff3b179", "status": "active"},
+    "check_p1_source_revision_contract": {"digest": "3fbdb0469e0e0ca681370098d2ee10809a277a468f1abdbae15b243bdb25dfae", "status": "active"},
     "check_platform_authority_implementation": {"digest": "64b767f09d0d29268af33e15bdf60d6fd879b61365abd45c1be2caa2319b92f4", "status": "active"},
     "check_platform_core_manifest": {"digest": "3082cf7fedfaf39080d287a036c8875f762751bb8832121ca2d7cd81d5947d62", "status": "active"},
     "check_platform_control_evidence": {"digest": "29ab55813d5c6872937c9753d53dac607e7f27436ce00a8297c665d2e37c9a94", "status": "active"},
@@ -13447,6 +13855,7 @@ def main() -> int:
     check_platform_control_evidence(issues)
     check_p1_source_revision_contract(issues)
     check_p1_source_registry_implementation(issues)
+    check_m60_b2_offline_implementation(issues)
     check_m60_b2_packet_digest(issues)
     check_external_agent_access_contract(issues)
     check_module_registry(issues)

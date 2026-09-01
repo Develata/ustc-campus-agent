@@ -9,7 +9,7 @@
 - `Contract`: accepted `source-import/v1` under `ACCEPT_EXACT_M60_B2_R11_PACKET`
 - `B1 status`: bounded pure lifecycle prerequisite implemented
 - `M60 status`: `planned`
-- `M60-B2 status`: accepted contract, retained implementation separately gated and unimplemented
+- `M60-B2 status`: accepted contract plus first bounded offline pure-policy implementation; transport/effects remain separately gated and unimplemented
 - `Acceptance`: `SRC-001` remains `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; `SRC-014` remains catalog-only/non-admitted
 - `Concrete source`: `ustc-teach-calendar-fall` remains `Proposed`
 - `Rust seed source sha256`: `0ab5ad85a3a816ad0146b1f57b6957d1d432738ca46c4c1bf2181441d6fdb7b6`

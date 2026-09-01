@@ -372,6 +372,16 @@ fn source_registry_parses_strict_nominal_values() {
         let decoded: SourceUrl = serde_json::from_str(&encoded).expect("deserialize");
         assert_eq!(decoded, parsed, "SourceUrl Serde must round-trip");
     }
+    let maximum_dns_host = format!(
+        "{}.{}.{}.{}",
+        "a".repeat(63),
+        "b".repeat(63),
+        "c".repeat(63),
+        "d".repeat(61)
+    );
+    assert_eq!(maximum_dns_host.len(), 253);
+    let maximum_dns_url = format!("https://{maximum_dns_host}/data");
+    assert_eq!(url(&maximum_dns_url).as_str(), maximum_dns_url);
 
     let status_evidence = SourceStatusEvidenceId::new(String::from("ustc:status-evidence-1"))
         .expect("status evidence id");
@@ -453,6 +463,14 @@ fn source_registry_rejects_invalid_nominal_values() {
     }
 
     let too_long_url = format!("https://example.invalid/{}", "a".repeat(MAX_URL_BYTES));
+    let oversized_dns_host = format!(
+        "{}.{}.{}.{}",
+        "a".repeat(63),
+        "b".repeat(63),
+        "c".repeat(63),
+        "d".repeat(63)
+    );
+    assert_eq!(oversized_dns_host.len(), 255);
     let url_cases: Vec<(String, SourceValueErrorKind)> = vec![
         (String::new(), SourceValueErrorKind::Empty),
         (
@@ -483,6 +501,10 @@ fn source_registry_rejects_invalid_nominal_values() {
         ),
         (
             "https://localhost/".to_owned(),
+            SourceValueErrorKind::InvalidHost,
+        ),
+        (
+            format!("https://{oversized_dns_host}/data"),
             SourceValueErrorKind::InvalidHost,
         ),
         (
