@@ -3,9 +3,9 @@
 ## Metadata
 
 - `Layer`: Shared campus authority
-- `Status`: Contract accepted under R11 M60-B2 two-layer transport architecture; `source-import/v1` and `source-retrieval/v0` are current contract authority per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); bounded `M60-B1 source-registry` remains implemented under `source-import/v0` (P1-1); operational `Suspended`/`Revoked` lifecycle precondition applies before any live B2 retrieval adapter; concrete source approval, retained B2 implementation and network retrieval remain unauthorized; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
-- `Version`: `0.5.0`
-- `Last Review`: `2026-08-15`
+- `Status`: Contract accepted under R11 M60-B2 two-layer transport architecture; `source-import/v1` and `source-retrieval/v0` are current contract authority per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); bounded `M60-B1 source-registry` implements the pure `source-import/v1` lifecycle prerequisite; M60 overall remains planned; concrete source approval, retained B2 implementation and network retrieval remain unauthorized; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
+- `Version`: `0.5.1`
+- `Last Review`: `2026-09-01`
 - `Authority Owns`: source identity, immutable revision, authority comparison policy, temporal/conflict/provenance state, baseline advancement and publication gates
 - `Authority Defers To`: source-import/data-model contracts for exact shapes and package sourcePolicy for requested scope
 - `Counterpart Features`: all documents under `docs/features/`
@@ -29,7 +29,7 @@ It is not a general crawler, does not authorize `*.ustc.edu.cn` by wildcard and 
 
 ## 2. SourceDefinition
 
-A planned `SourceDefinition` contains at least:
+The full M60 `SourceDefinition` remains planned. The implemented bounded M60-B1 v1 registry owns stable source identity, owner, URL, authority, six-field retrieval policy, operational status and authority revision; later M60 slices must extend the source pipeline without bypassing that lifecycle authority. The full pipeline shape contains at least:
 
 ```text
 source_id
@@ -54,7 +54,7 @@ Invariants:
 - `Approved` requires explicit owner, authority, URL, retrieval, parser, rate and permission review.
 - wildcard domains are at most egress ceilings; every source still needs exact host/path review.
 - `Suspended` blocks new retrieval while preserving historical evidence; `Revoked` is terminal and irreversible.
-- `SourceAuthorityRevision` is a monotone non-zero counter incremented on every retrievability-affecting transition; every mutation requires expected-revision CAS.
+- initial `propose` is the no-expected-revision creation exception and initializes `SourceAuthorityRevision` to `1`; every post-proposal retrievability-affecting mutation requires expected-revision CAS and increments this monotone non-zero counter on success.
 - declarations contain no credential, private endpoint or user session.
 - login/cookie/token sources require a separate identity and data-class review; they are not public defaults.
 
@@ -199,7 +199,7 @@ Default recovery:
 
 ## 10. Verification
 
-Current executable evidence is limited to the synthetic Course Planning fixture and its `COURSE-*` cases plus the bounded `M60-B1 source-registry` under `source-import/v0` (`SRC-001`). `source-import/v1` and `source-retrieval/v0` are accepted contract authority under R11; no v1 Rust implementation exists. Source/Procedure/Radar cases remain planned until a concrete reviewed public source and its parser fixtures are approved.
+Current executable evidence is limited to the synthetic Course Planning fixture and its `COURSE-*` cases plus the bounded pure `M60-B1 source-registry` lifecycle under `source-import/v1` (`SRC-001`). `source-retrieval/v0` remains accepted contract authority only: M60-B2 retrieval is unimplemented and separately gated. Source/Procedure/Radar cases remain planned until a concrete reviewed public source and its parser fixtures are approved.
 
 Primary entries:
 - `docs/contracts/source-import.md`

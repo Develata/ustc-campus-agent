@@ -4,7 +4,7 @@
 
 - `Stage`: `M60_B2_CONTRACT_ACCEPTED`
 - `Packet status`: `ACCEPTED`
-- `Mode`: accepted-contract projection; `source-import/v1` + `source-retrieval/v0` use the exact R11 two-layer M60/M90 semantic packet; no retained implementation
+- `Mode`: accepted-contract projection; `source-import/v1` + `source-retrieval/v0` use the exact R11 two-layer M60/M90 semantic packet; bounded M60-B1 v1 lifecycle prerequisite implemented; no retained M60-B2 implementation
 - `Bound source commit`: `a1b0efe33239b33afeea40e7981cf15f8a65cd1e`
 - `Bound source tree`: `bd3f096a26baf758b58bf80874e09a1604e885c0`
 - `Superseded packet`: `sha256:ba36425adc164ca9b3ec75addd4be2e4b299b5f8a8cfb75cf6a710679acd32ab` over `77276` bytes — historical evidence only; this R4 replacement packet supersedes it
@@ -12,10 +12,11 @@
 - `Independent review`: `FINAL_PRODUCT_GO` for the exact R11 packet
 - `Semantic acceptance`: `ACCEPTED` by Develata on 2026-08-13
 - `Acceptance decision`: `ACCEPT_EXACT_M60_B2_R11_PACKET`
-- `Retained implementation`: forbidden until a separately admitted implementation packet exists
+- `B1 lifecycle prerequisite`: implemented as bounded pure `source-import/v1` registry lifecycle; this is prerequisite truth, not M60-B2 implementation authority
+- `Retained M60-B2 implementation`: forbidden until a separately admitted implementation packet exists
 - `Concrete source`: `ustc-teach-calendar-fall` remains `Proposed`
 - `Remote shipping`: not granted by this document
-- `Accepted-contract projection`: the exact R11 semantic packet is current contract authority; no Rust, no network path, no source approval, no push/PR/merge/tag/release
+- `Accepted-contract projection`: the exact R11 semantic packet is current contract authority; bounded M60-B1 lifecycle Rust exists, while M60-B2 retrieval has no retained implementation; no network path, source approval, push/PR/merge/tag/release
 
 ## Acceptance receipt (HISTORICAL — SUPERSEDED BY R4)
 
@@ -660,6 +661,10 @@ Stop and return to Develata before authoritative mutation if:
 - `SRC-010`/`SRC-014` or M60 status would be promoted without complete bound evidence;
 - any push, PR, merge, tag, release, deployment or publication lacks current operation-specific or active-campaign authority.
 <!-- M60_B2_RETRIEVAL_POLICY_PROPOSAL:END -->
+
+## Marker-external R11 representability clarification
+
+The immutable R11 packet phrase “all with `expected_authority_revision` CAS” is represented by the accepted signatures, not by inventing a pre-creation revision. Initial `propose(full definition)` is the no-expected-revision creation exception and initializes `SourceAuthorityRevision` to `1`; every post-proposal lifecycle mutation (`revise`, `approve`, `suspend`, `reinstate`, `revoke`) requires exact expected-revision CAS and checked increment. The implemented bounded B1 projection also carries the closed one-variant `PublicIpPolicyVersion` inventory required by the packet's six-field retrieval policy. This clarification changes no byte inside the accepted R11 packet and grants no M60-B2 implementation authority.
 
 ## Review receipts
 

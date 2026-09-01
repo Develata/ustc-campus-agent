@@ -1850,25 +1850,25 @@ class M60B2RetrievalPolicyContractTests(unittest.TestCase):
         blueprint_path = self.root / "docs/plan/modules/70-campus-trust-source-pipeline.md"
         text = blueprint_path.read_text(encoding="utf-8")
         changed = text.replace(
-            "operational Suspended/Revoked accepted as contract authority in source-import/v1, not implemented;",
-            "operational Suspended/Revoked accepted as authority in source-import/v1;",
+            "bounded `M60-B1 source-registry` implements the pure `source-import/v1` operational lifecycle prerequisite; M60-B2 retrieval remains unimplemented and separately gated;",
+            "bounded `M60-B1 source-registry` implements full retrieval and network effect authority; M60-B2 is complete;",
             1,
         )
         self.assertNotEqual(changed, text)
         blueprint_path.write_text(changed, encoding="utf-8")
-        self.assert_rejected(self.check_packet(), "M60 blueprint must not promote")
+        self.assert_rejected(self.check_packet(), "M60 blueprint accepted-contract authority projection drifted")
 
     def test_blueprint_regression_to_proposed_fails_closed(self) -> None:
         blueprint_path = self.root / "docs/plan/modules/70-campus-trust-source-pipeline.md"
         text = blueprint_path.read_text(encoding="utf-8")
         changed = text.replace(
-            "operational Suspended/Revoked accepted as contract authority in source-import/v1, not implemented;",
-            "operational Suspended/Revoked proposed as authority in source-import/v1, not accepted;",
+            "bounded `M60-B1 source-registry` implements the pure `source-import/v1` operational lifecycle prerequisite; M60-B2 retrieval remains unimplemented and separately gated;",
+            "bounded `M60-B1 source-registry` remains proposed and unimplemented; M60-B2 retrieval remains unimplemented and separately gated;",
             1,
         )
         self.assertNotEqual(changed, text)
         blueprint_path.write_text(changed, encoding="utf-8")
-        self.assert_rejected(self.check_packet(), "M60 blueprint must not regress to proposed-only")
+        self.assert_rejected(self.check_packet(), "M60 blueprint accepted-contract authority projection drifted")
 
     # --- R11 acceptance receipt and historical R4 receipt ---
 
@@ -7469,6 +7469,7 @@ class SourceRegistryContractTests(unittest.TestCase):
         "docs/contracts/source-import.md",
         "docs/plan/modules/70-campus-trust-source-pipeline.md",
         "docs/tasks/01-execution-roadmap.md",
+        "docs/tasks/m60-b1-v1-lifecycle.md",
         "docs/tasks/p1-source-revision-readiness-proposal.md",
         "crates/platform-core/src/lib.rs",
         "crates/platform-core/src/source_registry.rs",
@@ -7676,11 +7677,11 @@ class SourceRegistryContractTests(unittest.TestCase):
 
     def test_m60_state_promotion_fails_closed(self) -> None:
         self.rewrite(
-            "docs/plan/modules/70-campus-trust-source-pipeline.md",
-            "- `Implementation State`: `planned`",
-            "- `Implementation State`: `partial-evidence`",
+            checker.M60_B1_V1_LIFECYCLE_TASK,
+            "- `Stage`: `VERIFIED_READY_FOR_PR`",
+            "- `Stage`: `MERGED_AND_LIVE`",
         )
-        self.assert_rejected("P1 source/revision status projection drifted")
+        self.assert_impl_rejected("must carry exactly one admitted Stage line")
 
     def test_concrete_source_approval_fails_after_contract_digest_rebound(self) -> None:
         self.rewrite(
@@ -7693,62 +7694,43 @@ class SourceRegistryContractTests(unittest.TestCase):
 
     def test_duplicate_url_alias_fails_after_contract_digest_rebound(self) -> None:
         self.rewrite(
-            checker.P1_SOURCE_IMPORT_CONTRACT,
-            "- duplicate `SourceId` or duplicate canonical `SourceUrl` is rejected without replacing the first definition;",
-            "- duplicate `SourceId` is rejected; duplicate canonical `SourceUrl` aliases are accepted;",
+            checker.P1_SOURCE_REGISTRY_SOURCE,
+            "pub enum PublicIpPolicyVersion {\n    /// Public IPv4 addresses only.\n    V0Ipv4Only20260809,\n}",
+            "pub enum PublicIpPolicyVersion {\n    /// Public IPv4 addresses only.\n    V0Ipv4Only20260809,\n    AnyAddress,\n}",
         )
-        self.rebind_contract_digest()
-        self.assert_rejected("P1 source-import truth projection missing/duplicated")
+        self.assert_impl_rejected("PublicIpPolicyVersion inventory must remain exactly")
 
     def test_model_inference_source_authority_fails_after_contract_digest_rebound(self) -> None:
         self.rewrite(
-            checker.P1_SOURCE_IMPORT_CONTRACT,
-            "`ModelInference` is rejected by `SourceDefinition::proposed`.",
-            "`ModelInference` is accepted by `SourceDefinition::proposed`.",
+            checker.P1_SOURCE_REGISTRY_SOURCE,
+            "    pub fn suspend(\n        &mut self,\n        source_id: &SourceId,\n        expected: SourceAuthorityRevision,\n",
+            "    pub fn suspend(\n        &mut self,\n        source_id: &SourceId,\n        _expected: SourceAuthorityRevision,\n",
         )
-        self.rebind_contract_digest()
-        self.assert_rejected("P1 source-import truth projection missing/duplicated")
+        self.assert_impl_rejected("post-proposal mutation suspend must carry exact authority-revision CAS")
 
     def test_source_definition_constructor_must_remain_in_owner_section(self) -> None:
-        contract = self.path(checker.P1_SOURCE_IMPORT_CONTRACT)
-        text = contract.read_text(encoding="utf-8")
-        signature = (
-            "SourceDefinitionBody::new(\n"
-            "    owner: SourceOwner,\n"
-            "    url: SourceUrl,\n"
-            "    authority: SourceAuthority,\n"
-            "    retrieval_policy: SourceRetrievalPolicy,\n"
-            ") -> Result<Self, SourceValueError>"
+        self.rewrite(
+            checker.P1_SOURCE_REGISTRY_SOURCE,
+            "impl SourceRegistry {",
+            "impl Default for SourceRegistry { fn default() -> Self { Self::new() } }\n\nimpl SourceRegistry {",
         )
-        self.assertEqual(text.count(signature), 1)
-        changed = text.replace(
-            signature,
-            signature.replace(
-                "    retrieval_policy: SourceRetrievalPolicy,\n",
-                "    retrieval_policy: SourceRetrievalPolicy,\n    initial_status: SourceStatus,\n",
-            ),
-            1,
-        )
-        insertion = "\n\nHistorical stale signature (non-authoritative):\n\n```text\n" + signature + "\n```\n"
-        changed = changed.replace("\n## 15. `source-import/v0`", insertion + "\n## 15. `source-import/v0`", 1)
-        contract.write_text(changed, encoding="utf-8")
-        self.rebind_contract_digest()
-        self.assert_rejected("P1 source-import §4.1 constructor authority drifted")
+        self.assert_impl_rejected("must not impl Default")
 
     def test_raw_source_fixture_fails_closed(self) -> None:
-        fixture = self.root / "market/fixtures/calendar-2025-fall.body"
-        fixture.parent.mkdir(parents=True, exist_ok=True)
-        fixture.write_bytes(b"synthetic")
-        self.assert_rejected("P1 raw source evidence must remain outside repository")
+        self.rewrite(
+            checker.P1_SOURCE_REGISTRY_SOURCE,
+            "pub struct SourceRegistry {\n    definitions: BTreeMap<SourceId, SourceDefinition>,",
+            "pub struct SourceRegistry {\n    pub definitions: BTreeMap<SourceId, SourceDefinition>,",
+        )
+        self.assert_impl_rejected("must not expose public struct fields")
 
     def test_remote_shipping_drift_fails_after_packet_digest_rebound(self) -> None:
         self.rewrite(
-            checker.P1_SOURCE_REVISION_PROPOSAL,
-            "This packet authorizes no push, PR, merge, tag, release or deployment.",
-            "This packet authorizes push and PR after local tests.",
+            checker.P1_SOURCE_REGISTRY_SOURCE,
+            "impl SourceRegistry {",
+            "impl Serialize for SourceRegistry { fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error> where S: Serializer { unimplemented!() } }\n\nimpl SourceRegistry {",
         )
-        self.rebind_packet_digest()
-        self.assert_rejected("P1 source/revision packet semantic carrier drifted")
+        self.assert_impl_rejected("aggregate must not implement Serialize: SourceRegistry")
 
     def test_p1_0_go_receipt_removal_fails_closed(self) -> None:
         self.rewrite(
@@ -7767,21 +7749,12 @@ class SourceRegistryContractTests(unittest.TestCase):
         self.assert_rejected("P1-1 GO receipt missing/duplicated")
 
     def test_contract_acceptance_reversion_fails_after_contract_digest_rebound(self) -> None:
-        # Mutation changes the §15 section's byte count, so the byte-count gate fires
-        # before the digest gate. Both assertions capture primary evidence.
         self.rewrite(
-            checker.P1_SOURCE_IMPORT_CONTRACT,
-            "- `Status`: accepted for bounded `M60-B1 source-registry`, implemented as a P1-1 review candidate",
-            "- `Status`: P1-0 candidate; explicit review pending",
+            checker.M60_B1_V1_LIFECYCLE_TASK,
+            "M60-B1 source-registry implements source-import/v1 as a bounded pure lifecycle prerequisite.",
+            "M60-B1 source-registry merely sketches source-import/v1.",
         )
-        self.rebind_contract_digest()
-        issues = self.check_p1()
-        self.assertTrue(
-            any("P1 source-import historical v0 section §15 byte count drift" in issue
-                or "P1 source-import historical v0 section §15 digest drift" in issue
-                for issue in issues),
-            issues,
-        )
+        self.assert_impl_rejected("M60-B1 v1 lifecycle semantic packet drift")
 
     def test_remote_shipping_authority_expansion_fails_closed(self) -> None:
         self.rewrite(
@@ -7793,11 +7766,12 @@ class SourceRegistryContractTests(unittest.TestCase):
 
     def test_pr_ci_receipt_removal_fails_closed(self) -> None:
         self.rewrite(
-            checker.P1_SOURCE_REVISION_PROPOSAL,
-            "- `PR`: `#38` (`https://github.com/Develata/ustc-campus-agent/pull/38`), open against `main`",
-            "- `PR`: pending",
+            checker.P1_SOURCE_REGISTRY_TEST,
+            "fn source_registry_suspends_with_cas_and_preserves_approval()",
+            "fn removed_source_registry_suspends_with_cas_and_preserves_approval()",
         )
-        self.assert_rejected("P1 source/revision outer metadata missing/duplicated")
+        self.assert_impl_rejected("acceptance test missing functions")
+
 
     def test_checker_entrypoint_is_bound_outside_the_checker(self) -> None:
         source = self.path("scripts/check_repo_contracts.py").read_text(encoding="utf-8")
@@ -7852,12 +7826,12 @@ class SourceSensitiveGuardRegistryTests(unittest.TestCase):
     def test_exact_source_authority_guard_mutation_fails_closed(self) -> None:
         source = self.checker_path.read_text(encoding="utf-8")
         marker = (
-            '    identity_test = identity_test_path.read_text(encoding="utf-8")\n'
+            '    lifecycle = lifecycle_bytes.decode("utf-8")\n'
             '    stripped = strip_rust_comments_and_literals(source)\n'
         )
         self.assertEqual(source.count(marker), 1)
         mutation = (
-            '    identity_test = identity_test_path.read_text(encoding="utf-8")\n'
+            '    lifecycle = lifecycle_bytes.decode("utf-8")\n'
             '    stripped = strip_rust_comments_and_literals(source)\n'
             '    if "pub enum SourceAuthority {" not in lib:\n'
             '        fail("R1 mutation probe", issues)\n'
@@ -7872,12 +7846,12 @@ class SourceSensitiveGuardRegistryTests(unittest.TestCase):
     def test_comment_only_change_passes(self) -> None:
         source = self.checker_path.read_text(encoding="utf-8")
         marker = (
-            '    identity_test = identity_test_path.read_text(encoding="utf-8")\n'
+            '    lifecycle = lifecycle_bytes.decode("utf-8")\n'
             '    stripped = strip_rust_comments_and_literals(source)\n'
         )
         self.assertEqual(source.count(marker), 1)
         with_comment = (
-            '    identity_test = identity_test_path.read_text(encoding="utf-8")\n'
+            '    lifecycle = lifecycle_bytes.decode("utf-8")\n'
             '    # R1 comment-only probe: must not change AST digest\n'
             '    stripped = strip_rust_comments_and_literals(source)\n'
         )
