@@ -188,7 +188,7 @@ The accepted next slice is intentionally narrower than the full M72 ontology:
 loopback Web
 → M10 authenticated profile/create|view|plan|revoke-delete intent
 → M00 admitted tenant/user identities
-→ transaction-current M20 package + installation + grant + policy authorization
+→ transaction-current M20 package + installation + grant + policy + typed per-request confirmation authorization
 → static owning M72 application use case
 → tenant-private profile repository; source-consuming planning additionally crosses the M60 revision-health port
 → typed owner-private M10 terminal
@@ -200,7 +200,7 @@ The frozen operation IDs are `profile.academic.create`,
 `profile.academic.revoke_delete`; exact fields/bounds/errors are owned by
 [`interfaces.md`](../../contracts/interfaces.md) §1.1. Principal identity is
 derived only from the admitted session. Wrong principal, missing/deleted profile,
-disabled/revoked Plugin and repository failure fail closed before any later stage
+missing or unconfirmed `Ask` evidence, disabled/revoked Plugin and repository failure fail closed before any later stage
 named by the precedence contract. Only `planner.generate` consumes source facts;
 it additionally denies non-current/unavailable M60 revision health before planning.
 Profile create/view/revoke-delete neither consult nor derive authority from M60.

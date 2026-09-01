@@ -22,11 +22,11 @@ use ustc_campus_agent_application_ingress::{
 use ustc_campus_agent_client_protocol::{
     ActorIntentDto, CLIENT_PROTOCOL_MAJOR_HEADER, CapabilityListDto, ClientErrorDto,
     ClientProtocolMajor, ClientProvenanceDto, ClientResponseDto, OpportunityCommandDto,
-    OpportunityConsentFieldDto, OpportunityPreferenceDto, OpportunityRejectionDto,
-    ProtocolCompatibilityDto, RedactionDto, ServerInfoDto, SubmitAffairsGetDto,
-    SubmitChangeFeedDto, SubmitOpportunityDto, UnixMillis, ViewerAuthorizationDto,
-    WireErrorClassDto, WireText, affairs_get_payload_digest, change_feed_payload_digest,
-    opportunity_payload_digest,
+    OpportunityConfirmationDto, OpportunityConsentFieldDto, OpportunityPreferenceDto,
+    OpportunityRejectionDto, ProtocolCompatibilityDto, RedactionDto, ServerInfoDto,
+    SubmitAffairsGetDto, SubmitChangeFeedDto, SubmitOpportunityDto, UnixMillis,
+    ViewerAuthorizationDto, WireErrorClassDto, WireText, affairs_get_payload_digest,
+    change_feed_payload_digest, opportunity_payload_digest,
 };
 
 use super::{AffairsComposition, parse_loopback_socket_addr};
@@ -34,6 +34,7 @@ use super::{AffairsComposition, parse_loopback_socket_addr};
 const INDEX_HTML: &str = include_str!("web/index.html");
 const APP_JS: &str = include_str!("web/app.js");
 const STYLES_CSS: &str = include_str!("web/styles.css");
+const OPPORTUNITY_CONFIRMATION_HEADER: &str = "x-ustc-opportunity-confirmation";
 
 const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const ADMINISTRATOR_DEMO_HEADER: &str = "x-ustc-agent-administrator-demo";
@@ -132,13 +133,15 @@ impl WebState {
     fn submit_opportunity(
         &self,
         command: OpportunityCommandDto,
+        confirmation: OpportunityConfirmationDto,
     ) -> Result<ClientResponseDto, WebRequestError> {
-        self.submit_opportunity_with_identity(command, None)
+        self.submit_opportunity_with_identity(command, confirmation, None)
     }
 
     fn submit_opportunity_with_identity(
         &self,
         command: OpportunityCommandDto,
+        confirmation: OpportunityConfirmationDto,
         identity: Option<OpportunityCallerIdentity>,
     ) -> Result<ClientResponseDto, WebRequestError> {
         command
@@ -168,8 +171,8 @@ impl WebState {
                 )
             }
         };
-        let payload_digest =
-            opportunity_payload_digest(&command).map_err(|_| WebRequestError::InternalIdentity)?;
+        let payload_digest = opportunity_payload_digest(&command, confirmation)
+            .map_err(|_| WebRequestError::InternalIdentity)?;
         let composition = self.lock()?;
         let request = SubmitOpportunityDto {
             request_id,
@@ -184,6 +187,7 @@ impl WebState {
                 target: checked_text("web-loopback-private-demo")?,
                 protocol: checked_text("http-json-v1")?,
             },
+            confirmation,
             payload_digest,
             command,
         };
@@ -818,6 +822,18 @@ fn administrator_demo_header_authorized(headers: &HeaderMap) -> bool {
         .is_some_and(|value| value == ADMINISTRATOR_DEMO_CONFIRMATION)
 }
 
+fn opportunity_confirmation(headers: &HeaderMap) -> OpportunityConfirmationDto {
+    if headers
+        .get(OPPORTUNITY_CONFIRMATION_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == "confirmed")
+    {
+        OpportunityConfirmationDto::Confirmed
+    } else {
+        OpportunityConfirmationDto::NotConfirmed
+    }
+}
+
 async fn change_publication_status(State(state): State<WebState>, headers: HeaderMap) -> Response {
     if !administrator_demo_header_authorized(&headers) {
         return web_error(
@@ -942,6 +958,7 @@ async fn change_feed_atom(
 
 async fn opportunity_profile_create(
     State(state): State<WebState>,
+    headers: HeaderMap,
     body: Result<Json<CreateOpportunityProfileBody>, JsonRejection>,
 ) -> Response {
     let Json(body) = match body {
@@ -1002,6 +1019,7 @@ async fn opportunity_profile_create(
                 max_credits: body.max_credits,
                 preference_weights,
             },
+            opportunity_confirmation(&headers),
             Some(identity),
         )
     });
@@ -1011,20 +1029,23 @@ async fn opportunity_profile_create(
 async fn opportunity_profile_view(
     AxumPath(profile_id): AxumPath<String>,
     State(state): State<WebState>,
+    headers: HeaderMap,
 ) -> Response {
     let profile_snapshot_id = match checked_text(profile_id) {
         Ok(value) => value,
         Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_profile_snapshot_id"),
     };
-    opportunity_response(
-        state.submit_opportunity(OpportunityCommandDto::ViewProfile {
+    opportunity_response(state.submit_opportunity(
+        OpportunityCommandDto::ViewProfile {
             profile_snapshot_id,
-        }),
-    )
+        },
+        opportunity_confirmation(&headers),
+    ))
 }
 
 async fn opportunity_plan_generate(
     State(state): State<WebState>,
+    headers: HeaderMap,
     body: Result<Json<GenerateOpportunityPlanBody>, JsonRejection>,
 ) -> Response {
     let Json(body) = match body {
@@ -1035,18 +1056,20 @@ async fn opportunity_plan_generate(
         Ok(value) => value,
         Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_profile_snapshot_id"),
     };
-    opportunity_response(
-        state.submit_opportunity(OpportunityCommandDto::GeneratePlan {
+    opportunity_response(state.submit_opportunity(
+        OpportunityCommandDto::GeneratePlan {
             profile_snapshot_id,
             max_results: body.max_results,
             beam_width: body.beam_width,
-        }),
-    )
+        },
+        opportunity_confirmation(&headers),
+    ))
 }
 
 async fn opportunity_profile_delete(
     AxumPath(profile_id): AxumPath<String>,
     State(state): State<WebState>,
+    headers: HeaderMap,
     body: Result<Json<DeleteOpportunityProfileBody>, JsonRejection>,
 ) -> Response {
     let Json(body) = match body {
@@ -1078,6 +1101,7 @@ async fn opportunity_profile_delete(
                 profile_snapshot_id,
                 revoked_at,
             },
+            opportunity_confirmation(&headers),
             Some(identity),
         )
     });

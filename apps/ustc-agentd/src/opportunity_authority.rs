@@ -15,9 +15,9 @@ use ustc_campus_agent_core::invocation::{
     CatalogPackageRevision, CatalogRevision, ComponentId, ComponentKind, ComponentVersion,
     ConfirmationPolicy, ExecutionIdentity, GrantSnapshotId, GrantState, GrantVersion,
     InstallationId, InstallationRevision, InstallationState, InstalledComponentIdentity,
-    InvocationPolicySnapshot, InvocationTarget, ObjectScope, PackageId, PackageVersion,
-    PluginInstallationSnapshot, PolicyRevision, PolicySnapshotId, Sha256Digest, SourcePolicyId,
-    SourcePolicyIdentity, ToolId,
+    InvocationConfirmation, InvocationPolicySnapshot, InvocationTarget, ObjectScope, PackageId,
+    PackageVersion, PluginInstallationSnapshot, PolicyRevision, PolicySnapshotId, Sha256Digest,
+    SourcePolicyId, SourcePolicyIdentity, ToolId,
 };
 use ustc_campus_agent_core::market::authority::{
     AuthorityRepositoryError, InMemoryInvocationAuthorityRepository, InvocationAuthorityRepository,
@@ -182,6 +182,7 @@ impl OpportunityMarketAuthorityStore {
         &self,
         actor: &M00AdmittedActor,
         metadata: &OpportunityOperationMetadata,
+        confirmation: InvocationConfirmation,
     ) -> Result<(), OpportunityInvocationError> {
         let M00AdmittedActor::Authenticated(ids) = actor else {
             return Err(OpportunityInvocationError::Denied);
@@ -199,6 +200,7 @@ impl OpportunityMarketAuthorityStore {
                 ids.user_id(),
                 &entry.target,
                 metadata.capability_class,
+                confirmation,
             )
             .map_err(map_authorization_error)
     }

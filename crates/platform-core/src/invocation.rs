@@ -126,6 +126,12 @@ pub enum ConfirmationPolicy {
     Ask,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvocationConfirmation {
+    Confirmed,
+    NotConfirmed,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourcePolicyIdentity {
     pub id: SourcePolicyId,
@@ -1200,6 +1206,7 @@ pub enum InvocationAuthorizationError {
     GrantRevoked,
     GrantVersionMismatch,
     GrantScopeMismatch,
+    ConfirmationRequired,
     ArgumentDigestMismatch,
     ArgumentsInvalid,
 }

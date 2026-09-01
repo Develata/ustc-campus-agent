@@ -210,6 +210,7 @@ fn authorize_static_application(fixture: &Fixture) -> Result<(), InvocationReche
             &fixture.request.user_id,
             &fixture.target,
             CapabilityClass::TenantPrivateWrite,
+            InvocationConfirmation::Confirmed,
         )
 }
 
@@ -315,11 +316,40 @@ fn static_application_authority_accepts_only_a_non_tool_resource_carrier() {
             &static_fixture.request.user_id,
             &static_fixture.target,
             CapabilityClass::TenantPrivateRead,
+            InvocationConfirmation::Confirmed,
         ),
         Err(InvocationRecheckError::Authorization(
             InvocationAuthorizationError::AuthorityConflict
         ))
     );
+}
+
+#[test]
+fn static_application_ask_grant_requires_confirmation() {
+    let mut fixture = static_application_fixture();
+    fixture.grant.confirmation_policy = ConfirmationPolicy::Ask;
+    let service = InvocationAuthorityService::new(repository(&fixture, true, true, true, true));
+    assert_eq!(
+        service.authorize_static_application_use_case(
+            &fixture.request.tenant_id,
+            &fixture.request.user_id,
+            &fixture.target,
+            CapabilityClass::TenantPrivateWrite,
+            InvocationConfirmation::NotConfirmed,
+        ),
+        Err(InvocationRecheckError::Authorization(
+            InvocationAuthorizationError::ConfirmationRequired
+        ))
+    );
+    service
+        .authorize_static_application_use_case(
+            &fixture.request.tenant_id,
+            &fixture.request.user_id,
+            &fixture.target,
+            CapabilityClass::TenantPrivateWrite,
+            InvocationConfirmation::Confirmed,
+        )
+        .expect("confirmed Ask grant authorizes");
 }
 
 #[test]
@@ -335,6 +365,7 @@ fn static_application_denial_precedes_final_transaction_verification() {
             &revoked.request.user_id,
             &revoked.target,
             CapabilityClass::TenantPrivateWrite,
+            InvocationConfirmation::Confirmed,
         ),
         Err(InvocationRecheckError::Authorization(
             InvocationAuthorizationError::GrantRevoked
@@ -351,6 +382,7 @@ fn static_application_denial_precedes_final_transaction_verification() {
             &fixture.request.user_id,
             &fixture.target,
             CapabilityClass::TenantPrivateWrite,
+            InvocationConfirmation::Confirmed,
         ),
         Err(InvocationRecheckError::Repository(
             AuthorityRepositoryError::TransactionConflict

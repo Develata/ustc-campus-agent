@@ -6,7 +6,8 @@ use crate::affairs::M71TerminalDto;
 use crate::change::M70ChangeFeedTerminalDto;
 use crate::error::ClientErrorDto;
 use crate::opportunity::{
-    M72OpportunityTerminalDto, OpportunityCommandDto, OpportunityRejectionDto,
+    M72OpportunityTerminalDto, OpportunityCommandDto, OpportunityConfirmationDto,
+    OpportunityRejectionDto,
 };
 use crate::protocol::{CapabilityListDto, ProtocolCompatibilityDto, ServerInfoDto};
 use crate::value::{UnixMillis, WireText};
@@ -80,6 +81,7 @@ pub struct SubmitOpportunityDto {
     pub idempotency_key: Option<WireText>,
     pub actor: ActorIntentDto,
     pub provenance: ClientProvenanceDto,
+    pub confirmation: OpportunityConfirmationDto,
     pub payload_digest: WireText,
     pub command: OpportunityCommandDto,
 }
@@ -333,4 +335,50 @@ pub fn read_frame<T: DeserializeOwned>(mut reader: impl Read) -> io::Result<T> {
     reader.read_exact(&mut payload)?;
     serde_json::from_slice(&payload)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{OpportunityCommandDto, opportunity_payload_digest};
+
+    fn text(value: &str) -> WireText {
+        WireText::parse(value).expect("fixture text")
+    }
+
+    #[test]
+    fn missing_opportunity_confirmation_is_malformed() {
+        let command = OpportunityCommandDto::ViewProfile {
+            profile_snapshot_id: text(
+                "profile-snapshot:opportunity:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            ),
+        };
+        let request = SubmitOpportunityDto {
+            request_id: text("req:confirmation-default"),
+            correlation_id: text("corr:confirmation-default"),
+            causation_id: None,
+            idempotency_key: Some(text("idem:confirmation-default")),
+            actor: ActorIntentDto::Authenticated {
+                session_id: text("session:confirmation-default"),
+            },
+            provenance: ClientProvenanceDto {
+                build: text("build:test"),
+                target: text("linux"),
+                protocol: text("m10:v1"),
+            },
+            confirmation: OpportunityConfirmationDto::NotConfirmed,
+            payload_digest: opportunity_payload_digest(
+                &command,
+                OpportunityConfirmationDto::NotConfirmed,
+            )
+            .expect("opportunity digest"),
+            command,
+        };
+        let mut value = serde_json::to_value(request).expect("serialize request");
+        value
+            .as_object_mut()
+            .expect("request object")
+            .remove("confirmation");
+        assert!(serde_json::from_value::<SubmitOpportunityDto>(value).is_err());
+    }
 }

@@ -15,6 +15,7 @@ use ustc_campus_agent_application_ingress::{
     OpportunityInvocationError, OpportunityInvocationOutcome, OpportunityInvocationPort,
 };
 use ustc_campus_agent_client_protocol::{OpportunityCommandDto, OpportunityConsentFieldDto};
+use ustc_campus_agent_core::invocation::InvocationConfirmation;
 use ustc_campus_agent_core::request_context::M00AdmittedActor;
 use ustc_campus_agent_course_planning::PlanningConfig;
 use ustc_campus_agent_opportunity_graph::{
@@ -207,9 +208,10 @@ impl OpportunityInvocationPort for OpportunityApplicationUseCase<'_> {
         &self,
         actor: &M00AdmittedActor,
         command: &OpportunityCommandDto,
+        confirmation: InvocationConfirmation,
     ) -> Result<OpportunityInvocationOutcome, OpportunityInvocationError> {
         let metadata = operation_metadata_for_command(command);
-        self.authority.authorize(actor, &metadata)?;
+        self.authority.authorize(actor, &metadata, confirmation)?;
         self.counters.authorizations.fetch_add(1, Ordering::SeqCst);
 
         if self.failure == OpportunityApplicationFailureMode::BeforeDispatch {

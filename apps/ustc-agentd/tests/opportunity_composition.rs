@@ -11,10 +11,11 @@ use serde_json::{Value, json};
 use ustc_agentd::AffairsComposition;
 use ustc_campus_agent_client_protocol::{
     ActorIntentDto, ClientErrorDto, ClientProvenanceDto, ClientResponseDto,
-    M72OpportunityTerminalDto, OpportunityCommandDto, OpportunityConsentFieldDto,
-    OpportunityPlanDecisionDto, OpportunityPreferenceDto, OpportunityRejectionDto,
-    OpportunitySourceHealthDto, SubmitAffairsGetDto, SubmitOpportunityDto, UnixMillis,
-    WireErrorClassDto, WireText, affairs_get_payload_digest, opportunity_payload_digest,
+    M72OpportunityTerminalDto, OpportunityCommandDto, OpportunityConfirmationDto,
+    OpportunityConsentFieldDto, OpportunityPlanDecisionDto, OpportunityPreferenceDto,
+    OpportunityRejectionDto, OpportunitySourceHealthDto, SubmitAffairsGetDto, SubmitOpportunityDto,
+    UnixMillis, WireErrorClassDto, WireText, affairs_get_payload_digest,
+    opportunity_payload_digest,
 };
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -199,6 +200,20 @@ fn request(
     suffix: &str,
     actor: ActorIntentDto,
 ) -> SubmitOpportunityDto {
+    request_with_confirmation(
+        command,
+        suffix,
+        actor,
+        OpportunityConfirmationDto::Confirmed,
+    )
+}
+
+fn request_with_confirmation(
+    command: OpportunityCommandDto,
+    suffix: &str,
+    actor: ActorIntentDto,
+    confirmation: OpportunityConfirmationDto,
+) -> SubmitOpportunityDto {
     SubmitOpportunityDto {
         request_id: wire(format!("req:opportunity:{suffix}")),
         correlation_id: wire(format!("corr:opportunity:{suffix}")),
@@ -210,7 +225,9 @@ fn request(
             target: wire("linux"),
             protocol: wire("m10:v2"),
         },
-        payload_digest: opportunity_payload_digest(&command).expect("opportunity digest"),
+        confirmation,
+        payload_digest: opportunity_payload_digest(&command, confirmation)
+            .expect("opportunity digest"),
         command,
     }
 }
@@ -746,6 +763,27 @@ fn market_disable_and_grant_revoke_deny_before_application_dispatch_and_m60() {
         assert_eq!(composition.opportunity_m60_call_count(), 0);
         assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
     }
+}
+
+#[test]
+fn ask_grant_requires_confirmation_before_application_dispatch() {
+    let env = TestEnv::new("confirmation-required");
+    let composition = env.open();
+    let response = composition.handle_opportunity_submit(&request_with_confirmation(
+        create_command(),
+        "confirmation-required",
+        authenticated_actor("session:proc011-web-demo"),
+        OpportunityConfirmationDto::NotConfirmed,
+    ));
+    match response {
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } => assert_eq!(error.class, WireErrorClassDto::PolicyDenied),
+        other => panic!("expected confirmation policy denial, got {other:?}"),
+    }
+    assert_eq!(composition.opportunity_application_counts(), (0, 0, 0));
+    assert_eq!(composition.opportunity_m60_call_count(), 0);
+    assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
 }
 
 #[test]

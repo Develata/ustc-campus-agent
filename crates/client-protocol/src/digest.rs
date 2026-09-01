@@ -1,7 +1,7 @@
 use sha2::{Digest, Sha256};
 
-use crate::OpportunityCommandDto;
 use crate::value::{UnixMillis, WireText};
+use crate::{OpportunityCommandDto, OpportunityConfirmationDto};
 
 const AFFAIRS_GET_DOMAIN: &[u8] = b"m10/affairs.get/payload-digest/v1\0";
 const CHANGE_FEED_DOMAIN: &[u8] = b"m10/change.list/payload-digest/v1\0";
@@ -52,12 +52,17 @@ pub fn change_feed_payload_digest(board_id: &WireText) -> Result<WireText, Chang
 
 pub fn opportunity_payload_digest(
     command: &OpportunityCommandDto,
+    confirmation: OpportunityConfirmationDto,
 ) -> Result<WireText, OpportunityDigestError> {
     let payload = command
         .canonical_bytes()
         .map_err(|_| OpportunityDigestError::Command)?;
     let mut hasher = Sha256::new();
     hasher.update(OPPORTUNITY_DOMAIN);
+    hasher.update([match confirmation {
+        OpportunityConfirmationDto::Confirmed => 1,
+        OpportunityConfirmationDto::NotConfirmed => 2,
+    }]);
     hasher.update(
         u32::try_from(payload.len())
             .map_err(|_| OpportunityDigestError::Length)?
@@ -223,7 +228,10 @@ mod tests {
 
     #[test]
     fn opportunity_digest_is_canonical_and_domain_separated() {
-        use crate::{OpportunityCommandDto, OpportunityConsentFieldDto, OpportunityPreferenceDto};
+        use crate::{
+            OpportunityCommandDto, OpportunityConfirmationDto, OpportunityConsentFieldDto,
+            OpportunityPreferenceDto,
+        };
         let command = OpportunityCommandDto::CreateProfile {
             consent_purpose: proc_id("opportunity_planning"),
             consent_fields: vec![
@@ -240,8 +248,13 @@ mod tests {
                 weight: 9,
             }],
         };
-        let digest = opportunity_payload_digest(&command).unwrap();
+        let digest =
+            opportunity_payload_digest(&command, OpportunityConfirmationDto::Confirmed).unwrap();
         assert_eq!(digest.as_str().len(), 64);
+        assert_ne!(
+            digest,
+            opportunity_payload_digest(&command, OpportunityConfirmationDto::NotConfirmed).unwrap()
+        );
         assert_ne!(
             digest,
             affairs_get_payload_digest(&proc_id("fixture"), None).unwrap()

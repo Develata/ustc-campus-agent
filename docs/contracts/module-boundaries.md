@@ -33,7 +33,7 @@ This registry defines what may cross each large-module boundary. It does not pre
 | `B-M10-APP-CALL` | `M10` | owning backend application module | one admitted typed application command/query; no transport or Dioxus type | bounded fixture-backed M71 Affairs plus four static M72 private-operation command/query paths; other operations and production ingress planned |
 | `B-APP-M10-RESULT` | owning backend application module | `M10` | typed application result/error/event projection; no concrete adapter handle | bounded M71 Affairs plus typed static M72 result/error evidence; other operations and production ingress planned |
 | `B-M20-M40-PROJECTION` | `M20` | `M40` | immutable tool projection, private route and current authorization result | partial implementation |
-| `B-M20-M72-AUTH` | `M20` | statically composed owning `M72` application use case | transaction-current package, declarative resource component, installation, grant, capability class/scope and policy authorization for one exact registered application operation; no Agent tool projection, provider call or executor route | bounded fixture-backed implementation for the four private Opportunity operations; durable production M20 adapter planned |
+| `B-M20-M72-AUTH` | `M20` | statically composed owning `M72` application use case | transaction-current package, declarative resource component, installation, grant, capability class/scope, policy and typed per-request confirmation authorization for one exact registered application operation; `Ask` without confirmed evidence fails closed; no Agent tool projection, provider call or executor route | bounded fixture-backed implementation for the four private Opportunity operations; durable production M20 adapter planned |
 | `B-M30-M50-MODEL` | `M30` | `M50` | complete model request, ordered events, usage and typed provider errors | planned |
 | `B-M20-M30-TOOLSET` | `M20` resolver via composition | `M30`/provider | frozen `AgentToolsetView` only; no private route/package/grant internals | partial implementation |
 | `B-M30-M40-CALL` | `M30` via composition | `M40` | correlated `AgentToolCall` proposal for staged prepare; no executor I/O yet | protocol/fake proof implemented; production planned |
@@ -89,7 +89,7 @@ For the first retained Affairs-first seam, `server.info` is header-free bootstra
 ## 4. Agent–Plugin boundary
 
 The four current Opportunity private operations do not cross this boundary. They
-follow `M00/M10 → B-M20-M72-AUTH → static owning M72 application use case`; no
+follow `M00/M10 typed confirmation → B-M20-M72-AUTH → static owning M72 application use case`; no
 `AgentToolsetView`, `AgentToolCall`, provider identity, M30 intent/receipt command,
 M40 route or Plugin executor request is created. This exception is a classification
 of static first-party application operations, not a weakening of the generic M40

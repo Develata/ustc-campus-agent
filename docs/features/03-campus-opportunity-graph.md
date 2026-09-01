@@ -41,7 +41,10 @@ store and the Web create/view/plan/revoke-delete journey. It creates no Agent ru
 provider call, ToolGateway route, effect intent/receipt or PluginExecutor request. The
 four bounded operations are `profile.academic.create`, `profile.academic.view`,
 `planner.generate` and `profile.academic.revoke_delete`; none has a direct
-M10/Web-to-M72 fallback.
+M10/Web-to-M72 fallback. Every operation carries an explicit per-request confirmation
+intent inside the M10 payload digest; transaction-current M20 authority rejects
+`confirmationDefault=Ask` unless that intent is `confirmed`, so direct M10 callers
+cannot bypass the Web adapter's confirmation UI.
 
 ## Course Planning bounded spike
 

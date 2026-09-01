@@ -1,9 +1,11 @@
 use ustc_campus_agent_client_protocol::{
     ActorIntentDto, ClientErrorDto, ClientResponseDto, EchoPayloadDto, M10WireErrorDto,
-    OpportunityCommandDto, OpportunityRejectionDto, OpportunitySourceHealthDto, RetryabilityDto,
-    SubmitOpportunityDto, UnixMillis, WireErrorClassDto, WireText, opportunity_payload_digest,
+    OpportunityCommandDto, OpportunityConfirmationDto, OpportunityRejectionDto,
+    OpportunitySourceHealthDto, RetryabilityDto, SubmitOpportunityDto, UnixMillis,
+    WireErrorClassDto, WireText, opportunity_payload_digest,
 };
 use ustc_campus_agent_core::identity::{CorrelationId, RequestId, SessionId};
+use ustc_campus_agent_core::invocation::InvocationConfirmation;
 use ustc_campus_agent_core::request_context::{
     ActorReference, ClientProvenance, M00AdmissionResult, M00AdmittedActor, OperationId,
     PayloadDigest, PublicScope, RequestAdmissionCoordinator,
@@ -27,6 +29,7 @@ pub trait OpportunityInvocationPort: Send + Sync {
         &self,
         actor: &M00AdmittedActor,
         command: &OpportunityCommandDto,
+        confirmation: InvocationConfirmation,
     ) -> Result<OpportunityInvocationOutcome, OpportunityInvocationError>;
 }
 
@@ -68,10 +71,11 @@ impl<'a> M10OpportunityService<'a> {
         if request.command.validate().is_err() {
             return malformed_command_error(operation_id);
         }
-        let expected_digest = match opportunity_payload_digest(&request.command) {
-            Ok(value) => value,
-            Err(_) => return malformed_command_error(operation_id),
-        };
+        let expected_digest =
+            match opportunity_payload_digest(&request.command, request.confirmation) {
+                Ok(value) => value,
+                Err(_) => return malformed_command_error(operation_id),
+            };
         if !constant_time_eq(
             request.payload_digest.as_str().as_bytes(),
             expected_digest.as_str().as_bytes(),
@@ -116,10 +120,15 @@ impl<'a> M10OpportunityService<'a> {
                 OpportunityRejectionDto::AuthenticationRequired,
             );
         }
-        let outcome = match self
-            .opportunity
-            .invoke(disposition.admitted_actor(), &request.command)
-        {
+        let confirmation = match request.confirmation {
+            OpportunityConfirmationDto::Confirmed => InvocationConfirmation::Confirmed,
+            OpportunityConfirmationDto::NotConfirmed => InvocationConfirmation::NotConfirmed,
+        };
+        let outcome = match self.opportunity.invoke(
+            disposition.admitted_actor(),
+            &request.command,
+            confirmation,
+        ) {
             Ok(value) => value,
             Err(OpportunityInvocationError::OutcomeUnknown) => {
                 return ClientResponseDto::Incomplete {

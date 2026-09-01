@@ -3083,9 +3083,11 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
  'market/authority.rs': ('use crate::identity::{TenantId, UserId};',
                          'use crate::invocation::{ AuthorizedInvocation, CapabilityClass, '
                          'CapabilityGrantSnapshot, CapabilityId, CatalogPackageRevision, '
-                         'ComponentKind, CurrentDenyState, GrantSnapshotId, GrantState, '
+                         'ComponentKind, ConfirmationPolicy, CurrentDenyState, GrantSnapshotId, '
+                         'GrantState, '
                          'InstallationId, InstallationState, InvocationAuthorityCandidate, '
-                         'InvocationAuthorizationError, InvocationPolicySnapshot, '
+                         'InvocationAuthorizationError, InvocationConfirmation, '
+                         'InvocationPolicySnapshot, '
                          'InvocationResolver, InvocationTarget, ObjectScope, '
                          'PluginInstallationSnapshot, ProjectionResolutionError, ProposedToolCall, '
                          'ResolvedInvocation, ToolProjectionRequest, ToolProjectionSnapshot, '
@@ -3679,8 +3681,8 @@ PLATFORM_GRANT_TEST_FUNCTIONS = ('checked_grant_ids_versions_and_sequences_are_c
  'non_issue_commands_validate_snapshot_and_expected_version',
  'empty_replay_and_repository_queries_are_deterministic',
  'public_errors_are_category_only_and_secret_safe')
-PLATFORM_AUTHORITY_SOURCE_SHA256 = "e6e1a6215e817f6a017e3bff199245490ebf11f298d96bda2c54d3b33d69dd16"
-PLATFORM_AUTHORITY_TEST_SHA256 = "f87197c169ee72065db8f794b9672ae34356c754a038f098f7982a793b175e2e"
+PLATFORM_AUTHORITY_SOURCE_SHA256 = "0885fab82e77098a6d2bcf49f460e2a83b6ae2c7ebde969917e774d9eead661b"
+PLATFORM_AUTHORITY_TEST_SHA256 = "eeb6dc180b010709e038ec4e8c7887581233ec81a93873a83858f06e38609d6c"
 PLATFORM_AUTHORITY_ADMITTED_ATTRIBUTE_COUNTS = (
     ((False, "cfg", "cfg(test)"), 1),
     ((False, "derive", "derive(Clone)"), 1),
@@ -3751,7 +3753,7 @@ PLATFORM_AUTHORITY_ADMITTED_PARSED_ARGUMENT_COUNTS = (
     ("UserId,", 2),
 )
 PLATFORM_AUTHORITY_FUNCTION_BODY_SHA256 = {
-    "authorize_static_application_use_case": ("58b9d6ee19880d533b3f5a4364dfee96f3cc648719bfe2b5cd5660a5d1591e6c",),
+    "authorize_static_application_use_case": ("92786de77803d839a0da1decde6d5401a6914aadaa5ca59c73c4c79580748d2b",),
     "resolve_projection": ("86be5f40fb3b13ac296f4da07c78ba1d792ba4fba866d300440b801f2a4ba8ba",),
     "recheck_invocation": ("a6504719b3433dc832800880e797cb6ece146b8862c0a17cee25662e7e045c0b",),
     "verify_precondition": (
@@ -3777,6 +3779,7 @@ PLATFORM_AUTHORITY_UNIT_TEST_FUNCTIONS = (
 PLATFORM_AUTHORITY_TEST_FUNCTIONS = (
     "projection_and_recheck_assemble_separate_carriers_under_one_verified_revision",
     "static_application_authority_accepts_only_a_non_tool_resource_carrier",
+    "static_application_ask_grant_requires_confirmation",
     "static_application_denial_precedes_final_transaction_verification",
     "projection_missing_catalog_installation_or_grant_keeps_exact_resolver_denial",
     "post_success_transaction_conflict_returns_no_projection_or_authorized_invocation",
@@ -9670,16 +9673,16 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
         M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "e6e4e7ecacc70d446eab6947f8a28e55b2d78a74a72523908a1bb8a46dd9e88c",
         "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
-        "docs/acceptance/matrix.tsv": "09970c4779255bee572e7ad232e47abedc1831d2162b56d7a45b18f1aa6520f4",
+        "docs/acceptance/matrix.tsv": "d2c0238eaa9cd0daddc8f2698d0dfc3f3f873d8f9122f017b1be5d79eeb562a1",
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
         "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
-        "docs/contracts/module-boundaries.md": "f04d8e92cf1faec80c5e0a138986df0babe0412910436e31a6134fb4a2e78a14",
+        "docs/contracts/module-boundaries.md": "d064bfcf0832962780678bddd848d0516e53d678b0389883144adec724e460a8",
         "docs/overview/architecture.md": "99de3f5d93cf8d8cd7e516e0d00d4303d8cb2f0807c2a23ad2ad01b63bbf21a5",
         "docs/features/02-ustc-change-radar.md": "27be5c7f4bebdd6bb2dc6938ecffa185b4d0cd53aeb050b031b46bf698478153",
         "docs/plan/05-campus-trust-kernel.md": "26ebed21efb3cfcf09a08864ec890fd75dea7322d296433d120557b1614e26db",
-        "docs/plan/modules/00-module-map.md": "1a1efd70347b03f8dd73a50f1c4e5a0761df4d7f918e46f9fc5754da7af81b83",
+        "docs/plan/modules/00-module-map.md": "79d7b38d0dab663dad49da13a1d307e0738a6b6f85c9624d74444a159a576f04",
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
-        "docs/tasks/01-execution-roadmap.md": "544ef4daec2386d1520023e1129f008d0709e0fb39dcd9aaafa98f648ef01d3c",
+        "docs/tasks/01-execution-roadmap.md": "05136dbe30d9e3db1d6af08bc3d46b4d6c318d5bb72de5bdec264afdce317f9e",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
         "docs/coverage-matrix.md": "2daa74003b0ba6bd1c9434c6396cda2a3237352de9ee4caae9ed7789e9f12df1",
     }
@@ -13716,7 +13719,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "200848c7e4439c7ddbdb0dc0d76be7a702f98127bd81956634e09e3cf2f5d3e8", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "2b5a2ba3c5120b84f9cd3fe4c89513729b65389e1bbad529cf9182563aa1f60c", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},

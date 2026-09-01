@@ -6,11 +6,12 @@
 use crate::identity::{TenantId, UserId};
 use crate::invocation::{
     AuthorizedInvocation, CapabilityClass, CapabilityGrantSnapshot, CapabilityId,
-    CatalogPackageRevision, ComponentKind, CurrentDenyState, GrantSnapshotId, GrantState,
-    InstallationId, InstallationState, InvocationAuthorityCandidate, InvocationAuthorizationError,
-    InvocationPolicySnapshot, InvocationResolver, InvocationTarget, ObjectScope,
-    PluginInstallationSnapshot, ProjectionResolutionError, ProposedToolCall, ResolvedInvocation,
-    ToolProjectionRequest, ToolProjectionSnapshot, authorize_call, preflight_projected_call,
+    CatalogPackageRevision, ComponentKind, ConfirmationPolicy, CurrentDenyState, GrantSnapshotId,
+    GrantState, InstallationId, InstallationState, InvocationAuthorityCandidate,
+    InvocationAuthorizationError, InvocationConfirmation, InvocationPolicySnapshot,
+    InvocationResolver, InvocationTarget, ObjectScope, PluginInstallationSnapshot,
+    ProjectionResolutionError, ProposedToolCall, ResolvedInvocation, ToolProjectionRequest,
+    ToolProjectionSnapshot, authorize_call, preflight_projected_call,
 };
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -232,6 +233,7 @@ impl<R: InvocationAuthorityRepository> InvocationAuthorityService<R> {
         user_id: &UserId,
         target: &InvocationTarget,
         capability_class: CapabilityClass,
+        confirmation: InvocationConfirmation,
     ) -> Result<(), InvocationRecheckError> {
         let transaction = self
             .repository
@@ -337,6 +339,11 @@ impl<R: InvocationAuthorityRepository> InvocationAuthorityService<R> {
             || grant.capability_manifest_digest != catalog.capability_manifest_digest
         {
             return Err(deny(InvocationAuthorizationError::GrantScopeMismatch));
+        }
+        if grant.confirmation_policy == ConfirmationPolicy::Ask
+            && confirmation != InvocationConfirmation::Confirmed
+        {
+            return Err(deny(InvocationAuthorizationError::ConfirmationRequired));
         }
 
         transaction

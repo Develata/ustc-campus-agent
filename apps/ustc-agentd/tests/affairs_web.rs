@@ -279,7 +279,7 @@ impl WebServer {
             .collect::<String>();
         write!(
             stream,
-            "GET {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json,text/html,*/*\r\n{protocol_headers}Connection: close\r\n\r\n",
+            "GET {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json,text/html,*/*\r\n{protocol_headers}X-USTC-Opportunity-Confirmation: confirmed\r\nConnection: close\r\n\r\n",
             self.endpoint,
         )
         .expect("write HTTP request");
@@ -332,17 +332,37 @@ impl WebServer {
 
     fn post_json(&self, path: &str, body: &Value) -> HttpResponse {
         let body = body.to_string();
-        self.post_raw(path, "application/json", &body)
+        self.post_raw_with_confirmation(path, "application/json", &body, true)
+    }
+
+    fn post_json_without_opportunity_confirmation(&self, path: &str, body: &Value) -> HttpResponse {
+        let body = body.to_string();
+        self.post_raw_with_confirmation(path, "application/json", &body, false)
     }
 
     fn post_raw(&self, path: &str, content_type: &str, body: &str) -> HttpResponse {
+        self.post_raw_with_confirmation(path, content_type, body, true)
+    }
+
+    fn post_raw_with_confirmation(
+        &self,
+        path: &str,
+        content_type: &str,
+        body: &str,
+        confirmed: bool,
+    ) -> HttpResponse {
         let mut stream = TcpStream::connect(&self.endpoint).expect("connect web server");
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
             .expect("set read timeout");
+        let confirmation_header = if confirmed {
+            "X-USTC-Opportunity-Confirmation: confirmed\r\n"
+        } else {
+            ""
+        };
         write!(
             stream,
-            "POST {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "POST {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nContent-Type: {content_type}\r\n{confirmation_header}Content-Length: {}\r\nConnection: close\r\n\r\n{}",
             self.endpoint,
             body.len(),
             body
@@ -1065,6 +1085,19 @@ fn opportunity_http_journey_requires_consent_plans_and_deletes_private_payload()
         serde_json::from_str(&after_delete.body).expect("deleted-plan JSON");
     assert_eq!(after_delete_value["kind"], "opportunity_rejected");
     assert_eq!(after_delete_value["rejection"]["kind"], "profile_deleted");
+}
+
+#[test]
+fn opportunity_http_missing_confirmation_fails_closed() {
+    let server = WebServer::start();
+    let response = server.post_json_without_opportunity_confirmation(
+        "/api/v1/opportunity/profiles",
+        &valid_opportunity_profile_body(),
+    );
+    assert!(response.status.contains(" 403 "), "{}", response.status);
+    let body: Value = serde_json::from_str(&response.body).expect("typed confirmation denial");
+    assert_eq!(body["kind"], "error");
+    assert_eq!(body["error"]["error"]["class"], "policy_denied");
 }
 
 #[test]
