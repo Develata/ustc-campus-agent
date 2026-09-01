@@ -445,6 +445,15 @@ Stop before widening scope if:
 - `Required closure`: rerun focused/full Rust gates, the complete `732`-test checker shard suite, exact-head GitHub CI/governance, and fresh formal review; resolve all four GitHub review conversations before requesting merge authorization.
 - `Non-claims`: no public API, source approval, transport/effect/B3 admission, status promotion or shipping widening.
 
+## Marker-external pull-request review repair R5
+
+- `Review`: GitHub Codex review `5077339981` on head `9ca6fe2e2b389af1cb1ffef4570904fddc5ea028` found that required positive denial substrings alone did not reject an added contradictory authority sentence.
+- `Repair`: the source-sensitive owning checker now applies bounded forbidden-promotion patterns to every declared B2 projection carrier after required-token validation. It rejects positive transport/network authority, concrete/real/approved-source authority, M60 completion/partial-evidence promotion and `SRC-010/011/012` implementation promotion.
+- `Sabotage`: the trust-kernel test preserves all existing denial text and appends `transport/network effects and an approved source are implemented`; the checker must reject the additive contradiction, preventing the exact false-green demonstrated by review.
+- `Scope`: checker, checker sabotage and this marker-external receipt only; production Rust semantics and frozen source/test hashes remain unchanged from R4.
+- `Required closure`: rerun the complete `732`-test checker shard suite, exact-head full CI/governance and final formal review before requesting merge authorization.
+- `Non-claims`: no effect, source approval, B3 admission, M60/SRC status promotion or shipping widening.
+
 ## Review receipts
 
 - `Pre-edit review`: `PASS`; taskbook `sha256:d509ef1fb95606bca0b6cc68baf810ec2a18d9471b548c8725751e5f495ad9c0`; marker packet `sha256:19fb0e7696ffd298e34da0c52507f3b186fa50d9ee9ccc4b68657ec65cb1026e` over `26003` bytes.

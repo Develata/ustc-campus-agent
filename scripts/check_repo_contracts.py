@@ -9643,6 +9643,41 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
             f"actual={tuple(M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS)}",
             issues,
         )
+    forbidden_projection_patterns = (
+        (
+            "positive transport/network authority",
+            re.compile(
+                r"(?i)\b(?:transport(?:/network)?(?:\s+port)?(?:\s+implementation|\s+effects?)?"
+                r"|network\s+effects?)\b[^\n]{0,120}\b(?:is|are)\s+"
+                r"(?:implemented|authorized|admitted|complete)\b"
+            ),
+        ),
+        (
+            "positive concrete-source authority",
+            re.compile(
+                r"(?i)\b(?:approved|concrete|real)\s+source\b[^\n]{0,120}\b"
+                r"(?:is|are)\s+(?:approved|authorized|admitted|implemented)\b"
+            ),
+        ),
+        (
+            "M60 status promotion",
+            re.compile(
+                r"(?i)\bM60(?:\s+overall)?\s+(?:is|remains)\s+"
+                r"(?:implemented|complete|partial-evidence)\b"
+            ),
+        ),
+        (
+            "planned SRC status promotion",
+            re.compile(
+                r"(?i)\bSRC-01[012]\b[^\n]{0,80}\b(?:is|are|remains?)\s+implemented\b"
+            ),
+        ),
+    )
+    promotion_projection_paths = tuple(
+        rel
+        for rel in declared_projection_paths
+        if rel not in (M60_B2_PROPOSAL_PATH, M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH)
+    )
 
     task_path = ROOT / M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH
     if not task_path.is_file() or task_path.is_symlink():
@@ -9687,6 +9722,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "## Marker-external formal-review repair R2",
         "## Marker-external pull-request review repair R3",
         "## Marker-external pull-request review repair R4",
+        "## Marker-external pull-request review repair R5",
         "controller-owned receipt `sha256:46fd36c88617c925739a80605fe291320b3cb33d0355b00db594da9c0e183b69`",
         "controller-owned receipt `sha256:e9a7650111c0832e3583c56a12c69f4d0925000dc8554c5278c8814a1edc68ae`",
         "controller-owned receipt `sha256:08270e618a32fc3f433971381c7fa9c01868ae84ec0e6b5188d08c6e91dfcaf9`",
@@ -9758,6 +9794,18 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         for token in tokens:
             if token not in text:
                 fail(f"M60-B2 implementation projection drifted in {rel}: {token}", issues)
+        if rel in promotion_projection_paths:
+            promotion_text = text
+            for token in tokens:
+                promotion_text = promotion_text.replace(token, "")
+            for label, pattern in forbidden_projection_patterns:
+                match = pattern.search(promotion_text)
+                if match is not None:
+                    fail(
+                        f"M60-B2 implementation projection gained {label} in {rel}: "
+                        f"{match.group(0)}",
+                        issues,
+                    )
 
     module_map_path = ROOT / "docs/plan/modules/00-module-map.md"
     module_rows = (
@@ -13631,7 +13679,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "39f2cc902b56f433bf0149a69acf84cc4866d84ea4be2ebf04adb6346fb146df", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "d5ac0486ea41e98287bcb4a314c158495bb82ea783dd1174a797da6d6bea1a53", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},
