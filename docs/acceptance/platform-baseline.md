@@ -322,7 +322,7 @@ ustc-agentctl acceptance matrix-check --strict --format json
 
 ### Source Registry — `SRC-*`
 
-Current projection: `SRC-001` is implemented as the bounded pure `M60-B1 source-registry` lifecycle under `source-import/v1` (exact active binding `cargo test --locked -p ustc-campus-agent-core --test source_registry` in [`matrix.tsv`](matrix.tsv)). The first bounded offline `M60-B2` pure-policy algebra is also implemented and tested under `source-retrieval/v0`, but it provides no fetch integration, transport port, network path or real-source approval. `M60` overall and every effectful `M60-B3` through `M60-B8` slice remain planned, so `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only `SRC-*` row below—including `SRC-014`—remain non-pass.
+Current projection: `SRC-001` is implemented as the bounded pure `M60-B1 source-registry` lifecycle under `source-import/v1` (exact active binding `cargo test --locked -p ustc-campus-agent-core --test source_registry` in [`matrix.tsv`](matrix.tsv)). `SRC-015` binds the first bounded offline `M60-B2` pure-policy algebra under `source-retrieval/v0`; it provides no fetch integration, transport port, network path or real-source approval. `M60` overall and every effectful `M60-B3` through `M60-B8` slice remain planned, so `SRC-010`, `SRC-011`, `SRC-012` and every catalog-only `SRC-*` row below—including `SRC-014`—remain non-pass.
 
 | Case ID | Assertion | Binding | Required gate |
 | --- | --- | --- | --- |
@@ -340,6 +340,7 @@ Current projection: `SRC-001` is implemented as the bounded pure `M60-B1 source-
 | `SRC-012` | baseline advances only after snapshot/parse/normalize/diff/candidate/evidence durable success | rust-integration | release |
 | `SRC-013` | model-proposed URL outside approved Source Registry enters review, never immediate fetch | rust-integration | integration |
 | `SRC-014` | suspended/revoked source blocks new fetch while preserving historical evidence | rust-integration | release |
+| `SRC-015` | bounded offline retrieval policy deterministically validates synthetic request/rate/DNS/peer/HTTP/body observations without I/O or source approval | rust-unit | PR |
 
 ### Structured procedures — `PROC-*`
 

@@ -311,6 +311,8 @@ Only HTTP status `200` is accepted in v0. Every `3xx` is `RedirectDenied`. Condi
 - exactly one empty `CRLF` terminator.
 
 Parser caps: status+headers ≤ 32768 raw bytes, ≤ 128 header fields, field name ≤ 64 bytes, field value ≤ 8192 bytes.
+Malformed grammar, including invalid UTF-8, is classified before the raw-byte cap; an
+oversized but otherwise well-formed head is `HeaderLimitExceeded`.
 
 ### 8.3 Framing and body validation
 
@@ -320,7 +322,8 @@ Framing rules:
 - `Content-Encoding`: absent or exactly `identity`;
 - `Transfer-Encoding`: absent or exactly `chunked` (one token, no parameters/chains);
 - `Content-Length`: `0` or `[1-9][0-9]*`, no coexistence with `Transfer-Encoding`; malformed decimal syntax is `AmbiguousFraming`, while a syntactically valid decimal above `u64::MAX` is already above every admitted body cap and therefore returns `DeclaredBodyTooLarge`;
-- absent both means close-delimited under `Connection: close`;
+- absent both means close-delimited because the exact serialized request already fixes
+  `Connection: close`; a conforming response need not echo that hop-by-hop header;
 - `Trailer`: absent;
 - chunk-size lines ≤ 128 raw bytes, `1..=16` hex digits, non-final count ≤ 4096.
 

@@ -984,9 +984,6 @@ impl RetrievalPolicy {
     pub fn parse_strict_response_head(
         raw: &[u8],
     ) -> Result<ResponseHeadObservation, RetrievalPolicyError> {
-        if raw.len() > MAX_RESPONSE_HEAD_BYTES {
-            return Err(RetrievalPolicyError::HeaderLimitExceeded);
-        }
         if raw.contains(&0)
             || raw
                 .windows(2)
@@ -1001,6 +998,9 @@ impl RetrievalPolicy {
         }
         let text =
             std::str::from_utf8(raw).map_err(|_| RetrievalPolicyError::MalformedResponseHead)?;
+        if raw.len() > MAX_RESPONSE_HEAD_BYTES {
+            return Err(RetrievalPolicyError::HeaderLimitExceeded);
+        }
         let mut lines = text[..text.len() - 4].split("\r\n");
         let status_line = lines
             .next()

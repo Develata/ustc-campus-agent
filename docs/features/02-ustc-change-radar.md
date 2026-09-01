@@ -38,6 +38,11 @@ The initial user may consume public per-board feeds without a tenant-private pro
 
 The retained Rust kernel proves two honestly labelled, canonical-URL-bound `DemoReviewed` revisions for one policy-pinned source identity, deterministic field-level comparison, digest-bound administrator review, coherent transaction-current M60 verification and one stable JSON/Atom item. A fixed administrator command recomputes its M10 payload digest, passes current M00 admission, durably persists or verifies admitted-request evidence, then calls only the owning M70 application port. Review/publication state is strict owner-only canonical JSON: exact retry returns one receipt, checked restart recovery performs zero M60 calls, post-rename parent-sync uncertainty reconciles the canonical file, and corrupt/replaced/unsafe state fails closed rather than becoming an empty feed. Ordinary reads still cross `M10 change.list → bounded Harness → current Market authorization → ToolGateway → owning M70 query`; real two-process/browser restart preserves the same GUID and Atom bytes. Production SSO/administration, approved live retrieval, maintainer leases and M80 peer clients remain unimplemented; `RADAR-002` remains planned.
 
+`SRC-015` separately binds the first bounded offline `source-retrieval/v0` policy algebra:
+it deterministically validates only synthetic request, rate, DNS, peer, HTTP-head and
+body observations. This supporting evidence is not on the active ChangeRadar journey,
+performs no I/O, approves no source and does not promote effectful `SRC-010`.
+
 ## States
 
 ```text

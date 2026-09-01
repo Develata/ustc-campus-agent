@@ -2124,6 +2124,22 @@ class M60B2OfflineImplementationTests(unittest.TestCase):
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         self.assert_rejected("must preserve SRC-010 as planned")
 
+    def test_src015_acceptance_binding_fails_closed(self) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace(
+                "-p ustc-campus-agent-core --doc source_retrieval\tpr\timplemented\tsecurity",
+                "-p ustc-campus-agent-core --doc source_retrieval\tpr\tplanned\tsecurity",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        issues: list[str] = []
+        checker.check_m60_b2_offline_implementation(issues)
+        self.assertTrue(any("projection digest drifted" in issue for issue in issues))
+        self.assertTrue(any("SRC-015 acceptance binding drifted" in issue for issue in issues))
+
 
 class S0ArchitectureReviewContractTests(unittest.TestCase):
     def setUp(self) -> None:

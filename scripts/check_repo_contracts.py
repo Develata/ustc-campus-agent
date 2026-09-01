@@ -9502,8 +9502,8 @@ M60_B2_FROZEN_EXECUTABLE_SHA256 = {
     "crates/platform-core/src/lib.rs": "576943ba5914913fe925f0333712b83f7a429d14f04289fc3f34352f6f90759b",
     "crates/platform-core/src/source_registry.rs": "3504fe9c470e123cf87af894fab37bb1095f33ba753b01818b9d16d9238e0a64",
     "crates/platform-core/tests/source_registry.rs": "167510be70ff1a0ff019efeb7f6ab2b98ac815ffa15ab0ac4004f0f42d8393f2",
-    "crates/platform-core/src/source_retrieval.rs": "afe0ced332d7cfcb3728cf320e9aeb4150f1619528b6036e4b5271b4980b0a16",
-    "crates/platform-core/tests/source_retrieval.rs": "232b31e299bb888ddac76d6471c553a3f8e7f5c529ece043769985e1023f6abd",
+    "crates/platform-core/src/source_retrieval.rs": "42c4cbafa2ee0025ea6102ba13e0939f729f3ca88ea764a8e918781450798283",
+    "crates/platform-core/tests/source_retrieval.rs": "7b453e8285a312d5ce2dab43fb03b9b3ae8bcc26367da44113fecef331711a1c",
 }
 M60_B2_EXTERNAL_TEST_FUNCTIONS = (
     "nominal_id_families_and_dns_names_are_exact_and_redacted",
@@ -9568,9 +9568,13 @@ M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS = {
         "no public API, dependency, transport/effect, source approval, acceptance projection or shipping widening",
     ),
     "docs/acceptance/platform-baseline.md": (
-        "The first bounded offline `M60-B2` pure-policy algebra is also implemented and tested",
+        "`SRC-015` binds the first bounded offline `M60-B2` pure-policy algebra",
         "`SRC-010`, `SRC-011`, `SRC-012`",
         "`SRC-014`",
+    ),
+    "docs/acceptance/matrix.tsv": (
+        "SRC-015\tsource\tbounded offline retrieval policy deterministically validates synthetic request rate DNS peer HTTP-head and body observations without I/O transport-port implementation or source approval",
+        "\tpr\timplemented\tsecurity",
     ),
     "docs/contracts/source-import.md": (
         "implement the bounded offline pure-policy B2 projection under `source-retrieval/v0`",
@@ -9588,6 +9592,10 @@ M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS = {
     "docs/overview/architecture.md": (
         "bounded B1 registry, first retained bounded offline B2 pure policy/shape-only observations",
         "no transport/network effect, approved source, parser or durable baseline",
+    ),
+    "docs/features/02-ustc-change-radar.md": (
+        "`SRC-015` separately binds the first bounded offline `source-retrieval/v0` policy algebra",
+        "performs no I/O, approves no source and does not promote effectful `SRC-010`",
     ),
     "docs/plan/05-campus-trust-kernel.md": (
         "first bounded offline M60-B2 pure-policy implementation under `source-retrieval/v0`",
@@ -9626,10 +9634,12 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         M60_B2_PROPOSAL_PATH,
         M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH,
         "docs/acceptance/platform-baseline.md",
+        "docs/acceptance/matrix.tsv",
         "docs/contracts/source-import.md",
         "docs/contracts/source-retrieval.md",
         "docs/contracts/module-boundaries.md",
         "docs/overview/architecture.md",
+        "docs/features/02-ustc-change-radar.md",
         "docs/plan/05-campus-trust-kernel.md",
         "docs/plan/modules/00-module-map.md",
         "docs/plan/modules/70-campus-trust-source-pipeline.md",
@@ -9647,14 +9657,16 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
     frozen_projection_sha256 = {
         "CLAUDE.md": "131b50b80b23bba24d565a4751b02be88f7ead4a4b1bad514abaf97282a465c4",
         M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
-        M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "0466293ef7a356ded9c2a22676df37b1c3921584acaa8d1cefa1bb2124dceeb5",
-        "docs/acceptance/platform-baseline.md": "f11a154e93b1c2609edcb9dc2d95c21d0c6e9f8fb04821f46a14f2993151209c",
+        M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "1ffa67b160fa829365cdb3e03f0ee499081dd2c7f0ef4421aa74c26170cfe9e0",
+        "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
+        "docs/acceptance/matrix.tsv": "aab5b2ab62463ae21200ca06868171b2d636177c79c72a0c2177de2989a52829",
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
-        "docs/contracts/source-retrieval.md": "416bcb1f016ffe63a32293e132b375adcdf3dd740e78a2eb40a63f8fe59ff3db",
+        "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
         "docs/contracts/module-boundaries.md": "fe8b2ba4f6c9bda834ee33a9c87188bfbdaefacb5f00da7cc297b240c4cb4f90",
         "docs/overview/architecture.md": "99de3f5d93cf8d8cd7e516e0d00d4303d8cb2f0807c2a23ad2ad01b63bbf21a5",
+        "docs/features/02-ustc-change-radar.md": "27be5c7f4bebdd6bb2dc6938ecffa185b4d0cd53aeb050b031b46bf698478153",
         "docs/plan/05-campus-trust-kernel.md": "80b32250953be7daebdf99e418a6974730c0374b4f0cb3636c65c064995d8e7a",
-        "docs/plan/modules/00-module-map.md": "41a5e1d11f94f9ac09f326fb90a832d6bef94d86ecb67e1be68da812b4b775b4",
+        "docs/plan/modules/00-module-map.md": "bafeece216c46cdd8d840e384d3a035834c1f2f9bc306d4b58a57907499b232c",
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
         "docs/tasks/01-execution-roadmap.md": "3b828a7167d6fb35eb0fab0defd5d3d6fac0f7bf2598124218176fe57507b556",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
@@ -9715,10 +9727,12 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "## Marker-external pull-request review repair R6",
         "## Marker-external pull-request review repair R7",
         "## Marker-external pull-request review repair R8",
+        "## Marker-external exhaustive-review repair R9",
         "controller-owned receipt `sha256:46fd36c88617c925739a80605fe291320b3cb33d0355b00db594da9c0e183b69`",
         "controller-owned receipt `sha256:e9a7650111c0832e3583c56a12c69f4d0925000dc8554c5278c8814a1edc68ae`",
         "controller-owned receipt `sha256:08270e618a32fc3f433971381c7fa9c01868ae84ec0e6b5188d08c6e91dfcaf9`",
         "controller-owned receipt `sha256:70d30b20358be3967b242deabc7cb7251284a03a348ad245e6aa87d9a845c634`",
+        "controller-owned receipt `sha256:21a80de3a8763d5f4cb36a6aaca3d07d13924ff61722083d01cbb8ef63f75b3d`",
     )
     for token in task_tokens:
         if task_text.count(token) != 1:
@@ -9812,6 +9826,8 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
     matrix_header = matrix_lines[0].split("\t") if matrix_lines else []
     try:
         case_index = matrix_header.index("case_id")
+        binding_index = matrix_header.index("binding")
+        gate_index = matrix_header.index("gate")
         status_index = matrix_header.index("status")
     except ValueError:
         fail("M60-B2 implementation acceptance matrix header drifted", issues)
@@ -9824,6 +9840,23 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         ]
         if len(src010) != 1 or src010[0][status_index] != "planned":
             fail("M60-B2 implementation must preserve SRC-010 as planned", issues)
+        src015 = [
+            fields
+            for fields in matrix_rows
+            if len(fields) == len(matrix_header) and fields[case_index] == "SRC-015"
+        ]
+        expected_src015_binding = (
+            "python3 scripts/check_repo_contracts.py && cargo test --locked "
+            "-p ustc-campus-agent-core --test source_retrieval && cargo test --locked "
+            "-p ustc-campus-agent-core --doc source_retrieval"
+        )
+        if (
+            len(src015) != 1
+            or src015[0][status_index] != "implemented"
+            or src015[0][binding_index] != expected_src015_binding
+            or src015[0][gate_index] != "pr"
+        ):
+            fail("M60-B2 implementation SRC-015 acceptance binding drifted", issues)
         if any(
             len(fields) == len(matrix_header) and fields[case_index] == "SRC-014"
             for fields in matrix_rows
@@ -13670,7 +13703,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "2f7fbb2a499d3dc6eb0be95873074a5e0df3f8825ecc947045f0b8c6912b8c83", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "e407dfc872b4e462767c362dfb661337a01e6d63a647e325424f16fb69b3f1fb", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},

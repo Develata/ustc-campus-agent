@@ -524,8 +524,18 @@ fn strict_response_parser_rejects_line_folding_limits_and_status_classes() {
             Err(RetrievalPolicyError::MalformedResponseHead)
         );
     }
+    for malformed_oversized in [vec![b'x'; 32_769], vec![0; 32_769]] {
+        assert_eq!(
+            RetrievalPolicy::parse_strict_response_head(&malformed_oversized),
+            Err(RetrievalPolicyError::MalformedResponseHead)
+        );
+    }
+    let valid_oversized = format!(
+        "HTTP/1.1 200 OK\r\n{}\r\n",
+        format!("X-A: {}\r\n", "a".repeat(8_000)).repeat(5)
+    );
     assert_eq!(
-        RetrievalPolicy::parse_strict_response_head(&vec![b'x'; 32_769]),
+        RetrievalPolicy::parse_strict_response_head(valid_oversized.as_bytes()),
         Err(RetrievalPolicyError::HeaderLimitExceeded)
     );
     let too_many_fields = format!(
@@ -657,6 +667,16 @@ fn response_authorization_enforces_content_codings_framing_and_trailers() {
     )
     .expect("quoted parameter head");
     assert!(RetrievalPolicy::authorize_response_head(peer_bound(&subject), head).is_ok());
+
+    let head = RetrievalPolicy::parse_strict_response_head(
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n",
+    )
+    .expect("close-delimited head");
+    let admission = RetrievalPolicy::authorize_response_head(peer_bound(&subject), head)
+        .expect("request-scoped close delimiting");
+    let body = BodyObservation::new(Vec::new(), 0, 0, 0, false, 0, true, 0)
+        .expect("complete empty close-delimited body");
+    assert!(RetrievalPolicy::finish_body(admission, body).is_ok());
 
     let admission = authorized_body(&subject, "Trailer: checksum\r\n");
     let body = BodyObservation::new(Vec::new(), 0, 0, 0, false, 0, true, 0).expect("body shape");
