@@ -9502,7 +9502,7 @@ M60_B2_FROZEN_EXECUTABLE_SHA256 = {
     "crates/platform-core/src/lib.rs": "576943ba5914913fe925f0333712b83f7a429d14f04289fc3f34352f6f90759b",
     "crates/platform-core/src/source_registry.rs": "5c9c43899e5512aab89a946257a28ad1cc8b965e3104dc8a30f215d1f4783afd",
     "crates/platform-core/src/source_retrieval.rs": "a53777861a15e4099674b48902383284cbf30df9f077dabecde18053a39db85f",
-    "crates/platform-core/tests/source_retrieval.rs": "8c287f29399f54818e569acb1373e56ead06d84c2cbac6e1d51254918cdc63a9",
+    "crates/platform-core/tests/source_retrieval.rs": "fdec042855125f6713762b1379f471250f59ca317653bc0b6ce539aa30a0acf3",
 }
 M60_B2_EXTERNAL_TEST_FUNCTIONS = (
     "nominal_id_families_and_dns_names_are_exact_and_redacted",

@@ -702,9 +702,12 @@ fn body_shape_and_policy_bounds_are_independent_and_ordered() {
             RetrievalPolicyError::ChunkLimitExceeded
         );
     }
-    let admission = authorized_body(&subject, "Transfer-Encoding: chunked\r\n");
-    let body = BodyObservation::new(vec![0; 4], 4, 1, 16, false, 0, true, 0).expect("shape");
-    assert!(RetrievalPolicy::finish_body(admission, body).is_ok());
+    for accepted_width in [1, 16] {
+        let admission = authorized_body(&subject, "Transfer-Encoding: chunked\r\n");
+        let body = BodyObservation::new(vec![0; 4], 4, 1, accepted_width, false, 0, true, 0)
+            .expect("shape");
+        assert!(RetrievalPolicy::finish_body(admission, body).is_ok());
+    }
     let admission = authorized_body(&subject, "Transfer-Encoding: chunked\r\n");
     let body = BodyObservation::new(Vec::new(), 0, 1, 1, true, 0, true, 0).expect("shape");
     assert_eq!(
