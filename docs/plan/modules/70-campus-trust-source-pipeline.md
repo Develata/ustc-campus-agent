@@ -3,13 +3,13 @@
 ## Metadata
 
 - `Module ID`: `M60`
-- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` implements the pure `source-import/v1` operational lifecycle prerequisite; M60-B2 retrieval remains unimplemented and separately gated; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
+- `Status`: Accepted blueprint; `source-import/v1` and `source-retrieval/v0` accepted as contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); `M60` overall remains `planned`; bounded `M60-B1 source-registry` and the first offline-only M60-B2 pure policy are implemented; transport/network effects and B3+ admission remain separately gated; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
 - `Implementation State`: `planned`
 - `Version`: `m60-campus-trust/v0.4`
 - `Last Review`: `2026-09-01`
 - `Owning Plan`: [`../05-campus-trust-kernel.md`](../05-campus-trust-kernel.md)
 - `Current Contract`: accepted [`source-import/v1`](../../contracts/source-import.md) and [`source-retrieval/v0`](../../contracts/source-retrieval.md) under R11 (`ACCEPT_EXACT_M60_B2_R11_PACKET`); bounded B1 implements the v1 lifecycle while historical [`source-import/v0`](../../contracts/source-import.md#15-source-importv0--historical-evidence-retained) remains immutable predecessor evidence
-- `Primary code area`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` for bounded pure `M60-B1` v1 lifecycle, and `crates/platform-core/src/source_revision.rs` for bounded immutable-revision/provenance/health value evidence; M60-B2 retrieval, parser/normalizer adapters, durable accepted-baseline advancement and publication composition remain future; current fixture semantics in `crates/course-planning/`
+- `Primary code area`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` for bounded pure `M60-B1` v1 lifecycle; `crates/platform-core/src/source_retrieval.rs` and `crates/platform-core/tests/source_retrieval.rs` for bounded offline M60-B2 pure policy; `crates/platform-core/src/source_revision.rs` for bounded immutable-revision/provenance/health values; transport, parser/normalizer adapters, durable accepted-baseline advancement and publication composition remain future; current fixture semantics in `crates/course-planning/`
 
 ## 1. Purpose
 
@@ -32,7 +32,7 @@
 SourceDefinition / SourcePolicy
 SourceStatus: Proposed | Approved | Suspended | Revoked
   (implemented as the bounded pure M60-B1 source-import/v1 lifecycle;
-   M60-B2 retrieval remains separately gated and unimplemented)
+   M60-B2 retains only bounded offline pure policy; transport/effects remain gated)
 SourceAuthorityRevision (initial propose creates revision 1 without expected CAS;
   exact CAS + checked increment on every post-proposal mutation)
 RetrievalSubject / RetrievalPlanCandidate / RetrievalPolicy
@@ -169,7 +169,7 @@ Network/body bounds precede parsing. Raw data streams to bounded immutable stora
 ## 13. Small-module decomposition
 
 1. `source-registry` — source identity, owner, six-field policy and operational lifecycle (v1 implemented as bounded pure M60-B1; v0 retained as historical P1-1 evidence).
-2. `retrieval-policy` — URL/DNS/IP/redirect/content/rate limits and response algebra (v0 contract accepted under R11; no implementation).
+2. `retrieval-policy` — URL/DNS/IP/redirect/content/rate limits and response algebra (v0 contract accepted under R11; bounded offline pure-policy implementation retained, with no port or effect).
 3. `source-lease` — concurrency and deterministic work identity.
 4. `raw-snapshot` — immutable bounded evidence.
 5. `normalization` — deterministic normalized bytes/digest.
@@ -180,7 +180,7 @@ Network/body bounds precede parsing. Raw data streams to bounded immutable stora
 10. `publication-gate` — typed candidate/evidence/admin disposition.
 11. `source-ports` — fetch/store/repository/queue/clock fakes.
 
-The accepted `source-import/v1` and `source-retrieval/v0` contracts (R11 two-layer edition) define current contract authority for modules 1–2. Module 1 now implements the bounded lifecycle precondition, including operational `Suspended`/`Revoked`, monotone authority revision and approved-only `RetrievalSubject`. No implementation exists for retrieval-policy/M60-B2; retained B2 implementation remains forbidden until a separately admitted implementation packet.
+The accepted `source-import/v1` and `source-retrieval/v0` contracts (R11 two-layer edition) define current contract authority for modules 1–2. Module 1 implements the bounded lifecycle precondition, including operational `Suspended`/`Revoked`, monotone authority revision and approved-only `RetrievalSubject`. Module 2 retains the separately admitted bounded offline pure-policy and shape-only observation algebra; it implements no M60/M90 port, clock, journal, network effect, source approval or B3 carrier.
 
 ## 14. Exit gate
 

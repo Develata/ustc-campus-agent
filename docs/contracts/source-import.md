@@ -10,7 +10,7 @@
 - `Owning Blueprint`: [`M60 Campus Trust and Source Pipeline`](../plan/modules/70-campus-trust-source-pipeline.md)
 - `Depends On`: [`module-boundaries.md`](module-boundaries.md), [`source-retrieval.md`](source-retrieval.md), and the existing crate-root `SourceAuthority` comparison policy
 - `Acceptance`: `SRC-001` is `implemented`; `SRC-010`, `SRC-011`, `SRC-012` remain `planned`; catalog-only `SRC-002`–`SRC-009` and `SRC-013` remain non-admitted; `SRC-014` remains catalog-only/non-admitted
-- `Primary Code`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` implement bounded pure B1 under `source-import/v1`; M60-B2 retrieval remains unimplemented and separately gated
+- `Primary Code`: `crates/platform-core/src/source_registry.rs` and `crates/platform-core/tests/source_registry.rs` implement bounded pure B1 under `source-import/v1`; `crates/platform-core/src/source_retrieval.rs` and `crates/platform-core/tests/source_retrieval.rs` implement the bounded offline pure-policy B2 projection under `source-retrieval/v0`; every transport/effect/B3+ path remains separately gated
 
 ## 1. Scope and authority
 
@@ -440,7 +440,7 @@ SRC-010 planned
 SRC-011 planned
 SRC-012 planned
 SRC-014 catalog-only / non-admitted
-M60 planned (B1 lifecycle prerequisite implemented; B2 retrieval unimplemented)
+M60 planned (B1 lifecycle prerequisite and bounded offline B2 pure policy implemented; no transport/effect path)
 ```
 
 `SRC-010` does not become `pass` from B1 lifecycle implementation or contract acceptance. `SRC-014` (`suspended/revoked source blocks new fetch`) remains catalog-only/non-admitted per the existing `platform-baseline.md` long-horizon catalog: B1 proves lifecycle and retrievability gating inside the pure registry, not the separately gated fetch integration.

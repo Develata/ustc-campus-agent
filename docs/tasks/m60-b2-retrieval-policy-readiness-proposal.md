@@ -4,7 +4,7 @@
 
 - `Stage`: `M60_B2_CONTRACT_ACCEPTED`
 - `Packet status`: `ACCEPTED`
-- `Mode`: accepted-contract projection; `source-import/v1` + `source-retrieval/v0` use the exact R11 two-layer M60/M90 semantic packet; bounded M60-B1 v1 lifecycle prerequisite implemented; no retained M60-B2 implementation
+- `Mode`: accepted-contract plus bounded implementation projection; `source-import/v1` + `source-retrieval/v0` use the exact R11 two-layer M60/M90 semantic packet; bounded M60-B1 v1 lifecycle prerequisite and the first offline-only M60-B2 pure policy are implemented
 - `Bound source commit`: `a1b0efe33239b33afeea40e7981cf15f8a65cd1e`
 - `Bound source tree`: `bd3f096a26baf758b58bf80874e09a1604e885c0`
 - `Superseded packet`: `sha256:ba36425adc164ca9b3ec75addd4be2e4b299b5f8a8cfb75cf6a710679acd32ab` over `77276` bytes — historical evidence only; this R4 replacement packet supersedes it
@@ -13,10 +13,10 @@
 - `Semantic acceptance`: `ACCEPTED` by Develata on 2026-08-13
 - `Acceptance decision`: `ACCEPT_EXACT_M60_B2_R11_PACKET`
 - `B1 lifecycle prerequisite`: implemented as bounded pure `source-import/v1` registry lifecycle; this is prerequisite truth, not M60-B2 implementation authority
-- `Retained M60-B2 implementation`: forbidden until a separately admitted implementation packet exists
+- `Retained M60-B2 implementation`: bounded offline pure policy admitted by `M60_B2_REPRESENTABILITY_CLARIFICATION_20260901` and the independently reviewed implementation taskbook; no transport/effect/B3+ authority
 - `Concrete source`: `ustc-teach-calendar-fall` remains `Proposed`
 - `Remote shipping`: not granted by this document
-- `Accepted-contract projection`: the exact R11 semantic packet is current contract authority; bounded M60-B1 lifecycle Rust exists, while M60-B2 retrieval has no retained implementation; no network path, source approval, push/PR/merge/tag/release
+- `Accepted-contract projection`: the exact R11 semantic packet is current contract authority; bounded M60-B1 lifecycle Rust and the first offline-only M60-B2 pure policy exist; no network path, source approval, B3 admission, push/PR/merge/tag/release
 
 ## Acceptance receipt (HISTORICAL — SUPERSEDED BY R4)
 
@@ -666,6 +666,27 @@ Stop and return to Develata before authoritative mutation if:
 
 The immutable R11 packet phrase “all with `expected_authority_revision` CAS” is represented by the accepted signatures, not by inventing a pre-creation revision. Initial `propose(full definition)` is the no-expected-revision creation exception and initializes `SourceAuthorityRevision` to `1`; every post-proposal lifecycle mutation (`revise`, `approve`, `suspend`, `reinstate`, `revoke`) requires exact expected-revision CAS and checked increment. The implemented bounded B1 projection also carries the closed one-variant `PublicIpPolicyVersion` inventory required by the packet's six-field retrieval policy. This clarification changes no byte inside the accepted R11 packet and grants no M60-B2 implementation authority.
 
+## Marker-external M60-B2 implementation representability clarification
+
+- `Decision`: `M60_B2_REPRESENTABILITY_CLARIFICATION_20260901`
+- `Selecting authority`: Develata, 2026-09-01
+- `Implementation taskbook semantic packet`: `sha256:19fb0e7696ffd298e34da0c52507f3b186fa50d9ee9ccc4b68657ec65cb1026e` over `26003` marker-delimited bytes
+- `Independent PRE_EDIT_TASKBOOK review`: `PASS`
+- `Representation`: the five pure phase carriers are public opaque non-authority outputs with private fields and no public constructors; only `RetrievalPlanCandidate` is `Clone`; pure phase methods remain public
+- `Body observation`: the exact fallible `BodyObservation::new(...) -> Result<BodyObservation, SourceTransportError>` shape contract and `0..=1_048_577` exact byte-retention bound are current authority
+- `Rate`: the exhaustive pure decision/precedence table installed in `source-retrieval/v0` is current authority
+- `Non-claims`: the retained Rust slice is bounded offline pure policy only; no port/effect/B3 authority, no network retrieval, no concrete-source approval, no acceptance promotion, no push/PR/merge/tag/release/deployment authority
+
+This marker-external clarification resolves Rust representability without changing any byte inside `M60_B2_RETRIEVAL_POLICY_PROPOSAL`; the separately reviewed implementation taskbook now binds the first retained offline-only projection.
+
+### Implementation projection receipt
+
+- `Taskbook`: [`m60-b2-offline-retrieval-policy.md`](m60-b2-offline-retrieval-policy.md)
+- `Frozen semantic packet`: `sha256:19fb0e7696ffd298e34da0c52507f3b186fa50d9ee9ccc4b68657ec65cb1026e` over `26003` bytes
+- `Frozen executable source phase`: controller-owned receipt `sha256:08270e618a32fc3f433971381c7fa9c01868ae84ec0e6b5188d08c6e91dfcaf9`
+- `Scope`: public opaque phase values plus pure URL/DNS/IP/redirect/header/media/body/rate/error policy; synthetic observations only
+- `Non-claims`: no M60/M90 port, socket, DNS lookup, HTTP client, filesystem/journal/clock effect, concrete-source approval, B3 admission or remote shipping authority
+
 ## Review receipts
 
 Earlier reviews progressively blocked or invalidated incomplete authority revision, override, admission/effect, lease and raw-wire designs. V7's exact review found fake-observation finalization, start-authority TOCTOU, command/attempt replay algebra, missing transport accessors and wall-clock recovery release; V9 repaired those but its exact review found one recovery wording that released the very ID indexes needed for replay. V10 makes both indexes and their immutable record permanent tombstones while releasing only concurrency slots.
@@ -701,3 +722,5 @@ The reviewer independently recomputed the exact packet byte count/digest and sou
 - `Semantic effect`: `source-import/v1` and `source-retrieval/v0` become current accepted contract authority while `M60` implementation state and every acceptance row remain unchanged
 - `Non-claims`: no Rust implementation, concrete-source approval, network fetch, publication, commit, push, PR, merge, tag, release or deployment
 - `Next gate`: retained implementation requires a separately admitted exact implementation packet
+
+The last two bullets above are the decision-time non-claims of the R11 contract-acceptance receipt. The later marker-external implementation receipt supersedes only the “no Rust implementation” timing statement; all effect, approval, promotion and shipping non-claims remain in force.

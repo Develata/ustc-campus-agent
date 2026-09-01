@@ -3,7 +3,7 @@
 ## Metadata
 
 - `Layer`: Shared campus authority
-- `Status`: Contract accepted under R11 M60-B2 two-layer transport architecture; `source-import/v1` and `source-retrieval/v0` are current contract authority per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); bounded `M60-B1 source-registry` implements the pure `source-import/v1` lifecycle prerequisite; M60 overall remains planned; concrete source approval, retained B2 implementation and network retrieval remain unauthorized; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
+- `Status`: Contract accepted under R11 M60-B2 two-layer transport architecture; `source-import/v1` and `source-retrieval/v0` are current contract authority per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); bounded `M60-B1 source-registry` and the first offline-only M60-B2 pure policy are implemented; M60 overall remains planned; concrete source approval, transport/network effect and B3+ retrieval remain unauthorized; the superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only
 - `Version`: `0.5.1`
 - `Last Review`: `2026-09-01`
 - `Authority Owns`: source identity, immutable revision, authority comparison policy, temporal/conflict/provenance state, baseline advancement and publication gates
@@ -11,7 +11,7 @@
 - `Counterpart Features`: all documents under `docs/features/`
 - `Counterpart Contracts`: `docs/contracts/source-import.md`, `docs/contracts/source-retrieval.md`, `docs/contracts/data-models.md`
 - `Counterpart Acceptance`: `SRC-*`, `PROC-*`, `RADAR-*`, `COURSE-*`
-- `Primary Code Areas`: future source/knowledge modules; current `crates/course-planning/`
+- `Primary Code Areas`: `crates/platform-core/src/source_registry.rs`, `crates/platform-core/src/source_retrieval.rs`, `crates/platform-core/src/source_revision.rs`; current bounded fixture semantics in `crates/course-planning/`; future effectful source/knowledge modules
 - `Large-module Blueprint`: [`modules/70-campus-trust-source-pipeline.md`](modules/70-campus-trust-source-pipeline.md)
 
 ## 1. Purpose and non-goals
@@ -199,7 +199,7 @@ Default recovery:
 
 ## 10. Verification
 
-Current executable evidence is limited to the synthetic Course Planning fixture and its `COURSE-*` cases plus the bounded pure `M60-B1 source-registry` lifecycle under `source-import/v1` (`SRC-001`). `source-retrieval/v0` remains accepted contract authority only: M60-B2 retrieval is unimplemented and separately gated. Source/Procedure/Radar cases remain planned until a concrete reviewed public source and its parser fixtures are approved.
+Current executable evidence includes the synthetic Course Planning fixture, the bounded pure `M60-B1 source-registry` lifecycle under `source-import/v1` (`SRC-001`), and the first bounded offline M60-B2 pure-policy implementation under `source-retrieval/v0`. The B2 evidence covers deterministic policy/shape decisions only; there is no transport port implementation, network effect or approved source. `M60` overall remains planned; no `SRC-*` row is promoted by B2, so `SRC-010`, `SRC-011` and `SRC-012` remain planned and `SRC-014` remains catalog-only/non-admitted.
 
 Primary entries:
 - `docs/contracts/source-import.md`

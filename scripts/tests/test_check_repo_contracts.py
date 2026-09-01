@@ -1850,7 +1850,7 @@ class M60B2RetrievalPolicyContractTests(unittest.TestCase):
         blueprint_path = self.root / "docs/plan/modules/70-campus-trust-source-pipeline.md"
         text = blueprint_path.read_text(encoding="utf-8")
         changed = text.replace(
-            "bounded `M60-B1 source-registry` implements the pure `source-import/v1` operational lifecycle prerequisite; M60-B2 retrieval remains unimplemented and separately gated;",
+            "bounded `M60-B1 source-registry` and the first offline-only M60-B2 pure policy are implemented; transport/network effects and B3+ admission remain separately gated;",
             "bounded `M60-B1 source-registry` implements full retrieval and network effect authority; M60-B2 is complete;",
             1,
         )
@@ -1862,8 +1862,8 @@ class M60B2RetrievalPolicyContractTests(unittest.TestCase):
         blueprint_path = self.root / "docs/plan/modules/70-campus-trust-source-pipeline.md"
         text = blueprint_path.read_text(encoding="utf-8")
         changed = text.replace(
-            "bounded `M60-B1 source-registry` implements the pure `source-import/v1` operational lifecycle prerequisite; M60-B2 retrieval remains unimplemented and separately gated;",
-            "bounded `M60-B1 source-registry` remains proposed and unimplemented; M60-B2 retrieval remains unimplemented and separately gated;",
+            "bounded `M60-B1 source-registry` and the first offline-only M60-B2 pure policy are implemented; transport/network effects and B3+ admission remain separately gated;",
+            "bounded `M60-B1 source-registry` and M60-B2 policy remain proposed and unimplemented; transport/network effects remain separately gated;",
             1,
         )
         self.assertNotEqual(changed, text)
@@ -1997,6 +1997,110 @@ class M60B2RetrievalPolicyContractTests(unittest.TestCase):
         self.assertNotEqual(changed, text)
         coverage_path.write_text(changed, encoding="utf-8")
         self.assert_rejected(self.check_packet(), "must not project an M60-M90 retrieval-clock boundary")
+
+
+class M60B2OfflineImplementationTests(unittest.TestCase):
+    """Sabotage the frozen source staircase and non-promotion projections independently."""
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        shutil.copytree(REPO_ROOT / "docs", self.root / "docs")
+        shutil.copytree(REPO_ROOT / "crates" / "platform-core", self.root / "crates" / "platform-core")
+        shutil.copy2(REPO_ROOT / "CLAUDE.md", self.root / "CLAUDE.md")
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def check_implementation(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_m60_b2_offline_implementation(issues)
+        return issues
+
+    def assert_rejected(self, marker: str) -> None:
+        issues = self.check_implementation()
+        self.assertTrue(any(marker in issue for issue in issues), issues)
+
+    def replace_once(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, f"stale or ambiguous mutation target in {rel}")
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def test_current_offline_implementation_passes(self) -> None:
+        self.assertEqual(self.check_implementation(), [])
+
+    def test_implementation_packet_drift_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH,
+            "M60 remains planned.",
+            "M60 is complete.",
+        )
+        self.assert_rejected("packet digest drift")
+
+    def test_frozen_source_digest_drift_fails_closed(self) -> None:
+        path = self.root / checker.PLATFORM_SOURCE_RETRIEVAL_SOURCE
+        path.write_text(path.read_text(encoding="utf-8") + "\n// sabotage\n", encoding="utf-8")
+        self.assert_rejected("frozen executable digest drift")
+
+    def test_missing_external_test_carrier_fails_closed(self) -> None:
+        (self.root / checker.PLATFORM_SOURCE_RETRIEVAL_TEST).unlink()
+        self.assert_rejected("frozen executable carrier missing")
+
+    def test_external_test_attribute_removal_fails_closed(self) -> None:
+        self.replace_once(
+            checker.PLATFORM_SOURCE_RETRIEVAL_TEST,
+            "#[test]\nfn nominal_id_families_and_dns_names_are_exact_and_redacted()",
+            "fn nominal_id_families_and_dns_names_are_exact_and_redacted()",
+        )
+        self.assert_rejected("acceptance test nominal_id_families_and_dns_names_are_exact_and_redacted attribute envelope drifted")
+
+    def test_shipping_promotion_fails_closed(self) -> None:
+        self.replace_once(
+            checker.M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH,
+            "- `Remote shipping`: not authorized by this taskbook",
+            "- `Remote shipping`: authorized",
+        )
+        self.assert_rejected("task projection drifted")
+
+    def test_ephemeral_host_path_fails_closed(self) -> None:
+        path = self.root / checker.M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH
+        path.write_text(path.read_text(encoding="utf-8") + "\n/opt/data/tmp/decoy\n", encoding="utf-8")
+        self.assert_rejected("must not retain ephemeral host paths")
+
+    def test_executable_mode_drift_fails_closed(self) -> None:
+        (self.root / checker.PLATFORM_SOURCE_RETRIEVAL_SOURCE).chmod(0o755)
+        self.assert_rejected("carrier mode drift")
+
+    def test_transport_port_widening_fails_closed(self) -> None:
+        path = self.root / checker.PLATFORM_SOURCE_RETRIEVAL_SOURCE
+        path.write_text(path.read_text(encoding="utf-8") + "\npub trait SourceTransportPort {}\n", encoding="utf-8")
+        self.assert_rejected("forbidden effect carrier: SourceTransportPort")
+
+    def test_m60_state_promotion_fails_closed(self) -> None:
+        path = self.root / "docs/plan/modules/00-module-map.md"
+        text = path.read_text(encoding="utf-8")
+        row = next(line for line in text.splitlines() if line.startswith("| `M60` |"))
+        self.assertIn("| `planned` |", row)
+        path.write_text(text.replace(row, row.replace("| `planned` |", "| `partial-evidence` |", 1), 1), encoding="utf-8")
+        self.assert_rejected("must preserve the M60 module state key as planned")
+
+    def test_src010_promotion_fails_closed(self) -> None:
+        path = self.root / "docs/acceptance/matrix.tsv"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        header = lines[0].split("\t")
+        status_index = header.index("status")
+        for index, line in enumerate(lines[1:], start=1):
+            fields = line.split("\t")
+            if fields[0] == "SRC-010":
+                fields[status_index] = "implemented"
+                lines[index] = "\t".join(fields)
+                break
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self.assert_rejected("must preserve SRC-010 as planned")
 
 
 class S0ArchitectureReviewContractTests(unittest.TestCase):
@@ -7176,7 +7280,7 @@ class PlatformSessionImplementationTests(unittest.TestCase):
                 r"\A(?:pub )?use crate::identity::(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]*\});\Z",
             )
             self.assertNotIn(" as ", admitted_text)
-        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 8)
+        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 9)
 
     def test_forbidden_dependency_carrier_fails_closed(self) -> None:
         # A path-qualified call inside a function body declares no item, so the item allowlist
@@ -7433,6 +7537,7 @@ class RepositoryCheckerRegistrationTests(unittest.TestCase):
         "check_platform_control_evidence(issues)",
         "check_p1_source_revision_contract(issues)",
         "check_p1_source_registry_implementation(issues)",
+        "check_m60_b2_offline_implementation(issues)",
         "check_m60_b2_packet_digest(issues)",
         "check_external_agent_access_contract(issues)",
         "check_module_registry(issues)",
