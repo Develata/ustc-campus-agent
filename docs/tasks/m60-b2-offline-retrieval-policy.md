@@ -454,6 +454,15 @@ Stop before widening scope if:
 - `Required closure`: rerun the complete `732`-test checker shard suite, exact-head full CI/governance and final formal review before requesting merge authorization.
 - `Non-claims`: no effect, source approval, B3 admission, M60/SRC status promotion or shipping widening.
 
+## Marker-external pull-request review repair R6
+
+- `Review`: GitHub Codex review `5077443874` on head `bfcda99f0d2fe58e19e71801356a97e0fabb2f65` demonstrated that grammar-specific contradiction regexes could be bypassed with the equivalent phrase `have been implemented`.
+- `Repair`: remove natural-language grammar inference from the gate. The source-sensitive owning function now embeds exact SHA-256 identities for every non-historical current-truth B2 projection carrier. The immutable proposal and marker-external taskbook remain under their existing packet/marker checks. Any additive or subtractive current-truth prose drift fails closed independently of wording.
+- `Sabotage`: preserve every required denial token and append the exact `have been implemented` counterexample to the trust-kernel plan; the checker must reject the file-digest drift.
+- `Trade-off`: legitimate edits to these current-truth projection carriers require an explicit reviewed hash refresh. This is intentionally stricter than attempting open-ended semantic interpretation of prose.
+- `Required closure`: rerun the complete `732`-test checker shard suite, exact-head full CI/governance and final formal review before requesting merge authorization.
+- `Non-claims`: no production Rust change, effect, source approval, B3 admission, status promotion or shipping widening.
+
 ## Review receipts
 
 - `Pre-edit review`: `PASS`; taskbook `sha256:d509ef1fb95606bca0b6cc68baf810ec2a18d9471b548c8725751e5f495ad9c0`; marker packet `sha256:19fb0e7696ffd298e34da0c52507f3b186fa50d9ee9ccc4b68657ec65cb1026e` over `26003` bytes.

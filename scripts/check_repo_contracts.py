@@ -9643,41 +9643,32 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
             f"actual={tuple(M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS)}",
             issues,
         )
-    forbidden_projection_patterns = (
-        (
-            "positive transport/network authority",
-            re.compile(
-                r"(?i)\b(?:transport(?:/network)?(?:\s+port)?(?:\s+implementation|\s+effects?)?"
-                r"|network\s+effects?)\b[^\n]{0,120}\b(?:is|are)\s+"
-                r"(?:implemented|authorized|admitted|complete)\b"
-            ),
-        ),
-        (
-            "positive concrete-source authority",
-            re.compile(
-                r"(?i)\b(?:approved|concrete|real)\s+source\b[^\n]{0,120}\b"
-                r"(?:is|are)\s+(?:approved|authorized|admitted|implemented)\b"
-            ),
-        ),
-        (
-            "M60 status promotion",
-            re.compile(
-                r"(?i)\bM60(?:\s+overall)?\s+(?:is|remains)\s+"
-                r"(?:implemented|complete|partial-evidence)\b"
-            ),
-        ),
-        (
-            "planned SRC status promotion",
-            re.compile(
-                r"(?i)\bSRC-01[012]\b[^\n]{0,80}\b(?:is|are|remains?)\s+implemented\b"
-            ),
-        ),
-    )
-    promotion_projection_paths = tuple(
+    frozen_current_truth_projection_sha256 = {
+        "CLAUDE.md": "131b50b80b23bba24d565a4751b02be88f7ead4a4b1bad514abaf97282a465c4",
+        "docs/acceptance/platform-baseline.md": "f11a154e93b1c2609edcb9dc2d95c21d0c6e9f8fb04821f46a14f2993151209c",
+        "docs/contracts/source-import.md": "0041da28d0c0bbb87b67b14f03177574ce6660d8d07ce17b402b6e7c69b95996",
+        "docs/contracts/source-retrieval.md": "080b8d1540bb058393d19ce311bdf6b737b31d03598ab62396df29e987c3dc3f",
+        "docs/contracts/module-boundaries.md": "fe8b2ba4f6c9bda834ee33a9c87188bfbdaefacb5f00da7cc297b240c4cb4f90",
+        "docs/overview/architecture.md": "99de3f5d93cf8d8cd7e516e0d00d4303d8cb2f0807c2a23ad2ad01b63bbf21a5",
+        "docs/plan/05-campus-trust-kernel.md": "80b32250953be7daebdf99e418a6974730c0374b4f0cb3636c65c064995d8e7a",
+        "docs/plan/modules/00-module-map.md": "41a5e1d11f94f9ac09f326fb90a832d6bef94d86ecb67e1be68da812b4b775b4",
+        "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
+        "docs/tasks/01-execution-roadmap.md": "3b828a7167d6fb35eb0fab0defd5d3d6fac0f7bf2598124218176fe57507b556",
+        "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
+        "docs/coverage-matrix.md": "448205458cfa6e664e251af208fbc0f9529b6acfe708b2d55c383913c8d020e7",
+    }
+    current_truth_projection_paths = tuple(
         rel
         for rel in declared_projection_paths
         if rel not in (M60_B2_PROPOSAL_PATH, M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH)
     )
+    if tuple(frozen_current_truth_projection_sha256) != current_truth_projection_paths:
+        fail(
+            "M60-B2 current-truth projection digest registry drifted: "
+            f"expected={current_truth_projection_paths} "
+            f"actual={tuple(frozen_current_truth_projection_sha256)}",
+            issues,
+        )
 
     task_path = ROOT / M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH
     if not task_path.is_file() or task_path.is_symlink():
@@ -9723,6 +9714,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "## Marker-external pull-request review repair R3",
         "## Marker-external pull-request review repair R4",
         "## Marker-external pull-request review repair R5",
+        "## Marker-external pull-request review repair R6",
         "controller-owned receipt `sha256:46fd36c88617c925739a80605fe291320b3cb33d0355b00db594da9c0e183b69`",
         "controller-owned receipt `sha256:e9a7650111c0832e3583c56a12c69f4d0925000dc8554c5278c8814a1edc68ae`",
         "controller-owned receipt `sha256:08270e618a32fc3f433971381c7fa9c01868ae84ec0e6b5188d08c6e91dfcaf9`",
@@ -9794,18 +9786,16 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         for token in tokens:
             if token not in text:
                 fail(f"M60-B2 implementation projection drifted in {rel}: {token}", issues)
-        if rel in promotion_projection_paths:
-            promotion_text = text
-            for token in tokens:
-                promotion_text = promotion_text.replace(token, "")
-            for label, pattern in forbidden_projection_patterns:
-                match = pattern.search(promotion_text)
-                if match is not None:
-                    fail(
-                        f"M60-B2 implementation projection gained {label} in {rel}: "
-                        f"{match.group(0)}",
-                        issues,
-                    )
+        expected_projection_sha256 = frozen_current_truth_projection_sha256.get(rel)
+        if expected_projection_sha256 is not None:
+            actual_projection_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+            if actual_projection_sha256 != expected_projection_sha256:
+                fail(
+                    "M60-B2 current-truth projection digest drifted in "
+                    f"{rel}: expected={expected_projection_sha256} "
+                    f"actual={actual_projection_sha256}",
+                    issues,
+                )
 
     module_map_path = ROOT / "docs/plan/modules/00-module-map.md"
     module_rows = (
@@ -13679,7 +13669,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "d5ac0486ea41e98287bcb4a314c158495bb82ea783dd1174a797da6d6bea1a53", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "bf3f8ca7f9a58ab0cca87102890342a0d06b0c93c44884dc9fcf1830d90da595", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},

@@ -2084,10 +2084,12 @@ class M60B2OfflineImplementationTests(unittest.TestCase):
         path = self.root / "docs/plan/05-campus-trust-kernel.md"
         path.write_text(
             path.read_text(encoding="utf-8")
-            + "\nM60-B2 authority: transport/network effects and an approved source are implemented.\n",
+            + "\nM60-B2 authority: transport/network effects and an approved source have been implemented.\n",
             encoding="utf-8",
         )
-        self.assert_rejected("gained positive transport/network authority")
+        self.assert_rejected(
+            "current-truth projection digest drifted in docs/plan/05-campus-trust-kernel.md"
+        )
 
     def test_m60_state_promotion_fails_closed(self) -> None:
         path = self.root / "docs/plan/modules/00-module-map.md"
