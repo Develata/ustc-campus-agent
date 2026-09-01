@@ -301,8 +301,20 @@ KEY_FILES = [
 ]
 
 EXTERNAL_AGENT_OPERATION_ROWS = {
-    "server.info": ("M10", "public-read", "read", "CLI, HTTP", "planned first protocol slice"),
-    "capability.list": ("M10", "public-read", "read", "CLI, HTTP", "planned first protocol slice"),
+    "server.info": (
+        "M10",
+        "public-read",
+        "read",
+        "Web, CLI, HTTP",
+        "approved Affairs-first protocol slice; bootstrap requires no protocol-major header",
+    ),
+    "capability.list": (
+        "M10",
+        "public-read",
+        "read",
+        "Web, CLI, HTTP",
+        "approved Affairs-first protocol slice; safe server-supported operation projection only",
+    ),
     "market.package.list": ("M20", "public-read", "read", "CLI, HTTP, inbound MCP", "planned first vertical slice"),
     "market.package.get": ("M20", "public-read", "read", "CLI, HTTP", "planned"),
     "affairs.search": ("M71", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
@@ -310,8 +322,8 @@ EXTERNAL_AGENT_OPERATION_ROWS = {
         "M71",
         "public-read",
         "read",
-        "CLI, HTTP, inbound MCP",
-        "bounded exact stable-ID evidence through `ustc-agentd`, `ustc-agent` and the loopback-only Web demo; production HTTP/inbound-MCP projection planned",
+        "Web, CLI, HTTP; later inbound MCP",
+        "bounded formal protocol-major Web/CLI route projection implemented over exact stable-ID/domain evidence; production auth/TLS/inbound-MCP remains planned",
     ),
     "change.list": (
         "M70",
@@ -1736,8 +1748,8 @@ def check_course_fixture(issues: list[str]) -> None:
         "market/packages/ustc.opportunity-graph/components/course-planning-resource-pack.json",
         issues,
     )
-    native_component = load_json(
-        "market/packages/ustc.opportunity-graph/components/native-rust-component.json",
+    package_manifest = load_json(
+        "market/packages/ustc.opportunity-graph/package.json",
         issues,
     )
     try:
@@ -1761,21 +1773,14 @@ def check_course_fixture(issues: list[str]) -> None:
         or resource_pack.get("reviewClass") != "DemoReviewed"
     ):
         fail("Course Planning resource-pack identity drift", issues)
-    expected_operations = [
-        "profile.academic.create",
-        "profile.academic.view",
-        "planner.generate",
-        "profile.academic.revoke_delete",
+    expected_components = [
+        {
+            "type": "DeclarativeResourcePack",
+            "path": "market/packages/ustc.opportunity-graph/components/course-planning-resource-pack.json",
+        }
     ]
-    if not isinstance(native_component, dict) or native_component != {
-        "schemaVersion": "native-rust-component/v1",
-        "packageId": "ustc.opportunity-graph",
-        "packageVersion": "0.1.0",
-        "cratePath": "crates/opportunity-graph",
-        "compositionOwner": "apps/ustc-agentd",
-        "operations": expected_operations,
-    }:
-        fail("Opportunity native-component identity/operation drift", issues)
+    if not isinstance(package_manifest, dict) or package_manifest.get("components") != expected_components:
+        fail("Opportunity package component classification drift", issues)
     expected_top_level = {
         "schema_version",
         "source_revision",
@@ -3076,10 +3081,13 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
                'use std::fmt;',
                'type Value = UniqueStringMap;'),
  'market/authority.rs': ('use crate::identity::{TenantId, UserId};',
-                         'use crate::invocation::{ AuthorizedInvocation, CapabilityGrantSnapshot, '
-                         'CapabilityId, CatalogPackageRevision, CurrentDenyState, GrantSnapshotId, '
-                         'InstallationId, InvocationAuthorityCandidate, '
-                         'InvocationAuthorizationError, InvocationPolicySnapshot, '
+                         'use crate::invocation::{ AuthorizedInvocation, CapabilityClass, '
+                         'CapabilityGrantSnapshot, CapabilityId, CatalogPackageRevision, '
+                         'ComponentKind, ConfirmationPolicy, CurrentDenyState, GrantSnapshotId, '
+                         'GrantState, '
+                         'InstallationId, InstallationState, InvocationAuthorityCandidate, '
+                         'InvocationAuthorizationError, InvocationConfirmation, '
+                         'InvocationPolicySnapshot, '
                          'InvocationResolver, InvocationTarget, ObjectScope, '
                          'PluginInstallationSnapshot, ProjectionResolutionError, ProposedToolCall, '
                          'ResolvedInvocation, ToolProjectionRequest, ToolProjectionSnapshot, '
@@ -3673,8 +3681,8 @@ PLATFORM_GRANT_TEST_FUNCTIONS = ('checked_grant_ids_versions_and_sequences_are_c
  'non_issue_commands_validate_snapshot_and_expected_version',
  'empty_replay_and_repository_queries_are_deterministic',
  'public_errors_are_category_only_and_secret_safe')
-PLATFORM_AUTHORITY_SOURCE_SHA256 = "7fa7210fd0cebca033fd9a597069dadf34af6cc084855ea3587afb413d89f672"
-PLATFORM_AUTHORITY_TEST_SHA256 = "ba92339afb73096309948638c10db75dcb2a3714c6cc5f369e17b11aa2648fc3"
+PLATFORM_AUTHORITY_SOURCE_SHA256 = "0885fab82e77098a6d2bcf49f460e2a83b6ae2c7ebde969917e774d9eead661b"
+PLATFORM_AUTHORITY_TEST_SHA256 = "eeb6dc180b010709e038ec4e8c7887581233ec81a93873a83858f06e38609d6c"
 PLATFORM_AUTHORITY_ADMITTED_ATTRIBUTE_COUNTS = (
     ((False, "cfg", "cfg(test)"), 1),
     ((False, "derive", "derive(Clone)"), 1),
@@ -3698,6 +3706,7 @@ PLATFORM_AUTHORITY_ADMITTED_PUBLIC_DECLARATIONS = (
     "pub enum AuthorityRepositoryError",
     "pub enum InvocationRecheckError",
     "pub enum ProjectionAssemblyError",
+    "pub fn authorize_static_application_use_case",
     "pub fn fail_next_precondition_for_testing",
     "pub fn into_repository",
     "pub fn recheck_invocation",
@@ -3744,6 +3753,7 @@ PLATFORM_AUTHORITY_ADMITTED_PARSED_ARGUMENT_COUNTS = (
     ("UserId,", 2),
 )
 PLATFORM_AUTHORITY_FUNCTION_BODY_SHA256 = {
+    "authorize_static_application_use_case": ("92786de77803d839a0da1decde6d5401a6914aadaa5ca59c73c4c79580748d2b",),
     "resolve_projection": ("86be5f40fb3b13ac296f4da07c78ba1d792ba4fba866d300440b801f2a4ba8ba",),
     "recheck_invocation": ("a6504719b3433dc832800880e797cb6ece146b8862c0a17cee25662e7e045c0b",),
     "verify_precondition": (
@@ -3768,6 +3778,9 @@ PLATFORM_AUTHORITY_UNIT_TEST_FUNCTIONS = (
 )
 PLATFORM_AUTHORITY_TEST_FUNCTIONS = (
     "projection_and_recheck_assemble_separate_carriers_under_one_verified_revision",
+    "static_application_authority_accepts_only_a_non_tool_resource_carrier",
+    "static_application_ask_grant_requires_confirmation",
+    "static_application_denial_precedes_final_transaction_verification",
     "projection_missing_catalog_installation_or_grant_keeps_exact_resolver_denial",
     "post_success_transaction_conflict_returns_no_projection_or_authorized_invocation",
     "resolver_or_recheck_denial_precedes_pending_verification_conflict",
@@ -3786,7 +3799,8 @@ PLATFORM_AUTHORITY_STATUS_MARKERS = {
     ),
     "docs/contracts/invocation-resolution.md": (
         "bounded `M20-B5` semantic repository-transaction consumer implemented",
-        "no durable or real application composition exists yet",
+        "the no-tool static authorization now has one fixture-backed M72 composition",
+        "durable production M20 authority remains planned",
     ),
     "docs/features/00-market-browse-install.md": (
         "bounded transaction-current authority-assembly evidence",
@@ -9659,18 +9673,18 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
         M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "e6e4e7ecacc70d446eab6947f8a28e55b2d78a74a72523908a1bb8a46dd9e88c",
         "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
-        "docs/acceptance/matrix.tsv": "aab5b2ab62463ae21200ca06868171b2d636177c79c72a0c2177de2989a52829",
+        "docs/acceptance/matrix.tsv": "d2c0238eaa9cd0daddc8f2698d0dfc3f3f873d8f9122f017b1be5d79eeb562a1",
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
         "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
-        "docs/contracts/module-boundaries.md": "fe8b2ba4f6c9bda834ee33a9c87188bfbdaefacb5f00da7cc297b240c4cb4f90",
+        "docs/contracts/module-boundaries.md": "d064bfcf0832962780678bddd848d0516e53d678b0389883144adec724e460a8",
         "docs/overview/architecture.md": "99de3f5d93cf8d8cd7e516e0d00d4303d8cb2f0807c2a23ad2ad01b63bbf21a5",
         "docs/features/02-ustc-change-radar.md": "27be5c7f4bebdd6bb2dc6938ecffa185b4d0cd53aeb050b031b46bf698478153",
         "docs/plan/05-campus-trust-kernel.md": "26ebed21efb3cfcf09a08864ec890fd75dea7322d296433d120557b1614e26db",
-        "docs/plan/modules/00-module-map.md": "bafeece216c46cdd8d840e384d3a035834c1f2f9bc306d4b58a57907499b232c",
+        "docs/plan/modules/00-module-map.md": "79d7b38d0dab663dad49da13a1d307e0738a6b6f85c9624d74444a159a576f04",
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
-        "docs/tasks/01-execution-roadmap.md": "3b828a7167d6fb35eb0fab0defd5d3d6fac0f7bf2598124218176fe57507b556",
+        "docs/tasks/01-execution-roadmap.md": "05136dbe30d9e3db1d6af08bc3d46b4d6c318d5bb72de5bdec264afdce317f9e",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
-        "docs/coverage-matrix.md": "448205458cfa6e664e251af208fbc0f9529b6acfe708b2d55c383913c8d020e7",
+        "docs/coverage-matrix.md": "2daa74003b0ba6bd1c9434c6396cda2a3237352de9ee4caae9ed7789e9f12df1",
     }
     if tuple(frozen_projection_sha256) != declared_projection_paths:
         fail(
@@ -11352,7 +11366,7 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
 
     required_fragments = {
         "docs/contracts/interfaces.md": (
-            "Bounded loopback-only `affairs.get` and `change.list` proofs now exist earlier as vertical-slice evidence for `M10 → deterministic Harness → current Market authorization → ToolGateway → fixed first-party owning adapter → M71/M70` and two operation-specific presentation surfaces",
+            "Bounded loopback-only `affairs.get` and `change.list` domain proofs already exist as vertical-slice evidence for `M10 → deterministic Harness → current Market authorization → ToolGateway → fixed first-party owning adapter → M71/M70` and operation-specific presentation surfaces",
             "The first remote profile uses reviewed MCP Streamable HTTP.",
             "`planner.generate` creates only a tenant-local draft. It does not enroll, register, pay or submit a transaction to any external campus system.",
         ),
@@ -13700,12 +13714,12 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_ci_v2_active_workflow": {"digest": "c930a3611b4e805be69ae4e965be4355bc56b08b490d6e7dd0d315c08b51ea7a", "status": "active"},
     "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
     "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
-    "check_course_fixture": {"digest": "f4dda0f63c4550edfa0a913e6f0ef84f4358c29a8ca789f404ae5bdf539c16e2", "status": "active"},
+    "check_course_fixture": {"digest": "a7e78e09e95c750a6543bc09b0d71a9232679ba000ce85926d0ca1a601109279", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
-    "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
+    "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "9819718e383ceaa0b7ea70ad37994c3acd401b517a8bee556051a0cd5747c41d", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "2b5a2ba3c5120b84f9cd3fe4c89513729b65389e1bbad529cf9182563aa1f60c", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},

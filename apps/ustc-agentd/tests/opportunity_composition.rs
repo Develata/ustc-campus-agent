@@ -11,10 +11,11 @@ use serde_json::{Value, json};
 use ustc_agentd::AffairsComposition;
 use ustc_campus_agent_client_protocol::{
     ActorIntentDto, ClientErrorDto, ClientProvenanceDto, ClientResponseDto,
-    M72OpportunityTerminalDto, OpportunityCommandDto, OpportunityConsentFieldDto,
-    OpportunityPlanDecisionDto, OpportunityPreferenceDto, OpportunityRejectionDto,
-    OpportunitySourceHealthDto, SubmitAffairsGetDto, SubmitOpportunityDto, UnixMillis,
-    WireErrorClassDto, WireText, affairs_get_payload_digest, opportunity_payload_digest,
+    M72OpportunityTerminalDto, OpportunityCommandDto, OpportunityConfirmationDto,
+    OpportunityConsentFieldDto, OpportunityPlanDecisionDto, OpportunityPreferenceDto,
+    OpportunityRejectionDto, OpportunitySourceHealthDto, SubmitAffairsGetDto, SubmitOpportunityDto,
+    UnixMillis, WireErrorClassDto, WireText, affairs_get_payload_digest,
+    opportunity_payload_digest,
 };
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -157,6 +158,37 @@ impl Drop for TestEnv {
     }
 }
 
+#[test]
+fn opportunity_production_sources_have_no_agent_provider_or_plugin_execution_spine() {
+    let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    for name in ["opportunity_use_case.rs", "opportunity_authority.rs"] {
+        let source = fs::read_to_string(source_root.join(name)).expect("read Opportunity source");
+        for forbidden in [
+            "ustc_campus_agent_runtime",
+            "ustc_agent_tool_protocol",
+            "provider:bounded-no-model",
+            "provider_call_id",
+            "provider_profile_id",
+            "AgentRun::",
+            "AgentToolCall",
+            "AgentToolsetView",
+            "ToolGateway::",
+            "PluginExecutionRequest",
+            "PluginExecutor::",
+            "OpportunityInvocationSpine",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{name} unexpectedly contains execution-spine marker {forbidden}"
+            );
+        }
+        if name == "opportunity_authority.rs" {
+            assert!(source.contains("confirmation_policy: ConfirmationPolicy::Ask"));
+            assert!(!source.contains("confirmation_policy: ConfirmationPolicy::Allow"));
+        }
+    }
+}
+
 fn authenticated_actor(session: &str) -> ActorIntentDto {
     ActorIntentDto::Authenticated {
         session_id: wire(session),
@@ -167,6 +199,20 @@ fn request(
     command: OpportunityCommandDto,
     suffix: &str,
     actor: ActorIntentDto,
+) -> SubmitOpportunityDto {
+    request_with_confirmation(
+        command,
+        suffix,
+        actor,
+        OpportunityConfirmationDto::Confirmed,
+    )
+}
+
+fn request_with_confirmation(
+    command: OpportunityCommandDto,
+    suffix: &str,
+    actor: ActorIntentDto,
+    confirmation: OpportunityConfirmationDto,
 ) -> SubmitOpportunityDto {
     SubmitOpportunityDto {
         request_id: wire(format!("req:opportunity:{suffix}")),
@@ -179,7 +225,9 @@ fn request(
             target: wire("linux"),
             protocol: wire("m10:v2"),
         },
-        payload_digest: opportunity_payload_digest(&command).expect("opportunity digest"),
+        confirmation,
+        payload_digest: opportunity_payload_digest(&command, confirmation)
+            .expect("opportunity digest"),
         command,
     }
 }
@@ -395,7 +443,7 @@ fn production_three_plugin_state_set_persists_every_member_and_missing_members_f
 }
 
 #[test]
-fn consent_profile_plan_delete_and_restart_cross_the_full_bounded_spine() {
+fn consent_profile_plan_delete_and_restart_cross_the_static_m72_use_case() {
     let env = TestEnv::new("journey");
     let composition = env.open();
     let profile_id = create_profile(&composition, "create");
@@ -408,7 +456,7 @@ fn consent_profile_plan_delete_and_restart_cross_the_full_bounded_spine() {
             & 0o777,
         0o600
     );
-    assert_eq!(composition.opportunity_invocation_counts(), (1, 1, 1));
+    assert_eq!(composition.opportunity_application_counts(), (1, 1, 1));
     assert_eq!(composition.opportunity_m60_call_count(), 0);
 
     let view = composition.handle_opportunity_submit(&request(
@@ -632,7 +680,7 @@ fn identical_command_and_identity_replays_committed_create_terminal() {
         other => panic!("expected idempotent create replay, got {other:?}"),
     }
     assert_eq!(composition.opportunity_private_state_counts(), (1, 0));
-    assert_eq!(composition.opportunity_invocation_counts(), (2, 2, 2));
+    assert_eq!(composition.opportunity_application_counts(), (2, 2, 2));
 }
 
 #[test]
@@ -686,13 +734,13 @@ fn different_tenant_cannot_read_profile_or_reach_m60() {
         }
         other => panic!("expected typed access denial, got {other:?}"),
     }
-    assert_eq!(other.opportunity_invocation_counts(), (1, 1, 1));
+    assert_eq!(other.opportunity_application_counts(), (1, 1, 1));
     assert_eq!(other.opportunity_m60_call_count(), 0);
     assert_eq!(other.opportunity_private_state_counts(), (1, 0));
 }
 
 #[test]
-fn market_disable_and_grant_revoke_deny_before_intent_executor_and_m60() {
+fn market_disable_and_grant_revoke_deny_before_application_dispatch_and_m60() {
     for (index, key) in ["market_enabled", "market_grant_active"]
         .into_iter()
         .enumerate()
@@ -711,10 +759,31 @@ fn market_disable_and_grant_revoke_deny_before_intent_executor_and_m60() {
             } => assert_eq!(error.class, WireErrorClassDto::PolicyDenied),
             other => panic!("expected policy denial, got {other:?}"),
         }
-        assert_eq!(composition.opportunity_invocation_counts(), (0, 0, 0));
+        assert_eq!(composition.opportunity_application_counts(), (0, 0, 0));
         assert_eq!(composition.opportunity_m60_call_count(), 0);
         assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
     }
+}
+
+#[test]
+fn ask_grant_requires_confirmation_before_application_dispatch() {
+    let env = TestEnv::new("confirmation-required");
+    let composition = env.open();
+    let response = composition.handle_opportunity_submit(&request_with_confirmation(
+        create_command(),
+        "confirmation-required",
+        authenticated_actor("session:proc011-web-demo"),
+        OpportunityConfirmationDto::NotConfirmed,
+    ));
+    match response {
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { error },
+        } => assert_eq!(error.class, WireErrorClassDto::PolicyDenied),
+        other => panic!("expected confirmation policy denial, got {other:?}"),
+    }
+    assert_eq!(composition.opportunity_application_counts(), (0, 0, 0));
+    assert_eq!(composition.opportunity_m60_call_count(), 0);
+    assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
 }
 
 #[test]
@@ -748,7 +817,7 @@ fn concurrent_retained_session_reads_are_peer_isolated() {
             "peer request failed: {response:?}"
         );
     }
-    assert_eq!(composition.opportunity_invocation_counts(), (3, 3, 3));
+    assert_eq!(composition.opportunity_application_counts(), (3, 3, 3));
     assert_eq!(
         fs::read(&env.sessions).expect("read retained sessions after peers"),
         retained_before
@@ -809,9 +878,12 @@ fn retained_session_restart_scope_and_changed_bootstrap_fail_closed() {
 }
 
 #[test]
-fn transaction_current_grant_recheck_denies_revocation_after_projection() {
-    let env = TestEnv::new("grant-revoked-after-projection");
-    env.set_opportunity("authority_change_after_projection", json!("revoke_grant"));
+fn transaction_current_authorization_denies_grant_revoked_before_dispatch() {
+    let env = TestEnv::new("grant-revoked-before-authorization");
+    env.set_opportunity(
+        "authority_change_before_authorization",
+        json!("revoke_grant"),
+    );
     let composition = env.open();
     let response = composition.handle_opportunity_submit(&request(
         create_command(),
@@ -824,7 +896,7 @@ fn transaction_current_grant_recheck_denies_revocation_after_projection() {
         } => assert_eq!(error.class, WireErrorClassDto::PolicyDenied),
         other => panic!("expected transaction-current policy denial, got {other:?}"),
     }
-    assert_eq!(composition.opportunity_invocation_counts(), (0, 0, 0));
+    assert_eq!(composition.opportunity_application_counts(), (0, 0, 0));
     assert_eq!(composition.opportunity_m60_call_count(), 0);
     assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
 }
@@ -910,7 +982,7 @@ fn stale_conflicting_and_unavailable_sources_return_typed_refusal() {
             other => panic!("expected typed source refusal, got {other:?}"),
         }
         assert_eq!(composition.opportunity_m60_call_count(), 1);
-        assert_eq!(composition.opportunity_invocation_counts(), (2, 2, 2));
+        assert_eq!(composition.opportunity_application_counts(), (2, 2, 2));
     }
 }
 
@@ -935,17 +1007,17 @@ fn unknown_profile_is_typed_and_does_not_reach_source() {
     ));
     assert_eq!(composition.opportunity_m60_call_count(), 0);
     assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
-    assert_eq!(composition.opportunity_invocation_counts(), (1, 1, 1));
+    assert_eq!(composition.opportunity_application_counts(), (1, 1, 1));
 }
 
 #[test]
-fn tool_failure_before_execution_and_outcome_unknown_are_distinguishable() {
-    let blocked = TestEnv::new("tool-before-execution");
-    blocked.set_opportunity("tool_failure", json!("before_execution"));
+fn application_failure_before_dispatch_and_response_unknown_are_distinguishable() {
+    let blocked = TestEnv::new("application-before-dispatch");
+    blocked.set_opportunity("application_failure", json!("before_dispatch"));
     let composition = blocked.open();
     let response = composition.handle_opportunity_submit(&request(
         create_command(),
-        "tool-before-execution",
+        "application-before-dispatch",
         authenticated_actor("session:proc011-web-demo"),
     ));
     assert!(matches!(
@@ -954,12 +1026,15 @@ fn tool_failure_before_execution_and_outcome_unknown_are_distinguishable() {
             error: ClientErrorDto::Infrastructure { .. }
         }
     ));
-    assert_eq!(composition.opportunity_invocation_counts(), (0, 0, 0));
+    assert_eq!(composition.opportunity_application_counts(), (1, 0, 0));
     assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
     assert_eq!(composition.opportunity_m60_call_count(), 0);
 
     let unknown = TestEnv::new("outcome-unknown");
-    unknown.set_opportunity("tool_failure", json!("outcome_persistence_unavailable"));
+    unknown.set_opportunity(
+        "application_failure",
+        json!("response_persistence_unavailable"),
+    );
     let composition = unknown.open();
     let command = create_command();
     let response = composition.handle_opportunity_submit(&request(
@@ -968,11 +1043,11 @@ fn tool_failure_before_execution_and_outcome_unknown_are_distinguishable() {
         authenticated_actor("session:proc011-web-demo"),
     ));
     assert!(matches!(response, ClientResponseDto::Incomplete { .. }));
-    assert_eq!(composition.opportunity_invocation_counts(), (1, 1, 0));
+    assert_eq!(composition.opportunity_application_counts(), (1, 1, 0));
     assert_eq!(composition.opportunity_private_state_counts(), (1, 0));
     drop(composition);
 
-    unknown.set_opportunity("tool_failure", json!("none"));
+    unknown.set_opportunity("application_failure", json!("none"));
     let recovered = unknown.open();
     let response = recovered.handle_opportunity_submit(&request(
         command,
@@ -986,13 +1061,13 @@ fn tool_failure_before_execution_and_outcome_unknown_are_distinguishable() {
             ..
         } if matches!(terminal.as_ref(), M72OpportunityTerminalDto::ProfileCreated { .. })
     ));
-    assert_eq!(recovered.opportunity_invocation_counts(), (1, 1, 1));
+    assert_eq!(recovered.opportunity_application_counts(), (1, 1, 1));
     assert_eq!(recovered.opportunity_private_state_counts(), (1, 0));
 }
 
 #[test]
-fn public_actor_and_malformed_digest_never_reach_private_executor() {
-    let env = TestEnv::new("pre-executor-denial");
+fn public_actor_and_malformed_digest_never_reach_static_application_use_case() {
+    let env = TestEnv::new("pre-application-denial");
     let composition = env.open();
     let public = composition.handle_opportunity_submit(&request(
         create_command(),
@@ -1005,7 +1080,7 @@ fn public_actor_and_malformed_digest_never_reach_private_executor() {
             error: ClientErrorDto::Admission { .. }
         }
     ));
-    assert_eq!(composition.opportunity_invocation_counts(), (0, 0, 0));
+    assert_eq!(composition.opportunity_application_counts(), (0, 0, 0));
 
     let mut malformed = request(
         create_command(),
@@ -1020,7 +1095,7 @@ fn public_actor_and_malformed_digest_never_reach_private_executor() {
         } => assert_eq!(error.class, WireErrorClassDto::MalformedCommand),
         other => panic!("expected malformed command, got {other:?}"),
     }
-    assert_eq!(composition.opportunity_invocation_counts(), (0, 0, 0));
+    assert_eq!(composition.opportunity_application_counts(), (0, 0, 0));
     assert_eq!(composition.opportunity_private_state_counts(), (0, 0));
 }
 
@@ -1050,7 +1125,7 @@ fn opportunity_disable_does_not_disable_affairs() {
         ClientResponseDto::Accepted { .. }
     ));
     assert_eq!(composition.invocation_counts(), (1, 1, 1));
-    assert_eq!(composition.opportunity_invocation_counts(), (0, 0, 0));
+    assert_eq!(composition.opportunity_application_counts(), (0, 0, 0));
 }
 
 #[test]

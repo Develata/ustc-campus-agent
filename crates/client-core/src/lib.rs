@@ -43,8 +43,9 @@ pub use reducer::{
 };
 pub use transport::{Endpoint, TransportError, send_intent};
 pub use ustc_campus_agent_client_protocol::{
-    ActorIntentDto, ClientIntentDto, ClientProvenanceDto, ClientResponseDto, RedactionDto,
-    SubmitAffairsGetDto, UnixMillis, ViewerAuthorizationDto, WireText, WireValueError,
+    ActorIntentDto, CapabilityListDto, ClientIntentDto, ClientProtocolMajor, ClientProvenanceDto,
+    ClientResponseDto, ProtocolCompatibilityDto, RedactionDto, ServerInfoDto, SubmitAffairsGetDto,
+    UnixMillis, ViewerAuthorizationDto, WireText, WireValueError,
 };
 
 use serde::{Deserialize, Serialize};

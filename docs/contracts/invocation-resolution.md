@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- `Status`: P0a deterministic resolver plus bounded `M20-B5` semantic repository-transaction consumer implemented; no durable or real application composition exists yet
+- `Status`: P0a deterministic resolver plus bounded `M20-B5` semantic repository-transaction consumer implemented; the no-tool static authorization now has one fixture-backed M72 composition, while durable production M20 authority remains planned
 - `Version`: `invocation-resolution/v0`
 - `Last Review`: `2026-07-30`
 - `Owning Plan`: [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)

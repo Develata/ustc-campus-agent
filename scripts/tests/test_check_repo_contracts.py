@@ -99,16 +99,19 @@ class MarketContractTests(unittest.TestCase):
                 for issue in self.check_course_fixture()
             )
         )
-        native_path = (
-            self.root
-            / "market/packages/ustc.opportunity-graph/components/native-rust-component.json"
+        manifest_path = self.root / "market/packages/ustc.opportunity-graph/package.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["components"].insert(
+            0,
+            {
+                "type": "NativeRustComponent",
+                "path": "market/packages/ustc.opportunity-graph/components/native-rust-component.json",
+            },
         )
-        native = json.loads(native_path.read_text(encoding="utf-8"))
-        native["operations"] = native["operations"][:-1]
-        native_path.write_text(json.dumps(native) + "\n", encoding="utf-8")
+        manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
         self.assertTrue(
             any(
-                "Opportunity native-component identity/operation drift" in issue
+                "Opportunity package component classification drift" in issue
                 for issue in self.check_course_fixture()
             )
         )
@@ -6757,8 +6760,8 @@ class ExternalAgentAccessContractTests(unittest.TestCase):
     def test_change_list_bounded_projection_removal_fails_closed(self) -> None:
         self.replace_once(
             "docs/contracts/interfaces.md",
-            "Bounded loopback-only `affairs.get` and `change.list` proofs",
-            "A bounded loopback-only `affairs.get` proof",
+            "Bounded loopback-only `affairs.get` and `change.list` domain proofs",
+            "A bounded loopback-only `affairs.get` domain proof",
         )
         issues = self.check_contract()
         self.assertTrue(any("external-Agent semantic projection" in issue for issue in issues), issues)
@@ -7984,6 +7987,28 @@ class SourceSensitiveGuardRegistryTests(unittest.TestCase):
         self.assertTrue(
             any("check_p1_source_registry_implementation" in i and "digest mismatch" in i for i in issues),
             f"expected digest mismatch for check_p1_source_registry_implementation, got {issues}",
+        )
+
+    def test_course_fixture_guard_mutation_fails_closed(self) -> None:
+        source = self.checker_path.read_text(encoding="utf-8")
+        marker = (
+            'def check_course_fixture(issues: list[str]) -> None:\n'
+            '    catalog_relative = "market/fixtures/course-planning/minimal-v0.json"\n'
+            '    fixture = load_json(catalog_relative, issues)\n'
+        )
+        self.assertEqual(source.count(marker), 1)
+        mutation = (
+            'def check_course_fixture(issues: list[str]) -> None:\n'
+            '    catalog_relative = "market/fixtures/course-planning/minimal-v0.json"\n'
+            '    if not catalog_relative:\n'
+            '        fail("course-fixture mutation probe", issues)\n'
+            '    fixture = load_json(catalog_relative, issues)\n'
+        )
+        self.rewrite_checker(source.replace(marker, mutation, 1))
+        issues = self.run_governance()
+        self.assertTrue(
+            any("check_course_fixture" in issue and "digest mismatch" in issue for issue in issues),
+            f"expected digest mismatch for check_course_fixture, got {issues}",
         )
 
     def test_comment_only_change_passes(self) -> None:

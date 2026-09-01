@@ -189,6 +189,31 @@ fn repository(
     .expect("coherent synthetic authority repository")
 }
 
+fn static_application_fixture() -> Fixture {
+    let mut fixture = fixture();
+    let component = fixture
+        .catalog
+        .component
+        .as_mut()
+        .expect("fixture component");
+    component.kind = ComponentKind::DeclarativeResourcePack;
+    component.tool = None;
+    fixture.policy.capability_class = Some(CapabilityClass::TenantPrivateWrite);
+    fixture.policy.admitted_execution_identity = None;
+    fixture
+}
+
+fn authorize_static_application(fixture: &Fixture) -> Result<(), InvocationRecheckError> {
+    InvocationAuthorityService::new(repository(fixture, true, true, true, true))
+        .authorize_static_application_use_case(
+            &fixture.request.tenant_id,
+            &fixture.request.user_id,
+            &fixture.target,
+            CapabilityClass::TenantPrivateWrite,
+            InvocationConfirmation::Confirmed,
+        )
+}
+
 fn candidate(fixture: &Fixture) -> InvocationAuthorityCandidate {
     InvocationAuthorityCandidate {
         target: fixture.target.clone(),
@@ -247,6 +272,122 @@ fn projection_and_recheck_assemble_separate_carriers_under_one_verified_revision
         .recheck_invocation(&projection, call)
         .expect("assembled adopted recheck");
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn static_application_authority_accepts_only_a_non_tool_resource_carrier() {
+    let static_fixture = static_application_fixture();
+    authorize_static_application(&static_fixture).expect("static application authority");
+
+    let mut tool_projected = static_fixture.clone();
+    tool_projected
+        .catalog
+        .component
+        .as_mut()
+        .expect("fixture component")
+        .tool = fixture().catalog.component.expect("tool component").tool;
+    assert_eq!(
+        authorize_static_application(&tool_projected),
+        Err(InvocationRecheckError::Authorization(
+            InvocationAuthorizationError::AuthorityConflict
+        ))
+    );
+
+    let mut execution_admitted = static_fixture.clone();
+    execution_admitted.policy.admitted_execution_identity = Some(
+        execution_admitted
+            .installation
+            .component
+            .execution_identity
+            .clone(),
+    );
+    assert_eq!(
+        authorize_static_application(&execution_admitted),
+        Err(InvocationRecheckError::Authorization(
+            InvocationAuthorizationError::AuthorityConflict
+        ))
+    );
+
+    let service =
+        InvocationAuthorityService::new(repository(&static_fixture, true, true, true, true));
+    assert_eq!(
+        service.authorize_static_application_use_case(
+            &static_fixture.request.tenant_id,
+            &static_fixture.request.user_id,
+            &static_fixture.target,
+            CapabilityClass::TenantPrivateRead,
+            InvocationConfirmation::Confirmed,
+        ),
+        Err(InvocationRecheckError::Authorization(
+            InvocationAuthorizationError::AuthorityConflict
+        ))
+    );
+}
+
+#[test]
+fn static_application_ask_grant_requires_confirmation() {
+    let mut fixture = static_application_fixture();
+    fixture.grant.confirmation_policy = ConfirmationPolicy::Ask;
+    let service = InvocationAuthorityService::new(repository(&fixture, true, true, true, true));
+    assert_eq!(
+        service.authorize_static_application_use_case(
+            &fixture.request.tenant_id,
+            &fixture.request.user_id,
+            &fixture.target,
+            CapabilityClass::TenantPrivateWrite,
+            InvocationConfirmation::NotConfirmed,
+        ),
+        Err(InvocationRecheckError::Authorization(
+            InvocationAuthorizationError::ConfirmationRequired
+        ))
+    );
+    service
+        .authorize_static_application_use_case(
+            &fixture.request.tenant_id,
+            &fixture.request.user_id,
+            &fixture.target,
+            CapabilityClass::TenantPrivateWrite,
+            InvocationConfirmation::Confirmed,
+        )
+        .expect("confirmed Ask grant authorizes");
+}
+
+#[test]
+fn static_application_denial_precedes_final_transaction_verification() {
+    let mut revoked = static_application_fixture();
+    revoked.grant.state = GrantState::Revoked;
+    let revoked_repository = repository(&revoked, true, true, true, true);
+    revoked_repository.fail_next_precondition_for_testing();
+    let service = InvocationAuthorityService::new(revoked_repository);
+    assert_eq!(
+        service.authorize_static_application_use_case(
+            &revoked.request.tenant_id,
+            &revoked.request.user_id,
+            &revoked.target,
+            CapabilityClass::TenantPrivateWrite,
+            InvocationConfirmation::Confirmed,
+        ),
+        Err(InvocationRecheckError::Authorization(
+            InvocationAuthorizationError::GrantRevoked
+        ))
+    );
+
+    let fixture = static_application_fixture();
+    let repository = repository(&fixture, true, true, true, true);
+    repository.fail_next_precondition_for_testing();
+    let service = InvocationAuthorityService::new(repository);
+    assert_eq!(
+        service.authorize_static_application_use_case(
+            &fixture.request.tenant_id,
+            &fixture.request.user_id,
+            &fixture.target,
+            CapabilityClass::TenantPrivateWrite,
+            InvocationConfirmation::Confirmed,
+        ),
+        Err(InvocationRecheckError::Repository(
+            AuthorityRepositoryError::TransactionConflict
+        ))
+    );
 }
 
 #[test]

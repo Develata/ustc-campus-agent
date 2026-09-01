@@ -97,9 +97,9 @@ fn current_manifests_load_with_exact_literal_digests() {
             OPPORTUNITY,
             "ustc.opportunity-graph",
             ImplementationStatus::Development,
-            "sha256:a3c66f29cf2344f4add13026f53c9a4ca64117f156e2353a2a1c3d554c527177",
-            2,
-            "sha256:b5db7ca1f13da4dd8282c998657d5661a41a0d4a6bc6d7cafc1656d19ea0bd8b",
+            "sha256:35b97d107bc712867fb1e65c22a62897f6c2d318cccd297d53868a15a82aead8",
+            1,
+            "sha256:ba319414743ca26caa228e8eb11c08d845539d15040678ebe8f8251d81c9f498",
             "sha256:0327438c481dce6d3957d6c13d6f2a483003847c43da8c99fc58b9166ef8090c",
             "sha256:fc80396957b6f6df93d46513e7e0d0ba3eaf1c0ba68fcb0d15c54cd26486e407",
         ),
@@ -501,7 +501,7 @@ fn catalog_read_model_is_exact_ordered_and_duplicate_safe() {
     assert_eq!(model.catalog_revision(), &revision);
     assert_eq!(
         model.catalog_digest().as_str(),
-        "sha256:ae2b36fcb2c74c448f8b32c6cc9c725c7a09d6f0bb77de3288924c12b5fc9b36"
+        "sha256:7bb9374f16c474f7b55e46145c2f0ec86ae17f232b8ad226e36e10dd0103cab6"
     );
 
     let id = parsed_package_id("ustc.change-radar");
@@ -536,7 +536,7 @@ fn catalog_metadata_does_not_claim_all_package_runtime_readiness() {
     let cases = [
         (load(AFFAIRS), 0),
         (load(CHANGE_RADAR), 0),
-        (load(OPPORTUNITY), 2),
+        (load(OPPORTUNITY), 1),
     ];
     for (manifest, component_count) in cases {
         assert_eq!(manifest.components().len(), component_count);

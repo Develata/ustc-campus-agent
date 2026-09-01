@@ -301,7 +301,10 @@ async function lookup() {
   try {
     const response = await fetch(`/api/v1/affairs/${encodeURIComponent(procedureId)}`, {
       method: "GET",
-      headers: { "Accept": "application/json" },
+      headers: {
+        "Accept": "application/json",
+        "X-USTC-Client-Protocol-Major": "1"
+      },
       cache: "no-store"
     });
     const payload = await response.json();
@@ -687,8 +690,13 @@ function reusableOperationEnvelope(operation, profileId) {
 async function requestOpportunity(url, options) {
   const response = await fetch(url, {
     cache: "no-store",
-    headers: { "Accept": "application/json", "Content-Type": "application/json" },
-    ...options
+    ...options,
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+      "X-USTC-Opportunity-Confirmation": "confirmed"
+    }
   });
   const payload = await response.json();
   if (!response.ok) {
@@ -733,7 +741,11 @@ async function submitOpportunityOperation(url, body) {
   const response = await fetch(url, {
     method: "POST",
     cache: "no-store",
-    headers: { "Accept": "application/json", "Content-Type": "application/json" },
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "X-USTC-Opportunity-Confirmation": "confirmed"
+    },
     body
   });
   let payload = null;
@@ -850,7 +862,7 @@ function renderOpportunityPlan(terminal) {
   renderCandidates(plan.decision);
   opportunityPlanResult.hidden = false;
   opportunityDeleted.hidden = true;
-  opportunityStatus.textContent = "已通过 M00 → M10 → bounded Harness → Market current authorization → ToolGateway → Opportunity Graph → M60 current source 生成计划。";
+  opportunityStatus.textContent = "已通过 M00 → M10 → transaction-current M20 authorization → static M72 Opportunity use case → M60 current source 生成计划。";
 }
 
 async function createOpportunityProfile() {

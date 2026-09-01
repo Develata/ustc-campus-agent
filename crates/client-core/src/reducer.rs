@@ -14,8 +14,9 @@
 use serde::Serialize;
 
 use ustc_campus_agent_client_protocol::{
-    CannotVerifyReasonDto, ClientErrorDto, ClientResponseDto, FreshnessDto, M10WireErrorDto,
-    M71LineageDto, M71OutcomeDto, M71TerminalDto, RedactionDto, RetryabilityDto, UnixMillis,
+    CannotVerifyReasonDto, CapabilityListDto, ClientErrorDto, ClientProtocolMajor,
+    ClientResponseDto, FreshnessDto, M10WireErrorDto, M71LineageDto, M71OutcomeDto, M71TerminalDto,
+    ProtocolCompatibilityDto, RedactionDto, RetryabilityDto, ServerInfoDto, UnixMillis,
     WireErrorClassDto, WireText,
 };
 
@@ -159,6 +160,22 @@ impl std::fmt::Debug for TerminalKind {
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ClientState {
+    ServerInfo {
+        info: ServerInfoDto,
+    },
+    Capabilities {
+        capabilities: CapabilityListDto,
+    },
+    UpgradeRequired {
+        client_major: ClientProtocolMajor,
+        minimum_client_major: ClientProtocolMajor,
+        server_major: ClientProtocolMajor,
+    },
+    IncompatibleProtocol {
+        client_major: Option<ClientProtocolMajor>,
+        supported_majors: [ClientProtocolMajor; 1],
+        server_major: ClientProtocolMajor,
+    },
     Terminal {
         command_id: WireText,
         terminal_kind: TerminalKind,
@@ -184,6 +201,34 @@ pub enum ClientState {
 impl std::fmt::Debug for ClientState {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ClientState::ServerInfo { info } => formatter
+                .debug_struct("ServerInfo")
+                .field("info", info)
+                .finish(),
+            ClientState::Capabilities { capabilities } => formatter
+                .debug_struct("Capabilities")
+                .field("capabilities", capabilities)
+                .finish(),
+            ClientState::UpgradeRequired {
+                client_major,
+                minimum_client_major,
+                server_major,
+            } => formatter
+                .debug_struct("UpgradeRequired")
+                .field("client_major", client_major)
+                .field("minimum_client_major", minimum_client_major)
+                .field("server_major", server_major)
+                .finish(),
+            ClientState::IncompatibleProtocol {
+                client_major,
+                supported_majors,
+                server_major,
+            } => formatter
+                .debug_struct("IncompatibleProtocol")
+                .field("client_major", client_major)
+                .field("supported_majors", supported_majors)
+                .field("server_major", server_major)
+                .finish(),
             ClientState::Terminal {
                 command_id,
                 terminal_kind,
@@ -255,6 +300,30 @@ fn static_text(value: &'static str) -> WireText {
 #[must_use]
 pub fn reduce_response(response: ClientResponseDto) -> ClientState {
     match response {
+        ClientResponseDto::ServerInfo { info } => ClientState::ServerInfo { info },
+        ClientResponseDto::Capabilities { capabilities } => {
+            ClientState::Capabilities { capabilities }
+        }
+        ClientResponseDto::Compatibility { compatibility } => match compatibility {
+            ProtocolCompatibilityDto::UpgradeRequired {
+                client_major,
+                minimum_client_major,
+                server_major,
+            } => ClientState::UpgradeRequired {
+                client_major,
+                minimum_client_major,
+                server_major,
+            },
+            ProtocolCompatibilityDto::IncompatibleProtocol {
+                client_major,
+                supported_majors,
+                server_major,
+            } => ClientState::IncompatibleProtocol {
+                client_major,
+                supported_majors,
+                server_major,
+            },
+        },
         ClientResponseDto::Accepted {
             command_id,
             terminal,
@@ -345,6 +414,10 @@ pub fn reduce_transport_failure(error: crate::TransportError) -> ClientState {
 #[must_use]
 pub fn exit_class(state: &ClientState) -> ExitClass {
     match state {
+        ClientState::ServerInfo { .. } | ClientState::Capabilities { .. } => ExitClass::Success,
+        ClientState::UpgradeRequired { .. } | ClientState::IncompatibleProtocol { .. } => {
+            ExitClass::Compatibility
+        }
         ClientState::Terminal { .. } => ExitClass::Success,
         ClientState::Incomplete { .. } => ExitClass::OutcomeUnknown,
         ClientState::Unavailable => ExitClass::Unavailable,

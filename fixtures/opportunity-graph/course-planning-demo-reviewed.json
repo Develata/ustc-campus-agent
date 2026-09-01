@@ -14,7 +14,7 @@
   "source_health": "current",
   "market_enabled": true,
   "market_grant_active": true,
-  "authority_change_after_projection": "none",
-  "tool_failure": "none",
+  "authority_change_before_authorization": "none",
+  "application_failure": "none",
   "schema_digest_seed": "opportunity-private-operations/v1"
 }

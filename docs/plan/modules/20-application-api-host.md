@@ -3,10 +3,10 @@
 ## Metadata
 
 - `Module ID`: `M10`
-- `Status`: Accepted blueprint with bounded executable evidence for M10-owned client-protocol/application-ingress carriers, fixed Affairs/ChangeRadar administrator commands and one loopback three-plugin HTTP/Web composition; production public HTTP/Dioxus/stream hosting remains planned
+- `Status`: Accepted blueprint with an approved Affairs-first protocol-major/operation-registry prerequisite slice plus bounded executable evidence for existing M10-owned carriers, fixed Affairs/ChangeRadar administrator commands and one loopback three-plugin HTTP/Web composition; production public HTTP/Dioxus/stream hosting remains planned
 - `Implementation State`: `partial-evidence`
-- `Version`: `m10-application-ingress/v2.1`
-- `Last Review`: `2026-08-30`
+- `Version`: `m10-application-ingress/v2.2`
+- `Last Review`: `2026-09-01`
 - `Composition`: `apps/ustc-agentd`
 - `Primary code area`: `apps/ustc-agentd/`, M10-owned `crates/client-protocol/` and `crates/application-ingress/`, plus future shared Dioxus server-function declarations in the Fullstack application boundary
 
@@ -31,7 +31,7 @@ M10 owns the versioned public wire schema and compatibility carrier (`client-pro
 
 The retained `client-protocol` and `application-ingress` carriers prove checked request/value/error envelopes, M00 admission, capability and owner/operator lookup projections, idempotent submit/finalize behavior and typed M71 result mapping. They also own fixed typed Affairs and ChangeRadar administrator commands whose payload digests are recomputed before M00 admission and whose admitted-request evidence is durable before the owning product port is called. `apps/ustc-agentd` composes the fixture-backed three-plugin surface over numeric loopback TCP, including owner-only canonical Affairs and ChangeRadar publication state, operator CLI/HTTP/Web calls and public JSON/Atom read-back after restart. These are bounded demo surfaces, not production remote administration or a generic operation registry.
 
-This evidence is deliberately narrower than the module exit gate. It does not establish remotely exposed production HTTP/TLS, a Dioxus server-function surface, broad operation registry, stream cursor/reconnect semantics, supported-version matrix, graceful drain, Docker Compose deployment, inbound MCP projection or Web/Android parity journey. The loopback fixture transports are integration proof surfaces, not the final heterogeneous-client transport contract.
+The first retained Affairs-first portion of B1/B7 now implements protocol major `1`; a header-free `server.info` bootstrap; a closed Web/CLI projection of exactly `server.info`, `capability.list` and `affairs.get`; and typed old/new/unknown-major rejection before application dispatch. Its exact task contract is [`m10-m80-affairs-protocol-prerequisite.md`](../../tasks/m10-m80-affairs-protocol-prerequisite.md). This evidence remains deliberately narrower than the module exit gate. It does not establish remotely exposed production HTTP/TLS, a Dioxus server-function surface, broad operation registry, stream cursor/reconnect semantics, a multi-major support window, graceful drain, Docker Compose deployment, inbound MCP projection or Web/Android parity journey. The loopback fixture transports are integration proof surfaces, not the final heterogeneous-client transport contract.
 
 ## 2. Non-goals
 
@@ -74,6 +74,19 @@ first-party product queries/actions added only with their contracts
 Operation IDs are transport-neutral. A CLI command tree, MCP tool registry or GUI action registry is an allowlisted projection, not a new application service. If two adapters expose the same operation, authorization, result/error/provenance/audit semantics remain equal; the adapters do not need identical command sets. M10 binds exact schema identity/digest so a data, permission, effect or target widening can stale old grants before dispatch.
 
 Public DTOs contain stable IDs, explicit status and safe summaries. Unknown fields/versions follow the endpoint contract; they are never silently interpreted as a nearby variant.
+
+### Affairs-first protocol-major prerequisite
+
+The first retained B1/B7 registry slice is closed and transport-neutral:
+
+- current/supported/minimum protocol major is exactly `1`;
+- `GET /api/v1/server/info` is bootstrap-only and requires no version header;
+- `GET /api/v1/client/capabilities` and `GET /api/v1/affairs/{procedure_id}?as_of=<unix-ms>` require `X-USTC-Client-Protocol-Major`;
+- major `< 1` yields typed `upgrade_required`, projected as HTTP `426`, before `B-M10-APP-CALL`;
+- major `> 1`, absent or unparseable yields typed `incompatible_protocol`, projected as HTTP `409`, before `B-M10-APP-CALL`;
+- the capability projection contains only closed operation/schema/permission/effect/route/adapter values for Web and CLI. It carries no tenant grant, operator command, bearer capability, concrete handler or arbitrary dispatch target.
+
+M10 produces the compatibility outcome and existing typed M71 terminal. HTTP status is only an adapter projection. M80 may reduce those typed values but cannot recompute compatibility or domain authority. The M80 machine outer result remains `ustc-client-result/v1`.
 
 ## 5. Server-function boundary
 
@@ -193,7 +206,7 @@ Hot paths are request decode/admission, compatibility checks, read-model seriali
 
 ## 14. Small-module decomposition
 
-1. `ingress-registry` — canonical operation/schema plus server-function/public-route/adapter-allowlist/version/error registry.
+1. `ingress-registry` — canonical operation/schema plus server-function/public-route/adapter-allowlist/version/error registry; the first retained subset is the three-operation Affairs-first Web/CLI registry above.
 2. `ingress-contract` — first-party/public request/response/event/compatibility values.
 3. `request-admission` — bounds, M00 actor, client version and precondition mapping.
 4. `server-function-adapter` — Dioxus/Axum endpoint declarations and dispatch.
@@ -202,7 +215,7 @@ Hot paths are request decode/admission, compatibility checks, read-model seriali
 7. `error-projection` — stable safe error and upgrade envelopes.
 8. `event-stream` — cursor, heartbeat, reconnect and backpressure.
 9. `server-lifecycle` — config preflight, Dioxus attachment, readiness and drain.
-10. `ingress-conformance` — black-box and import-boundary fixtures.
+10. `ingress-conformance` — black-box and import-boundary fixtures, including exact golden/Serde and pre-dispatch zero-call compatibility proofs.
 
 ## 15. Exit gate
 

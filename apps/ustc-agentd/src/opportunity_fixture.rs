@@ -25,7 +25,7 @@ use ustc_campus_agent_opportunity_graph::{
 };
 
 use crate::affairs_fixture::FixtureDescriptor;
-use crate::opportunity_invocation::OpportunityInvocationCounters;
+use crate::opportunity_use_case::OpportunityApplicationCounters;
 
 const MAX_OPPORTUNITY_METADATA_BYTES: u64 = 65_536;
 const MAX_OPPORTUNITY_CATALOG_BYTES: u64 = 1_048_576;
@@ -48,22 +48,22 @@ struct OpportunityFixtureDto {
     source_health: String,
     market_enabled: bool,
     market_grant_active: bool,
-    authority_change_after_projection: String,
-    tool_failure: String,
+    authority_change_before_authorization: String,
+    application_failure: String,
     schema_digest_seed: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum OpportunityToolFailureMode {
+pub(crate) enum OpportunityApplicationFailureMode {
     None,
-    BeforeExecution,
-    OutcomePersistenceUnavailable,
+    BeforeDispatch,
+    ResponsePersistenceUnavailable,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OpportunityAuthorityMutationMode {
     None,
-    RevokeGrantAfterProjection,
+    RevokeGrantBeforeAuthorization,
 }
 
 pub(crate) struct OpportunityFixture {
@@ -73,8 +73,8 @@ pub(crate) struct OpportunityFixture {
     pub(crate) market_enabled: bool,
     pub(crate) market_grant_active: bool,
     pub(crate) authority_mutation: OpportunityAuthorityMutationMode,
-    pub(crate) tool_failure: OpportunityToolFailureMode,
-    pub(crate) invocation_counters: OpportunityInvocationCounters,
+    pub(crate) application_failure: OpportunityApplicationFailureMode,
+    pub(crate) application_counters: OpportunityApplicationCounters,
     schema_digest_seed: String,
 }
 
@@ -144,17 +144,17 @@ impl OpportunityFixture {
             "corrupted" => OpportunitySourceMode::Error(OpportunitySourcePortError::Corrupted),
             _ => return Err("opportunity source health mode is invalid".to_owned()),
         };
-        let tool_failure = match dto.tool_failure.as_str() {
-            "none" => OpportunityToolFailureMode::None,
-            "before_execution" => OpportunityToolFailureMode::BeforeExecution,
-            "outcome_persistence_unavailable" => {
-                OpportunityToolFailureMode::OutcomePersistenceUnavailable
+        let application_failure = match dto.application_failure.as_str() {
+            "none" => OpportunityApplicationFailureMode::None,
+            "before_dispatch" => OpportunityApplicationFailureMode::BeforeDispatch,
+            "response_persistence_unavailable" => {
+                OpportunityApplicationFailureMode::ResponsePersistenceUnavailable
             }
-            _ => return Err("opportunity tool failure mode is invalid".to_owned()),
+            _ => return Err("opportunity application failure mode is invalid".to_owned()),
         };
-        let authority_mutation = match dto.authority_change_after_projection.as_str() {
+        let authority_mutation = match dto.authority_change_before_authorization.as_str() {
             "none" => OpportunityAuthorityMutationMode::None,
-            "revoke_grant" => OpportunityAuthorityMutationMode::RevokeGrantAfterProjection,
+            "revoke_grant" => OpportunityAuthorityMutationMode::RevokeGrantBeforeAuthorization,
             _ => return Err("opportunity authority mutation mode is invalid".to_owned()),
         };
         let source_evidence_digest = format!(
@@ -179,8 +179,8 @@ impl OpportunityFixture {
             market_enabled: dto.market_enabled,
             market_grant_active: dto.market_grant_active,
             authority_mutation,
-            tool_failure,
-            invocation_counters: OpportunityInvocationCounters::default(),
+            application_failure,
+            application_counters: OpportunityApplicationCounters::default(),
             schema_digest_seed: dto.schema_digest_seed,
         })
     }

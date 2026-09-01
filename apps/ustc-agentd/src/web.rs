@@ -10,18 +10,20 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{DefaultBodyLimit, Path as AxumPath, State};
-use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use ustc_campus_agent_application_ingress::{
     AffairsPublicationApplicationError, AffairsPublicationOutcome,
-    ChangePublicationApplicationError, ChangePublicationOutcome,
+    ChangePublicationApplicationError, ChangePublicationOutcome, dispatch_with_protocol_major,
 };
 use ustc_campus_agent_client_protocol::{
-    ActorIntentDto, ClientErrorDto, ClientProvenanceDto, ClientResponseDto, OpportunityCommandDto,
-    OpportunityConsentFieldDto, OpportunityPreferenceDto, OpportunityRejectionDto, RedactionDto,
+    ActorIntentDto, CLIENT_PROTOCOL_MAJOR_HEADER, CapabilityListDto, ClientErrorDto,
+    ClientProtocolMajor, ClientProvenanceDto, ClientResponseDto, OpportunityCommandDto,
+    OpportunityConfirmationDto, OpportunityConsentFieldDto, OpportunityPreferenceDto,
+    OpportunityRejectionDto, ProtocolCompatibilityDto, RedactionDto, ServerInfoDto,
     SubmitAffairsGetDto, SubmitChangeFeedDto, SubmitOpportunityDto, UnixMillis,
     ViewerAuthorizationDto, WireErrorClassDto, WireText, affairs_get_payload_digest,
     change_feed_payload_digest, opportunity_payload_digest,
@@ -32,6 +34,7 @@ use super::{AffairsComposition, parse_loopback_socket_addr};
 const INDEX_HTML: &str = include_str!("web/index.html");
 const APP_JS: &str = include_str!("web/app.js");
 const STYLES_CSS: &str = include_str!("web/styles.css");
+const OPPORTUNITY_CONFIRMATION_HEADER: &str = "x-ustc-opportunity-confirmation";
 
 const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 const ADMINISTRATOR_DEMO_HEADER: &str = "x-ustc-agent-administrator-demo";
@@ -57,7 +60,11 @@ impl WebState {
             .map_err(|_| WebRequestError::CompositionUnavailable)
     }
 
-    fn submit(&self, procedure_id: String) -> Result<ClientResponseDto, WebRequestError> {
+    fn submit(
+        &self,
+        procedure_id: String,
+        as_of: Option<UnixMillis>,
+    ) -> Result<ClientResponseDto, WebRequestError> {
         let procedure_id =
             WireText::parse(procedure_id).map_err(|_| WebRequestError::InvalidProcedureId)?;
         let sequence = self
@@ -70,7 +77,7 @@ impl WebState {
             .duration_since(UNIX_EPOCH)
             .map_err(|_| WebRequestError::InternalIdentity)?
             .as_nanos();
-        let payload_digest = affairs_get_payload_digest(&procedure_id, None)
+        let payload_digest = affairs_get_payload_digest(&procedure_id, as_of)
             .map_err(|_| WebRequestError::InternalIdentity)?;
         let request = SubmitAffairsGetDto {
             request_id: checked_text(format!("req:web:{request_nonce}:{sequence}"))?,
@@ -85,7 +92,7 @@ impl WebState {
             },
             payload_digest,
             procedure_id,
-            as_of: None,
+            as_of,
         };
         let composition = self.lock()?;
         let submitted = composition.handle_submit(&request);
@@ -126,13 +133,15 @@ impl WebState {
     fn submit_opportunity(
         &self,
         command: OpportunityCommandDto,
+        confirmation: OpportunityConfirmationDto,
     ) -> Result<ClientResponseDto, WebRequestError> {
-        self.submit_opportunity_with_identity(command, None)
+        self.submit_opportunity_with_identity(command, confirmation, None)
     }
 
     fn submit_opportunity_with_identity(
         &self,
         command: OpportunityCommandDto,
+        confirmation: OpportunityConfirmationDto,
         identity: Option<OpportunityCallerIdentity>,
     ) -> Result<ClientResponseDto, WebRequestError> {
         command
@@ -162,8 +171,8 @@ impl WebState {
                 )
             }
         };
-        let payload_digest =
-            opportunity_payload_digest(&command).map_err(|_| WebRequestError::InternalIdentity)?;
+        let payload_digest = opportunity_payload_digest(&command, confirmation)
+            .map_err(|_| WebRequestError::InternalIdentity)?;
         let composition = self.lock()?;
         let request = SubmitOpportunityDto {
             request_id,
@@ -178,6 +187,7 @@ impl WebState {
                 target: checked_text("web-loopback-private-demo")?,
                 protocol: checked_text("http-json-v1")?,
             },
+            confirmation,
             payload_digest,
             command,
         };
@@ -562,6 +572,8 @@ pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
         .route("/assets/app.js", get(app_js))
         .route("/assets/styles.css", get(styles_css))
         .route("/healthz", get(healthz))
+        .route("/api/v1/server/info", get(server_info))
+        .route("/api/v1/client/capabilities", get(capability_list))
         .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
         .route(
             "/api/v1/demo/administrator/affairs/publication",
@@ -637,37 +649,110 @@ async fn healthz() -> Response {
     )
 }
 
+async fn server_info() -> Response {
+    typed_json_response(
+        StatusCode::OK,
+        ClientResponseDto::ServerInfo {
+            info: ServerInfoDto::new(
+                checked_text(concat!("ustc-agentd/", env!("CARGO_PKG_VERSION")))
+                    .expect("static server build is valid wire text"),
+            ),
+        },
+    )
+}
+
+async fn capability_list(headers: HeaderMap) -> Response {
+    match dispatch_with_protocol_major(presented_protocol_major(&headers), || {
+        ClientResponseDto::Capabilities {
+            capabilities: CapabilityListDto::affairs_first(),
+        }
+    }) {
+        Ok(response) => typed_json_response(StatusCode::OK, response),
+        Err(compatibility) => compatibility_response(compatibility),
+    }
+}
+
 async fn affairs_get(
     AxumPath(procedure_id): AxumPath<String>,
     State(state): State<WebState>,
+    headers: HeaderMap,
+    uri: Uri,
 ) -> Response {
-    match state.submit(procedure_id) {
-        Ok(response) => typed_json_response(affairs_response_status(&response), response),
-        Err(WebRequestError::InvalidProcedureId) => {
+    let as_of = match parse_affairs_as_of(&uri) {
+        Ok(as_of) => as_of,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_affairs_query"),
+    };
+    match dispatch_with_protocol_major(presented_protocol_major(&headers), || {
+        state.submit(procedure_id, as_of)
+    }) {
+        Err(compatibility) => compatibility_response(compatibility),
+        Ok(Ok(response)) => typed_json_response(affairs_response_status(&response), response),
+        Ok(Err(WebRequestError::InvalidProcedureId)) => {
             web_error(StatusCode::BAD_REQUEST, "invalid_procedure_id")
         }
-        Err(WebRequestError::CounterExhausted | WebRequestError::InternalIdentity) => {
+        Ok(Err(WebRequestError::CounterExhausted | WebRequestError::InternalIdentity)) => {
             web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error")
         }
-        Err(WebRequestError::UnexpectedSubmitResponse) => {
+        Ok(Err(WebRequestError::UnexpectedSubmitResponse)) => {
             web_error(StatusCode::BAD_GATEWAY, "public_submit_unavailable")
         }
-        Err(
+        Ok(Err(
             WebRequestError::MissingPublicCapability | WebRequestError::UnexpectedLookupResponse,
-        ) => web_error(StatusCode::BAD_GATEWAY, "public_lookup_unavailable"),
-        Err(WebRequestError::InvalidBoardId) => {
+        )) => web_error(StatusCode::BAD_GATEWAY, "public_lookup_unavailable"),
+        Ok(Err(WebRequestError::InvalidBoardId)) => {
             web_error(StatusCode::BAD_REQUEST, "invalid_board_id")
         }
-        Err(WebRequestError::InvalidOpportunityRequest) => {
+        Ok(Err(WebRequestError::InvalidOpportunityRequest)) => {
             web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error")
         }
-        Err(WebRequestError::InvalidOpportunityIdentity) => {
+        Ok(Err(WebRequestError::InvalidOpportunityIdentity)) => {
             web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_identity")
         }
-        Err(WebRequestError::CompositionUnavailable) => {
+        Ok(Err(WebRequestError::CompositionUnavailable)) => {
             web_error(StatusCode::SERVICE_UNAVAILABLE, "composition_unavailable")
         }
     }
+}
+
+fn parse_affairs_as_of(uri: &Uri) -> Result<Option<UnixMillis>, ()> {
+    let Some(query) = uri.query() else {
+        return Ok(None);
+    };
+    let mut fields = query.split('&');
+    let field = fields.next().ok_or(())?;
+    if fields.next().is_some() {
+        return Err(());
+    }
+    let (key, value) = field.split_once('=').ok_or(())?;
+    if key != "as_of" || value.is_empty() || value.contains('=') {
+        return Err(());
+    }
+    value
+        .parse::<i64>()
+        .map(UnixMillis::new)
+        .map(Some)
+        .map_err(|_| ())
+}
+
+fn presented_protocol_major(headers: &HeaderMap) -> Option<ClientProtocolMajor> {
+    let mut values = headers.get_all(CLIENT_PROTOCOL_MAJOR_HEADER).iter();
+    let value = values.next()?;
+    if values.next().is_some() {
+        return None;
+    }
+    let value = value.to_str().ok()?;
+    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    value.parse::<u16>().ok().map(ClientProtocolMajor::new)
+}
+
+fn compatibility_response(compatibility: ProtocolCompatibilityDto) -> Response {
+    let status = match compatibility {
+        ProtocolCompatibilityDto::UpgradeRequired { .. } => StatusCode::UPGRADE_REQUIRED,
+        ProtocolCompatibilityDto::IncompatibleProtocol { .. } => StatusCode::CONFLICT,
+    };
+    typed_json_response(status, ClientResponseDto::Compatibility { compatibility })
 }
 
 fn affairs_response_status(response: &ClientResponseDto) -> StatusCode {
@@ -735,6 +820,18 @@ fn administrator_demo_header_authorized(headers: &HeaderMap) -> bool {
         .get(ADMINISTRATOR_DEMO_HEADER)
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value == ADMINISTRATOR_DEMO_CONFIRMATION)
+}
+
+fn opportunity_confirmation(headers: &HeaderMap) -> OpportunityConfirmationDto {
+    if headers
+        .get(OPPORTUNITY_CONFIRMATION_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == "confirmed")
+    {
+        OpportunityConfirmationDto::Confirmed
+    } else {
+        OpportunityConfirmationDto::NotConfirmed
+    }
 }
 
 async fn change_publication_status(State(state): State<WebState>, headers: HeaderMap) -> Response {
@@ -861,6 +958,7 @@ async fn change_feed_atom(
 
 async fn opportunity_profile_create(
     State(state): State<WebState>,
+    headers: HeaderMap,
     body: Result<Json<CreateOpportunityProfileBody>, JsonRejection>,
 ) -> Response {
     let Json(body) = match body {
@@ -921,6 +1019,7 @@ async fn opportunity_profile_create(
                 max_credits: body.max_credits,
                 preference_weights,
             },
+            opportunity_confirmation(&headers),
             Some(identity),
         )
     });
@@ -930,20 +1029,23 @@ async fn opportunity_profile_create(
 async fn opportunity_profile_view(
     AxumPath(profile_id): AxumPath<String>,
     State(state): State<WebState>,
+    headers: HeaderMap,
 ) -> Response {
     let profile_snapshot_id = match checked_text(profile_id) {
         Ok(value) => value,
         Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_profile_snapshot_id"),
     };
-    opportunity_response(
-        state.submit_opportunity(OpportunityCommandDto::ViewProfile {
+    opportunity_response(state.submit_opportunity(
+        OpportunityCommandDto::ViewProfile {
             profile_snapshot_id,
-        }),
-    )
+        },
+        opportunity_confirmation(&headers),
+    ))
 }
 
 async fn opportunity_plan_generate(
     State(state): State<WebState>,
+    headers: HeaderMap,
     body: Result<Json<GenerateOpportunityPlanBody>, JsonRejection>,
 ) -> Response {
     let Json(body) = match body {
@@ -954,18 +1056,20 @@ async fn opportunity_plan_generate(
         Ok(value) => value,
         Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_profile_snapshot_id"),
     };
-    opportunity_response(
-        state.submit_opportunity(OpportunityCommandDto::GeneratePlan {
+    opportunity_response(state.submit_opportunity(
+        OpportunityCommandDto::GeneratePlan {
             profile_snapshot_id,
             max_results: body.max_results,
             beam_width: body.beam_width,
-        }),
-    )
+        },
+        opportunity_confirmation(&headers),
+    ))
 }
 
 async fn opportunity_profile_delete(
     AxumPath(profile_id): AxumPath<String>,
     State(state): State<WebState>,
+    headers: HeaderMap,
     body: Result<Json<DeleteOpportunityProfileBody>, JsonRejection>,
 ) -> Response {
     let Json(body) = match body {
@@ -997,6 +1101,7 @@ async fn opportunity_profile_delete(
                 profile_snapshot_id,
                 revoked_at,
             },
+            opportunity_confirmation(&headers),
             Some(identity),
         )
     });

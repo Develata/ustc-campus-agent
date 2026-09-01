@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- `Status`: Accepted target architecture with bounded client-core, ordinary-user Affairs CLI and one operation-specific loopback thin-Web presentation proof; production auth/remote HTTP/stream, inbound MCP and Dioxus clients remain planned
-- `Version`: `client-shell/v2.1`
-- `Last Review`: `2026-08-26`
+- `Status`: Accepted target architecture with an approved Affairs-first compatibility/operation-registry prerequisite plus bounded client-core, ordinary-user Affairs CLI and one operation-specific loopback thin-Web proof; production auth/remote HTTP/stream, inbound MCP and Dioxus clients remain planned
+- `Version`: `client-shell/v2.2`
+- `Last Review`: `2026-09-01`
 - `Owning Plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
 - `Counterpart Plans`: [`M10 Application Ingress Host`](../plan/modules/20-application-api-host.md), [`platform authority`](../plan/03-platform-authority.md)
 - `Decisions`: [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md), [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
@@ -138,6 +138,8 @@ terminal versus nonterminal state
 Shared Rust source does not merge authority. M10 owns the public wire schema and result/event production; M80 owns client behavior and produces request instances that conform to that schema. `client-core` depends on the M10-owned protocol carrier, while M10 server code never depends on `client-core`. M10 still cannot reinterpret client intent as a domain command until admission succeeds.
 
 Unknown versions, variants or non-monotone cursors fail closed and yield refresh, resync or upgrade—not a nearby interpretation.
+
+The first retained compatibility seam is exact: M10 advertises current/supported/minimum protocol major `1` through header-free `GET /api/v1/server/info`; `GET /api/v1/client/capabilities` and `GET /api/v1/affairs/{procedure_id}?as_of=<unix-ms>` require `X-USTC-Client-Protocol-Major`. M10 returns typed `upgrade_required` for an older major and typed `incompatible_protocol` for a newer, absent or unparseable major before application dispatch. M80 reduces the returned variant as-is; it MUST NOT infer one from HTTP `426`/`409`, compare majors as authority or flatten an M71 terminal into transport status. The machine outer result remains `ustc-client-result/v1`.
 
 ## 5. Common client-core behavior
 
@@ -290,7 +292,8 @@ The inbound MCP session, CLI process and Dioxus page lifecycle are transport/ses
 
 - API unavailable: explicit unavailable state; no hidden local execution fallback.
 - Timeout after possible acceptance: query/reconcile by correlation or idempotency identity before retry.
-- Unsupported version: `UpgradeRequired` before unsafe dispatch.
+- Older client major: server-typed `UpgradeRequired` before unsafe dispatch; M80 preserves the typed relation and recovery hint.
+- Newer, absent or malformed client major: server-typed `IncompatibleProtocol` before unsafe dispatch; M80 does not relabel it as an upgrade.
 - Unknown event/result: fail closed and refresh/upgrade.
 - Cursor gap/expiry: explicit resync or full projection reload.
 - Reauthentication: use the adapter auth port; preserve no raw secret in common state.
