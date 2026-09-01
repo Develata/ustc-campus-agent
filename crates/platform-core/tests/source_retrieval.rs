@@ -605,6 +605,14 @@ fn response_authorization_enforces_content_codings_framing_and_trailers() {
             RetrievalPolicyError::InvalidContentType,
         ),
         (
+            "Content-Type: text/plain; charset =utf-8\r\n",
+            RetrievalPolicyError::InvalidContentType,
+        ),
+        (
+            "Content-Type: text/plain; charset= utf-8\r\n",
+            RetrievalPolicyError::InvalidContentType,
+        ),
+        (
             "Content-Type: text/plain\r\nContent-Encoding: gzip\r\n",
             RetrievalPolicyError::UnsupportedContentEncoding,
         ),

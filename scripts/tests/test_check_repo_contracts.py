@@ -2080,6 +2080,14 @@ class M60B2OfflineImplementationTests(unittest.TestCase):
         path.write_text(path.read_text(encoding="utf-8") + "\npub trait SourceTransportPort {}\n", encoding="utf-8")
         self.assert_rejected("forbidden effect carrier: SourceTransportPort")
 
+    def test_trust_kernel_false_transport_authority_fails_closed(self) -> None:
+        self.replace_once(
+            "docs/plan/05-campus-trust-kernel.md",
+            "there is no transport port implementation, network effect or approved source",
+            "transport and network effects are authorized for an approved source",
+        )
+        self.assert_rejected("implementation projection drifted in docs/plan/05-campus-trust-kernel.md")
+
     def test_m60_state_promotion_fails_closed(self) -> None:
         path = self.root / "docs/plan/modules/00-module-map.md"
         text = path.read_text(encoding="utf-8")

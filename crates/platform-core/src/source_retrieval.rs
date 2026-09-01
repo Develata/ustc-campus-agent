@@ -1244,8 +1244,6 @@ fn parse_content_type(value: &str) -> Result<&str, RetrievalPolicyError> {
         let Some((name, raw_value)) = parameter.split_once('=') else {
             return Err(RetrievalPolicyError::InvalidContentType);
         };
-        let name = name.trim_matches(' ');
-        let raw_value = raw_value.trim_matches(' ');
         let (value, quoted) = match raw_value
             .strip_prefix('"')
             .and_then(|inner| inner.strip_suffix('"'))

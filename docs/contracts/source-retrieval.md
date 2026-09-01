@@ -314,7 +314,7 @@ Parser caps: status+headers ≤ 32768 raw bytes, ≤ 128 header fields, field na
 
 ### 8.3 Framing and body validation
 
-`Content-Type`: exactly one syntactically valid `type/subtype` essence required. Parameters ≤ 16, name/value `1..=64`, no duplicates. An unquoted parameter value is an RFC `tchar` token and therefore contains no spaces; a quoted value may contain ASCII spaces in addition to `tchar` bytes. Case-insensitive essence must equal `expected_media_type`.
+`Content-Type`: exactly one syntactically valid `type/subtype` essence required. Parameters ≤ 16, name/value `1..=64`, no duplicates. Optional ASCII space is admitted around `;`, but not on either side of a parameter `=`. An unquoted parameter value is an RFC `tchar` token and therefore contains no spaces; a quoted value may contain ASCII spaces in addition to `tchar` bytes. Case-insensitive essence must equal `expected_media_type`.
 
 Framing rules:
 - `Content-Encoding`: absent or exactly `identity`;

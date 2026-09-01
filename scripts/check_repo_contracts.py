@@ -9501,8 +9501,8 @@ M60_B2_OFFLINE_IMPLEMENTATION_SHA256 = (
 M60_B2_FROZEN_EXECUTABLE_SHA256 = {
     "crates/platform-core/src/lib.rs": "576943ba5914913fe925f0333712b83f7a429d14f04289fc3f34352f6f90759b",
     "crates/platform-core/src/source_registry.rs": "5c9c43899e5512aab89a946257a28ad1cc8b965e3104dc8a30f215d1f4783afd",
-    "crates/platform-core/src/source_retrieval.rs": "a53777861a15e4099674b48902383284cbf30df9f077dabecde18053a39db85f",
-    "crates/platform-core/tests/source_retrieval.rs": "fdec042855125f6713762b1379f471250f59ca317653bc0b6ce539aa30a0acf3",
+    "crates/platform-core/src/source_retrieval.rs": "b91ed6cd3bda067e1185fc87ad7785bc1dfeb39e0fb1b90e78c279396792930b",
+    "crates/platform-core/tests/source_retrieval.rs": "14d95307bc271a822769c20b2016b1d68b9012916031449e24c7dbb0ea314db9",
 }
 M60_B2_EXTERNAL_TEST_FUNCTIONS = (
     "nominal_id_families_and_dns_names_are_exact_and_redacted",
@@ -9552,42 +9552,49 @@ M60_B2_REQUIRED_DIGEST_LINE = (
     "marker newline and ending immediately before the `END` marker token, including the "
     "final packet newline"
 )
-M60_B2_PROJECTED_PATHS = (
-    "CLAUDE.md",
-    M60_B2_PROPOSAL_PATH,
-    M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH,
-    "docs/acceptance/platform-baseline.md",
-    "docs/contracts/source-import.md",
-    "docs/contracts/source-retrieval.md",
-    "docs/contracts/module-boundaries.md",
-    "docs/overview/architecture.md",
-    "docs/plan/05-campus-trust-kernel.md",
-    "docs/plan/modules/00-module-map.md",
-    "docs/plan/modules/70-campus-trust-source-pipeline.md",
-    "docs/tasks/01-execution-roadmap.md",
-    "docs/tasks/m60-b1-v1-lifecycle.md",
-    "docs/coverage-matrix.md",
-)
-
 M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS = {
     "CLAUDE.md": (
         "`source_retrieval.rs` owns only the first offline `source-retrieval/v0` B2 "
         "policy/observation algebra",
         "M60 overall and `SRC-010/011/012` remain `planned`; `SRC-014` remains catalog-only.",
     ),
+    M60_B2_PROPOSAL_PATH: (
+        "Retained M60-B2 implementation",
+        "no transport/effect/B3+ authority",
+    ),
+    M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: (
+        "## Marker-external pull-request review repair R3",
+        "no public API, dependency, transport/effect, source approval, acceptance projection or shipping widening",
+    ),
     "docs/acceptance/platform-baseline.md": (
         "The first bounded offline `M60-B2` pure-policy algebra is also implemented and tested",
         "`SRC-010`, `SRC-011`, `SRC-012`",
         "`SRC-014`",
+    ),
+    "docs/contracts/source-import.md": (
+        "implement the bounded offline pure-policy B2 projection under `source-retrieval/v0`",
+        "every transport/effect/B3+ path remains separately gated",
     ),
     "docs/contracts/source-retrieval.md": (
         "with the first bounded offline pure-policy implementation retained",
         "no transport port, network effect, real source approval or B3 admission carrier is implemented",
         "It implements none of the four ports above.",
     ),
+    "docs/contracts/module-boundaries.md": (
+        "`B-M60-M90-SOURCE-TRANSPORT`",
+        "accepted contract; implementation planned",
+    ),
     "docs/overview/architecture.md": (
         "bounded B1 registry, first retained bounded offline B2 pure policy/shape-only observations",
         "no transport/network effect, approved source, parser or durable baseline",
+    ),
+    "docs/plan/05-campus-trust-kernel.md": (
+        "first bounded offline M60-B2 pure-policy implementation under `source-retrieval/v0`",
+        "there is no transport port implementation, network effect or approved source",
+    ),
+    "docs/plan/modules/00-module-map.md": (
+        "first offline-only B2 pure policy",
+        "no transport/network effect, approved source, parser, durable baseline or publication composition",
     ),
     "docs/plan/modules/70-campus-trust-source-pipeline.md": (
         "`Implementation State`: `planned`",
@@ -9599,11 +9606,43 @@ M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS = {
         "bounded M60-B2 implements only offline pure request/rate/DNS/head/body policy plus shape-only observations",
         "`SRC-010`, `SRC-011`, `SRC-012` remain `planned`; `SRC-014` remains catalog-only/non-admitted",
     ),
+    "docs/tasks/m60-b1-v1-lifecycle.md": (
+        "accepted contract plus first bounded offline pure-policy implementation",
+        "transport/effects remain separately gated and unimplemented",
+    ),
+    "docs/coverage-matrix.md": (
+        "`M60 Campus Trust/Source`",
+        "`B-M60-M90-SOURCE-TRANSPORT`",
+    ),
 }
 
 
 def check_m60_b2_offline_implementation(issues: list[str]) -> None:
     """Pin the first retained B2 slice to its reviewed offline-only executable bytes."""
+
+    declared_projection_paths = (
+        "CLAUDE.md",
+        M60_B2_PROPOSAL_PATH,
+        M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH,
+        "docs/acceptance/platform-baseline.md",
+        "docs/contracts/source-import.md",
+        "docs/contracts/source-retrieval.md",
+        "docs/contracts/module-boundaries.md",
+        "docs/overview/architecture.md",
+        "docs/plan/05-campus-trust-kernel.md",
+        "docs/plan/modules/00-module-map.md",
+        "docs/plan/modules/70-campus-trust-source-pipeline.md",
+        "docs/tasks/01-execution-roadmap.md",
+        "docs/tasks/m60-b1-v1-lifecycle.md",
+        "docs/coverage-matrix.md",
+    )
+    if tuple(M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS) != declared_projection_paths:
+        fail(
+            "M60-B2 declared projection path registry drifted: "
+            f"expected={declared_projection_paths} "
+            f"actual={tuple(M60_B2_REQUIRED_IMPLEMENTATION_PROJECTIONS)}",
+            issues,
+        )
 
     task_path = ROOT / M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH
     if not task_path.is_file() or task_path.is_symlink():
@@ -9647,6 +9686,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "## Marker-external formal-review repair R1",
         "## Marker-external formal-review repair R2",
         "## Marker-external pull-request review repair R3",
+        "## Marker-external pull-request review repair R4",
         "controller-owned receipt `sha256:46fd36c88617c925739a80605fe291320b3cb33d0355b00db594da9c0e183b69`",
         "controller-owned receipt `sha256:e9a7650111c0832e3583c56a12c69f4d0925000dc8554c5278c8814a1edc68ae`",
         "controller-owned receipt `sha256:08270e618a32fc3f433971381c7fa9c01868ae84ec0e6b5188d08c6e91dfcaf9`",
@@ -13591,7 +13631,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "d46fb1beae3b621376cffa3ba8a465c4d9502616aa7584d78265effec9f15b4e", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "39f2cc902b56f433bf0149a69acf84cc4866d84ea4be2ebf04adb6346fb146df", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},
