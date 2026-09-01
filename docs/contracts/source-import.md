@@ -121,7 +121,9 @@ Same exact constrained public-HTTPS grammar as `source-import/v0` §3.4, with th
 canonical lowercase DNS host additionally bounded to `3..=253` presentation bytes
 while every label remains `1..=63` bytes. This closes representability with
 `source-retrieval/v0`: every admitted `SourceUrl` host can construct the exact
-`RetrievalDnsName`; a `254+` byte host is `InvalidHost`, not a later protocol mismatch.
+`RetrievalDnsName`. Under the existing constructor precedence, a complete URL above
+`2048` bytes is `TooLong` before host parsing; otherwise a `254+` byte host is
+`InvalidHost`, not a later protocol mismatch.
 
 ## 4. Source definition v1
 

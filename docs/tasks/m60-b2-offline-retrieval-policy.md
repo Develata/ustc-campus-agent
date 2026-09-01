@@ -473,6 +473,14 @@ Stop before widening scope if:
 - `Required closure`: focused remote Rust source gates, complete `733`-test checker shards, exact-head full CI/governance and final formal review must all rerun before requesting merge authorization.
 - `Non-claims`: no network effect, concrete-source approval, B3/M90 implementation, acceptance promotion or shipping widening.
 
+## Marker-external pull-request review repair R8
+
+- `Review`: GitHub Codex review `5077784428` on head `39bb12dd44230693d7c970f428514fcbb95f87fc` found that the new source-import prose overclaimed `InvalidHost` for every `254+` byte host despite the pre-existing whole-URL `TooLong` precedence.
+- `Repair`: the contract now states the exact constructor order: a complete URL above `2048` bytes is `TooLong` before host parsing; only an otherwise in-bound URL with a `254+` byte host is `InvalidHost`.
+- `Scope`: documentary qualification and exact projection-hash refresh only; Rust source/tests and the R7 focused-gate receipt remain unchanged.
+- `Required closure`: rerun the complete `733`-test checker shards, exact-head full CI/governance and final formal review before requesting merge authorization.
+- `Non-claims`: no authority, API, effect, source approval, B3/M90 admission, status promotion or shipping widening.
+
 ## Review receipts
 
 - `Pre-edit review`: `PASS`; taskbook `sha256:d509ef1fb95606bca0b6cc68baf810ec2a18d9471b548c8725751e5f495ad9c0`; marker packet `sha256:19fb0e7696ffd298e34da0c52507f3b186fa50d9ee9ccc4b68657ec65cb1026e` over `26003` bytes.
