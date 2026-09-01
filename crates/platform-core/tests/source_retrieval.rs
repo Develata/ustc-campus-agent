@@ -601,6 +601,10 @@ fn response_authorization_enforces_content_codings_framing_and_trailers() {
             RetrievalPolicyError::InvalidContentType,
         ),
         (
+            "Content-Type: text/plain; charset=utf 8\r\n",
+            RetrievalPolicyError::InvalidContentType,
+        ),
+        (
             "Content-Type: text/plain\r\nContent-Encoding: gzip\r\n",
             RetrievalPolicyError::UnsupportedContentEncoding,
         ),
@@ -631,6 +635,12 @@ fn response_authorization_enforces_content_codings_framing_and_trailers() {
             "{headers:?}"
         );
     }
+
+    let head = RetrievalPolicy::parse_strict_response_head(
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=\"utf 8\"\r\nContent-Length: 0\r\n\r\n",
+    )
+    .expect("quoted parameter head");
+    assert!(RetrievalPolicy::authorize_response_head(peer_bound(&subject), head).is_ok());
 
     let admission = authorized_body(&subject, "Trailer: checksum\r\n");
     let body = BodyObservation::new(Vec::new(), 0, 0, 0, false, 0, true, 0).expect("body shape");
@@ -683,6 +693,18 @@ fn body_shape_and_policy_bounds_are_independent_and_ordered() {
         RetrievalPolicy::finish_body(admission, body).expect_err("chunk line cap"),
         RetrievalPolicyError::ChunkLimitExceeded
     );
+    for invalid_width in [0, 17] {
+        let admission = authorized_body(&subject, "Transfer-Encoding: chunked\r\n");
+        let body = BodyObservation::new(Vec::new(), 0, 1, invalid_width, false, 0, true, 0)
+            .expect("shape");
+        assert_eq!(
+            RetrievalPolicy::finish_body(admission, body).expect_err("chunk-size digit bound"),
+            RetrievalPolicyError::ChunkLimitExceeded
+        );
+    }
+    let admission = authorized_body(&subject, "Transfer-Encoding: chunked\r\n");
+    let body = BodyObservation::new(vec![0; 4], 4, 1, 16, false, 0, true, 0).expect("shape");
+    assert!(RetrievalPolicy::finish_body(admission, body).is_ok());
     let admission = authorized_body(&subject, "Transfer-Encoding: chunked\r\n");
     let body = BodyObservation::new(Vec::new(), 0, 1, 1, true, 0, true, 0).expect("shape");
     assert_eq!(

@@ -426,10 +426,21 @@ Stop before widening scope if:
 - `Required closure`: rerun focused/full Rust gates, complete checker shards and obtain one final exact-candidate formal verdict; the wire-sabotage behavioral test remains retained and must continue to pass.
 - `Non-claims`: no API/effect/authority/projection/shipping widening.
 
+## Marker-external pull-request review repair R3
+
+- `Review`: GitHub Codex review `5076822986` on exact head `ad342163c21a5903f8f01ebd42527847d5e7e5de` produced two P2 correctness findings: discussion `3903119091` rejected unquoted `Content-Type` parameter spaces, and discussion `3903119098` identified the missing `1..=16` chunk-size digit enforcement.
+- `Contract-preserving repair`: unquoted parameter values now accept RFC `tchar` bytes only while quoted values may additionally contain ASCII spaces; focused tests reject `charset=utf 8` and admit `charset="utf 8"`.
+- `Representability closure`: `max_chunk_line_bytes` is the pre-`CRLF` width. Once chunk extensions are rejected, that width is exactly the hexadecimal digit count; policy therefore rejects `0` and `> 16` and tests both failing edges plus width `16` success without adding a public field or widening the accepted phase API.
+- `Exact repair carriers`: `crates/platform-core/src/source_retrieval.rs`, `crates/platform-core/tests/source_retrieval.rs`, `docs/contracts/source-retrieval.md`, this marker-external receipt, and the existing checker/hash proof carrier.
+- `Repaired source hashes`: `source_retrieval.rs sha256:a53777861a15e4099674b48902383284cbf30df9f077dabecde18053a39db85f`; `tests/source_retrieval.rs sha256:8c287f29399f54818e569acb1373e56ead06d84c2cbac6e1d51254918cdc63a9`.
+- `Required closure`: rerun focused/full Rust gates, complete checker shards, obtain a fresh exact-head formal review and resolve both GitHub review conversations before merge authorization is requested.
+- `Non-claims`: no public API, dependency, transport/effect, source approval, acceptance projection or shipping widening.
+
 ## Review receipts
 
 - `Pre-edit review`: `PASS`; taskbook `sha256:d509ef1fb95606bca0b6cc68baf810ec2a18d9471b548c8725751e5f495ad9c0`; marker packet `sha256:19fb0e7696ffd298e34da0c52507f3b186fa50d9ee9ccc4b68657ec65cb1026e` over `26003` bytes.
 - `Source phase`: `PASS`; controller-owned receipt `sha256:08270e618a32fc3f433971381c7fa9c01868ae84ec0e6b5188d08c6e91dfcaf9`; `17` source-registry integration tests, `12` source-retrieval integration tests, `2` private unit tests and `3` compile-fail doctests passed with zero failures, plus `cargo check`, rustfmt and focused clippy under the exact-base remote lane.
 - `Formal repair R1 source gates`: `PASS`; controller-owned receipt `sha256:e9a7650111c0832e3583c56a12c69f4d0925000dc8554c5278c8814a1edc68ae`; baseline focused gates passed with `17` source-registry integration tests, `12` source-retrieval integration tests, `3` private unit tests and `3` compile-fail doctests; exact-wire sabotage changed the source to `sha256:85d4f1cd7b8c5c67c8cc8913afd4c3948106e492141652aa1368494b7b300e55`, the named unit test bit with exit `101`, restoration returned the exact repaired source hash, and the post-restore named test passed.
 - `Formal repair R2 source gates`: `PASS`; controller-owned receipt `sha256:46fd36c88617c925739a80605fe291320b3cb33d0355b00db594da9c0e183b69`; focused format/check/tests/doc/clippy remained green after the transfer-coding precedence repair, exact-wire sabotage again bit with exit `101`, and post-restore source/test hashes matched `131fb476fc04b3cc900946a8153dc79d3d701cb107254b8e80fe6bb2cdf9f1e7` / `91eccecc7a40da1e608ea4c78fc3fc02657621bf9881ee84c82543a006cfffe8`.
+- `Pull-request repair R3 source gates`: `PASS`; controller-owned receipt `sha256:0ac5d44baef367c61075f11796f3ad37763ecb5a549819ae52860a6286e25724`; focused format/check/tests/doc/clippy remained green after both Codex P2 repairs, exact-wire sabotage bit with exit `101`, and post-restore source/test hashes matched `a53777861a15e4099674b48902383284cbf30df9f077dabecde18053a39db85f` / `8c287f29399f54818e569acb1373e56ead06d84c2cbac6e1d51254918cdc63a9`.
 - `Exact candidate`: pending authoritative full gates, checker sabotage and formal review.

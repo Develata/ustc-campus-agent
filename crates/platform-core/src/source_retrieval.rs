@@ -58,6 +58,7 @@ const MAX_TRANSPORT_ELAPSED_MILLISECONDS: u64 = 60_000;
 const WIRE_OVERHEAD_BYTES: u64 = 65_536;
 const MAX_CHUNK_COUNT: u32 = 4_096;
 const MAX_CHUNK_LINE_BYTES: u16 = 128;
+const MAX_CHUNK_SIZE_DIGITS: u16 = 16;
 
 macro_rules! retrieval_id {
     ($(#[$attribute:meta])* $name:ident) => {
@@ -1171,7 +1172,9 @@ impl RetrievalPolicy {
         }
         if matches!(admission.framing, RetrievalBodyFraming::Chunked)
             && (body.chunk_count > MAX_CHUNK_COUNT
+                || body.max_chunk_line_bytes == 0
                 || body.max_chunk_line_bytes > MAX_CHUNK_LINE_BYTES
+                || body.max_chunk_line_bytes > MAX_CHUNK_SIZE_DIGITS
                 || body.saw_chunk_extension)
         {
             return Err(RetrievalPolicyError::ChunkLimitExceeded);
@@ -1243,16 +1246,21 @@ fn parse_content_type(value: &str) -> Result<&str, RetrievalPolicyError> {
         };
         let name = name.trim_matches(' ');
         let raw_value = raw_value.trim_matches(' ');
-        let value = raw_value
+        let (value, quoted) = match raw_value
             .strip_prefix('"')
             .and_then(|inner| inner.strip_suffix('"'))
-            .unwrap_or(raw_value);
+        {
+            Some(value) => (value, true),
+            None => (raw_value, false),
+        };
         if name.is_empty()
             || value.is_empty()
             || name.len() > MAX_CONTENT_PARAMETER_BYTES
             || value.len() > MAX_CONTENT_PARAMETER_BYTES
             || !name.bytes().all(is_tchar)
-            || !value.bytes().all(|byte| is_tchar(byte) || byte == b' ')
+            || !value
+                .bytes()
+                .all(|byte| is_tchar(byte) || (quoted && byte == b' '))
             || !names.insert(name.to_ascii_lowercase())
         {
             return Err(RetrievalPolicyError::InvalidContentType);

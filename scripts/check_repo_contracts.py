@@ -9501,8 +9501,8 @@ M60_B2_OFFLINE_IMPLEMENTATION_SHA256 = (
 M60_B2_FROZEN_EXECUTABLE_SHA256 = {
     "crates/platform-core/src/lib.rs": "576943ba5914913fe925f0333712b83f7a429d14f04289fc3f34352f6f90759b",
     "crates/platform-core/src/source_registry.rs": "5c9c43899e5512aab89a946257a28ad1cc8b965e3104dc8a30f215d1f4783afd",
-    "crates/platform-core/src/source_retrieval.rs": "131fb476fc04b3cc900946a8153dc79d3d701cb107254b8e80fe6bb2cdf9f1e7",
-    "crates/platform-core/tests/source_retrieval.rs": "91eccecc7a40da1e608ea4c78fc3fc02657621bf9881ee84c82543a006cfffe8",
+    "crates/platform-core/src/source_retrieval.rs": "a53777861a15e4099674b48902383284cbf30df9f077dabecde18053a39db85f",
+    "crates/platform-core/tests/source_retrieval.rs": "8c287f29399f54818e569acb1373e56ead06d84c2cbac6e1d51254918cdc63a9",
 }
 M60_B2_EXTERNAL_TEST_FUNCTIONS = (
     "nominal_id_families_and_dns_names_are_exact_and_redacted",
@@ -9646,6 +9646,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "- `Repair`: `M60_B2_PLATFORM_IDENTITY_MODULE_INVENTORY_20260901`",
         "## Marker-external formal-review repair R1",
         "## Marker-external formal-review repair R2",
+        "## Marker-external pull-request review repair R3",
         "controller-owned receipt `sha256:46fd36c88617c925739a80605fe291320b3cb33d0355b00db594da9c0e183b69`",
         "controller-owned receipt `sha256:e9a7650111c0832e3583c56a12c69f4d0925000dc8554c5278c8814a1edc68ae`",
         "controller-owned receipt `sha256:08270e618a32fc3f433971381c7fa9c01868ae84ec0e6b5188d08c6e91dfcaf9`",
@@ -13590,7 +13591,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "9ebe468fb136feec23a2ed39a0c33f76f6953a5a74e84e37aa6eefbc7034441c", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "d46fb1beae3b621376cffa3ba8a465c4d9502616aa7584d78265effec9f15b4e", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},

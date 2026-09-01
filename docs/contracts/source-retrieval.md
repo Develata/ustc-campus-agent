@@ -314,7 +314,7 @@ Parser caps: status+headers ≤ 32768 raw bytes, ≤ 128 header fields, field na
 
 ### 8.3 Framing and body validation
 
-`Content-Type`: exactly one syntactically valid `type/subtype` essence required. Parameters ≤ 16, name/value `1..=64`, no duplicates. Case-insensitive essence must equal `expected_media_type`.
+`Content-Type`: exactly one syntactically valid `type/subtype` essence required. Parameters ≤ 16, name/value `1..=64`, no duplicates. An unquoted parameter value is an RFC `tchar` token and therefore contains no spaces; a quoted value may contain ASCII spaces in addition to `tchar` bytes. Case-insensitive essence must equal `expected_media_type`.
 
 Framing rules:
 - `Content-Encoding`: absent or exactly `identity`;
@@ -323,6 +323,8 @@ Framing rules:
 - absent both means close-delimited under `Connection: close`;
 - `Trailer`: absent;
 - chunk-size lines ≤ 128 raw bytes, `1..=16` hex digits, non-final count ≤ 4096.
+
+`max_chunk_line_bytes` counts bytes before `CRLF` in the widest observed chunk-size line. Because any extension sets `saw_chunk_extension = true` and is rejected, an accepted line consists only of its hexadecimal size digits; the policy therefore rejects widths `0` and `> 16` directly, which also satisfies the broader 128-byte line cap.
 
 Body/wire counters operate independently. Wire ≤ `maximum_response_bytes + 65536`. Delivered entity body ≤ `maximum_response_bytes`. Adapter retains at most `maximum_response_bytes + 1` entity bytes.
 
