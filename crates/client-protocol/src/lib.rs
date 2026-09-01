@@ -12,6 +12,7 @@ pub mod change;
 pub mod digest;
 pub mod error;
 pub mod opportunity;
+pub mod protocol;
 pub mod transport;
 pub mod value;
 
@@ -21,5 +22,6 @@ pub use change::*;
 pub use digest::*;
 pub use error::*;
 pub use opportunity::*;
+pub use protocol::*;
 pub use transport::*;
 pub use value::*;

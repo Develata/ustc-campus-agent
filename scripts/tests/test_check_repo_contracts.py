@@ -6757,8 +6757,8 @@ class ExternalAgentAccessContractTests(unittest.TestCase):
     def test_change_list_bounded_projection_removal_fails_closed(self) -> None:
         self.replace_once(
             "docs/contracts/interfaces.md",
-            "Bounded loopback-only `affairs.get` and `change.list` proofs",
-            "A bounded loopback-only `affairs.get` proof",
+            "Bounded loopback-only `affairs.get` and `change.list` domain proofs",
+            "A bounded loopback-only `affairs.get` domain proof",
         )
         issues = self.check_contract()
         self.assertTrue(any("external-Agent semantic projection" in issue for issue in issues), issues)

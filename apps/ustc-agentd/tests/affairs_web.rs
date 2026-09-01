@@ -257,14 +257,30 @@ impl WebServer {
     }
 
     fn get(&self, path: &str) -> HttpResponse {
+        self.get_with_protocol_headers(path, &["1"])
+    }
+
+    fn get_without_protocol(&self, path: &str) -> HttpResponse {
+        self.get_with_protocol_headers(path, &[])
+    }
+
+    fn get_with_protocol(&self, path: &str, major: &str) -> HttpResponse {
+        self.get_with_protocol_headers(path, &[major])
+    }
+
+    fn get_with_protocol_headers(&self, path: &str, majors: &[&str]) -> HttpResponse {
         let mut stream = TcpStream::connect(&self.endpoint).expect("connect web server");
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
             .expect("set read timeout");
+        let protocol_headers = majors
+            .iter()
+            .map(|major| format!("X-USTC-Client-Protocol-Major: {major}\r\n"))
+            .collect::<String>();
         write!(
             stream,
-            "GET {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json,text/html,*/*\r\nConnection: close\r\n\r\n",
-            self.endpoint
+            "GET {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json,text/html,*/*\r\n{protocol_headers}Connection: close\r\n\r\n",
+            self.endpoint,
         )
         .expect("write HTTP request");
         stream.flush().expect("flush HTTP request");
@@ -387,6 +403,83 @@ fn valid_opportunity_profile_body() -> Value {
             {"course_code": "LANG2001", "weight": 2}
         ]
     })
+}
+
+#[test]
+fn client_protocol_bootstrap_and_capability_registry_are_retained() {
+    let server = WebServer::start_affairs_only();
+
+    let info = server.get_without_protocol("/api/v1/server/info");
+    assert!(info.status.contains(" 200 "), "{}", info.status);
+    let info: Value = serde_json::from_str(&info.body).expect("server info JSON");
+    assert_eq!(info["kind"], "server_info");
+    assert_eq!(info["info"]["protocol_major"], 1);
+    assert_eq!(info["info"]["supported_protocol_majors"], json!([1]));
+    assert_eq!(
+        info["info"]["capabilities_route"],
+        "/api/v1/client/capabilities"
+    );
+
+    let capabilities = server.get("/api/v1/client/capabilities");
+    assert!(
+        capabilities.status.contains(" 200 "),
+        "{}",
+        capabilities.status
+    );
+    let capabilities: Value =
+        serde_json::from_str(&capabilities.body).expect("capability registry JSON");
+    assert_eq!(capabilities["kind"], "capabilities");
+    let operations = capabilities["capabilities"]["operations"]
+        .as_array()
+        .expect("operation array");
+    assert_eq!(operations.len(), 3);
+    assert_eq!(operations[0]["operation_id"], "server.info");
+    assert_eq!(operations[1]["operation_id"], "capability.list");
+    assert_eq!(operations[2]["operation_id"], "affairs.get");
+}
+
+#[test]
+fn version_gated_affairs_rejects_old_new_missing_malformed_and_repeated_majors() {
+    const PATH: &str = "/api/v1/affairs/proc%3Austc%3Aundergraduate%3Atranscript-certificate";
+    let server = WebServer::start_affairs_only();
+
+    let old = server.get_with_protocol(PATH, "0");
+    assert!(old.status.contains(" 426 "), "{}", old.status);
+    assert!(old.body.contains("upgrade_required"));
+
+    let newer = server.get_with_protocol(PATH, "2");
+    assert!(newer.status.contains(" 409 "), "{}", newer.status);
+    assert!(newer.body.contains("incompatible_protocol"));
+    assert!(newer.body.contains("\"client_major\":2"));
+
+    for response in [
+        server.get_without_protocol(PATH),
+        server.get_with_protocol(PATH, "not-a-major"),
+        server.get_with_protocol_headers(PATH, &["1", "1"]),
+    ] {
+        assert!(response.status.contains(" 409 "), "{}", response.status);
+        assert!(response.body.contains("incompatible_protocol"));
+        assert!(response.body.contains("\"client_major\":null"));
+    }
+
+    let invalid_procedure = "/api/v1/affairs/%0A";
+    let gated = server.get_without_protocol(invalid_procedure);
+    assert!(gated.status.contains(" 409 "), "{}", gated.status);
+    let admitted = server.get(invalid_procedure);
+    assert!(admitted.status.contains(" 400 "), "{}", admitted.status);
+    assert!(admitted.body.contains("invalid_procedure_id"));
+}
+
+#[test]
+fn affairs_as_of_query_reaches_existing_m71_cutoff_semantics() {
+    let server = WebServer::start_affairs_only();
+    let response =
+        server.get("/api/v1/affairs/proc%3Austc%3Aundergraduate%3Atranscript-certificate?as_of=1");
+    assert!(response.status.contains(" 200 "), "{}", response.status);
+    let value: Value = serde_json::from_str(&response.body).expect("typed JSON response");
+    assert_eq!(value["kind"], "available");
+    assert_eq!(value["terminal"]["outcome"]["kind"], "not_yet_known");
+    assert_eq!(value["terminal"]["outcome"]["as_of"], 1);
 }
 
 #[test]
@@ -1199,6 +1292,7 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(script.body.contains("ustc-change-publication-status/v1"));
     assert!(script.body.contains("publishChangeDemo"));
     assert!(script.body.contains("textContent"));
+    assert!(script.body.contains("X-USTC-Client-Protocol-Major"));
     assert!(script.body.contains("syncProcedurePreview"));
     assert!(script.body.contains("renderChangeFeed"));
     assert!(script.body.contains("loadChangeFeed"));

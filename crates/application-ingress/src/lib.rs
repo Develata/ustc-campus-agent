@@ -10,6 +10,7 @@
 pub mod affairs_publication;
 pub mod capability;
 pub mod change_publication;
+pub mod client_protocol;
 pub mod m00_projection;
 pub mod m70_projection;
 pub mod m70_service;
@@ -30,6 +31,7 @@ pub use change_publication::{
     ChangePublicationEvidenceError, ChangePublicationOutcome, M10ChangePublicationService,
     change_publication_payload_digest,
 };
+pub use client_protocol::dispatch_with_protocol_major;
 pub use m70_service::{
     ChangeFeedInvocationError, ChangeFeedInvocationOutcome, ChangeFeedInvocationPort,
     M10ChangeFeedService,

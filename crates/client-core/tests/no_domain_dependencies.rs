@@ -188,7 +188,13 @@ fn reducer_matches_every_response_variant() {
     // Source-level proof that each ClientResponseDto variant is named in an
     // explicit arm of reduce_response.
     for variant in [
+        "ClientResponseDto::ServerInfo",
+        "ClientResponseDto::Capabilities",
+        "ClientResponseDto::Compatibility",
         "ClientResponseDto::Accepted",
+        "ClientResponseDto::ChangeFeedAccepted",
+        "ClientResponseDto::OpportunityAccepted",
+        "ClientResponseDto::OpportunityRejected",
         "ClientResponseDto::Available",
         "ClientResponseDto::Incomplete",
         "ClientResponseDto::Unavailable",

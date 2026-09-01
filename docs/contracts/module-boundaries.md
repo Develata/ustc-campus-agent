@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Current contract
-- `Version`: `module-boundaries/v3`
-- `Last Review`: `2026-08-24`
+- `Version`: `module-boundaries/v3.1`
+- `Last Review`: `2026-09-01`
 - `Owning Plan`: [`../plan/modules/00-module-map.md`](../plan/modules/00-module-map.md)
 - `Task Policy`: [`../tasks/00-module-work-policy.md`](../tasks/00-module-work-policy.md)
 
@@ -27,8 +27,8 @@ This registry defines what may cross each large-module boundary. It does not pre
 | Boundary ID | Producer/owner | Consumer | Values/operation | Status |
 |---|---|---|---|---|
 | `B-M00-M10-ACTOR` | `M00` | `M10` | [`platform-request-context/v0`](platform-request-context.md): closed `M00AdmittedActor::{Public, Authenticated}`, sealed `PlatformRequestContext`, complete scalar `M00AdmittedDisposition`, typed rejection/incomplete outcome | M00 bounded producer implemented (`AUTH-013`); M10-v17 composition/wire runtime planned |
-| `B-M80-M10-CALL` | M80 produces request instances; M10 owns the versioned wire schema | `M10` | versioned client-core request from Dioxus, `ustc-agent` or inbound MCP; client build/target/protocol, admitted session projection, typed intent, precondition and correlation/idempotency identity | bounded `affairs get/lookup` request evidence over fixture-only numeric loopback framing; production auth/HTTP/SSE, generic conformance and other adapters planned |
-| `B-M10-M80-RESULT` | `M10` | `M80` | versioned response/error/projection plus compatibility or `UpgradeRequired` outcome reduced/rendered by the calling peer adapter | bounded Affairs response/error/provenance reduction and canonical CLI JSON/exit evidence; production compatibility matrix and other peer adapters planned |
+| `B-M80-M10-CALL` | M80 produces request instances; M10 owns the versioned wire schema | `M10` | protocol-major bootstrap/admission plus versioned client-core request; the first closed subset is Web/CLI `server.info`, `capability.list`, `affairs.get` | approved Affairs-first major-1/header/route slice plus bounded existing `affairs get/lookup`; production auth/SSE, generic conformance and other adapters planned |
+| `B-M10-M80-RESULT` | `M10` | `M80` | typed `server.info`, safe capability projection, typed domain result/error and exact `upgrade_required` or `incompatible_protocol` outcome | approved Affairs-first compatibility reduction plus bounded existing Affairs response/provenance and canonical CLI JSON evidence; full peer matrix planned |
 | `B-M10-M80-EVENT` | `M10` | `M80` | typed server event/stream value, monotone cursor and reconnect/resync outcome shared semantically across peer adapters | accepted contract; implementation planned |
 | `B-M10-APP-CALL` | `M10` | owning backend application module | one admitted typed application command/query; no transport or Dioxus type | bounded fixture-backed M71 Affairs command/query evidence; other operations and production ingress planned |
 | `B-APP-M10-RESULT` | owning backend application module | `M10` | typed application result/error/event projection; no concrete adapter handle | bounded M71 Affairs result/error/provenance evidence; other operations and production ingress planned |
@@ -82,6 +82,8 @@ M40 → M51 outbound MCP binding/executor → external MCP server
 ```
 
 The inbound adapter cannot invoke M51 or inherit operator commands/credentials. Independently deployed Android, CLI and inbound-MCP artifacts require compatibility fixtures and typed rejection before an unsupported request reaches `B-M10-APP-CALL`.
+
+For the first retained Affairs-first seam, `server.info` is header-free bootstrap; every other admitted route requires major `1`. M10 alone classifies older as `upgrade_required` and newer/absent/unparseable as `incompatible_protocol`; the HTTP adapter projects `426`/`409`, respectively. The capability projection is a closed Web/CLI allowlist and is not dispatch authority. M80 preserves the typed classification under `ustc-client-result/v1` and never derives domain or compatibility truth from HTTP status.
 
 ## 4. Agent–Plugin boundary
 

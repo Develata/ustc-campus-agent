@@ -301,7 +301,10 @@ async function lookup() {
   try {
     const response = await fetch(`/api/v1/affairs/${encodeURIComponent(procedureId)}`, {
       method: "GET",
-      headers: { "Accept": "application/json" },
+      headers: {
+        "Accept": "application/json",
+        "X-USTC-Client-Protocol-Major": "1"
+      },
       cache: "no-store"
     });
     const payload = await response.json();

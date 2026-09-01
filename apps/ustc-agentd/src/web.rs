@@ -10,21 +10,23 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{DefaultBodyLimit, Path as AxumPath, State};
-use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use ustc_campus_agent_application_ingress::{
     AffairsPublicationApplicationError, AffairsPublicationOutcome,
-    ChangePublicationApplicationError, ChangePublicationOutcome,
+    ChangePublicationApplicationError, ChangePublicationOutcome, dispatch_with_protocol_major,
 };
 use ustc_campus_agent_client_protocol::{
-    ActorIntentDto, ClientErrorDto, ClientProvenanceDto, ClientResponseDto, OpportunityCommandDto,
-    OpportunityConsentFieldDto, OpportunityPreferenceDto, OpportunityRejectionDto, RedactionDto,
-    SubmitAffairsGetDto, SubmitChangeFeedDto, SubmitOpportunityDto, UnixMillis,
-    ViewerAuthorizationDto, WireErrorClassDto, WireText, affairs_get_payload_digest,
-    change_feed_payload_digest, opportunity_payload_digest,
+    ActorIntentDto, CLIENT_PROTOCOL_MAJOR_HEADER, CapabilityListDto, ClientErrorDto,
+    ClientProtocolMajor, ClientProvenanceDto, ClientResponseDto, OpportunityCommandDto,
+    OpportunityConsentFieldDto, OpportunityPreferenceDto, OpportunityRejectionDto,
+    ProtocolCompatibilityDto, RedactionDto, ServerInfoDto, SubmitAffairsGetDto,
+    SubmitChangeFeedDto, SubmitOpportunityDto, UnixMillis, ViewerAuthorizationDto,
+    WireErrorClassDto, WireText, affairs_get_payload_digest, change_feed_payload_digest,
+    opportunity_payload_digest,
 };
 
 use super::{AffairsComposition, parse_loopback_socket_addr};
@@ -57,7 +59,11 @@ impl WebState {
             .map_err(|_| WebRequestError::CompositionUnavailable)
     }
 
-    fn submit(&self, procedure_id: String) -> Result<ClientResponseDto, WebRequestError> {
+    fn submit(
+        &self,
+        procedure_id: String,
+        as_of: Option<UnixMillis>,
+    ) -> Result<ClientResponseDto, WebRequestError> {
         let procedure_id =
             WireText::parse(procedure_id).map_err(|_| WebRequestError::InvalidProcedureId)?;
         let sequence = self
@@ -70,7 +76,7 @@ impl WebState {
             .duration_since(UNIX_EPOCH)
             .map_err(|_| WebRequestError::InternalIdentity)?
             .as_nanos();
-        let payload_digest = affairs_get_payload_digest(&procedure_id, None)
+        let payload_digest = affairs_get_payload_digest(&procedure_id, as_of)
             .map_err(|_| WebRequestError::InternalIdentity)?;
         let request = SubmitAffairsGetDto {
             request_id: checked_text(format!("req:web:{request_nonce}:{sequence}"))?,
@@ -85,7 +91,7 @@ impl WebState {
             },
             payload_digest,
             procedure_id,
-            as_of: None,
+            as_of,
         };
         let composition = self.lock()?;
         let submitted = composition.handle_submit(&request);
@@ -562,6 +568,8 @@ pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
         .route("/assets/app.js", get(app_js))
         .route("/assets/styles.css", get(styles_css))
         .route("/healthz", get(healthz))
+        .route("/api/v1/server/info", get(server_info))
+        .route("/api/v1/client/capabilities", get(capability_list))
         .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
         .route(
             "/api/v1/demo/administrator/affairs/publication",
@@ -637,37 +645,110 @@ async fn healthz() -> Response {
     )
 }
 
+async fn server_info() -> Response {
+    typed_json_response(
+        StatusCode::OK,
+        ClientResponseDto::ServerInfo {
+            info: ServerInfoDto::new(
+                checked_text(concat!("ustc-agentd/", env!("CARGO_PKG_VERSION")))
+                    .expect("static server build is valid wire text"),
+            ),
+        },
+    )
+}
+
+async fn capability_list(headers: HeaderMap) -> Response {
+    match dispatch_with_protocol_major(presented_protocol_major(&headers), || {
+        ClientResponseDto::Capabilities {
+            capabilities: CapabilityListDto::affairs_first(),
+        }
+    }) {
+        Ok(response) => typed_json_response(StatusCode::OK, response),
+        Err(compatibility) => compatibility_response(compatibility),
+    }
+}
+
 async fn affairs_get(
     AxumPath(procedure_id): AxumPath<String>,
     State(state): State<WebState>,
+    headers: HeaderMap,
+    uri: Uri,
 ) -> Response {
-    match state.submit(procedure_id) {
-        Ok(response) => typed_json_response(affairs_response_status(&response), response),
-        Err(WebRequestError::InvalidProcedureId) => {
+    let as_of = match parse_affairs_as_of(&uri) {
+        Ok(as_of) => as_of,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_affairs_query"),
+    };
+    match dispatch_with_protocol_major(presented_protocol_major(&headers), || {
+        state.submit(procedure_id, as_of)
+    }) {
+        Err(compatibility) => compatibility_response(compatibility),
+        Ok(Ok(response)) => typed_json_response(affairs_response_status(&response), response),
+        Ok(Err(WebRequestError::InvalidProcedureId)) => {
             web_error(StatusCode::BAD_REQUEST, "invalid_procedure_id")
         }
-        Err(WebRequestError::CounterExhausted | WebRequestError::InternalIdentity) => {
+        Ok(Err(WebRequestError::CounterExhausted | WebRequestError::InternalIdentity)) => {
             web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error")
         }
-        Err(WebRequestError::UnexpectedSubmitResponse) => {
+        Ok(Err(WebRequestError::UnexpectedSubmitResponse)) => {
             web_error(StatusCode::BAD_GATEWAY, "public_submit_unavailable")
         }
-        Err(
+        Ok(Err(
             WebRequestError::MissingPublicCapability | WebRequestError::UnexpectedLookupResponse,
-        ) => web_error(StatusCode::BAD_GATEWAY, "public_lookup_unavailable"),
-        Err(WebRequestError::InvalidBoardId) => {
+        )) => web_error(StatusCode::BAD_GATEWAY, "public_lookup_unavailable"),
+        Ok(Err(WebRequestError::InvalidBoardId)) => {
             web_error(StatusCode::BAD_REQUEST, "invalid_board_id")
         }
-        Err(WebRequestError::InvalidOpportunityRequest) => {
+        Ok(Err(WebRequestError::InvalidOpportunityRequest)) => {
             web_error(StatusCode::INTERNAL_SERVER_ERROR, "internal_request_error")
         }
-        Err(WebRequestError::InvalidOpportunityIdentity) => {
+        Ok(Err(WebRequestError::InvalidOpportunityIdentity)) => {
             web_error(StatusCode::BAD_REQUEST, "invalid_opportunity_identity")
         }
-        Err(WebRequestError::CompositionUnavailable) => {
+        Ok(Err(WebRequestError::CompositionUnavailable)) => {
             web_error(StatusCode::SERVICE_UNAVAILABLE, "composition_unavailable")
         }
     }
+}
+
+fn parse_affairs_as_of(uri: &Uri) -> Result<Option<UnixMillis>, ()> {
+    let Some(query) = uri.query() else {
+        return Ok(None);
+    };
+    let mut fields = query.split('&');
+    let field = fields.next().ok_or(())?;
+    if fields.next().is_some() {
+        return Err(());
+    }
+    let (key, value) = field.split_once('=').ok_or(())?;
+    if key != "as_of" || value.is_empty() || value.contains('=') {
+        return Err(());
+    }
+    value
+        .parse::<i64>()
+        .map(UnixMillis::new)
+        .map(Some)
+        .map_err(|_| ())
+}
+
+fn presented_protocol_major(headers: &HeaderMap) -> Option<ClientProtocolMajor> {
+    let mut values = headers.get_all(CLIENT_PROTOCOL_MAJOR_HEADER).iter();
+    let value = values.next()?;
+    if values.next().is_some() {
+        return None;
+    }
+    let value = value.to_str().ok()?;
+    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    value.parse::<u16>().ok().map(ClientProtocolMajor::new)
+}
+
+fn compatibility_response(compatibility: ProtocolCompatibilityDto) -> Response {
+    let status = match compatibility {
+        ProtocolCompatibilityDto::UpgradeRequired { .. } => StatusCode::UPGRADE_REQUIRED,
+        ProtocolCompatibilityDto::IncompatibleProtocol { .. } => StatusCode::CONFLICT,
+    };
+    typed_json_response(status, ClientResponseDto::Compatibility { compatibility })
 }
 
 fn affairs_response_status(response: &ClientResponseDto) -> StatusCode {

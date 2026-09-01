@@ -3,10 +3,10 @@
 ## Metadata
 
 - `Module ID`: `M80`
-- `Status`: Accepted blueprint with bounded client-core, real ordinary-user CLI evidence and one operation-specific loopback Web presentation proof for Affairs; inbound MCP, Dioxus targets and full client conformance remain planned
+- `Status`: Accepted blueprint with an approved Affairs-first M10 compatibility/operation-registry prerequisite plus bounded client-core, ordinary-user CLI evidence and one operation-specific loopback Web presentation proof; inbound MCP, Dioxus targets and full client conformance remain planned
 - `Implementation State`: `partial-evidence`
-- `Version`: `m80-client-shells/v2.1`
-- `Last Review`: `2026-08-24`
+- `Version`: `m80-client-shells/v2.2`
+- `Last Review`: `2026-09-01`
 - `Decisions`: [`ADR-0009`](../../adr/0009-dioxus-multi-client-shell.md), [`ADR-0010`](../../adr/0010-typed-client-peer-adapters.md)
 - `Owning Contract`: [`client-shell/v2.1`](../../contracts/client-shell.md)
 - `Primary code areas`: `crates/client-core/`, `apps/ustc-agent/`, future `apps/ustc-client/`, and one future inbound MCP adapter surface finalized by its first accepted slice
@@ -31,7 +31,7 @@ The retained framework-neutral `client-core` constructs and reduces the M10-owne
 
 `ustc-agentd serve-web` separately provides one operation-specific loopback presentation proof over the same M10-owned typed DTO: conditions, steps, explicit unknown time bounds, entries, contacts, safe lineage, freshness, conflict and uncertainty. It consumes the public capability internally and exposes no raw revision identity. Because this proof is colocated in the composition root and does not use the shared client core or Dioxus, it does not establish the peer Web/PWA target.
 
-This slice is not the complete `CLIENT-009` claim. It has no production HTTP/TLS profile/auth adapter, NDJSON/SSE stream, cursor/reconnect/cancellation or version-skew host matrix, and it does not implement inbound MCP, Dioxus Web/PWA, Android, Windows or shared graphical presentation state. The loopback fixture paths are bounded composition evidence and must not be projected as production remote-client support.
+The first retained prerequisite consumes M10 protocol major `1`, header-free `server.info`, the closed Web/CLI `server.info`/`capability.list`/`affairs.get` projection and typed `upgrade_required`/`incompatible_protocol` outcomes. M80 now reduces those server-owned values into client state and retains `ustc-client-result/v1`; it does not derive compatibility from HTTP status or recalculate Affairs authority. This is still not the complete `CLIENT-007` or `CLIENT-009` claim. It has no production HTTP/TLS profile/auth adapter, NDJSON/SSE stream, cursor/reconnect/cancellation or version-skew host matrix, and it does not implement inbound MCP, Dioxus Web/PWA, Android, Windows or shared graphical presentation state. The loopback fixture paths are bounded composition evidence and must not be projected as production remote-client support.
 
 ## 2. Non-goals
 
@@ -190,7 +190,8 @@ Transport disconnect, CLI termination and MCP session closure are not server-tas
 
 - Server unavailable/offline: preserve only safe drafts/cursors; return explicit unavailable state and invent no success.
 - Unknown schema/event or non-monotone sequence: fail closed and require refresh/upgrade.
-- Unsupported client/server version: return `UpgradeRequired` before unsafe application dispatch.
+- Server-typed `upgrade_required`: reduce to `UpgradeRequired` without recalculating the major relation; the M10 HTTP adapter projects `426`.
+- Server-typed `incompatible_protocol`: reduce to `IncompatibleProtocol` without treating a newer, absent or malformed major as an upgrade case; the M10 HTTP adapter projects `409`.
 - Timeout after possible acceptance: reconcile by correlation/idempotency identity before retry.
 - Cancellation: send a typed server cancellation intent; killing a shell/process is not cancellation evidence.
 - Reauthentication: use the adapter's secure auth port; no raw password/token in shared state or command arguments.
@@ -272,8 +273,8 @@ Dioxus separately budgets initial Web payload, SSR/hydration, Android startup/me
 
 ## 15. Small-module decomposition
 
-1. `client-contract-adoption` — consume the M10-owned `client-protocol` schema and map validated M80 shell intent into conforming request instances without duplicate authority.
-2. `client-core` — compatibility, auth-port, command/query, correlation/idempotency, typed failure and event-reconnect behavior.
+1. `client-contract-adoption` — consume the M10-owned `client-protocol` schema and closed operation registry; the first retained subset is protocol major `1` plus Web/CLI `server.info`, `capability.list` and `affairs.get`.
+2. `client-core` — compatibility, auth-port, command/query, correlation/idempotency, typed failure and event-reconnect behavior; compatibility reduction consumes the M10 terminal and does not infer authority from transport status.
 3. `client-conformance` — fake-M10 normal, denial, stale, reconnect, cancellation, timeout-reconciliation and version-skew fixtures.
 4. `user-cli-shell` — `ustc-agent` command tree, human/machine rendering and stable exit/output semantics.
 5. `inbound-mcp-shell` — selected least-privilege tool/resource discovery and invocation over client-core; first slice is public-read `market.package.list` using the M10 operation/schema registry.
@@ -288,6 +289,8 @@ Dioxus separately budgets initial Web payload, SSR/hydration, Android startup/me
 ## 16. Exit gate
 
 M80 client-core is standalone-ready only when fake-M10 fixtures prove compatibility admission, typed normal/denial outcomes, monotone reconnect, timeout reconciliation, cancellation semantics and adapter-independent equivalent reduction.
+
+The bounded Affairs-first prerequisite may prove only bootstrap/capability/compatibility reduction and exact Web HTTP projections. It leaves this standalone-ready gate and planned `CLIENT-007`/`CLIENT-009` rows open until the omitted peer/event/reconnect/cancellation/host-matrix evidence exists.
 
 The user CLI is integration-ready only when a real M10 read-only path proves versioned JSON/NDJSON, stdout/stderr separation, stable exit classes, auth isolation and no operator/domain dependency. The inbound MCP adapter is integration-ready only when one external-client conformance path proves bounded discovery/invocation, tenant/grant isolation and no `ustc-agentctl`, domain or M51 reach-through.
 

@@ -301,8 +301,20 @@ KEY_FILES = [
 ]
 
 EXTERNAL_AGENT_OPERATION_ROWS = {
-    "server.info": ("M10", "public-read", "read", "CLI, HTTP", "planned first protocol slice"),
-    "capability.list": ("M10", "public-read", "read", "CLI, HTTP", "planned first protocol slice"),
+    "server.info": (
+        "M10",
+        "public-read",
+        "read",
+        "Web, CLI, HTTP",
+        "approved Affairs-first protocol slice; bootstrap requires no protocol-major header",
+    ),
+    "capability.list": (
+        "M10",
+        "public-read",
+        "read",
+        "Web, CLI, HTTP",
+        "approved Affairs-first protocol slice; safe server-supported operation projection only",
+    ),
     "market.package.list": ("M20", "public-read", "read", "CLI, HTTP, inbound MCP", "planned first vertical slice"),
     "market.package.get": ("M20", "public-read", "read", "CLI, HTTP", "planned"),
     "affairs.search": ("M71", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
@@ -310,8 +322,8 @@ EXTERNAL_AGENT_OPERATION_ROWS = {
         "M71",
         "public-read",
         "read",
-        "CLI, HTTP, inbound MCP",
-        "bounded exact stable-ID evidence through `ustc-agentd`, `ustc-agent` and the loopback-only Web demo; production HTTP/inbound-MCP projection planned",
+        "Web, CLI, HTTP; later inbound MCP",
+        "bounded formal protocol-major Web/CLI route projection implemented over exact stable-ID/domain evidence; production auth/TLS/inbound-MCP remains planned",
     ),
     "change.list": (
         "M70",
@@ -11352,7 +11364,7 @@ def check_external_agent_access_contract(issues: list[str]) -> None:
 
     required_fragments = {
         "docs/contracts/interfaces.md": (
-            "Bounded loopback-only `affairs.get` and `change.list` proofs now exist earlier as vertical-slice evidence for `M10 → deterministic Harness → current Market authorization → ToolGateway → fixed first-party owning adapter → M71/M70` and two operation-specific presentation surfaces",
+            "Bounded loopback-only `affairs.get` and `change.list` domain proofs already exist as vertical-slice evidence for `M10 → deterministic Harness → current Market authorization → ToolGateway → fixed first-party owning adapter → M71/M70` and operation-specific presentation surfaces",
             "The first remote profile uses reviewed MCP Streamable HTTP.",
             "`planner.generate` creates only a tenant-local draft. It does not enroll, register, pay or submit a transaction to any external campus system.",
         ),
@@ -13702,7 +13714,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
     "check_course_fixture": {"digest": "f4dda0f63c4550edfa0a913e6f0ef84f4358c29a8ca789f404ae5bdf539c16e2", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
-    "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
+    "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
     "check_m60_b2_offline_implementation": {"digest": "9819718e383ceaa0b7ea70ad37994c3acd401b517a8bee556051a0cd5747c41d", "status": "active"},

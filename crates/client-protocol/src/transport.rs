@@ -8,6 +8,7 @@ use crate::error::ClientErrorDto;
 use crate::opportunity::{
     M72OpportunityTerminalDto, OpportunityCommandDto, OpportunityRejectionDto,
 };
+use crate::protocol::{CapabilityListDto, ProtocolCompatibilityDto, ServerInfoDto};
 use crate::value::{UnixMillis, WireText};
 
 pub const MAX_FRAME_BYTES: usize = 1_048_576;
@@ -182,6 +183,15 @@ impl std::fmt::Debug for ClientIntentDto {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClientResponseDto {
+    ServerInfo {
+        info: ServerInfoDto,
+    },
+    Capabilities {
+        capabilities: CapabilityListDto,
+    },
+    Compatibility {
+        compatibility: ProtocolCompatibilityDto,
+    },
     Accepted {
         command_id: WireText,
         terminal: Box<M71TerminalDto>,
@@ -218,6 +228,21 @@ pub enum ClientResponseDto {
 impl std::fmt::Debug for ClientResponseDto {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ServerInfo { info } => formatter
+                .debug_struct("ClientResponseDto")
+                .field("kind", &"server_info")
+                .field("info", info)
+                .finish(),
+            Self::Capabilities { capabilities } => formatter
+                .debug_struct("ClientResponseDto")
+                .field("kind", &"capabilities")
+                .field("capabilities", capabilities)
+                .finish(),
+            Self::Compatibility { compatibility } => formatter
+                .debug_struct("ClientResponseDto")
+                .field("kind", &"compatibility")
+                .field("compatibility", compatibility)
+                .finish(),
             Self::Accepted { .. } => formatter
                 .debug_struct("ClientResponseDto")
                 .field("kind", &"accepted")
