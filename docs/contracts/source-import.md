@@ -117,7 +117,11 @@ Same semantics as `source-import/v0` §§3.2–3.3.
 
 ### 3.4 `SourceUrl`
 
-Same exact constrained public-HTTPS grammar as `source-import/v0` §3.4.
+Same exact constrained public-HTTPS grammar as `source-import/v0` §3.4, with the
+canonical lowercase DNS host additionally bounded to `3..=253` presentation bytes
+while every label remains `1..=63` bytes. This closes representability with
+`source-retrieval/v0`: every admitted `SourceUrl` host can construct the exact
+`RetrievalDnsName`; a `254+` byte host is `InvalidHost`, not a later protocol mismatch.
 
 ## 4. Source definition v1
 

@@ -2088,7 +2088,18 @@ class M60B2OfflineImplementationTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.assert_rejected(
-            "current-truth projection digest drifted in docs/plan/05-campus-trust-kernel.md"
+            "projection digest drifted in docs/plan/05-campus-trust-kernel.md"
+        )
+
+    def test_marker_external_task_contradiction_fails_closed(self) -> None:
+        path = self.root / "docs/tasks/m60-b2-offline-retrieval-policy.md"
+        path.write_text(
+            path.read_text(encoding="utf-8")
+            + "\nM60-B2 authority: transport/network effects and an approved source have been implemented.\n",
+            encoding="utf-8",
+        )
+        self.assert_rejected(
+            "projection digest drifted in docs/tasks/m60-b2-offline-retrieval-policy.md"
         )
 
     def test_m60_state_promotion_fails_closed(self) -> None:

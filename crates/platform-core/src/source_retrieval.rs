@@ -1132,8 +1132,7 @@ impl RetrievalPolicy {
                 RetrievalBodyFraming::Chunked
             }
             (ObservedHeaderValue::Missing, ObservedHeaderValue::One(value)) => {
-                let declared =
-                    parse_content_length(&value).ok_or(RetrievalPolicyError::AmbiguousFraming)?;
+                let declared = parse_content_length(&value)?;
                 if declared > u64::from(plan.candidate.maximum_response_bytes) {
                     return Err(RetrievalPolicyError::DeclaredBodyTooLarge);
                 }
@@ -1267,17 +1266,19 @@ fn parse_content_type(value: &str) -> Result<&str, RetrievalPolicyError> {
     Ok(essence)
 }
 
-fn parse_content_length(value: &str) -> Option<u64> {
+fn parse_content_length(value: &str) -> Result<u64, RetrievalPolicyError> {
     if value == "0" {
-        return Some(0);
+        return Ok(0);
     }
     if value.is_empty()
         || value.starts_with('0')
         || !value.bytes().all(|byte| byte.is_ascii_digit())
     {
-        return None;
+        return Err(RetrievalPolicyError::AmbiguousFraming);
     }
-    value.parse().ok()
+    value
+        .parse()
+        .map_err(|_| RetrievalPolicyError::DeclaredBodyTooLarge)
 }
 
 const fn is_tchar(byte: u8) -> bool {
@@ -1352,8 +1353,15 @@ mod tests {
             one_header(&head.headers, "content-type"),
             ObservedHeaderValue::One("text/plain".to_owned())
         );
-        assert_eq!(parse_content_length("0"), Some(0));
-        assert_eq!(parse_content_length("01"), None);
+        assert_eq!(parse_content_length("0"), Ok(0));
+        assert_eq!(
+            parse_content_length("01"),
+            Err(RetrievalPolicyError::AmbiguousFraming)
+        );
+        assert_eq!(
+            parse_content_length("18446744073709551616"),
+            Err(RetrievalPolicyError::DeclaredBodyTooLarge)
+        );
     }
 
     #[test]

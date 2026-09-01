@@ -1,6 +1,6 @@
 {
   "schema_version": "checker-test-inventory/v1",
-  "expected_count": 732,
+  "expected_count": 733,
   "test_ids": [
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_count_mismatch",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_duplicates",
@@ -185,6 +185,7 @@
     "test_check_repo_contracts.M60B2OfflineImplementationTests.test_frozen_source_digest_drift_fails_closed",
     "test_check_repo_contracts.M60B2OfflineImplementationTests.test_implementation_packet_drift_fails_closed",
     "test_check_repo_contracts.M60B2OfflineImplementationTests.test_m60_state_promotion_fails_closed",
+    "test_check_repo_contracts.M60B2OfflineImplementationTests.test_marker_external_task_contradiction_fails_closed",
     "test_check_repo_contracts.M60B2OfflineImplementationTests.test_missing_external_test_carrier_fails_closed",
     "test_check_repo_contracts.M60B2OfflineImplementationTests.test_shipping_promotion_fails_closed",
     "test_check_repo_contracts.M60B2OfflineImplementationTests.test_src010_promotion_fails_closed",

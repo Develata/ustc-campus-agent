@@ -632,6 +632,14 @@ fn response_authorization_enforces_content_codings_framing_and_trailers() {
             "Content-Type: text/plain\r\nContent-Length: 65\r\n",
             RetrievalPolicyError::DeclaredBodyTooLarge,
         ),
+        (
+            "Content-Type: text/plain\r\nContent-Length: 01\r\n",
+            RetrievalPolicyError::AmbiguousFraming,
+        ),
+        (
+            "Content-Type: text/plain\r\nContent-Length: 18446744073709551616\r\n",
+            RetrievalPolicyError::DeclaredBodyTooLarge,
+        ),
     ];
     for (headers, expected) in cases {
         let raw = format!("HTTP/1.1 200 OK\r\n{headers}\r\n");

@@ -319,7 +319,7 @@ Parser caps: status+headers ≤ 32768 raw bytes, ≤ 128 header fields, field na
 Framing rules:
 - `Content-Encoding`: absent or exactly `identity`;
 - `Transfer-Encoding`: absent or exactly `chunked` (one token, no parameters/chains);
-- `Content-Length`: `0` or `[1-9][0-9]*`, no coexistence with `Transfer-Encoding`;
+- `Content-Length`: `0` or `[1-9][0-9]*`, no coexistence with `Transfer-Encoding`; malformed decimal syntax is `AmbiguousFraming`, while a syntactically valid decimal above `u64::MAX` is already above every admitted body cap and therefore returns `DeclaredBodyTooLarge`;
 - absent both means close-delimited under `Connection: close`;
 - `Trailer`: absent;
 - chunk-size lines ≤ 128 raw bytes, `1..=16` hex digits, non-final count ≤ 4096.
