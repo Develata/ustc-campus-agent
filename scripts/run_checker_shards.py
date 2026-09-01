@@ -20,6 +20,7 @@ import argparse
 import errno
 import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -581,21 +582,21 @@ def _build_plan(
 
 
 def _partition(sorted_ids: list[str], jobs: int) -> list[list[str]]:
-    """Deterministically partition sorted IDs across at most ``jobs`` nonempty shards."""
+    """Deterministically stripe sorted IDs across at most ``jobs`` nonempty shards.
+
+    Test IDs are grouped lexicographically by TestCase class. Contiguous
+    equal-count chunks therefore concentrate a large, expensive class in one
+    process and leave the other workers idle. Round-robin striping preserves
+    exact deterministic inventory coverage while spreading every large class
+    across the available processes.
+    """
     if jobs < 1:
         raise ValueError("jobs must be >= 1")
     n = len(sorted_ids)
     if n == 0:
         raise ValueError("cannot partition zero tests")
     actual_shards = min(jobs, n)
-    base = n // actual_shards
-    extra = n % actual_shards
-    shards: list[list[str]] = []
-    start = 0
-    for i in range(actual_shards):
-        size = base + (1 if i < extra else 0)
-        shards.append(sorted_ids[start : start + size])
-        start += size
+    shards = [sorted_ids[index::actual_shards] for index in range(actual_shards)]
     if any(len(s) == 0 for s in shards):
         raise ValueError("partition produced an empty shard")
     return shards
@@ -929,6 +930,7 @@ def _write_parent_timeout_report(
         "aggregate_framed_input_digest": plan.get("aggregate_framed_input_digest"),
         "expected_test_ids": expected_ids,
         "expected_count": len(expected_ids),
+        "wall_seconds": None,
         "outcomes": outcomes,
         "reported_count": len(outcomes),
         "details": {},
@@ -991,6 +993,7 @@ def _verify_reports(
     reports: dict[int, dict[str, Any]] = {}
     log_digests: dict[int, dict[str, str]] = {}
     report_digests: dict[int, str] = {}
+    shard_wall_seconds: dict[int, float | None] = {}
 
     for result in child_results:
         shard_id = result["shard_id"]
@@ -1015,6 +1018,30 @@ def _verify_reports(
             )
             continue
         reports[shard_id] = report
+        report_wall_seconds = report.get("wall_seconds")
+        if parent_owned_timeout:
+            if report_wall_seconds is not None:
+                errors.append(f"shard {shard_id}: parent-timeout wall_seconds must be null")
+            shard_wall_seconds[shard_id] = None
+        elif report_wall_seconds is None:
+            # Timing is additive, non-authoritative telemetry for v1 receipts;
+            # legacy reports remain readable while every current child emits it.
+            shard_wall_seconds[shard_id] = None
+        elif not isinstance(report_wall_seconds, (int, float)) or isinstance(
+            report_wall_seconds, bool
+        ):
+            errors.append(f"shard {shard_id}: wall_seconds is not a finite nonnegative number")
+        else:
+            try:
+                normalized_wall_seconds = float(report_wall_seconds)
+            except OverflowError:
+                normalized_wall_seconds = math.inf
+            if not math.isfinite(normalized_wall_seconds) or normalized_wall_seconds < 0:
+                errors.append(
+                    f"shard {shard_id}: wall_seconds is not a finite nonnegative number"
+                )
+            else:
+                shard_wall_seconds[shard_id] = normalized_wall_seconds
         # Verify report binds the exact plan digest and source identity.
         if report.get("plan_digest") != plan_digest:
             errors.append(
@@ -1128,6 +1155,7 @@ def _verify_reports(
             "outcome_counts": outcome_counts,
             "report_digests": report_digests,
             "log_digests": log_digests,
+            "shard_wall_seconds": shard_wall_seconds,
         },
         errors,
     )
@@ -1196,6 +1224,7 @@ def _write_summary(
             str(shard_id): {
                 "report_digest": fan_in.get("report_digests", {}).get(shard_id, ""),
                 "log_digests": fan_in.get("log_digests", {}).get(shard_id, {}),
+                "wall_seconds": fan_in.get("shard_wall_seconds", {}).get(shard_id),
             }
             for shard_id in [shard["shard_id"] for shard in plan["shards"]]
         },
@@ -1404,6 +1433,9 @@ def _child_main(argv: list[str]) -> int:
         print(f"child {shard_id}: shard has zero expected test IDs", file=sys.stderr)
         return 2
 
+    # Time the complete inventory-bound child workload: exact loading plus execution.
+    shard_started = time.monotonic()
+
     # Load exactly those IDs and reject _FailedTest/missing/extra/duplicate/zero.
     loader = unittest.TestLoader()
     loaded_suite = unittest.TestSuite()
@@ -1441,6 +1473,7 @@ def _child_main(argv: list[str]) -> int:
 
     result = ShardTestResult(expected_ids)
     loaded_suite.run(result)
+    wall_seconds = time.monotonic() - shard_started
 
     missing, unexpected = result.missing_or_unexpected()
     if missing or unexpected:
@@ -1473,6 +1506,7 @@ def _child_main(argv: list[str]) -> int:
         "aggregate_framed_input_digest": plan.get("aggregate_framed_input_digest"),
         "expected_test_ids": expected_ids,
         "expected_count": len(expected_ids),
+        "wall_seconds": wall_seconds,
         "outcomes": result.outcomes,
         "reported_count": len(result.outcomes),
         "details": result.details,

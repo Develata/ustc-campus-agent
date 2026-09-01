@@ -282,6 +282,21 @@ class DiscoveryAndPartitionTests(RunnerTestBase):
         union = sorted(tid for shard in shards for tid in shard["test_ids"])
         self.assertEqual(union, ids)
         self.assertEqual(len(union), len(set(union)))
+        self.assertEqual(
+            [shard["test_ids"] for shard in shards],
+            [ids[0::3], ids[1::3], ids[2::3]],
+        )
+
+    def test_03_round_robin_partition_spreads_large_test_classes(self) -> None:
+        ids = [f"m.LargeCase.test_{index:03d}" for index in range(190)]
+        ids.extend(f"m.SmallCase.test_{index:03d}" for index in range(10))
+        shards = runner._partition(sorted(ids), 4)
+
+        self.assertEqual([len(shard) for shard in shards], [50, 50, 50, 50])
+        self.assertEqual(
+            [sum(".LargeCase." in test_id for test_id in shard) for shard in shards],
+            [48, 48, 47, 47],
+        )
 
 
 class InventoryValidationTests(RunnerTestBase):
@@ -606,6 +621,51 @@ class FanInTests(RunnerTestBase):
             f"expected tampering rejection, got {errors}",
         )
 
+    def test_16_malformed_wall_seconds_rejected(self) -> None:
+        self.setup_passing_suite(1)
+        result = self.run_runner("--jobs", "1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        plan = self.read_plan()
+        shard_id = plan["shards"][0]["shard_id"]
+        report_path = self.evidence / f"shard-{shard_id}" / "report.json"
+        base_report = json.loads(report_path.read_text(encoding="utf-8"))
+        child_result = {
+            "shard_id": shard_id,
+            "exit_code": 0,
+            "report_path": str(report_path),
+            "stdout_path": str(self.evidence / f"shard-{shard_id}" / "stdout.log"),
+            "stderr_path": str(self.evidence / f"shard-{shard_id}" / "stderr.log"),
+            "timed_out": False,
+        }
+
+        invalid_values = (True, -1, float("nan"), "1", 10**400)
+        for value in invalid_values:
+            with self.subTest(value=repr(value)):
+                report = dict(base_report)
+                report["wall_seconds"] = value
+                report_path.write_text(
+                    json.dumps(report, indent=2) + "\n", encoding="utf-8"
+                )
+                _, errors = runner._verify_reports(plan, [child_result])
+                self.assertTrue(
+                    any("wall_seconds is not a finite nonnegative number" in e for e in errors),
+                    f"expected malformed timing rejection, got {errors}",
+                )
+
+        timeout_report = dict(base_report)
+        timeout_report["report_owner"] = "parent-timeout"
+        timeout_report["wall_seconds"] = 1
+        report_path.write_text(
+            json.dumps(timeout_report, indent=2) + "\n", encoding="utf-8"
+        )
+        timeout_result = dict(child_result)
+        timeout_result["parent_timeout_report"] = True
+        _, errors = runner._verify_reports(plan, [timeout_result])
+        self.assertTrue(
+            any("parent-timeout wall_seconds must be null" in e for e in errors),
+            f"expected timeout timing rejection, got {errors}",
+        )
+
     def test_17_evidence_carries_exact_fields(self) -> None:
         self.write_test(
             "test_buffered_output.py",
@@ -662,6 +722,11 @@ class FanInTests(RunnerTestBase):
             stdout_path = self.evidence / f"shard-{shard_id}" / "stdout.log"
             report = self.read_shard_report(shard_id)
             stdout_payload += stdout_path.read_bytes()
+            self.assertGreaterEqual(report["wall_seconds"], 0)
+            self.assertEqual(
+                summary["per_shard_evidence"][str(shard_id)]["wall_seconds"],
+                report["wall_seconds"],
+            )
             self.assertEqual(
                 report["stdout_log_digest"],
                 runner._sha256_file(stdout_path),
@@ -1267,6 +1332,7 @@ class ParentTimeoutReportTests(RunnerTestBase):
         self.assertTrue(report_path.is_file(), "parent-timeout report must exist")
         report = json.loads(report_path.read_text(encoding="utf-8"))
         self.assertEqual(report.get("report_owner"), "parent-timeout")
+        self.assertIsNone(report.get("wall_seconds"))
         expected_ids = plan["shards"][0]["test_ids"]
         self.assertEqual(sorted(report["outcomes"].keys()), sorted(expected_ids))
         for outcome in report["outcomes"].values():

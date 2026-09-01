@@ -1,6 +1,6 @@
 {
   "schema_version": "checker-test-inventory/v1",
-  "expected_count": 735,
+  "expected_count": 737,
   "test_ids": [
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_count_mismatch",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_duplicates",
@@ -715,8 +715,10 @@
     "test_run_checker_shards.ChildExecutionTests.test_11_assertion_failure_fails_with_evidence",
     "test_run_checker_shards.DiscoveryAndPartitionTests.test_01_deterministic_discovery_sorted_ids",
     "test_run_checker_shards.DiscoveryAndPartitionTests.test_02_deterministic_partition_exact_union",
+    "test_run_checker_shards.DiscoveryAndPartitionTests.test_03_round_robin_partition_spreads_large_test_classes",
     "test_run_checker_shards.DuplicateDiscoveryTests.test_31_load_tests_duplicate_id_rejected",
     "test_run_checker_shards.FanInTests.test_15_report_tampering_rejected",
+    "test_run_checker_shards.FanInTests.test_16_malformed_wall_seconds_rejected",
     "test_run_checker_shards.FanInTests.test_17_evidence_carries_exact_fields",
     "test_run_checker_shards.FanInTests.test_18_atomic_write_failure_no_pass",
     "test_run_checker_shards.FanInTests.test_22_concurrent_mutation_fails",
