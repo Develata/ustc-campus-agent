@@ -5,12 +5,12 @@
 
 use crate::identity::{TenantId, UserId};
 use crate::invocation::{
-    AuthorizedInvocation, CapabilityGrantSnapshot, CapabilityId, CatalogPackageRevision,
-    CurrentDenyState, GrantSnapshotId, InstallationId, InvocationAuthorityCandidate,
-    InvocationAuthorizationError, InvocationPolicySnapshot, InvocationResolver, InvocationTarget,
-    ObjectScope, PluginInstallationSnapshot, ProjectionResolutionError, ProposedToolCall,
-    ResolvedInvocation, ToolProjectionRequest, ToolProjectionSnapshot, authorize_call,
-    preflight_projected_call,
+    AuthorizedInvocation, CapabilityClass, CapabilityGrantSnapshot, CapabilityId,
+    CatalogPackageRevision, ComponentKind, CurrentDenyState, GrantSnapshotId, GrantState,
+    InstallationId, InstallationState, InvocationAuthorityCandidate, InvocationAuthorizationError,
+    InvocationPolicySnapshot, InvocationResolver, InvocationTarget, ObjectScope,
+    PluginInstallationSnapshot, ProjectionResolutionError, ProposedToolCall, ResolvedInvocation,
+    ToolProjectionRequest, ToolProjectionSnapshot, authorize_call, preflight_projected_call,
 };
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -217,6 +217,131 @@ impl<R: InvocationAuthorityRepository> InvocationAuthorityService<R> {
             .verify_precondition()
             .map_err(ProjectionAssemblyError::Repository)?;
         Ok(projection)
+    }
+
+    /// Authorizes one statically composed first-party application use case from
+    /// transaction-current Market package, installation, grant, and policy state.
+    ///
+    /// This path deliberately produces no tool projection, provider call,
+    /// `AgentRun`, `ToolGateway` route, or `PluginExecutor` request. The target's
+    /// final identity field is only the repository's exact operation locator for
+    /// the bounded M20 carrier; it never becomes an Agent-facing tool identity.
+    pub fn authorize_static_application_use_case(
+        &self,
+        tenant_id: &TenantId,
+        user_id: &UserId,
+        target: &InvocationTarget,
+        capability_class: CapabilityClass,
+    ) -> Result<(), InvocationRecheckError> {
+        let transaction = self
+            .repository
+            .begin_read()
+            .map_err(InvocationRecheckError::Repository)?;
+        let catalog = transaction
+            .load_catalog_for_target(target)
+            .map_err(InvocationRecheckError::Repository)?
+            .ok_or(InvocationRecheckError::Authorization(
+                InvocationAuthorizationError::CatalogRevoked,
+            ))?;
+        let installation = transaction
+            .load_installation(&target.installation_id)
+            .map_err(InvocationRecheckError::Repository)?
+            .ok_or(InvocationRecheckError::Authorization(
+                InvocationAuthorizationError::InstallationMissing,
+            ))?;
+        let grant = transaction
+            .load_current_grant(tenant_id, user_id, target)
+            .map_err(InvocationRecheckError::Repository)?
+            .ok_or(InvocationRecheckError::Repository(
+                AuthorityRepositoryError::CurrentGrantMissing,
+            ))?;
+        let policy = transaction
+            .load_policy(&target.capability_id)
+            .map_err(InvocationRecheckError::Repository)?
+            .ok_or(InvocationRecheckError::Repository(
+                AuthorityRepositoryError::PolicyMissing,
+            ))?;
+
+        let deny = |error| InvocationRecheckError::Authorization(error);
+        if policy.emergency_blocked {
+            return Err(deny(InvocationAuthorizationError::EmergencyBlocked));
+        }
+        if catalog.revoked || !catalog.runnable {
+            return Err(deny(InvocationAuthorizationError::CatalogRevoked));
+        }
+        let component = catalog
+            .component
+            .as_ref()
+            .ok_or_else(|| deny(InvocationAuthorizationError::AuthorityConflict))?;
+        if catalog.package_id != target.package_id
+            || catalog.package_version != target.package_version
+            || component.id != target.component_id
+            || component.kind != ComponentKind::DeclarativeResourcePack
+            || component.tool.is_some()
+            || !component
+                .declared_capabilities
+                .contains(&target.capability_id)
+            || policy.capability_id != target.capability_id
+            || policy.capability_class != Some(capability_class)
+            || policy.admitted_execution_identity.is_some()
+            || policy.admitted_source_policy != catalog.source_policy
+        {
+            return Err(deny(InvocationAuthorizationError::AuthorityConflict));
+        }
+        if &installation.tenant_id != tenant_id
+            || &installation.user_id != user_id
+            || &grant.tenant_id != tenant_id
+            || &grant.user_id != user_id
+        {
+            return Err(deny(
+                InvocationAuthorizationError::TenantOrUserScopeMismatch,
+            ));
+        }
+        match installation.state {
+            InstallationState::Enabled => {}
+            InstallationState::Disabled => {
+                return Err(deny(InvocationAuthorizationError::InstallationDisabled));
+            }
+            InstallationState::Revoked => {
+                return Err(deny(InvocationAuthorizationError::InstallationRevoked));
+            }
+        }
+        if installation.id != target.installation_id
+            || installation.package_id != catalog.package_id
+            || installation.package_version != catalog.package_version
+            || installation.package_digest != catalog.package_digest
+            || installation.component.id != component.id
+            || installation.component.version != component.version
+            || installation.component.digest != component.digest
+            || installation.component.execution_identity != component.execution_identity
+        {
+            return Err(deny(
+                InvocationAuthorizationError::InstallationRevisionMismatch,
+            ));
+        }
+        match grant.state {
+            GrantState::Active => {}
+            GrantState::Stale => {
+                return Err(deny(InvocationAuthorizationError::GrantStale));
+            }
+            GrantState::Expired => {
+                return Err(deny(InvocationAuthorizationError::GrantExpired));
+            }
+            GrantState::Revoked => {
+                return Err(deny(InvocationAuthorizationError::GrantRevoked));
+            }
+        }
+        if grant.installation_id != installation.id
+            || grant.capability_id != target.capability_id
+            || grant.object_scope != target.object_scope
+            || grant.capability_manifest_digest != catalog.capability_manifest_digest
+        {
+            return Err(deny(InvocationAuthorizationError::GrantScopeMismatch));
+        }
+
+        transaction
+            .verify_precondition()
+            .map_err(InvocationRecheckError::Repository)
     }
 
     pub fn recheck_invocation(

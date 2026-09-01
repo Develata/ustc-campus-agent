@@ -5,7 +5,7 @@
 - `Layer`: Runtime architecture
 - `Status`: R0 platform-owned transition kernel implemented; finite harness, orchestration, persistence and production adapters planned
 - `Version`: `0.8.0`
-- `Last Review`: `2026-08-15`
+- `Last Review`: `2026-09-01`
 - `Authority Owns`: finite HarnessRun/TaskGraph, Plugin-neutral node AgentRun state, context budget, versioned Agent tool protocol, tool-effect ordering, framework/provider adapter boundary, selective production persistence policy and the application-level RunExecutionCoordinator contract
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
 - `Counterpart Features`: `docs/features/04-bounded-agent-harness.md`; current Market and product features
@@ -288,7 +288,7 @@ Implemented now:
 - `agent-runtime` production/test dependency independence from Market, Plugin and adapter crates, enforced by the repository checker;
 - P0a→`RunSpec` cross-boundary proof owned by `ustc-agentd`, the composition root.
 
-This is an R0 node-local domain kernel, not the complete finite user-task `HarnessRun`. `agent-tool-protocol/v0` values/fake conformance and provider-free deterministic Harness-turn compositions for Affairs, ChangeRadar and Opportunity are implemented: transaction-current Market projection/recheck precedes effect intent, owning first-party execution, receipt and correlated result. Generic package-portable ToolGateway hosting, durable generic Agent journal composition/restart, model provider profiles, MCP binding, out-of-process native/WASM Plugin execution, clarification/review supervisors and model-backed planning remain future work.
+This is an R0 node-local domain kernel, not the complete finite user-task `HarnessRun`. `agent-tool-protocol/v0` values/fake conformance and provider-free deterministic Harness-turn compositions for Affairs and ChangeRadar are implemented: transaction-current Market projection/recheck precedes effect intent, owning first-party execution, receipt and correlated result. Opportunity Graph's current tenant-private operations are static M72 application use cases and are not M30/M40 evidence. Generic package-portable ToolGateway hosting, durable generic Agent journal composition/restart, model provider profiles, MCP binding, out-of-process native/WASM Plugin execution, clarification/review supervisors and model-backed planning remain future work.
 
 The accepted finite harness, TaskGraph, clarification/review supervisor and context-budget/compaction contracts are H0 target architecture only; no production harness, tokenizer, compactor, subagent supervisor or plan panel exists yet.
 

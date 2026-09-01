@@ -4,7 +4,7 @@
   "publisher": "first-party",
   "tier": "FirstParty",
   "displayName": "Campus Opportunity Graph",
-  "description": "Consent-bound tenant-private opportunity profile and deterministic source-grounded course planning through the bounded campus Agent spine.",
+  "description": "Consent-bound tenant-private opportunity profile and deterministic source-grounded course planning through static first-party M72 application use cases.",
   "implementationStatus": "development",
   "installPolicy": {
     "class": "FirstPartySystemPlugin",
@@ -13,10 +13,6 @@
     "userDisableAllowed": true
   },
   "components": [
-    {
-      "type": "NativeRustComponent",
-      "path": "market/packages/ustc.opportunity-graph/components/native-rust-component.json"
-    },
     {
       "type": "DeclarativeResourcePack",
       "path": "market/packages/ustc.opportunity-graph/components/course-planning-resource-pack.json"

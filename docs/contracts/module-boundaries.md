@@ -30,9 +30,10 @@ This registry defines what may cross each large-module boundary. It does not pre
 | `B-M80-M10-CALL` | M80 produces request instances; M10 owns the versioned wire schema | `M10` | protocol-major bootstrap/admission plus versioned client-core request; the first closed subset is Web/CLI `server.info`, `capability.list`, `affairs.get` | approved Affairs-first major-1/header/route slice plus bounded existing `affairs get/lookup`; production auth/SSE, generic conformance and other adapters planned |
 | `B-M10-M80-RESULT` | `M10` | `M80` | typed `server.info`, safe capability projection, typed domain result/error and exact `upgrade_required` or `incompatible_protocol` outcome | approved Affairs-first compatibility reduction plus bounded existing Affairs response/provenance and canonical CLI JSON evidence; full peer matrix planned |
 | `B-M10-M80-EVENT` | `M10` | `M80` | typed server event/stream value, monotone cursor and reconnect/resync outcome shared semantically across peer adapters | accepted contract; implementation planned |
-| `B-M10-APP-CALL` | `M10` | owning backend application module | one admitted typed application command/query; no transport or Dioxus type | bounded fixture-backed M71 Affairs command/query evidence; other operations and production ingress planned |
-| `B-APP-M10-RESULT` | owning backend application module | `M10` | typed application result/error/event projection; no concrete adapter handle | bounded M71 Affairs result/error/provenance evidence; other operations and production ingress planned |
+| `B-M10-APP-CALL` | `M10` | owning backend application module | one admitted typed application command/query; no transport or Dioxus type | bounded fixture-backed M71 Affairs plus four static M72 private-operation command/query paths; other operations and production ingress planned |
+| `B-APP-M10-RESULT` | owning backend application module | `M10` | typed application result/error/event projection; no concrete adapter handle | bounded M71 Affairs plus typed static M72 result/error evidence; other operations and production ingress planned |
 | `B-M20-M40-PROJECTION` | `M20` | `M40` | immutable tool projection, private route and current authorization result | partial implementation |
+| `B-M20-M72-AUTH` | `M20` | statically composed owning `M72` application use case | transaction-current package, declarative resource component, installation, grant, capability class/scope and policy authorization for one exact registered application operation; no Agent tool projection, provider call or executor route | bounded fixture-backed implementation for the four private Opportunity operations; durable production M20 adapter planned |
 | `B-M30-M50-MODEL` | `M30` | `M50` | complete model request, ordered events, usage and typed provider errors | planned |
 | `B-M20-M30-TOOLSET` | `M20` resolver via composition | `M30`/provider | frozen `AgentToolsetView` only; no private route/package/grant internals | partial implementation |
 | `B-M30-M40-CALL` | `M30` via composition | `M40` | correlated `AgentToolCall` proposal for staged prepare; no executor I/O yet | protocol/fake proof implemented; production planned |
@@ -41,8 +42,8 @@ This registry defines what may cross each large-module boundary. It does not pre
 | `B-M40-M51-EXEC` | `M40` | `M51` | bounded `PluginExecutionRequest`/`PluginExecutionOutcome` | planned |
 | `B-M60-M70-CHANGE` | `M60` | `M70` | accepted revision/fact pair, provenance/freshness/conflict | planned |
 | `B-M60-M71-PROC` | `M60` | `M71` | accepted facts/revisions supporting procedure candidates | planned |
-| `B-M60-M72-OPPORTUNITY` | `M60` | `M72` | reviewed opportunity/course facts with provenance/time/conflict | fixture subset only |
-| `B-M00-M72-PROFILE` | `M00` | `M72` | exact tenant/user/request context for private profile operations | planned |
+| `B-M60-M72-OPPORTUNITY` | `M60` | `M72` | reviewed opportunity/course facts with provenance/time/conflict | bounded `DemoReviewed` revision-health fixture subset only; approved live-source port planned |
+| `B-M00-M72-PROFILE` | `M00` | `M72` | exact tenant/user/request context for private profile operations | bounded authenticated demo-session composition implemented; production SSO/session authority planned |
 | `B-M60-M90-SOURCE-TRANSPORT` | `M60` | `M90` | M60 produces owned move-only `RetrievalTransportRequest` from `EffectReadyRetrievalPlan`; M90 implements `SourceTransportPort::transport`, performs DNS/TLS/HTTP/framing/body I/O under M60-provided bounds, returns only `RetrievalTransportSuccess` or transport-only `SourceTransportError`; M90 never receives `EffectReadyRetrievalPlan`, never names domain `SourceFetchFailure`, and never returns `BoundedFetch` | accepted contract; implementation planned |
 | `B-DOMAIN-M90-PORTS` | each domain module | `M90` | repository, journal, artifact, clock, scheduler, secret-ref, HTTP and telemetry ports; M00's exact session repository/clock/credential-evidence subset is [`platform-session-port/v0`](platform-session-port.md), and its redacted evidence read/append-once subset is [`platform-control-evidence/v0`](platform-control-evidence.md) | bounded B4a session ports plus one app-private durable DemoReviewed current-session read/bootstrap vendor and bounded B4b data-only evidence/journal interfaces are implemented (`AUTH-021`, `AUTH-022`); durable lifecycle/evidence adapters, formal authentication and B5 coupling remain planned |
 
@@ -86,6 +87,13 @@ The inbound adapter cannot invoke M51 or inherit operator commands/credentials. 
 For the first retained Affairs-first seam, `server.info` is header-free bootstrap; every other admitted route requires major `1`. M10 alone classifies older as `upgrade_required` and newer/absent/unparseable as `incompatible_protocol`; the HTTP adapter projects `426`/`409`, respectively. The capability projection is a closed Web/CLI allowlist and is not dispatch authority. M80 preserves the typed classification under `ustc-client-result/v1` and never derives domain or compatibility truth from HTTP status.
 
 ## 4. Agent–Plugin boundary
+
+The four current Opportunity private operations do not cross this boundary. They
+follow `M00/M10 → B-M20-M72-AUTH → static owning M72 application use case`; no
+`AgentToolsetView`, `AgentToolCall`, provider identity, M30 intent/receipt command,
+M40 route or Plugin executor request is created. This exception is a classification
+of static first-party application operations, not a weakening of the generic M40
+contract below.
 
 The only Agent-facing tool family is `agent-tool-protocol/v0`:
 

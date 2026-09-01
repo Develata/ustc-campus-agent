@@ -6,7 +6,7 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 
 平台有三个正式的 default first-party Plugins：**USTC Affairs Navigator**、**USTC ChangeRadar** 与 **Campus Opportunity Graph**。三者共享 Campus Trust Kernel，但保持独立的 package identity、版本、安装与启停边界。
 
-平台主线已建立 framework-neutral Agent runtime kernel、typed invocation resolver 与 `agent-tool-protocol/v0` 的 executable evidence，并固定 `Agent ↔ ToolGateway ↔ PluginExecutor` 为唯一扩展边界。当前同一 `ustc-agentd` binary 已组成一个 bounded 三插件 MVP：loopback Web → M10 → bounded Agent/Harness → transaction-current Market authorization → ToolGateway → owning Plugin → source/profile-grounded result → typed projection → Web。它使用显著标记的 DemoReviewed source snapshots 与 synthetic private profile，不代表 USTC 官方服务、实时来源、正式 SSO、自动审批或自动选课。
+平台主线已建立 framework-neutral Agent runtime kernel、typed invocation resolver 与 `agent-tool-protocol/v0` 的 executable evidence，并固定 `Agent ↔ ToolGateway ↔ PluginExecutor` 为通用 Agent 扩展边界。当前同一 `ustc-agentd` binary 已组成一个 bounded 三插件 MVP：Affairs Navigator 与 ChangeRadar 的普通读取使用 `M10 → bounded Agent/Harness → transaction-current Market authorization → ToolGateway → owning Plugin`；Opportunity Graph 的四个 tenant-private profile/planner operation 则使用 `M00/M10 → transaction-current M20 authorization → static M72 application use case → source/profile-grounded result → typed projection → Web`，不创建 Agent run、provider call、ToolGateway route、effect intent/receipt 或 PluginExecutor request。所有路径都使用显著标记的 DemoReviewed source snapshots 与 synthetic private profile，不代表 USTC 官方服务、实时来源、正式 SSO、自动审批或自动选课。
 
 ## 一条命令运行三插件 MVP
 

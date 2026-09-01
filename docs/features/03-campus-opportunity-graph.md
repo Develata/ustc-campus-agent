@@ -35,11 +35,13 @@ user installs/enables Opportunity Graph
 
 This full installed-Plugin journey is the active M72 slice. The current candidate
 combines the offline Course Planning pack with exact-consent M10 commands,
-transaction-current Market/Harness/ToolGateway authorization, an M60-bound
-`DemoReviewed` catalog adapter, a mode-`0600` atomic tenant-private profile store and
-the Web create/view/plan/revoke-delete journey. The four bounded operations are
-`profile.academic.create`, `profile.academic.view`, `planner.generate` and
-`profile.academic.revoke_delete`; none has a direct M10/Web-to-M72 fallback.
+transaction-current M20 authorization of four static M72 application use cases, an
+M60-bound `DemoReviewed` catalog adapter, a mode-`0600` atomic tenant-private profile
+store and the Web create/view/plan/revoke-delete journey. It creates no Agent run,
+provider call, ToolGateway route, effect intent/receipt or PluginExecutor request. The
+four bounded operations are `profile.academic.create`, `profile.academic.view`,
+`planner.generate` and `profile.academic.revoke_delete`; none has a direct
+M10/Web-to-M72 fallback.
 
 ## Course Planning bounded spike
 

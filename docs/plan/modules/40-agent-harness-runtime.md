@@ -3,10 +3,10 @@
 ## Metadata
 
 - `Module ID`: `M30`
-- `Status`: Accepted blueprint; node-local runtime kernel plus provider-free deterministic Harness turns implemented, finite user-task harness planned
+- `Status`: Accepted blueprint; node-local runtime kernel plus provider-free deterministic Affairs/ChangeRadar Harness turns implemented, finite user-task harness planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m30-agent-runtime/v0`
-- `Last Review`: `2026-07-25`
+- `Last Review`: `2026-09-01`
 - `Owning Plan`: [`../07-runtime-and-integration.md`](../07-runtime-and-integration.md)
 - `Primary code areas`: `crates/agent-runtime/` and future cohesive harness modules
 

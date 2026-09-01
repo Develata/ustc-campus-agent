@@ -99,16 +99,19 @@ class MarketContractTests(unittest.TestCase):
                 for issue in self.check_course_fixture()
             )
         )
-        native_path = (
-            self.root
-            / "market/packages/ustc.opportunity-graph/components/native-rust-component.json"
+        manifest_path = self.root / "market/packages/ustc.opportunity-graph/package.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["components"].insert(
+            0,
+            {
+                "type": "NativeRustComponent",
+                "path": "market/packages/ustc.opportunity-graph/components/native-rust-component.json",
+            },
         )
-        native = json.loads(native_path.read_text(encoding="utf-8"))
-        native["operations"] = native["operations"][:-1]
-        native_path.write_text(json.dumps(native) + "\n", encoding="utf-8")
+        manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
         self.assertTrue(
             any(
-                "Opportunity native-component identity/operation drift" in issue
+                "Opportunity package component classification drift" in issue
                 for issue in self.check_course_fixture()
             )
         )

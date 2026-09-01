@@ -3,10 +3,10 @@
 ## Metadata
 
 - `Module ID`: `M20`
-- `Status`: Accepted blueprint; manifest/package-catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` semantic authority-read transaction/assembly, bounded `M20-B6` update/rollback domain plus semantic fake and pure invocation-resolver evidence exist; durable installation/grant/update repositories, artifact switching and production composition remain planned
+- `Status`: Accepted blueprint; manifest/package-catalog, B2 capability, B3 installation, B4 grant, bounded `M20-B5` semantic authority-read transaction/assembly including static-application authorization, bounded `M20-B6` update/rollback domain plus semantic fake and pure invocation-resolver evidence exist; durable installation/grant/update repositories, artifact switching and production composition remain planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m20-market-package/v0`
-- `Last Review`: `2026-08-02`
+- `Last Review`: `2026-09-01`
 - `Owning Plan`: [`../04-market-and-plugin-lifecycle.md`](../04-market-and-plugin-lifecycle.md)
 - `Owning Lifecycle Contract`: [`../../contracts/market-lifecycle.md`](../../contracts/market-lifecycle.md)
 - `Primary code areas`: `market/`, cohesive Market modules under `crates/platform-core/` until extraction is justified
@@ -61,10 +61,11 @@ BrowseCatalog / PackageDetail
 InstallationSnapshot / GrantSnapshot
 ResolveToolProjection
 RecheckInvocationAuthority
+AuthorizeStaticApplicationUseCase
 MarketEvent / MarketError
 ```
 
-The resolver emits immutable authority entries and gateway-private routes. Agent-facing protocol values are produced through `M40`, not by exposing Market internals.
+The resolver emits immutable authority entries and gateway-private routes. Agent-facing protocol values are produced through `M40`, not by exposing Market internals. `AuthorizeStaticApplicationUseCase` is a separate transaction-current check for an exact registered application operation backed by a declarative resource component with no tool or admitted execution identity; it emits no Agent-facing projection or executor route.
 
 ## 5. Dependency direction
 
@@ -78,6 +79,7 @@ Allowed callers:
 
 - `M10` application API;
 - `M40` for projection/current invocation authority;
+- composition invoking an owning static `M72` application use case through `B-M20-M72-AUTH`;
 - composition/bootstrap commands.
 
 Forbidden dependencies:
@@ -165,7 +167,7 @@ Read-heavy browse projection and per-turn/call authorization are separate paths.
 5. `grant-domain` — exact scope/version/reapproval.
 6. `catalog-read-model` — anonymous browse/detail projection.
 7. `invocation-resolver` — immutable per-turn projection.
-8. `invocation-recheck` — current deny-side and arguments.
+8. `invocation-recheck` — current deny-side/arguments plus the narrower no-tool static-application authorization.
 9. `package-update` — stage/apply/rollback.
 10. `market-ports` — repositories/artifact/secret-ref/event fakes.
 
@@ -173,7 +175,7 @@ Existing `invocation.rs` is reviewed against items 7–8; it is not permission t
 
 ### Delivery sequence
 
-The canonical roadmap batch schedule lives in [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md) §7 (`M20-B0` through `M20-B7`). B1–B4 provide bounded catalog/capability/installation/grant evidence. Bounded `M20-B5` provides one GAT read transaction across separate catalog/installation/current-or-exact-grant/policy carriers, service-owned candidate/current assembly, the adopted resolver/recheck and post-success precondition verification under `crate::market::authority`. Bounded `M20-B6` now provides pure update/rollback aggregate evidence and an atomic in-memory semantic package-update repository under `crate::market::update`, including exact approval/readiness/confirmation/rollback evidence, complete-current grant stale-on-Apply/Rollback semantics, receipt-prefix rebuild and cross-stream reference bijection tests. These slices create no production grant/update issuer, durable lifecycle state, artifact-store switch, crash recovery, enable evidence, effect intent or acceptance promotion. Remaining work is `M20-B7` production-facing API/composition/fake M40 consumer plus future durable adapters. The module remains `partial-evidence`; B6 effects no `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted` promotion.
+The canonical roadmap batch schedule lives in [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md) §7 (`M20-B0` through `M20-B7`). B1–B4 provide bounded catalog/capability/installation/grant evidence. Bounded `M20-B5` provides one GAT read transaction across separate catalog/installation/current-or-exact-grant/policy carriers, service-owned candidate/current assembly, the adopted resolver/recheck, a no-tool static-application authorization and post-success precondition verification under `crate::market::authority`. The static check is consumed by the fixture-backed M72 composition without claiming a durable production M20 adapter or generic M20-B7 completion. Bounded `M20-B6` now provides pure update/rollback aggregate evidence and an atomic in-memory semantic package-update repository under `crate::market::update`, including exact approval/readiness/confirmation/rollback evidence, complete-current grant stale-on-Apply/Rollback semantics, receipt-prefix rebuild and cross-stream reference bijection tests. These slices create no production grant/update issuer, durable lifecycle state, artifact-store switch, crash recovery, enable evidence, effect intent or acceptance promotion. Remaining work is `M20-B7` production-facing API/composition/fake M40 consumer plus future durable adapters. The module remains `partial-evidence`; B6 effects no `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted` promotion.
 
 ## 14. Exit gate
 

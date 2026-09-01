@@ -4,10 +4,10 @@
 
 - `Module ID`: `M72`
 - `Package ID`: `ustc.opportunity-graph`
-- `Status`: Accepted blueprint; bounded consent/profile and Course Planning evidence exists
+- `Status`: Accepted blueprint; bounded consent/profile, static application-use-case composition and Course Planning evidence exist
 - `Implementation State`: `partial-evidence`
 - `Version`: `m72-opportunity-graph/v0`
-- `Last Review`: `2026-08-27`
+- `Last Review`: `2026-09-01`
 - `Primary code areas`: `plugins/first-party/opportunity-graph/`, `crates/opportunity-graph/`, `crates/course-planning/`, future peer opportunity packs
 
 ## 1. Purpose
@@ -67,6 +67,7 @@ Allowed dependencies:
 
 - `M60` typed fact/revision/provenance/freshness interfaces;
 - `M00` tenant/user/request context;
+- public `M20` transaction-current authorization for exact static application operations;
 - `M90` tenant-scoped repository, consent/audit, artifact and clock ports;
 - optional `M30` explanation assistance after deterministic results are fixed.
 
@@ -76,6 +77,7 @@ Forbidden dependencies:
 - `M70`/`M71` private state;
 - Dioxus/client types;
 - model output as hard eligibility/planning truth;
+- `M30`/`M40`/`M50`/`M51` execution for the four current static profile/planner operations;
 - shared non-tenant-keyed profile cache.
 
 ## 6. Lifecycle
@@ -170,12 +172,13 @@ Use typed indexed facts and tenant-scoped profile projections. Candidate generat
 12. `opportunity-ports` — public/profile repositories, clock and audit fakes.
 
 Existing `course-planning` remains items 6–8 and 10. The retained
-`opportunity-graph` foundation adds exact consent fields, one active tenant/user
-profile snapshot, wrong-principal denial before M60 access, deterministic
-qualification/planning reuse, source/profile stale classification and atomic
-revoke/delete tombstones. It is in-memory and fixture-backed: it does not prove
-M00/M10/M20/M30/M40/M80 composition, durable deletion/backup erasure, Market
-lifecycle or live source retrieval.
+`opportunity-graph` standalone foundation adds exact consent fields, one active
+tenant/user profile snapshot, wrong-principal denial before M60 access,
+deterministic qualification/planning reuse, source/profile stale classification
+and atomic revoke/delete tombstones. The active composition below adds M00/M10,
+transaction-current M20 authorization, a strict file-backed private repository and
+loopback Web evidence. It does not prove production SSO, durable production M20
+adapters, backup erasure, approved live source retrieval or generic M80 clients.
 
 ### 13.1 Active common-platform composition slice
 
@@ -185,10 +188,8 @@ The accepted next slice is intentionally narrower than the full M72 ontology:
 loopback Web
 → M10 authenticated profile/create|view|plan|revoke-delete intent
 → M00 admitted tenant/user identities
-→ transaction-current M20 installation + grant recheck
-→ deterministic bounded M30 Harness
-→ M40 ToolGateway intent/executor/receipt ordering
-→ owning `ustc.opportunity-graph` adapter
+→ transaction-current M20 package + installation + grant + policy authorization
+→ static owning M72 application use case
 → tenant-private profile repository + M60 revision-health port + planner
 → typed owner-private M10 terminal
 → Web
@@ -201,6 +202,10 @@ The frozen operation IDs are `profile.academic.create`,
 derived only from the admitted session. Wrong principal, missing/deleted profile,
 disabled/revoked Plugin, repository failure and non-current/unavailable M60
 revision all fail closed before any later stage named by the precedence contract.
+The path creates no Agent run or tool projection, provider call, ToolGateway route,
+effect intent/receipt or PluginExecutor request. Optional future model explanation
+remains a separate M30/M50-assisted slice after the deterministic M72 result is
+fixed; it does not reinterpret these four operations as Agent execution.
 
 The retained Course Planning JSON remains synthetic. The composition adapter
 must construct a real `DemoReviewed` M60 `SourceRevision` from retained evidence,

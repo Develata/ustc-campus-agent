@@ -1748,8 +1748,8 @@ def check_course_fixture(issues: list[str]) -> None:
         "market/packages/ustc.opportunity-graph/components/course-planning-resource-pack.json",
         issues,
     )
-    native_component = load_json(
-        "market/packages/ustc.opportunity-graph/components/native-rust-component.json",
+    package_manifest = load_json(
+        "market/packages/ustc.opportunity-graph/package.json",
         issues,
     )
     try:
@@ -1773,21 +1773,14 @@ def check_course_fixture(issues: list[str]) -> None:
         or resource_pack.get("reviewClass") != "DemoReviewed"
     ):
         fail("Course Planning resource-pack identity drift", issues)
-    expected_operations = [
-        "profile.academic.create",
-        "profile.academic.view",
-        "planner.generate",
-        "profile.academic.revoke_delete",
+    expected_components = [
+        {
+            "type": "DeclarativeResourcePack",
+            "path": "market/packages/ustc.opportunity-graph/components/course-planning-resource-pack.json",
+        }
     ]
-    if not isinstance(native_component, dict) or native_component != {
-        "schemaVersion": "native-rust-component/v1",
-        "packageId": "ustc.opportunity-graph",
-        "packageVersion": "0.1.0",
-        "cratePath": "crates/opportunity-graph",
-        "compositionOwner": "apps/ustc-agentd",
-        "operations": expected_operations,
-    }:
-        fail("Opportunity native-component identity/operation drift", issues)
+    if not isinstance(package_manifest, dict) or package_manifest.get("components") != expected_components:
+        fail("Opportunity package component classification drift", issues)
     expected_top_level = {
         "schema_version",
         "source_revision",
@@ -3088,9 +3081,10 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
                'use std::fmt;',
                'type Value = UniqueStringMap;'),
  'market/authority.rs': ('use crate::identity::{TenantId, UserId};',
-                         'use crate::invocation::{ AuthorizedInvocation, CapabilityGrantSnapshot, '
-                         'CapabilityId, CatalogPackageRevision, CurrentDenyState, GrantSnapshotId, '
-                         'InstallationId, InvocationAuthorityCandidate, '
+                         'use crate::invocation::{ AuthorizedInvocation, CapabilityClass, '
+                         'CapabilityGrantSnapshot, CapabilityId, CatalogPackageRevision, '
+                         'ComponentKind, CurrentDenyState, GrantSnapshotId, GrantState, '
+                         'InstallationId, InstallationState, InvocationAuthorityCandidate, '
                          'InvocationAuthorizationError, InvocationPolicySnapshot, '
                          'InvocationResolver, InvocationTarget, ObjectScope, '
                          'PluginInstallationSnapshot, ProjectionResolutionError, ProposedToolCall, '
@@ -3685,8 +3679,8 @@ PLATFORM_GRANT_TEST_FUNCTIONS = ('checked_grant_ids_versions_and_sequences_are_c
  'non_issue_commands_validate_snapshot_and_expected_version',
  'empty_replay_and_repository_queries_are_deterministic',
  'public_errors_are_category_only_and_secret_safe')
-PLATFORM_AUTHORITY_SOURCE_SHA256 = "7fa7210fd0cebca033fd9a597069dadf34af6cc084855ea3587afb413d89f672"
-PLATFORM_AUTHORITY_TEST_SHA256 = "ba92339afb73096309948638c10db75dcb2a3714c6cc5f369e17b11aa2648fc3"
+PLATFORM_AUTHORITY_SOURCE_SHA256 = "e6e1a6215e817f6a017e3bff199245490ebf11f298d96bda2c54d3b33d69dd16"
+PLATFORM_AUTHORITY_TEST_SHA256 = "f87197c169ee72065db8f794b9672ae34356c754a038f098f7982a793b175e2e"
 PLATFORM_AUTHORITY_ADMITTED_ATTRIBUTE_COUNTS = (
     ((False, "cfg", "cfg(test)"), 1),
     ((False, "derive", "derive(Clone)"), 1),
@@ -3710,6 +3704,7 @@ PLATFORM_AUTHORITY_ADMITTED_PUBLIC_DECLARATIONS = (
     "pub enum AuthorityRepositoryError",
     "pub enum InvocationRecheckError",
     "pub enum ProjectionAssemblyError",
+    "pub fn authorize_static_application_use_case",
     "pub fn fail_next_precondition_for_testing",
     "pub fn into_repository",
     "pub fn recheck_invocation",
@@ -3756,6 +3751,7 @@ PLATFORM_AUTHORITY_ADMITTED_PARSED_ARGUMENT_COUNTS = (
     ("UserId,", 2),
 )
 PLATFORM_AUTHORITY_FUNCTION_BODY_SHA256 = {
+    "authorize_static_application_use_case": ("58b9d6ee19880d533b3f5a4364dfee96f3cc648719bfe2b5cd5660a5d1591e6c",),
     "resolve_projection": ("86be5f40fb3b13ac296f4da07c78ba1d792ba4fba866d300440b801f2a4ba8ba",),
     "recheck_invocation": ("a6504719b3433dc832800880e797cb6ece146b8862c0a17cee25662e7e045c0b",),
     "verify_precondition": (
@@ -3780,6 +3776,8 @@ PLATFORM_AUTHORITY_UNIT_TEST_FUNCTIONS = (
 )
 PLATFORM_AUTHORITY_TEST_FUNCTIONS = (
     "projection_and_recheck_assemble_separate_carriers_under_one_verified_revision",
+    "static_application_authority_accepts_only_a_non_tool_resource_carrier",
+    "static_application_denial_precedes_final_transaction_verification",
     "projection_missing_catalog_installation_or_grant_keeps_exact_resolver_denial",
     "post_success_transaction_conflict_returns_no_projection_or_authorized_invocation",
     "resolver_or_recheck_denial_precedes_pending_verification_conflict",
@@ -3798,7 +3796,8 @@ PLATFORM_AUTHORITY_STATUS_MARKERS = {
     ),
     "docs/contracts/invocation-resolution.md": (
         "bounded `M20-B5` semantic repository-transaction consumer implemented",
-        "no durable or real application composition exists yet",
+        "the no-tool static authorization now has one fixture-backed M72 composition",
+        "durable production M20 authority remains planned",
     ),
     "docs/features/00-market-browse-install.md": (
         "bounded transaction-current authority-assembly evidence",

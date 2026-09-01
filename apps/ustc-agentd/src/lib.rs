@@ -19,9 +19,10 @@ mod change_publication;
 mod durable_path;
 mod m00_control_evidence;
 mod m00_session;
+mod opportunity_authority;
 mod opportunity_fixture;
-mod opportunity_invocation;
 mod opportunity_persistence;
+mod opportunity_use_case;
 mod web;
 
 pub use web::web_router;
@@ -41,9 +42,10 @@ use change_invocation::ChangeInvocationSpine;
 use change_publication::{ChangePublicationCounters, FixtureChangePublicationPort};
 use m00_control_evidence::{DurableControlEvidenceJournal, ensure_secure_state_parent};
 use m00_session::DurableCurrentSessionStore;
+use opportunity_authority::OpportunityMarketAuthorityStore;
 use opportunity_fixture::OpportunityFixture;
-use opportunity_invocation::{OpportunityAuthorityStore, OpportunityInvocationSpine};
 use opportunity_persistence::DurableOpportunityProfileRepository;
+use opportunity_use_case::OpportunityApplicationUseCase;
 use ustc_campus_agent_application_ingress::{
     AffairsPublicationCommand, AffairsPublicationOutcome, ChangePublicationCommand,
     ChangePublicationOutcome, FileRecordStore, M10AffairsPublicationService, M10ChangeFeedService,
@@ -87,7 +89,7 @@ pub struct AffairsComposition {
 
 struct OpportunityComposition {
     fixture: OpportunityFixture,
-    authority: OpportunityAuthorityStore,
+    authority: OpportunityMarketAuthorityStore,
     profiles: Mutex<DurableOpportunityProfileRepository>,
 }
 
@@ -426,7 +428,7 @@ impl AffairsComposition {
         bootstrap_is_fresh: bool,
     ) -> Result<(), String> {
         let fixture = OpportunityFixture::load(fixture_path, catalog_path)?;
-        let authority = OpportunityAuthorityStore::new(
+        let authority = OpportunityMarketAuthorityStore::new(
             self.current_tenant_id.clone(),
             self.current_user_id.clone(),
             fixture.market_enabled,
@@ -788,7 +790,7 @@ impl AffairsComposition {
     }
 
     /// Handles one consent-bound tenant-private Opportunity operation through
-    /// M00, M10, current Market authority, Harness/ToolGateway and M72.
+    /// M00/M10, current M20 authority, and the statically composed M72 use case.
     #[must_use]
     pub fn handle_opportunity_submit(&self, request: &SubmitOpportunityDto) -> ClientResponseDto {
         let Some(opportunity) = &self.opportunity else {
@@ -798,15 +800,15 @@ impl AffairsComposition {
             Ok(descriptor) => descriptor,
             Err(_) => return ClientResponseDto::Unavailable,
         };
-        let invocation = OpportunityInvocationSpine::new(
+        let application = OpportunityApplicationUseCase::new(
             &opportunity.profiles,
             &opportunity.fixture.source,
             &opportunity.fixture.catalog,
             &opportunity.authority,
-            opportunity.fixture.tool_failure,
-            opportunity.fixture.invocation_counters.clone(),
+            opportunity.fixture.application_failure,
+            opportunity.fixture.application_counters.clone(),
         );
-        let m10 = M10OpportunityService::new(&invocation);
+        let m10 = M10OpportunityService::new(&application);
         let mut ports = FixturePorts::new(
             self.idempotency.clone(),
             descriptor,
@@ -830,15 +832,15 @@ impl AffairsComposition {
         })
     }
 
-    /// Returns Opportunity `(effect_intents, plugin_executions,
-    /// effect_receipts)` observed by the bounded invocation spine.
+    /// Returns Opportunity `(M20 authorizations, M72 dispatches,
+    /// application terminals)` observed by the static application use case.
     #[must_use]
-    pub fn opportunity_invocation_counts(&self) -> (u64, u64, u64) {
+    pub fn opportunity_application_counts(&self) -> (u64, u64, u64) {
         self.opportunity.as_ref().map_or((0, 0, 0), |opportunity| {
             (
-                opportunity.fixture.invocation_counters.intents(),
-                opportunity.fixture.invocation_counters.executions(),
-                opportunity.fixture.invocation_counters.receipts(),
+                opportunity.fixture.application_counters.authorizations(),
+                opportunity.fixture.application_counters.dispatches(),
+                opportunity.fixture.application_counters.terminals(),
             )
         })
     }
