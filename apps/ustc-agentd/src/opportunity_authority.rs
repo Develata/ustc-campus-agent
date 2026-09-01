@@ -302,7 +302,7 @@ fn authority_for_ids(
         installation_id: installation_id.clone(),
         capability_id: capability_id.clone(),
         object_scope: object_scope.clone(),
-        confirmation_policy: ConfirmationPolicy::Allow,
+        confirmation_policy: ConfirmationPolicy::Ask,
         capability_manifest_digest: capability_manifest_digest.clone(),
         state: if grant_active {
             GrantState::Active

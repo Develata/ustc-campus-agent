@@ -7989,6 +7989,28 @@ class SourceSensitiveGuardRegistryTests(unittest.TestCase):
             f"expected digest mismatch for check_p1_source_registry_implementation, got {issues}",
         )
 
+    def test_course_fixture_guard_mutation_fails_closed(self) -> None:
+        source = self.checker_path.read_text(encoding="utf-8")
+        marker = (
+            'def check_course_fixture(issues: list[str]) -> None:\n'
+            '    catalog_relative = "market/fixtures/course-planning/minimal-v0.json"\n'
+            '    fixture = load_json(catalog_relative, issues)\n'
+        )
+        self.assertEqual(source.count(marker), 1)
+        mutation = (
+            'def check_course_fixture(issues: list[str]) -> None:\n'
+            '    catalog_relative = "market/fixtures/course-planning/minimal-v0.json"\n'
+            '    if not catalog_relative:\n'
+            '        fail("course-fixture mutation probe", issues)\n'
+            '    fixture = load_json(catalog_relative, issues)\n'
+        )
+        self.rewrite_checker(source.replace(marker, mutation, 1))
+        issues = self.run_governance()
+        self.assertTrue(
+            any("check_course_fixture" in issue and "digest mismatch" in issue for issue in issues),
+            f"expected digest mismatch for check_course_fixture, got {issues}",
+        )
+
     def test_comment_only_change_passes(self) -> None:
         source = self.checker_path.read_text(encoding="utf-8")
         marker = (

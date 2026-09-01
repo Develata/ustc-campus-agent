@@ -455,6 +455,8 @@ fn version_gated_affairs_rejects_old_new_missing_malformed_and_repeated_majors()
     for response in [
         server.get_without_protocol(PATH),
         server.get_with_protocol(PATH, "not-a-major"),
+        server.get_with_protocol(PATH, "65536"),
+        server.get_with_protocol(PATH, "1.0"),
         server.get_with_protocol_headers(PATH, &["1", "1"]),
     ] {
         assert!(response.status.contains(" 409 "), "{}", response.status);

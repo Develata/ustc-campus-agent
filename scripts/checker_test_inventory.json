@@ -1,6 +1,6 @@
 {
   "schema_version": "checker-test-inventory/v1",
-  "expected_count": 734,
+  "expected_count": 735,
   "test_ids": [
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_count_mismatch",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_duplicates",
@@ -693,6 +693,7 @@
     "test_check_repo_contracts.SourceRegistryContractTests.test_src_001_binding_drift_fails_closed",
     "test_check_repo_contracts.SourceRegistryContractTests.test_src_001_reversion_fails_closed",
     "test_check_repo_contracts.SourceSensitiveGuardRegistryTests.test_comment_only_change_passes",
+    "test_check_repo_contracts.SourceSensitiveGuardRegistryTests.test_course_fixture_guard_mutation_fails_closed",
     "test_check_repo_contracts.SourceSensitiveGuardRegistryTests.test_exact_source_authority_guard_mutation_fails_closed",
     "test_check_repo_contracts.SourceSensitiveGuardRegistryTests.test_pristine_checker_passes",
     "test_check_repo_contracts.SourceSensitiveGuardRegistryTests.test_registered_function_no_longer_source_sensitive_fails_closed",

@@ -13711,7 +13711,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_ci_v2_active_workflow": {"digest": "c930a3611b4e805be69ae4e965be4355bc56b08b490d6e7dd0d315c08b51ea7a", "status": "active"},
     "check_ci_v2_inert_fixture": {"digest": "f6780f6177d741126b3818bb9199a6b55dcd28242b95408122f50c28a41ba3c3", "status": "active"},
     "check_ci_governance_workflow": {"digest": "d1430ded96b6966697748ed9b313c0d75d6a058245bd4956a8eac4801c381ca9", "status": "active"},
-    "check_course_fixture": {"digest": "f4dda0f63c4550edfa0a913e6f0ef84f4358c29a8ca789f404ae5bdf539c16e2", "status": "active"},
+    "check_course_fixture": {"digest": "a7e78e09e95c750a6543bc09b0d71a9232679ba000ce85926d0ca1a601109279", "status": "active"},
     "check_design_packets": {"digest": "743558920d241f208a6a10c7264b70f5fa4b80a77321472d750b05e3a2bf144c", "status": "active"},
     "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},

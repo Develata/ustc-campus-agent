@@ -181,6 +181,10 @@ fn opportunity_production_sources_have_no_agent_provider_or_plugin_execution_spi
                 "{name} unexpectedly contains execution-spine marker {forbidden}"
             );
         }
+        if name == "opportunity_authority.rs" {
+            assert!(source.contains("confirmation_policy: ConfirmationPolicy::Ask"));
+            assert!(!source.contains("confirmation_policy: ConfirmationPolicy::Allow"));
+        }
     }
 }
 
