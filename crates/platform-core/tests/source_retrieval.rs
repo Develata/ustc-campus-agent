@@ -538,6 +538,19 @@ fn strict_response_parser_rejects_line_folding_limits_and_status_classes() {
         RetrievalPolicy::parse_strict_response_head(valid_oversized.as_bytes()),
         Err(RetrievalPolicyError::HeaderLimitExceeded)
     );
+    for malformed_prefix in [
+        "HTTX/1.1 200 OK\r\nX-A: ok\r\n",
+        "HTTP/1.1 200 OK\r\nBad Name: x\r\n",
+    ] {
+        let malformed_oversized = format!(
+            "{malformed_prefix}{}\r\n",
+            format!("X-A: {}\r\n", "a".repeat(8_000)).repeat(5)
+        );
+        assert_eq!(
+            RetrievalPolicy::parse_strict_response_head(malformed_oversized.as_bytes()),
+            Err(RetrievalPolicyError::MalformedResponseHead)
+        );
+    }
     let too_many_fields = format!(
         "HTTP/1.1 200 OK\r\n{}\r\n",
         "X-Field: value\r\n".repeat(129)

@@ -9502,8 +9502,8 @@ M60_B2_FROZEN_EXECUTABLE_SHA256 = {
     "crates/platform-core/src/lib.rs": "576943ba5914913fe925f0333712b83f7a429d14f04289fc3f34352f6f90759b",
     "crates/platform-core/src/source_registry.rs": "3504fe9c470e123cf87af894fab37bb1095f33ba753b01818b9d16d9238e0a64",
     "crates/platform-core/tests/source_registry.rs": "167510be70ff1a0ff019efeb7f6ab2b98ac815ffa15ab0ac4004f0f42d8393f2",
-    "crates/platform-core/src/source_retrieval.rs": "42c4cbafa2ee0025ea6102ba13e0939f729f3ca88ea764a8e918781450798283",
-    "crates/platform-core/tests/source_retrieval.rs": "7b453e8285a312d5ce2dab43fb03b9b3ae8bcc26367da44113fecef331711a1c",
+    "crates/platform-core/src/source_retrieval.rs": "6cbbcd5277fcfe99389735dd1b97879b77267710cef5421894df80d9ee93b5e8",
+    "crates/platform-core/tests/source_retrieval.rs": "d52cba008bfc9bd271d6bea776ba0822086bd598f24355a185a27caeda5ab31f",
 }
 M60_B2_EXTERNAL_TEST_FUNCTIONS = (
     "nominal_id_families_and_dns_names_are_exact_and_redacted",
@@ -9657,7 +9657,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
     frozen_projection_sha256 = {
         "CLAUDE.md": "131b50b80b23bba24d565a4751b02be88f7ead4a4b1bad514abaf97282a465c4",
         M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
-        M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "1ffa67b160fa829365cdb3e03f0ee499081dd2c7f0ef4421aa74c26170cfe9e0",
+        M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "e6e4e7ecacc70d446eab6947f8a28e55b2d78a74a72523908a1bb8a46dd9e88c",
         "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
         "docs/acceptance/matrix.tsv": "aab5b2ab62463ae21200ca06868171b2d636177c79c72a0c2177de2989a52829",
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
@@ -9665,7 +9665,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "docs/contracts/module-boundaries.md": "fe8b2ba4f6c9bda834ee33a9c87188bfbdaefacb5f00da7cc297b240c4cb4f90",
         "docs/overview/architecture.md": "99de3f5d93cf8d8cd7e516e0d00d4303d8cb2f0807c2a23ad2ad01b63bbf21a5",
         "docs/features/02-ustc-change-radar.md": "27be5c7f4bebdd6bb2dc6938ecffa185b4d0cd53aeb050b031b46bf698478153",
-        "docs/plan/05-campus-trust-kernel.md": "80b32250953be7daebdf99e418a6974730c0374b4f0cb3636c65c064995d8e7a",
+        "docs/plan/05-campus-trust-kernel.md": "26ebed21efb3cfcf09a08864ec890fd75dea7322d296433d120557b1614e26db",
         "docs/plan/modules/00-module-map.md": "bafeece216c46cdd8d840e384d3a035834c1f2f9bc306d4b58a57907499b232c",
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
         "docs/tasks/01-execution-roadmap.md": "3b828a7167d6fb35eb0fab0defd5d3d6fac0f7bf2598124218176fe57507b556",
@@ -9728,11 +9728,13 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "## Marker-external pull-request review repair R7",
         "## Marker-external pull-request review repair R8",
         "## Marker-external exhaustive-review repair R9",
+        "## Marker-external final-review repair R10",
         "controller-owned receipt `sha256:46fd36c88617c925739a80605fe291320b3cb33d0355b00db594da9c0e183b69`",
         "controller-owned receipt `sha256:e9a7650111c0832e3583c56a12c69f4d0925000dc8554c5278c8814a1edc68ae`",
         "controller-owned receipt `sha256:08270e618a32fc3f433971381c7fa9c01868ae84ec0e6b5188d08c6e91dfcaf9`",
         "controller-owned receipt `sha256:70d30b20358be3967b242deabc7cb7251284a03a348ad245e6aa87d9a845c634`",
         "controller-owned receipt `sha256:21a80de3a8763d5f4cb36a6aaca3d07d13924ff61722083d01cbb8ef63f75b3d`",
+        "controller-owned receipt `sha256:c2da2fa3e1683d71e4ce535fbb41753f75ba97f445a3717124db5c9d72ba1b7f`",
     )
     for token in task_tokens:
         if task_text.count(token) != 1:
@@ -13703,7 +13705,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "37cfce70fb87a433c9f053c49fbfbccea651c4e291a2bb4f802fdc5249fa803e", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "e407dfc872b4e462767c362dfb661337a01e6d63a647e325424f16fb69b3f1fb", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "9819718e383ceaa0b7ea70ad37994c3acd401b517a8bee556051a0cd5747c41d", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},

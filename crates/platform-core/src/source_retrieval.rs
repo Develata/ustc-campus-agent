@@ -998,6 +998,9 @@ impl RetrievalPolicy {
         }
         let text =
             std::str::from_utf8(raw).map_err(|_| RetrievalPolicyError::MalformedResponseHead)?;
+        if !strict_response_head_grammar_is_valid(text) {
+            return Err(RetrievalPolicyError::MalformedResponseHead);
+        }
         if raw.len() > MAX_RESPONSE_HEAD_BYTES {
             return Err(RetrievalPolicyError::HeaderLimitExceeded);
         }
@@ -1200,6 +1203,50 @@ impl RetrievalPolicy {
             body: body.bytes,
         })
     }
+}
+
+fn strict_response_head_grammar_is_valid(text: &str) -> bool {
+    let Some(head) = text.strip_suffix("\r\n\r\n") else {
+        return false;
+    };
+    let mut lines = head.split("\r\n");
+    let Some(status_line) = lines.next() else {
+        return false;
+    };
+    let mut status_parts = status_line.splitn(3, ' ');
+    let (Some(version), Some(status), Some(reason)) = (
+        status_parts.next(),
+        status_parts.next(),
+        status_parts.next(),
+    ) else {
+        return false;
+    };
+    if version.len() != 8
+        || !version.starts_with("HTTP/")
+        || !version.as_bytes()[5].is_ascii_digit()
+        || version.as_bytes()[6] != b'.'
+        || !version.as_bytes()[7].is_ascii_digit()
+        || status.len() != 3
+        || !status.bytes().all(|byte| byte.is_ascii_digit())
+        || !reason
+            .bytes()
+            .all(|byte| byte == b' ' || (b'!'..=b'~').contains(&byte))
+    {
+        return false;
+    }
+    lines.all(|line| {
+        if line.starts_with(' ') || line.starts_with('\t') {
+            return false;
+        }
+        let Some((name, value)) = line.split_once(':') else {
+            return false;
+        };
+        !name.is_empty()
+            && name.bytes().all(is_tchar)
+            && value
+                .bytes()
+                .all(|byte| byte == b' ' || (b'!'..=b'~').contains(&byte))
+    })
 }
 
 fn one_header(headers: &[(String, String)], name: &str) -> ObservedHeaderValue {

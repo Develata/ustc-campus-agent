@@ -199,7 +199,7 @@ Default recovery:
 
 ## 10. Verification
 
-Current executable evidence includes the synthetic Course Planning fixture, the bounded pure `M60-B1 source-registry` lifecycle under `source-import/v1` (`SRC-001`), and the first bounded offline M60-B2 pure-policy implementation under `source-retrieval/v0`. The B2 evidence covers deterministic policy/shape decisions only; there is no transport port implementation, network effect or approved source. `M60` overall remains planned; no `SRC-*` row is promoted by B2, so `SRC-010`, `SRC-011` and `SRC-012` remain planned and `SRC-014` remains catalog-only/non-admitted.
+Current executable evidence includes the synthetic Course Planning fixture, the bounded pure `M60-B1 source-registry` lifecycle under `source-import/v1` (`SRC-001`), and the first bounded offline M60-B2 pure-policy implementation under `source-retrieval/v0` (`SRC-015`). The B2 evidence covers deterministic policy/shape decisions only; there is no transport port implementation, network effect or approved source. `M60` overall remains planned; only bounded non-effectful `SRC-015` is promoted by B2, while effectful `SRC-010`, `SRC-011` and `SRC-012` remain `planned` and `SRC-014` remains catalog-only/non-admitted.
 
 Primary entries:
 - `docs/contracts/source-import.md`
