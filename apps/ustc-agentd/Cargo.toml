@@ -10,6 +10,7 @@ homepage.workspace = true
 
 [dependencies]
 axum.workspace = true
+reqwest.workspace = true
 ustc-campus-agent-runtime = { path = "../../crates/agent-runtime" }
 ustc-agent-tool-protocol.workspace = true
 ustc-campus-agent-core = { path = "../../crates/platform-core" }
