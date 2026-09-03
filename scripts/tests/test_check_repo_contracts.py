@@ -4677,8 +4677,8 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def test_market_capability_registry_missing_bound_test_fails_closed(self) -> None:
         self.rewrite(
             self.capability_test_path(),
-            "#[test]\nfn current_registry_loads_with_exact_nine_definitions()",
-            "fn current_registry_loads_with_exact_nine_definitions()",
+            "#[test]\nfn current_registry_loads_with_exact_eleven_definitions()",
+            "fn current_registry_loads_with_exact_eleven_definitions()",
         )
         self.assert_rejected(
             self.check_identity(),

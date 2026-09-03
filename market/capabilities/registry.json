@@ -1,6 +1,6 @@
 {
   "schemaVersion": "capability-registry/v1",
-  "registryRevision": "capability-registry:2026-08-28-01",
+  "registryRevision": "capability-registry:2026-09-04-01",
   "capabilities": [
     {
       "id": "campus.public_rules.read",
