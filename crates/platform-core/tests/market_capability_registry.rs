@@ -164,8 +164,8 @@ fn current_registry_loads_with_exact_eleven_definitions() {
             "campus.public_rules.read",
             "user.own_academic_snapshot.read",
             "user.own_academic_snapshot.write",
-            "user.own_calendar.read",
-            "user.own_calendar.write",
+            "user.own_calendar_items.read",
+            "user.own_calendar_items.write",
             "user.own_course_preferences.read",
             "user.own_plan_draft.write",
         ]
@@ -211,7 +211,7 @@ fn current_registry_loads_with_exact_eleven_definitions() {
                 assert_eq!(definition.risk_class(), RiskClass::Low);
             }
             "user.own_academic_snapshot.read"
-            | "user.own_calendar.read"
+            | "user.own_calendar_items.read"
             | "user.own_course_preferences.read" => {
                 assert_eq!(definition.effect_class(), EffectClass::Read);
                 assert_eq!(definition.data_class(), DataClass::UserProfile);
@@ -227,7 +227,7 @@ fn current_registry_loads_with_exact_eleven_definitions() {
                 assert_eq!(definition.risk_class(), RiskClass::High);
             }
             "user.own_academic_snapshot.write"
-            | "user.own_calendar.write"
+            | "user.own_calendar_items.write"
             | "user.own_plan_draft.write" => {
                 assert_eq!(definition.effect_class(), EffectClass::Write);
                 assert_eq!(definition.data_class(), DataClass::UserProfile);
