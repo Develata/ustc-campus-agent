@@ -184,7 +184,7 @@ impl ChatProvider {
         let model = bounded_nonblank(model, MAX_MODEL_BYTES)
             .ok_or(ProviderConfigError::InvalidModel)?
             .to_owned();
-        if timeout_ms < MIN_TIMEOUT_MS || timeout_ms > MAX_TIMEOUT_MS {
+        if !(MIN_TIMEOUT_MS..=MAX_TIMEOUT_MS).contains(&timeout_ms) {
             return Err(ProviderConfigError::InvalidTimeout);
         }
         let api_key = read_api_key(key_file)?;

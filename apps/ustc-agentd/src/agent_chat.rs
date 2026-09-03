@@ -105,7 +105,7 @@ pub(crate) enum ChatError {
     OpportunityConfirmationRequired,
     #[allow(dead_code)]
     CompositionUnavailable,
-    InternalChatError,
+    Internal,
 }
 
 impl ChatError {
@@ -124,7 +124,7 @@ impl ChatError {
             Self::TurnBudgetExhausted => "turn_budget_exhausted",
             Self::OpportunityConfirmationRequired => "opportunity_confirmation_required",
             Self::CompositionUnavailable => "composition_unavailable",
-            Self::InternalChatError => "internal_chat_error",
+            Self::Internal => "internal_chat_error",
         }
     }
 
@@ -383,9 +383,7 @@ impl ChatRun {
                 .serialize_for_provider()
                 .map_err(|error| match error {
                     ChatToolResultValidationError::TooLarge => ChatError::ToolResultTooLarge,
-                    ChatToolResultValidationError::SerializationFailed => {
-                        ChatError::InternalChatError
-                    }
+                    ChatToolResultValidationError::SerializationFailed => ChatError::Internal,
                 })?;
             self.tool_trace.push(ChatToolTraceDto {
                 call_id: call.id.clone(),
@@ -446,14 +444,14 @@ where
 fn validate_run_id(run_id: &str) -> Result<(), ChatError> {
     let suffix = run_id
         .strip_prefix("chat-run:")
-        .ok_or(ChatError::InternalChatError)?;
+        .ok_or(ChatError::Internal)?;
     if suffix.is_empty()
         || run_id.len() > 128
         || !run_id
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b':' | b'-' | b'_'))
     {
-        return Err(ChatError::InternalChatError);
+        return Err(ChatError::Internal);
     }
     Ok(())
 }
@@ -1092,7 +1090,7 @@ mod tests {
                 "opportunity_confirmation_required",
             ),
             (ChatError::CompositionUnavailable, "composition_unavailable"),
-            (ChatError::InternalChatError, "internal_chat_error"),
+            (ChatError::Internal, "internal_chat_error"),
         ];
         for (error, expected) in cases {
             assert_eq!(error.code(), expected);
@@ -1135,7 +1133,7 @@ mod tests {
     fn valid_run_id_is_bounded_and_server_owned_shape() {
         assert_eq!(validate_run_id("chat-run:abc-123_x"), Ok(()));
         for run_id in ["", "run:abc", "chat-run:", "chat-run:has space"] {
-            assert_eq!(validate_run_id(run_id), Err(ChatError::InternalChatError));
+            assert_eq!(validate_run_id(run_id), Err(ChatError::Internal));
         }
     }
 
