@@ -3,7 +3,7 @@
 - `Status`: Planned user journey; no production orchestrator or UI exists
 - `Owning plan`: [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md)
 - `Contracts`: [`../contracts/agent-harness.md`](../contracts/agent-harness.md), [`../contracts/agent-plugin-boundary.md`](../contracts/agent-plugin-boundary.md)
-- `Acceptance`: `HARNESS-*`, `AGENT-017/018`, `PKG-019/020`
+- `Acceptance`: `HARNESS-*`, `AGENT-017/018`, `PKG-019/020`, bounded `AI-005/006`
 
 ## Goal
 
@@ -40,6 +40,28 @@ user submits intent
 ```
 
 The graph may degenerate to one direct node. Planner, delegation and model reviewer are conditional mechanisms, not mandatory ceremony for simple work.
+
+## Bounded chat + first-party Plugin MVP
+
+The first model-backed product slice is intentionally smaller than the full
+finite HarnessRun lifecycle. One loopback Web request supplies one bounded user
+message and receives one non-streaming assistant answer. The host may complete
+directly after one provider response or admit exactly one tool round followed by
+one final provider response. It exposes exactly two strict tools:
+
+- `ustc_affairs_lookup`, which validates one stable procedure ID and invokes the
+  existing Affairs application/composition path;
+- `ustc_course_advice`, which requires explicit per-request academic-profile
+  consent, validates the existing M72 profile bounds, and invokes the owning
+  create-profile → generate-plan → revoke-delete application path.
+
+The typed Plugin terminal remains authority; provider prose is explanatory and
+cannot add source facts, courses, eligibility or external enrollment effects.
+Unknown or malformed tools, typed Plugin denial, provider failure and required
+profile-cleanup failure are explicit non-successes. There is no alternate
+provider, direct-domain, source or tool fallback. The exact request, provider
+configuration, acceptance and non-goals are frozen in
+[`chat-plugin-mvp.md`](../tasks/chat-plugin-mvp.md).
 
 The user-visible Agent remains stable when a Plugin is installed, updated or disabled: only the approved tool projection changes. Conversely, changing the Agent framework/harness does not rebuild or rewrite Plugin packages while the major tool protocol remains compatible.
 

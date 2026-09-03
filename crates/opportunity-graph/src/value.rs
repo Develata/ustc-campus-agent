@@ -167,7 +167,7 @@ impl AcademicProfileInput {
         max_credits: u16,
         preference_weights: BTreeMap<String, i32>,
     ) -> Result<Self, OpportunityValueError> {
-        if max_credits == 0 || min_credits > max_credits {
+        if min_credits == 0 || min_credits > max_credits {
             return Err(OpportunityValueError::InvalidCreditBounds);
         }
         let mut completed_courses = completed_courses;

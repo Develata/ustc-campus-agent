@@ -16,6 +16,7 @@ mod change_fixture;
 mod change_invocation;
 mod change_persistence;
 mod change_publication;
+mod chat;
 mod durable_path;
 mod m00_control_evidence;
 mod m00_session;

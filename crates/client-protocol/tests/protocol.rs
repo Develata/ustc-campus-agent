@@ -91,3 +91,21 @@ fn protocol_serde_rejects_unknown_and_incoherent_values() {
     });
     assert!(serde_json::from_value::<ProtocolCompatibilityDto>(invalid_supported).is_err());
 }
+
+#[test]
+fn opportunity_profile_rejects_zero_minimum_credits() {
+    let command = OpportunityCommandDto::CreateProfile {
+        consent_purpose: text("opportunity_planning"),
+        consent_fields: vec![
+            OpportunityConsentFieldDto::CompletedCourses,
+            OpportunityConsentFieldDto::CreditBounds,
+            OpportunityConsentFieldDto::PreferenceWeights,
+        ],
+        consented_at: UnixMillis::new(1_700_000_000_000),
+        completed_courses: Vec::new(),
+        min_credits: 0,
+        max_credits: 1,
+        preference_weights: Vec::new(),
+    };
+    assert_eq!(command.validate(), Err(OpportunityWireError::CreditBounds));
+}

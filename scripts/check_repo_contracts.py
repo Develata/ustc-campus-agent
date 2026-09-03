@@ -308,6 +308,13 @@ EXTERNAL_AGENT_OPERATION_ROWS = {
         "Web, CLI, HTTP",
         "approved Affairs-first protocol slice; bootstrap requires no protocol-major header",
     ),
+    "agent.chat.turn": (
+        "M30",
+        "`public-read` plus per-request tenant-private consent when course advice is used",
+        "bounded provider/tool execution",
+        "loopback Web/HTTP",
+        "accepted bounded chat + first-party Plugin MVP contract; implementation evidence pending",
+    ),
     "capability.list": (
         "M10",
         "public-read",
@@ -4729,7 +4736,7 @@ WORKSPACE_ADMITTED_DEPENDENCIES = {
     "semver": "1.0.27",
     "sha2": "0.10.9",
     "time": {"version": "0.3.54", "features": ["parsing"]},
-    "tokio": {"version": "1.53.1", "features": ["net", "rt-multi-thread"]},
+    "tokio": {"version": "1.53.1", "features": ["net", "rt-multi-thread", "time"]},
     # The single admitted local path dependency, pinned to its exact in-repo location.
     "ustc-agent-tool-protocol": {"path": "crates/agent-tool-protocol"},
 }
@@ -9672,19 +9679,19 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "CLAUDE.md": "131b50b80b23bba24d565a4751b02be88f7ead4a4b1bad514abaf97282a465c4",
         M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
         M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "e6e4e7ecacc70d446eab6947f8a28e55b2d78a74a72523908a1bb8a46dd9e88c",
-        "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
-        "docs/acceptance/matrix.tsv": "d2c0238eaa9cd0daddc8f2698d0dfc3f3f873d8f9122f017b1be5d79eeb562a1",
+        "docs/acceptance/platform-baseline.md": "5f7e2fc32cd61437eda4e707406f0fc9184050544eb5a8630c911ae4130937c6",
+        "docs/acceptance/matrix.tsv": "6c015fd0a0a221313c8301a9120940fefac9e4d52b83adc8a5427ed36845156c",
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
         "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
         "docs/contracts/module-boundaries.md": "d064bfcf0832962780678bddd848d0516e53d678b0389883144adec724e460a8",
         "docs/overview/architecture.md": "99de3f5d93cf8d8cd7e516e0d00d4303d8cb2f0807c2a23ad2ad01b63bbf21a5",
         "docs/features/02-ustc-change-radar.md": "27be5c7f4bebdd6bb2dc6938ecffa185b4d0cd53aeb050b031b46bf698478153",
         "docs/plan/05-campus-trust-kernel.md": "26ebed21efb3cfcf09a08864ec890fd75dea7322d296433d120557b1614e26db",
-        "docs/plan/modules/00-module-map.md": "79d7b38d0dab663dad49da13a1d307e0738a6b6f85c9624d74444a159a576f04",
+        "docs/plan/modules/00-module-map.md": "678928abdcb1b8fbea3a3a815c7fa7f95948e431145035279cd8a02316f356a4",
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
-        "docs/tasks/01-execution-roadmap.md": "05136dbe30d9e3db1d6af08bc3d46b4d6c318d5bb72de5bdec264afdce317f9e",
+        "docs/tasks/01-execution-roadmap.md": "a0bfa835f627debf1603c6d842a492cdc592bf1483232ec960cf295898db1e9c",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
-        "docs/coverage-matrix.md": "2daa74003b0ba6bd1c9434c6396cda2a3237352de9ee4caae9ed7789e9f12df1",
+        "docs/coverage-matrix.md": "49c35773ebad2961c9cb4c7b892976fa99258595f1b77c073d3e408f721e21c0",
     }
     if tuple(frozen_projection_sha256) != declared_projection_paths:
         fail(
@@ -13719,7 +13726,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "2b5a2ba3c5120b84f9cd3fe4c89513729b65389e1bbad529cf9182563aa1f60c", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "69c754bfa5c0ed4d4188d5fd32530e9bfc3e27b444d3e6cdc82bc9e7ed662448", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},
