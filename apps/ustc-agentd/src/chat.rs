@@ -21,13 +21,16 @@ use ustc_campus_agent_runtime::chat::{
     ModelToolCall, ToolExecutionOutput, USTC_AFFAIRS_LOOKUP_TOOL, USTC_COURSE_ADVICE_TOOL,
 };
 
-use crate::web::WebState;
+use crate::web::{WebRequestError, WebState};
 
 const COURSE_PLAN_MAX_RESULTS: u16 = 3;
 const COURSE_PLAN_BEAM_WIDTH: u16 = 1_024;
 
 pub(crate) enum ChatService {
-    Ready(OpenAiResponsesProvider),
+    Ready {
+        provider: OpenAiResponsesProvider,
+        course_sequence: Arc<Mutex<()>>,
+    },
     Unavailable,
     Misconfigured,
 }
@@ -35,7 +38,10 @@ pub(crate) enum ChatService {
 impl ChatService {
     pub(crate) fn from_env() -> Self {
         match OpenAiResponsesProvider::from_env() {
-            Ok(Some(provider)) => Self::Ready(provider),
+            Ok(Some(provider)) => Self::Ready {
+                provider,
+                course_sequence: Arc::new(Mutex::new(())),
+            },
             Ok(None) => Self::Unavailable,
             Err(_) => Self::Misconfigured,
         }
@@ -47,13 +53,16 @@ impl ChatService {
         message: String,
         course_profile_consent: bool,
     ) -> Result<ChatResult, ChatServiceError> {
-        let provider = match self {
-            Self::Ready(provider) => provider,
+        let (provider, course_sequence) = match self {
+            Self::Ready {
+                provider,
+                course_sequence,
+            } => (provider, Arc::clone(course_sequence)),
             Self::Unavailable => return Err(ChatServiceError::Unavailable),
             Self::Misconfigured => return Err(ChatServiceError::Misconfigured),
         };
         let tools = RequestChatTools {
-            applications: ApplicationChatTools::new(state),
+            applications: ApplicationChatTools::new(state, course_sequence),
             course_profile_consent,
         };
         BoundedChatEngine::new(provider, &tools)
@@ -81,20 +90,6 @@ pub(crate) enum ChatToolAdapterError {
     SerializationFailed,
 }
 
-impl ChatToolAdapterError {
-    pub(crate) const fn code(self) -> &'static str {
-        match self {
-            Self::InvalidArguments => "chat_tool_invalid_arguments",
-            Self::CourseConsentRequired => "chat_course_consent_required",
-            Self::TypedDenial => "chat_tool_denied",
-            Self::ApplicationUnavailable => "chat_tool_unavailable",
-            Self::CleanupFailed => "chat_course_cleanup_failed",
-            Self::UnexpectedTerminal => "chat_tool_unexpected_terminal",
-            Self::SerializationFailed => "chat_tool_serialization_failed",
-        }
-    }
-}
-
 #[derive(Clone)]
 pub(crate) struct ApplicationChatTools {
     state: WebState,
@@ -102,19 +97,22 @@ pub(crate) struct ApplicationChatTools {
 }
 
 impl ApplicationChatTools {
-    pub(crate) fn new(state: WebState) -> Self {
+    pub(crate) fn new(state: WebState, course_sequence: Arc<Mutex<()>>) -> Self {
         Self {
             state,
-            course_sequence: Arc::new(Mutex::new(())),
+            course_sequence,
         }
     }
 
     fn affairs(&self, raw_arguments: &str) -> Result<String, ChatToolAdapterError> {
         let arguments: AffairsToolArguments = parse_exact_arguments(raw_arguments)?;
-        let response = self
-            .state
-            .submit(arguments.procedure_id, None)
-            .map_err(|_| ChatToolAdapterError::ApplicationUnavailable)?;
+        let response =
+            self.state
+                .submit(arguments.procedure_id, None)
+                .map_err(|error| match error {
+                    WebRequestError::InvalidProcedureId => ChatToolAdapterError::InvalidArguments,
+                    _ => ChatToolAdapterError::ApplicationUnavailable,
+                })?;
         match response {
             ClientResponseDto::Available {
                 terminal,
@@ -220,7 +218,7 @@ impl ApplicationChatTools {
         let cleanup = self.state.submit_opportunity(
             OpportunityCommandDto::RevokeConsentAndDeleteProfile {
                 profile_snapshot_id: profile_snapshot_id.clone(),
-                revoked_at: current_unix_millis_at_least(consented_at)?,
+                revoked_at: consented_at,
             },
             OpportunityConfirmationDto::Confirmed,
         );
@@ -296,11 +294,6 @@ fn current_unix_millis() -> Result<UnixMillis, ChatToolAdapterError> {
         return Err(ChatToolAdapterError::ApplicationUnavailable);
     }
     Ok(UnixMillis::new(millis))
-}
-
-fn current_unix_millis_at_least(minimum: UnixMillis) -> Result<UnixMillis, ChatToolAdapterError> {
-    let current = current_unix_millis()?;
-    Ok(UnixMillis::new(current.get().max(minimum.get())))
 }
 
 fn classify_non_success(response: &ClientResponseDto) -> ChatToolAdapterError {

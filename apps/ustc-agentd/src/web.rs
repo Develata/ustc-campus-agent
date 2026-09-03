@@ -34,6 +34,7 @@ use super::{AffairsComposition, parse_loopback_socket_addr};
 const INDEX_HTML: &str = include_str!("web/index.html");
 const APP_JS: &str = include_str!("web/app.js");
 const STYLES_CSS: &str = include_str!("web/styles.css");
+const CHAT_BODY_LIMIT_BYTES: usize = 64 * 1024;
 const OPPORTUNITY_CONFIRMATION_HEADER: &str = "x-ustc-opportunity-confirmation";
 
 const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
@@ -399,7 +400,7 @@ impl WebState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WebRequestError {
+pub(crate) enum WebRequestError {
     InvalidProcedureId,
     InvalidBoardId,
     InvalidOpportunityRequest,
@@ -453,6 +454,22 @@ fn bounded_operation_timestamp(value: i64) -> Result<UnixMillis, WebRequestError
 struct WebErrorEnvelope {
     schema: &'static str,
     error: &'static str,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ChatTurnBody {
+    message: String,
+    course_profile_consent: bool,
+}
+
+#[derive(Serialize)]
+struct ChatTurnEnvelope {
+    schema: &'static str,
+    answer: String,
+    model: String,
+    used_tools: Vec<String>,
+    grounded: bool,
 }
 
 #[derive(Serialize)]
@@ -574,7 +591,10 @@ pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
         .route("/assets/app.js", get(app_js))
         .route("/assets/styles.css", get(styles_css))
         .route("/healthz", get(healthz))
-        .route("/api/v1/agent/chat", post(agent_chat))
+        .route(
+            "/api/v1/agent/chat",
+            post(agent_chat).layer(DefaultBodyLimit::max(CHAT_BODY_LIMIT_BYTES)),
+        )
         .route("/api/v1/server/info", get(server_info))
         .route("/api/v1/client/capabilities", get(capability_list))
         .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
@@ -650,6 +670,81 @@ async fn healthz() -> Response {
         })
         .into_response(),
     )
+}
+
+async fn agent_chat(
+    State(state): State<WebState>,
+    headers: HeaderMap,
+    body: Result<Json<ChatTurnBody>, JsonRejection>,
+) -> Response {
+    if let Err(compatibility) =
+        dispatch_with_protocol_major(presented_protocol_major(&headers), || ())
+    {
+        return compatibility_response(compatibility);
+    }
+    let Json(body) = match body {
+        Ok(body) => body,
+        Err(_) => return web_error(StatusCode::BAD_REQUEST, "invalid_chat_json"),
+    };
+    let chat = Arc::clone(&state.chat);
+    match chat
+        .run(state, body.message, body.course_profile_consent)
+        .await
+    {
+        Ok(result) => typed_json_response(
+            StatusCode::OK,
+            ChatTurnEnvelope {
+                schema: "ustc-agent-chat-turn/v1",
+                answer: result.answer,
+                model: result.model,
+                used_tools: result.used_tools,
+                grounded: result.grounded,
+            },
+        ),
+        Err(error) => chat_error_response(error),
+    }
+}
+
+fn chat_error_response(error: super::chat::ChatServiceError) -> Response {
+    use super::chat::ChatServiceError;
+    use ustc_campus_agent_runtime::chat::ChatError;
+
+    match error {
+        ChatServiceError::Unavailable => {
+            web_error(StatusCode::SERVICE_UNAVAILABLE, "chat_unavailable")
+        }
+        ChatServiceError::Misconfigured => {
+            web_error(StatusCode::SERVICE_UNAVAILABLE, "chat_misconfigured")
+        }
+        ChatServiceError::Chat(ChatError::InvalidMessage) => {
+            web_error(StatusCode::BAD_REQUEST, "invalid_chat_message")
+        }
+        ChatServiceError::Chat(ChatError::MalformedToolArguments) => web_error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "chat_tool_invalid_arguments",
+        ),
+        ChatServiceError::Chat(ChatError::ToolDenied) => {
+            web_error(StatusCode::UNPROCESSABLE_ENTITY, "chat_tool_denied")
+        }
+        ChatServiceError::Chat(ChatError::ProviderTimeout) => {
+            web_error(StatusCode::GATEWAY_TIMEOUT, "chat_provider_timeout")
+        }
+        ChatServiceError::Chat(
+            ChatError::ProviderUnavailable
+            | ChatError::ProviderRejected
+            | ChatError::MalformedProviderResponse
+            | ChatError::NonTerminalProviderResponse
+            | ChatError::InvalidProviderOutcome
+            | ChatError::SecondToolRound,
+        ) => web_error(StatusCode::BAD_GATEWAY, "chat_provider_error"),
+        ChatServiceError::Chat(
+            ChatError::ToolFailed
+            | ChatError::InvalidToolOutput
+            | ChatError::InvalidProviderRequest
+            | ChatError::MalformedToolCall
+            | ChatError::UnknownTool,
+        ) => web_error(StatusCode::BAD_GATEWAY, "chat_tool_error"),
+    }
 }
 
 async fn server_info() -> Response {

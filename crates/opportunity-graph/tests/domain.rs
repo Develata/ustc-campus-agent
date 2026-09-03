@@ -346,6 +346,10 @@ fn exact_consent_field_set_is_required_and_no_feasible_plan_still_returns_qualif
 
 #[test]
 fn planning_bounds_and_debug_redaction_fail_closed_before_source_access() {
+    assert!(matches!(
+        AcademicProfileInput::new(Vec::new(), 0, 1, BTreeMap::new()),
+        Err(OpportunityValueError::InvalidCreditBounds)
+    ));
     let (catalog, profile) = catalog_and_profile();
     let owner = principal("tenant:private-sentinel", "user:private-sentinel");
     let principal_debug = format!("{owner:?}");

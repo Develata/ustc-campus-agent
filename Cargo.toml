@@ -36,7 +36,7 @@ libc = "0.2.183"
 base64 = "0.22.1"
 ustc-agent-tool-protocol = { path = "crates/agent-tool-protocol" }
 time = { version = "0.3.54", features = ["parsing"] }
-tokio = { version = "1.53.1", features = ["net", "rt-multi-thread"] }
+tokio = { version = "1.53.1", features = ["net", "rt-multi-thread", "time"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

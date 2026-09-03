@@ -4736,7 +4736,7 @@ WORKSPACE_ADMITTED_DEPENDENCIES = {
     "semver": "1.0.27",
     "sha2": "0.10.9",
     "time": {"version": "0.3.54", "features": ["parsing"]},
-    "tokio": {"version": "1.53.1", "features": ["net", "rt-multi-thread"]},
+    "tokio": {"version": "1.53.1", "features": ["net", "rt-multi-thread", "time"]},
     # The single admitted local path dependency, pinned to its exact in-repo location.
     "ustc-agent-tool-protocol": {"path": "crates/agent-tool-protocol"},
 }

@@ -16,6 +16,17 @@ USTC Campus Agent 的首版目标不是做一个通用聊天机器人，而是�
 ./scripts/run_three_plugin_mvp.sh
 ```
 
+若要同时启用最小 non-streaming AI chat，运行前配置一个 OpenAI-compatible Responses endpoint；凭据只放在进程环境或本机未跟踪的 secret store 中：
+
+```bash
+export USTC_AGENT_MODEL_BASE_URL=https://example.invalid
+export USTC_AGENT_MODEL_API_KEY='[REDACTED]'
+export USTC_AGENT_MODEL='your-model-id'
+./scripts/run_three_plugin_mvp.sh
+```
+
+三项必须同时存在；全部缺失时三插件页面仍可运行，但 chat 明确返回 unavailable。可选 `USTC_AGENT_MODEL_TIMEOUT_SECS` 为 `1..=120` 秒，默认 `30`。本 MVP 每次请求只允许一次 tool round，并且只暴露 `ustc_affairs_lookup` 与显式同意后的 `ustc_course_advice`；课程建议不会选课、退课、支付或写入教务系统。
+
 然后访问 <http://127.0.0.1:8787>。同一页面提供三条展示旅程：
 
 - **Affairs Navigator**：查询 `proc:ustc:undergraduate:transcript-certificate`，展示办理条件、步骤、入口、联系信息、provenance、freshness、conflict 与 uncertainty；管理员面板在显式确认后执行固定 `DemoReviewed` revision publish；
@@ -29,6 +40,14 @@ M00 的 bounded B4 interface/fake batch 现包含 B4a durable current-session re
 当前 fixture 保留了 2026-08-26 获取的[中国科大教务处公开页面](https://www.teach.ustc.edu.cn/service/svc-student/13824.html)及 normalized bytes，并由 checker/test 核对 SHA-256；ChangeRadar 与 Opportunity source 也显著标记为 DemoReviewed/synthetic。这些 fixture 不会替代原始官方页面。服务没有生产认证、TLS、正式多用户 SSO 或自动来源更新，禁止直接暴露到公网。
 
 只需 Affairs Navigator 的兼容性 demo 入口仍是 `./scripts/run_affairs_web_demo.sh`。
+
+确定性测试包的统一入口为：
+
+```bash
+./scripts/run_chat_plugin_mvp.sh
+```
+
+测试使用本机 fake Responses server 与仓库内 `DemoReviewed` / synthetic fixtures，不需要真实 API key 或校园网络。若 `USTC_AGENT_MODEL_BASE_URL`、`USTC_AGENT_MODEL_API_KEY`、`USTC_AGENT_MODEL` 三项均已配置，统一入口最后会执行一次不输出响应正文或凭据的可选 provider connectivity smoke；否则明确报告 `NOT_RUN`。
 
 `ustc-agentctl` 可从另一个本机进程读取或触发同一固定 demo 命令；非 loopback 地址、发布时缺少 `--confirm` 或 HTTP 侧缺少自定义确认请求头都会 fail closed：
 

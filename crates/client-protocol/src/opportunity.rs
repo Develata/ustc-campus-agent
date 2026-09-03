@@ -133,7 +133,7 @@ impl OpportunityCommandDto {
                 if courses.len() != completed_courses.len() {
                     return Err(OpportunityWireError::DuplicateCourse);
                 }
-                if *max_credits == 0 || min_credits > max_credits {
+                if *min_credits == 0 || min_credits > max_credits {
                     return Err(OpportunityWireError::CreditBounds);
                 }
                 if preference_weights.len() > MAX_OPPORTUNITY_PREFERENCES {
