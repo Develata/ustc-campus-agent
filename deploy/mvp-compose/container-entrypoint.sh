@@ -15,6 +15,10 @@ umask 077
 required=(
   /app/fixtures/affairs/proc-011-reviewed.json
   /app/fixtures/change-radar/academic-calendar-demo-reviewed.json
+  /app/fixtures/change-radar/evidence/academic-calendar-r1.reviewed.txt
+  /app/fixtures/change-radar/evidence/academic-calendar-r1.normalized.json
+  /app/fixtures/change-radar/evidence/academic-calendar-r2.reviewed.txt
+  /app/fixtures/change-radar/evidence/academic-calendar-r2.normalized.json
   /app/fixtures/opportunity-graph/course-planning-demo-reviewed.json
   /app/market/fixtures/course-planning/minimal-v0.json
 )

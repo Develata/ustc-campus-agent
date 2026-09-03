@@ -80,6 +80,10 @@ done
 fixture_files=(
   fixtures/affairs/proc-011-reviewed.json
   fixtures/change-radar/academic-calendar-demo-reviewed.json
+  fixtures/change-radar/evidence/academic-calendar-r1.reviewed.txt
+  fixtures/change-radar/evidence/academic-calendar-r1.normalized.json
+  fixtures/change-radar/evidence/academic-calendar-r2.reviewed.txt
+  fixtures/change-radar/evidence/academic-calendar-r2.normalized.json
   fixtures/opportunity-graph/course-planning-demo-reviewed.json
   market/fixtures/course-planning/minimal-v0.json
 )
@@ -108,6 +112,7 @@ output_created=1
 mkdir -p "$package_dir/bin" \
   "$package_dir/fixtures/affairs" \
   "$package_dir/fixtures/change-radar" \
+  "$package_dir/fixtures/change-radar/evidence" \
   "$package_dir/fixtures/opportunity-graph" \
   "$package_dir/market/fixtures/course-planning"
 
@@ -122,6 +127,10 @@ install -m 0755 "$repo_root/deploy/mvp-compose/smoke.sh" "$package_dir/smoke.sh"
 install -m 0755 "$repo_root/deploy/mvp-compose/start.sh" "$package_dir/start.sh"
 install -m 0644 "$repo_root/fixtures/affairs/proc-011-reviewed.json" "$package_dir/fixtures/affairs/proc-011-reviewed.json"
 install -m 0644 "$repo_root/fixtures/change-radar/academic-calendar-demo-reviewed.json" "$package_dir/fixtures/change-radar/academic-calendar-demo-reviewed.json"
+install -m 0644 "$repo_root/fixtures/change-radar/evidence/academic-calendar-r1.reviewed.txt" "$package_dir/fixtures/change-radar/evidence/academic-calendar-r1.reviewed.txt"
+install -m 0644 "$repo_root/fixtures/change-radar/evidence/academic-calendar-r1.normalized.json" "$package_dir/fixtures/change-radar/evidence/academic-calendar-r1.normalized.json"
+install -m 0644 "$repo_root/fixtures/change-radar/evidence/academic-calendar-r2.reviewed.txt" "$package_dir/fixtures/change-radar/evidence/academic-calendar-r2.reviewed.txt"
+install -m 0644 "$repo_root/fixtures/change-radar/evidence/academic-calendar-r2.normalized.json" "$package_dir/fixtures/change-radar/evidence/academic-calendar-r2.normalized.json"
 install -m 0644 "$repo_root/fixtures/opportunity-graph/course-planning-demo-reviewed.json" "$package_dir/fixtures/opportunity-graph/course-planning-demo-reviewed.json"
 install -m 0644 "$repo_root/market/fixtures/course-planning/minimal-v0.json" "$package_dir/market/fixtures/course-planning/minimal-v0.json"
 printf 'UCA_MVP_PORT=8787\nUCA_SOURCE_COMMIT=%s\n' "$source_commit" > "$package_dir/.env"
