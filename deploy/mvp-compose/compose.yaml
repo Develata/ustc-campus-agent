@@ -1,0 +1,34 @@
+name: ustc-campus-agent-mvp
+
+services:
+  mvp:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        UCA_SOURCE_COMMIT: ${UCA_SOURCE_COMMIT:-unknown}
+    image: ustc-campus-agent-mvp:0.1.0
+    init: true
+    ports:
+      - "127.0.0.1:${UCA_MVP_PORT:-8787}:8787"
+    volumes:
+      - mvp-state:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 10s
+    networks:
+      - mvp-internal
+
+volumes:
+  mvp-state:
+
+networks:
+  mvp-internal:
+    internal: true
