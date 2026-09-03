@@ -68,7 +68,7 @@ Windows 可双击 `reset.cmd`，脚本会再次确认。
 
 默认只监听宿主机 loopback `127.0.0.1:8787`，不会暴露到局域网。若端口冲突，在启动前设置：
 
-容器内的 `socat` 必须监听 container interface，才能把 Docker published port 转发给仍然只监听 `127.0.0.1:8788` 的 Rust application；安全边界由 Compose 的 host-loopback port mapping 与 internal network 共同限定。
+容器内的 `socat` 必须监听 container interface，才能把 Docker published port 转发给仍然只监听 `127.0.0.1:8788` 的 Rust application；入站安全边界由 Compose 的 host-loopback port mapping 限定。容器使用默认的 project-scoped bridge network，因为 Docker `internal: true` 会同时阻断此处所需的 published-port NAT；application 本身没有 live source retrieval 路径。
 
 ```powershell
 $env:UCA_MVP_PORT = "8877"

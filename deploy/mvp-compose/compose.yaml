@@ -23,12 +23,6 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     stop_grace_period: 10s
-    networks:
-      - mvp-internal
 
 volumes:
   mvp-state:
-
-networks:
-  mvp-internal:
-    internal: true
