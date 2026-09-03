@@ -797,6 +797,9 @@ fn contains_ascii_term(text: &str, term: &str) -> bool {
 }
 
 fn deterministic_calendar_arguments(user: &str) -> Option<String> {
+    if user.contains("校历") || contains_ascii_term(user, "academic calendar") {
+        return None;
+    }
     let wants_calendar = user.contains("日历")
         || user.contains("待办")
         || user.contains("事项")

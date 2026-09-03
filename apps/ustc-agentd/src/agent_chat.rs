@@ -781,7 +781,7 @@ mod tests {
         let mut absent = new_run(request("x"), false);
         assert_eq!(
             absent.next_provider_request().expect("request").tools.len(),
-            2
+            3
         );
         let mut present = new_run(opportunity_request(), true);
         let tools = present.next_provider_request().expect("request").tools;

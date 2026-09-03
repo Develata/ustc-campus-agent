@@ -306,6 +306,16 @@ try {
   assert.match(await evaluate("document.querySelector('.chat-message[data-role=assistant] .chat-message-body')?.textContent"), /transcript-certificate/);
   assert.equal(await evaluate("document.activeElement === document.querySelector('#chat-input')"), true);
 
+  await submitWithEnter("校历最近有什么变更？");
+  assert.match(
+    await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
+    /变更雷达/
+  );
+  assert.match(
+    await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"),
+    /academic-calendar/
+  );
+
   await submitWithEnter("记录事项：提交开题报告");
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
@@ -319,6 +329,15 @@ try {
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"),
     /提交开题报告/
+  );
+  await submitWithEnter("删除事项 calendar:item:1");
+  assert.match(
+    await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
+    /简明日历/
+  );
+  assert.match(
+    await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"),
+    /calendar:item:1/
   );
 
   await evaluate(`(() => {
@@ -409,7 +428,7 @@ try {
 
   const exceptions = cdp.events.filter((event) => event.method === "Runtime.exceptionThrown");
   assert.deepEqual(exceptions, [], `browser exceptions: ${JSON.stringify(exceptions)}`);
-  console.log("agent-chat-browser: PASS journeys=10 turn-pairs=PASS oversized-turn=OMITTED viewport=390 reduced-motion=PASS clear=PASS");
+  console.log("agent-chat-browser: PASS journeys=13 turn-pairs=PASS oversized-turn=OMITTED viewport=390 reduced-motion=PASS clear=PASS");
 } catch (error) {
   console.error(error?.stack ?? error);
   if (serverOutput) console.error(`server output:\n${serverOutput}`);
