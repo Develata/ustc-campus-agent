@@ -4,6 +4,8 @@
 //! effect intent/receipt ordering, and replay-stable budgets. It deliberately contains
 //! no provider SDK, MCP transport, database, HTTP server, or framework checkpoint type.
 
+pub mod chat;
+
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;

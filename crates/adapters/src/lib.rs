@@ -4,6 +4,8 @@
 //! object storage, or databases. They must not own canonical grants, approvals,
 //! receipts, source revisions, or market catalog truth.
 
+pub mod openai_responses;
+
 use ustc_campus_agent_core::PRODUCT_NAME;
 
 /// Returns a small health string used by binary smoke tests.
