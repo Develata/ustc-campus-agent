@@ -4724,12 +4724,20 @@ WORKSPACE_ADMITTED_DEPENDENCIES = {
     "base64": "0.22.1",
     "hmac": "0.12.1",
     "libc": "0.2.183",
+    "reqwest": {
+        "version": "0.12.23",
+        "default-features": False,
+        "features": ["json", "rustls-tls", "stream"],
+    },
     "serde": {"version": "1.0.229", "features": ["derive"]},
     "serde_json": "1.0.151",
     "semver": "1.0.27",
     "sha2": "0.10.9",
     "time": {"version": "0.3.54", "features": ["parsing"]},
-    "tokio": {"version": "1.53.1", "features": ["net", "rt-multi-thread"]},
+    "tokio": {
+        "version": "1.53.1",
+        "features": ["net", "rt-multi-thread", "time"],
+    },
     # The single admitted local path dependency, pinned to its exact in-repo location.
     "ustc-agent-tool-protocol": {"path": "crates/agent-tool-protocol"},
 }

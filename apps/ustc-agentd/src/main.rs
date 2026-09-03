@@ -165,6 +165,7 @@ fn run_serve(mut args: std::iter::Skip<std::env::Args>, mode: ServeMode) -> Exit
         ServeMode::Web => {
             let runtime = match tokio::runtime::Builder::new_multi_thread()
                 .enable_io()
+                .enable_time()
                 .build()
             {
                 Ok(runtime) => runtime,

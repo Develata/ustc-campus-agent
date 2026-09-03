@@ -15,6 +15,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use ustc_campus_agent_application_ingress::{
     AffairsPublicationApplicationError, AffairsPublicationOutcome,
     ChangePublicationApplicationError, ChangePublicationOutcome, dispatch_with_protocol_major,
@@ -29,6 +30,9 @@ use ustc_campus_agent_client_protocol::{
     change_feed_payload_digest, opportunity_payload_digest,
 };
 
+use super::agent_chat::{ChatError, ChatRequestDto, run_bounded_chat};
+use super::chat_provider::ChatProvider;
+use super::chat_tools::{ChatToolExecution, ChatToolRequest};
 use super::{AffairsComposition, parse_loopback_socket_addr};
 
 const INDEX_HTML: &str = include_str!("web/index.html");
@@ -44,14 +48,30 @@ const ADMINISTRATOR_DEMO_CONFIRMATION: &str = "confirm-v1";
 struct WebState {
     composition: Arc<Mutex<AffairsComposition>>,
     next_request: Arc<AtomicU64>,
+    chat_provider: ChatProvider,
 }
 
 impl WebState {
-    fn new(composition: Arc<Mutex<AffairsComposition>>) -> Self {
+    fn new(composition: Arc<Mutex<AffairsComposition>>, chat_provider: ChatProvider) -> Self {
         Self {
             composition,
             next_request: Arc::new(AtomicU64::new(1)),
+            chat_provider,
         }
+    }
+
+    fn next_chat_run_id(&self) -> Result<String, WebRequestError> {
+        let sequence = self
+            .next_request
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                current.checked_add(1)
+            })
+            .map_err(|_| WebRequestError::CounterExhausted)?;
+        let request_nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| WebRequestError::InternalIdentity)?
+            .as_nanos();
+        Ok(format!("chat-run:{request_nonce}:{sequence}"))
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, AffairsComposition>, WebRequestError> {
@@ -567,6 +587,13 @@ struct DeleteOpportunityProfileBody {
 
 /// Builds the bounded same-origin Web router over one composition.
 pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
+    web_router_with_provider(composition, ChatProvider::deterministic_mock())
+}
+
+fn web_router_with_provider(
+    composition: Arc<Mutex<AffairsComposition>>,
+    chat_provider: ChatProvider,
+) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/assets/app.js", get(app_js))
@@ -574,6 +601,7 @@ pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
         .route("/healthz", get(healthz))
         .route("/api/v1/server/info", get(server_info))
         .route("/api/v1/client/capabilities", get(capability_list))
+        .route("/api/v1/agent/chat", post(agent_chat))
         .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
         .route(
             "/api/v1/demo/administrator/affairs/publication",
@@ -599,7 +627,7 @@ pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
             post(opportunity_profile_delete),
         )
         .layer(DefaultBodyLimit::max(16 * 1024))
-        .with_state(WebState::new(composition))
+        .with_state(WebState::new(composition, chat_provider))
 }
 
 impl AffairsComposition {
@@ -609,6 +637,8 @@ impl AffairsComposition {
     ///
     /// Rejects non-loopback addresses and reports listener/server failures.
     pub async fn serve_web(self, bind_addr: &str) -> Result<(), String> {
+        let chat_provider = ChatProvider::from_env()
+            .map_err(|_| "agent provider configuration invalid".to_owned())?;
         let socket_addr = parse_loopback_socket_addr(bind_addr)?;
         let listener = tokio::net::TcpListener::bind(socket_addr)
             .await
@@ -621,9 +651,12 @@ impl AffairsComposition {
         std::io::stdout()
             .flush()
             .map_err(|error| format!("stdout flush failed: {error}"))?;
-        axum::serve(listener, web_router(Arc::new(Mutex::new(self))))
-            .await
-            .map_err(|error| format!("web serve failed: {error}"))
+        axum::serve(
+            listener,
+            web_router_with_provider(Arc::new(Mutex::new(self)), chat_provider),
+        )
+        .await
+        .map_err(|error| format!("web serve failed: {error}"))
     }
 }
 
@@ -670,6 +703,147 @@ async fn capability_list(headers: HeaderMap) -> Response {
         Ok(response) => typed_json_response(StatusCode::OK, response),
         Err(compatibility) => compatibility_response(compatibility),
     }
+}
+
+async fn agent_chat(
+    State(state): State<WebState>,
+    headers: HeaderMap,
+    body: Result<Json<ChatRequestDto>, JsonRejection>,
+) -> Response {
+    let Json(request) = match body {
+        Ok(body) => body,
+        Err(_) => return chat_error_response(ChatError::InvalidChatRequest),
+    };
+    let run_id = match state.next_chat_run_id() {
+        Ok(run_id) => run_id,
+        Err(_) => return chat_error_response(ChatError::InternalChatError),
+    };
+    let opportunity_confirmed = matches!(
+        opportunity_confirmation(&headers),
+        OpportunityConfirmationDto::Confirmed
+    );
+    let provider = state.chat_provider.clone();
+    let execution_state = state.clone();
+    let mut executor = move |request| execute_chat_tool(&execution_state, request);
+    match run_bounded_chat(
+        run_id,
+        request,
+        opportunity_confirmed,
+        &provider,
+        &mut executor,
+    )
+    .await
+    {
+        Ok(response) => typed_json_response(StatusCode::OK, response),
+        Err(error) => chat_error_response(error),
+    }
+}
+
+fn execute_chat_tool(state: &WebState, request: ChatToolRequest) -> ChatToolExecution {
+    match request {
+        ChatToolRequest::AffairsNavigatorGet { procedure_id } => {
+            match state.submit(procedure_id, None) {
+                Ok(response) => project_chat_tool_response(
+                    matches!(&response, ClientResponseDto::Available { .. }),
+                    matches!(
+                        &response,
+                        ClientResponseDto::Error {
+                            error: ClientErrorDto::Admission { .. },
+                        }
+                    ),
+                    response,
+                ),
+                Err(_) => ChatToolExecution::failed(json!({"code": "composition_unavailable"})),
+            }
+        }
+        ChatToolRequest::ChangeRadarGet { board_id } => match state.submit_change(board_id) {
+            Ok(response) => project_chat_tool_response(
+                matches!(&response, ClientResponseDto::ChangeFeedAccepted { .. }),
+                matches!(
+                    &response,
+                    ClientResponseDto::Error {
+                        error: ClientErrorDto::Admission { .. },
+                    }
+                ),
+                response,
+            ),
+            Err(_) => ChatToolExecution::failed(json!({"code": "composition_unavailable"})),
+        },
+        ChatToolRequest::OpportunityGraphPlanCurrentProfile {
+            profile_snapshot_id,
+            max_results,
+            beam_width,
+        } => {
+            let profile_snapshot_id = match checked_text(profile_snapshot_id) {
+                Ok(value) => value,
+                Err(_) => {
+                    return ChatToolExecution::denied(
+                        json!({"code": "invalid_profile_snapshot_id"}),
+                    );
+                }
+            };
+            match state.submit_opportunity(
+                OpportunityCommandDto::GeneratePlan {
+                    profile_snapshot_id,
+                    max_results: u16::from(max_results),
+                    beam_width,
+                },
+                OpportunityConfirmationDto::Confirmed,
+            ) {
+                Ok(response) => project_chat_tool_response(
+                    matches!(&response, ClientResponseDto::OpportunityAccepted { .. }),
+                    matches!(
+                        &response,
+                        ClientResponseDto::OpportunityRejected { .. }
+                            | ClientResponseDto::Error {
+                                error: ClientErrorDto::Admission { .. },
+                            }
+                    ),
+                    response,
+                ),
+                Err(_) => ChatToolExecution::failed(json!({"code": "composition_unavailable"})),
+            }
+        }
+    }
+}
+
+fn project_chat_tool_response(
+    succeeded: bool,
+    denied: bool,
+    response: ClientResponseDto,
+) -> ChatToolExecution {
+    let data = match serde_json::to_value(response) {
+        Ok(value) => value,
+        Err(_) => return ChatToolExecution::failed(json!({"code": "projection_failed"})),
+    };
+    if succeeded {
+        ChatToolExecution::succeeded(data)
+    } else if denied {
+        ChatToolExecution::denied(data)
+    } else {
+        ChatToolExecution::failed(data)
+    }
+}
+
+fn chat_error_response(error: ChatError) -> Response {
+    let status = match error {
+        ChatError::InvalidChatRequest => StatusCode::BAD_REQUEST,
+        ChatError::ProviderNotConfigured
+        | ChatError::ProviderUnavailable
+        | ChatError::CompositionUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+        ChatError::ProviderUnauthorized | ChatError::ProviderProtocolError => {
+            StatusCode::BAD_GATEWAY
+        }
+        ChatError::ProviderRateLimited => StatusCode::TOO_MANY_REQUESTS,
+        ChatError::ProviderTimeout => StatusCode::GATEWAY_TIMEOUT,
+        ChatError::ToolCallRejected
+        | ChatError::ToolResultTooLarge
+        | ChatError::ToolBudgetExhausted
+        | ChatError::TurnBudgetExhausted => StatusCode::UNPROCESSABLE_ENTITY,
+        ChatError::OpportunityConfirmationRequired => StatusCode::FORBIDDEN,
+        ChatError::InternalChatError => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    typed_json_response(status, error.response())
 }
 
 async fn affairs_get(
