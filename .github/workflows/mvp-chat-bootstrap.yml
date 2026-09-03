@@ -1,0 +1,154 @@
+name: mvp-chat-bootstrap
+
+on:
+  push:
+    branches:
+      - hermes/mvp-chat-bootstrap
+
+permissions:
+  contents: read
+
+env:
+  PRODUCT_COMMIT: f04b137d3a4470802e09bd88ea9fcfca1cb6b578
+
+jobs:
+  linux-product:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact carrier
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 2
+      - name: Verify carrier custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$PRODUCT_COMMIT"
+          test "$(git diff --name-only "$PRODUCT_COMMIT" HEAD)" = '.github/workflows/mvp-chat-bootstrap.yml'
+      - name: Install Rust 1.97.1
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          toolchain: 1.97.1
+          components: rustfmt, clippy
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Test agent daemon
+        run: cargo test --locked -p ustc-agentd --all-targets
+      - name: Clippy agent daemon
+        run: cargo clippy --locked -p ustc-agentd --all-targets -- -D warnings
+      - name: Release build with source identity
+        env:
+          UCA_SOURCE_COMMIT: ${{ env.PRODUCT_COMMIT }}
+        run: cargo build --locked --release -p ustc-agentd
+      - name: Verify embedded source identity
+        run: test "$(target/release/ustc-agentd source-commit)" = "$PRODUCT_COMMIT"
+      - name: Materialize product checkout
+        run: git checkout --detach "$PRODUCT_COMMIT"
+      - name: Browser Chat behavior on release binary
+        run: node scripts/test_agent_chat_browser.mjs target/release/ustc-agentd
+      - name: Package deterministically
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 022
+          bash scripts/package_three_plugin_mvp_compose.sh \
+            --binary target/release/ustc-agentd \
+            --output-dir /tmp/package-a \
+            --source-commit "$PRODUCT_COMMIT"
+          chmod 0600 \
+            deploy/mvp-compose/compose.yaml \
+            deploy/mvp-compose/Dockerfile \
+            deploy/mvp-compose/.env.example \
+            deploy/mvp-compose/README.md \
+            deploy/mvp-compose/start.ps1 \
+            deploy/mvp-compose/stop.ps1 \
+            deploy/mvp-compose/reset.ps1 \
+            deploy/mvp-compose/start.cmd \
+            deploy/mvp-compose/stop.cmd \
+            deploy/mvp-compose/reset.cmd
+          test -z "$(git status --porcelain --untracked-files=no)"
+          umask 077
+          bash scripts/package_three_plugin_mvp_compose.sh \
+            --binary target/release/ustc-agentd \
+            --output-dir /tmp/package-b \
+            --source-commit "$PRODUCT_COMMIT"
+          cmp /tmp/package-a/ustc-campus-agent-mvp-compose-f04b137d3a44.zip \
+              /tmp/package-b/ustc-campus-agent-mvp-compose-f04b137d3a44.zip
+          cmp /tmp/package-a/ustc-campus-agent-mvp-compose-f04b137d3a44.tar.gz \
+              /tmp/package-b/ustc-campus-agent-mvp-compose-f04b137d3a44.tar.gz
+          (cd /tmp/package-a && sha256sum -c ustc-campus-agent-mvp-compose-f04b137d3a44.sha256)
+      - name: Compose Chat restart smoke
+        env:
+          UCA_MVP_PORT: '18789'
+        run: bash /tmp/package-a/ustc-campus-agent-mvp-compose/smoke.sh
+      - name: Clean archive read-back
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir /tmp/readback
+          tar -xzf /tmp/package-a/ustc-campus-agent-mvp-compose-f04b137d3a44.tar.gz -C /tmp/readback
+          cd /tmp/readback/ustc-campus-agent-mvp-compose
+          sha256sum -c SHA256SUMS
+          test "$(bin/ustc-agentd source-commit)" = "$PRODUCT_COMMIT"
+          test "$(bin/ustc-agentd --version)" = 'ustc-agentd 0.1.0'
+      - name: Upload exact product package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mvp-chat-product-f04b137d3a44-${{ github.run_attempt }}
+          path: |
+            /tmp/package-a/ustc-campus-agent-mvp-compose-f04b137d3a44.zip
+            /tmp/package-a/ustc-campus-agent-mvp-compose-f04b137d3a44.tar.gz
+            /tmp/package-a/ustc-campus-agent-mvp-compose-f04b137d3a44.sha256
+          if-no-files-found: error
+          retention-days: 3
+
+  windows-powershell-51:
+    needs: linux-product
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download exact product package
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: mvp-chat-product-f04b137d3a44-${{ github.run_attempt }}
+          path: artifact
+      - name: Verify and parse Windows launchers
+        shell: powershell
+        run: |
+          if ($PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion.Major -ne 5) {
+            throw "Windows PowerShell 5.1 required"
+          }
+          $zip = Get-ChildItem artifact -Filter '*.zip' | Select-Object -First 1
+          $sidecar = Get-ChildItem artifact -Filter '*.sha256' | Select-Object -First 1
+          if ($null -eq $zip -or $null -eq $sidecar) { throw "package artifacts missing" }
+          $expected = $null
+          foreach ($line in Get-Content -LiteralPath $sidecar.FullName) {
+            if ($line -match '^([0-9a-f]{64})  (.+)$' -and $Matches[2] -eq $zip.Name) {
+              $expected = $Matches[1]
+            }
+          }
+          if ($null -eq $expected) { throw "ZIP checksum entry missing" }
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip.FullName).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "ZIP checksum mismatch" }
+          Expand-Archive -LiteralPath $zip.FullName -DestinationPath extracted
+          $root = Join-Path (Resolve-Path extracted) 'ustc-campus-agent-mvp-compose'
+          foreach ($launcher in Get-ChildItem -LiteralPath $root -File | Where-Object { $_.Extension -in '.ps1', '.cmd' }) {
+            $bytes = [System.IO.File]::ReadAllBytes($launcher.FullName)
+            if ($bytes.Length -eq 0 -or $bytes[$bytes.Length - 1] -ne 10) { throw "$($launcher.Name): missing LF" }
+            if ($bytes -contains 0) { throw "$($launcher.Name): contains NUL" }
+            foreach ($byte in $bytes) { if ($byte -gt 127) { throw "$($launcher.Name): non-ASCII byte" } }
+          }
+          foreach ($script in Get-ChildItem -LiteralPath $root -Filter '*.ps1' -File) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -ne 0) { throw "$($script.Name): parser errors: $errors" }
+          }
+          foreach ($line in Get-Content -LiteralPath (Join-Path $root 'SHA256SUMS')) {
+            if ($line -notmatch '^([0-9a-f]{64})  (.+)$') { throw "malformed inner checksum row" }
+            $path = Join-Path $root ($Matches[2] -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+            $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+            if ($actual -ne $Matches[1]) { throw "inner checksum mismatch: $($Matches[2])" }
+          }
+          Write-Output 'WINDOWS_POWERSHELL_51_PACKAGE=PASS'
