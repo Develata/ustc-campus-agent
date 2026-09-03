@@ -426,6 +426,56 @@ fn valid_opportunity_profile_body() -> Value {
 }
 
 #[test]
+fn agent_chat_http_route_maps_success_and_closed_request_failures() {
+    let server = WebServer::start();
+    let path = "/api/v1/agent/chat";
+
+    let success = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "成绩单证明怎么办"}],
+            "opportunity_context": null
+        }),
+    );
+    assert!(success.status.contains(" 200 "), "{}", success.status);
+    assert!(success.headers.contains("content-type: application/json"));
+    assert!(success.headers.contains("cache-control: no-store"));
+    let success: Value = serde_json::from_str(&success.body).expect("chat success JSON");
+    assert_eq!(success["schema"], "ustc-agent-chat-response/v1");
+    assert_eq!(success["provider"]["mode"], "mock");
+    assert_eq!(success["provider"]["model"], "deterministic-mock-v1");
+    assert_eq!(success["tool_trace"][0]["tool"], "affairs_navigator_get");
+    assert_eq!(success["tool_trace"][0]["status"], "succeeded");
+
+    let malformed = server.post_raw_with_confirmation(path, "application/json", "{", false);
+    assert!(malformed.status.contains(" 400 "), "{}", malformed.status);
+    let malformed: Value = serde_json::from_str(&malformed.body).expect("chat error JSON");
+    assert_eq!(malformed["schema"], "ustc-agent-chat-error/v1");
+    assert_eq!(malformed["error"], "invalid_chat_request");
+
+    let missing_confirmation = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "帮我规划课程"}],
+            "opportunity_context": {"profile_snapshot_id": "profile:synthetic:missing"}
+        }),
+    );
+    assert!(
+        missing_confirmation.status.contains(" 403 "),
+        "{}",
+        missing_confirmation.status
+    );
+    let missing_confirmation: Value =
+        serde_json::from_str(&missing_confirmation.body).expect("chat confirmation error JSON");
+    assert_eq!(
+        missing_confirmation["error"],
+        "opportunity_confirmation_required"
+    );
+}
+
+#[test]
 fn client_protocol_bootstrap_and_capability_registry_are_retained() {
     let server = WebServer::start_affairs_only();
 

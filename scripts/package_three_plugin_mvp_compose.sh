@@ -24,6 +24,17 @@ case "$source_commit" in
   *[!0-9a-f]*|'') printf 'source commit must be lowercase hexadecimal\n' >&2; exit 65 ;;
 esac
 [ "${#source_commit}" -eq 40 ] || { printf 'source commit must be 40 hexadecimal characters\n' >&2; exit 65; }
+head_commit=$(git -C "$repo_root" rev-parse HEAD)
+[ "$head_commit" = "$source_commit" ] || {
+  printf 'source commit must equal the current checkout HEAD\n' >&2
+  exit 65
+}
+if [ -n "$(git -C "$repo_root" status --short --untracked-files=no -- \
+  deploy/mvp-compose fixtures/affairs/proc-011-reviewed.json \
+  fixtures/change-radar market/fixtures/course-planning/minimal-v0.json)" ]; then
+  printf 'package source paths must be clean\n' >&2
+  exit 65
+fi
 [ -f "$binary" ] && [ ! -L "$binary" ] && [ -x "$binary" ] || {
   printf 'binary must be an executable regular non-symlink file: %s\n' "$binary" >&2
   exit 66
