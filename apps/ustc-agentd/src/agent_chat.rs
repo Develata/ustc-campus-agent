@@ -104,6 +104,7 @@ pub(crate) enum ChatError {
     ProviderTimeout,
     ProviderUnavailable,
     ProviderProtocolError,
+    ContextBudgetExceeded,
     ToolCallRejected,
     ToolResultTooLarge,
     ToolBudgetExhausted,
@@ -124,6 +125,7 @@ impl ChatError {
             Self::ProviderTimeout => "provider_timeout",
             Self::ProviderUnavailable => "provider_unavailable",
             Self::ProviderProtocolError => "provider_protocol_error",
+            Self::ContextBudgetExceeded => "context_budget_exceeded",
             Self::ToolCallRejected => "tool_call_rejected",
             Self::ToolResultTooLarge => "tool_result_too_large",
             Self::ToolBudgetExhausted => "tool_budget_exhausted",
@@ -162,6 +164,7 @@ impl From<ProviderError> for ChatError {
             ProviderError::Timeout => Self::ProviderTimeout,
             ProviderError::Unavailable => Self::ProviderUnavailable,
             ProviderError::Protocol => Self::ProviderProtocolError,
+            ProviderError::ContextBudgetExceeded => Self::ContextBudgetExceeded,
         }
     }
 }
@@ -391,8 +394,12 @@ impl ChatRun {
                     ChatToolResultValidationError::TooLarge => ChatError::ToolResultTooLarge,
                     ChatToolResultValidationError::SerializationFailed => ChatError::Internal,
                 })?;
+            let public_call_id = format!("call-{}", self.tool_trace.len().saturating_add(1));
             self.tool_trace.push(ChatToolTraceDto {
-                call_id: call.id.clone(),
+                // The provider ID remains private correlation state: after a
+                // tool result is visible to the provider it is no longer a
+                // safe public trace identifier.
+                call_id: public_call_id,
                 tool: call.name,
                 status,
             });
@@ -480,7 +487,10 @@ fn validate_request(
         content: SYSTEM_PROMPT.to_owned(),
     });
     for message in request.messages {
-        if message.content.trim().is_empty() || message.content.len() > MAX_MESSAGE_BYTES {
+        if message.content.trim().is_empty()
+            || message.content.contains('\0')
+            || message.content.len() > MAX_MESSAGE_BYTES
+        {
             return Err(ChatError::InvalidChatRequest);
         }
         total_bytes = total_bytes
@@ -508,6 +518,7 @@ fn validate_request(
             }
             let profile_snapshot_id = context.profile_snapshot_id;
             if profile_snapshot_id.trim().is_empty()
+                || profile_snapshot_id.contains('\0')
                 || profile_snapshot_id.len() > MAX_PROFILE_SNAPSHOT_ID_BYTES
             {
                 return Err(ChatError::InvalidChatRequest);
@@ -661,7 +672,12 @@ mod tests {
 
     #[test]
     fn request_rejects_blank_per_message_and_total_byte_overflow() {
-        for content in ["".to_owned(), " \n\t".to_owned(), "界".repeat(1_366)] {
+        for content in [
+            "".to_owned(),
+            " \n\t".to_owned(),
+            "a\0b".to_owned(),
+            "界".repeat(1_366),
+        ] {
             assert!(matches!(
                 ChatRun::new("chat-run:x".to_owned(), request(&content), false),
                 Err(ChatError::InvalidChatRequest)
@@ -715,6 +731,14 @@ mod tests {
         });
         assert!(matches!(
             ChatRun::new("chat-run:x".to_owned(), blank, true),
+            Err(ChatError::InvalidChatRequest)
+        ));
+        let mut nul = opportunity_request();
+        nul.opportunity_context = Some(OpportunityContextDto {
+            profile_snapshot_id: "profile:\0private".to_owned(),
+        });
+        assert!(matches!(
+            ChatRun::new("chat-run:x".to_owned(), nul, true),
             Err(ChatError::InvalidChatRequest)
         ));
     }
@@ -830,7 +854,13 @@ mod tests {
         run.next_provider_request().expect("turn");
         let mut operations = Vec::new();
         run.accept_provider_turn(
-            turn(None, vec![affairs_call("call-1"), change_call("call-2")]),
+            turn(
+                None,
+                vec![
+                    affairs_call("provider-profile-MATH2001"),
+                    change_call("provider-payload-academic-calendar"),
+                ],
+            ),
             &mut |request| {
                 operations.push(request);
                 if operations.len() == 1 {
@@ -871,6 +901,11 @@ mod tests {
                 {"call_id":"call-1","tool":AFFAIRS_TOOL_NAME,"status":"succeeded"},
                 {"call_id":"call-2","tool":CHANGE_TOOL_NAME,"status":"denied"}
             ])
+        );
+        assert!(
+            !serde_json::to_string(&run.tool_trace)
+                .expect("trace text")
+                .contains("provider-")
         );
     }
 

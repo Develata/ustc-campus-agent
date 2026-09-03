@@ -9575,7 +9575,7 @@ class CiV2ActiveWorkflowMutationTests(_M90MutationTestBase):
         path = self.path(checker.CAMPAIGN_CI_WORKFLOW_PATH)
         text = path.read_text(encoding="utf-8")
         action = "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"
-        self.assertEqual(text.count(action), 2)
+        self.assertEqual(text.count(action), 3)
         path.write_text(text.replace(action, "actions/checkout@v6", 1), encoding="utf-8")
         self.assert_rejected(self.check(), "action inventory drift")
 

@@ -373,6 +373,34 @@ impl WebServer {
         stream.read_to_end(&mut bytes).expect("read HTTP response");
         HttpResponse::parse(&bytes)
     }
+
+    fn post_json_with_authority(
+        &self,
+        path: &str,
+        body: &Value,
+        host: &str,
+        origin: Option<&str>,
+    ) -> HttpResponse {
+        let body = body.to_string();
+        let mut stream = TcpStream::connect(&self.endpoint).expect("connect web server");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .expect("set read timeout");
+        let origin_header = origin
+            .map(|value| format!("Origin: {value}\r\n"))
+            .unwrap_or_default();
+        write!(
+            stream,
+            "POST {path} HTTP/1.1\r\nHost: {host}\r\n{origin_header}Accept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body,
+        )
+        .expect("write authority HTTP request");
+        stream.flush().expect("flush authority HTTP request");
+        let mut bytes = Vec::new();
+        stream.read_to_end(&mut bytes).expect("read HTTP response");
+        HttpResponse::parse(&bytes)
+    }
 }
 
 impl Drop for WebServer {
@@ -426,6 +454,47 @@ fn valid_opportunity_profile_body() -> Value {
 }
 
 #[test]
+fn loopback_host_and_origin_admission_precede_chat_dispatch() {
+    let server = WebServer::start();
+    let body = json!({
+        "schema": "ustc-agent-chat-request/v1",
+        "messages": [{"role": "user", "content": "普通问题"}],
+        "opportunity_context": null
+    });
+
+    let rebound = server.post_json_with_authority(
+        "/api/v1/agent/chat",
+        &body,
+        "campus-attacker.example:8787",
+        None,
+    );
+    assert!(rebound.status.contains(" 421 "), "{}", rebound.status);
+    assert!(rebound.body.contains("invalid_loopback_host"));
+
+    let cross_origin = server.post_json_with_authority(
+        "/api/v1/agent/chat",
+        &body,
+        &server.endpoint,
+        Some("http://campus-attacker.example"),
+    );
+    assert!(
+        cross_origin.status.contains(" 403 "),
+        "{}",
+        cross_origin.status
+    );
+    assert!(cross_origin.body.contains("cross_origin_request_forbidden"));
+
+    let origin = format!("http://{}", server.endpoint);
+    let admitted = server.post_json_with_authority(
+        "/api/v1/agent/chat",
+        &body,
+        &server.endpoint,
+        Some(&origin),
+    );
+    assert!(admitted.status.contains(" 200 "), "{}", admitted.status);
+}
+
+#[test]
 fn agent_chat_http_route_maps_success_and_closed_request_failures() {
     let server = WebServer::start();
     let path = "/api/v1/agent/chat";
@@ -447,12 +516,178 @@ fn agent_chat_http_route_maps_success_and_closed_request_failures() {
     assert_eq!(success["provider"]["model"], "deterministic-mock-v1");
     assert_eq!(success["tool_trace"][0]["tool"], "affairs_navigator_get");
     assert_eq!(success["tool_trace"][0]["status"], "succeeded");
+    assert!(
+        success["answer"]
+            .as_str()
+            .is_some_and(|answer| answer.contains("transcript-certificate"))
+    );
+
+    let unrelated = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "student affairs office hours and exchange opportunities"}],
+            "opportunity_context": null
+        }),
+    );
+    assert!(unrelated.status.contains(" 200 "), "{}", unrelated.status);
+    let unrelated: Value = serde_json::from_str(&unrelated.body).expect("unrelated chat JSON");
+    assert_eq!(unrelated["tool_trace"], json!([]));
+    assert!(
+        unrelated["answer"]
+            .as_str()
+            .is_some_and(|answer| answer.contains("deterministic mock"))
+    );
+
+    let mixed_without_opportunity = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "请查成绩单并规划课程"}],
+            "opportunity_context": null
+        }),
+    );
+    assert!(
+        mixed_without_opportunity.status.contains(" 200 "),
+        "{}",
+        mixed_without_opportunity.status
+    );
+    let mixed_without_opportunity: Value =
+        serde_json::from_str(&mixed_without_opportunity.body).expect("mixed chat JSON");
+    assert_eq!(
+        mixed_without_opportunity["tool_trace"]
+            .as_array()
+            .map(Vec::len),
+        Some(1)
+    );
+    assert_eq!(
+        mixed_without_opportunity["tool_trace"][0]["tool"],
+        "affairs_navigator_get"
+    );
+    assert_eq!(
+        mixed_without_opportunity["tool_trace"][0]["status"],
+        "succeeded"
+    );
+    assert!(
+        mixed_without_opportunity["answer"]
+            .as_str()
+            .is_some_and(|answer| answer.contains("transcript-certificate")
+                && answer.contains("课程规划请求未执行"))
+    );
+
+    let change = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "校历有什么变更"}],
+            "opportunity_context": null
+        }),
+    );
+    assert!(change.status.contains(" 200 "), "{}", change.status);
+    let change: Value = serde_json::from_str(&change.body).expect("change chat JSON");
+    assert_eq!(change["tool_trace"][0]["tool"], "change_radar_get");
+    assert_eq!(change["tool_trace"][0]["status"], "succeeded");
+    assert!(
+        change["answer"]
+            .as_str()
+            .is_some_and(|answer| answer.contains("academic-calendar"))
+    );
+
+    let created = server.post_json(
+        "/api/v1/opportunity/profiles",
+        &valid_opportunity_profile_body(),
+    );
+    assert!(created.status.contains(" 201 "), "{}", created.status);
+    let created: Value = serde_json::from_str(&created.body).expect("profile JSON");
+    let profile_id = created["terminal"]["profile"]["profile_snapshot_id"]
+        .as_str()
+        .expect("profile id");
+    let opportunity = server.post_json(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "帮我规划课程"}],
+            "opportunity_context": {"profile_snapshot_id": profile_id}
+        }),
+    );
+    assert!(
+        opportunity.status.contains(" 200 "),
+        "{}",
+        opportunity.status
+    );
+    let opportunity: Value =
+        serde_json::from_str(&opportunity.body).expect("opportunity chat JSON");
+    assert_eq!(
+        opportunity["tool_trace"][0]["tool"],
+        "opportunity_graph_plan_current_profile"
+    );
+    assert_eq!(opportunity["tool_trace"][0]["status"], "succeeded");
+    assert!(
+        opportunity["answer"]
+            .as_str()
+            .is_some_and(|answer| answer.contains("MATH2001"))
+    );
+
+    let denied = server.post_json(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "帮我规划课程"}],
+            "opportunity_context": {"profile_snapshot_id": "profile:synthetic:missing"}
+        }),
+    );
+    assert!(denied.status.contains(" 200 "), "{}", denied.status);
+    let denied: Value = serde_json::from_str(&denied.body).expect("denied chat JSON");
+    assert_eq!(denied["tool_trace"][0]["status"], "denied");
+    assert!(
+        denied["answer"]
+            .as_str()
+            .is_some_and(|answer| answer.contains("拒绝"))
+    );
 
     let malformed = server.post_raw_with_confirmation(path, "application/json", "{", false);
     assert!(malformed.status.contains(" 400 "), "{}", malformed.status);
     let malformed: Value = serde_json::from_str(&malformed.body).expect("chat error JSON");
     assert_eq!(malformed["schema"], "ustc-agent-chat-error/v1");
     assert_eq!(malformed["error"], "invalid_chat_request");
+
+    let structured_suffix_body = json!({
+        "schema": "ustc-agent-chat-request/v1",
+        "messages": [{"role": "user", "content": "成绩单证明怎么办"}],
+        "opportunity_context": null
+    })
+    .to_string();
+    let structured_suffix = server.post_raw_with_confirmation(
+        path,
+        "application/vnd.ustc-agent+json",
+        &structured_suffix_body,
+        false,
+    );
+    assert!(
+        structured_suffix.status.contains(" 400 "),
+        "{}",
+        structured_suffix.status
+    );
+    let structured_suffix: Value =
+        serde_json::from_str(&structured_suffix.body).expect("chat content-type error JSON");
+    assert_eq!(structured_suffix["schema"], "ustc-agent-chat-error/v1");
+    assert_eq!(structured_suffix["error"], "invalid_chat_request");
+
+    let nul_content = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "bad\u{0000}content"}],
+            "opportunity_context": null
+        }),
+    );
+    assert!(
+        nul_content.status.contains(" 400 "),
+        "{}",
+        nul_content.status
+    );
+    let nul_content: Value = serde_json::from_str(&nul_content.body).expect("NUL chat error JSON");
+    assert_eq!(nul_content["error"], "invalid_chat_request");
 
     let missing_confirmation = server.post_json_without_opportunity_confirmation(
         path,
@@ -1338,11 +1573,13 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(page.headers.contains("content-type: text/html"));
     assert!(page.headers.contains("content-security-policy:"));
     assert!(page.headers.contains("x-frame-options: deny"));
-    assert!(page.body.contains("科大校园助手"));
+    assert!(page.body.contains("USTC Campus Agent"));
+    assert!(!page.body.contains("科大校园助手"));
     assert!(page.body.contains("先说你要做什么。"));
     for id in [
         "chat-form",
         "chat-input",
+        "chat-clear",
         "chat-send",
         "chat-messages",
         "chat-opportunity-confirm",

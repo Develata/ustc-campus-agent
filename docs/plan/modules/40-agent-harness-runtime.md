@@ -3,12 +3,12 @@
 ## Metadata
 
 - `Module ID`: `M30`
-- `Status`: Accepted blueprint; node-local runtime kernel plus provider-free deterministic Affairs/ChangeRadar Harness turns implemented, finite user-task harness planned
+- `Status`: Accepted blueprint; node-local runtime kernel, provider-free deterministic turns and one bounded app-private provider/tool Chat coordinator implemented; durable finite user-task harness planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m30-agent-runtime/v0`
-- `Last Review`: `2026-09-01`
+- `Last Review`: `2026-09-03`
 - `Owning Plan`: [`../07-runtime-and-integration.md`](../07-runtime-and-integration.md)
-- `Primary code areas`: `crates/agent-runtime/` and future cohesive harness modules
+- `Primary code areas`: node kernel in `crates/agent-runtime/`, current bounded app-private Chat coordinator in `apps/ustc-agentd/src/agent_chat.rs`, and future cohesive durable harness modules
 
 ## 1. Purpose
 
@@ -73,6 +73,8 @@ RuntimeError
 It consumes turn/tool budgets and the same intent/receipt ordering, but records no
 fabricated provider token/cost usage. It is a node-local execution mode, not the
 future user-task `HarnessRun` phase machine.
+
+The app-private Chat MVP provides a second bounded M30 orchestration slice: a closed three-turn/three-call coordinator sends complete request projections through M50, validates exact tool proposals, executes tools sequentially and produces a typed final response. Its confirmed Opportunity tool may invoke the separately owned static M72 planning use case; M72 consent/profile/planning semantics remain M72 evidence, not M30/M40 implementation.
 
 ## 5. Dependency direction
 

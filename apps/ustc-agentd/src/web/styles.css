@@ -363,6 +363,33 @@ main {
   accent-color: var(--accent);
 }
 
+.chat-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#chat-clear {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--muted-strong);
+  background: transparent;
+  cursor: pointer;
+  font-weight: 680;
+}
+
+#chat-clear:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+
+#chat-clear:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
 #chat-send {
   min-width: 104px;
   min-height: 48px;
@@ -1300,6 +1327,10 @@ footer {
   #chat-send {
     justify-self: end;
     min-width: 120px;
+  }
+
+  .chat-actions {
+    justify-self: end;
   }
 
   .diagnostics-intro {

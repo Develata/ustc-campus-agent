@@ -15,7 +15,7 @@
 `agent-chat/v1` is one loopback-only competition profile. It is not the complete durable [`agent-harness/v0`](agent-harness.md), a generic Plugin runtime, a provider-managed conversation, or production campus-source activation.
 
 ```text
-M80 static Web Chat
+Composition-owned static Web Chat shell (not M80 module evidence)
 → M10 POST /api/v1/agent/chat
 → M30 bounded in-memory coordinator
 → M50 deterministic mock or operator-configured OpenAI-compatible adapter
@@ -29,7 +29,7 @@ The server owns request validation, provider selection, budgets, tool registrati
 
 ## 2. HTTP request
 
-`POST /api/v1/agent/chat` accepts `application/json` only, under the router's 16 KiB complete-body limit.
+`POST /api/v1/agent/chat` accepts `application/json` only, under the router's 16 KiB complete-body limit. The loopback router requires a `Host` authority whose host is `localhost` or a numeric loopback IP (`127.0.0.0/8` or `::1`) and contains no userinfo; when `Origin` is present it must be the same HTTP authority. Invalid Host or cross-origin requests fail before provider or tool I/O.
 
 ```json
 {
@@ -47,12 +47,12 @@ The request is closed:
 - `messages` contains 1–12 entries;
 - each entry has only `role` and `content`;
 - `role` is exactly `user | assistant`; browser/provider callers cannot submit `system` or `tool` history;
-- each UTF-8 `content` is nonblank and at most 4 KiB; aggregate message content is at most 12 KiB; the final role is `user`;
+- each UTF-8 `content` is nonblank, contains no U+0000/NUL scalar, and is at most 4 KiB; aggregate message content is at most 12 KiB; the final role is `user`;
 - `opportunity_context` is absent/null unless the browser has an existing profile hint and the user enables the explicit per-request chat-use control;
-- a non-null `opportunity_context` is exactly `{"profile_snapshot_id":"..."}`; its value is nonblank and at most 4 KiB; scalar aliases and unknown fields fail;
+- a non-null `opportunity_context` is exactly `{"profile_snapshot_id":"..."}`; its value is nonblank, contains no U+0000/NUL scalar and is at most 4 KiB; scalar aliases and unknown fields fail;
 - a non-null context additionally requires `X-USTC-Opportunity-Confirmation: confirmed` on the same request.
 
-The profile snapshot ID and header are non-authoritative hints. The server still checks current session, tenant/user ownership, consent, Market state and source currentness through the existing Opportunity composition.
+The profile snapshot ID and header are non-authoritative hints. The browser applies the same nonblank/NUL/4 KiB bound before enabling a restored `localStorage` hint and removes an invalid persisted value. The server still checks current session, tenant/user ownership, consent, Market state and source currentness through the existing Opportunity composition.
 
 ## 3. HTTP response and errors
 
@@ -71,9 +71,11 @@ Success is closed by this shape:
 }
 ```
 
-`answer` is nonblank and at most 16 KiB. `usage` is the saturating sum of provider-reported prompt/completion tokens; the deterministic mock reports zero. `tool_trace` exposes only bounded call ID, model-visible tool name and `succeeded | denied | failed`; it exposes no private route, product payload, package/grant internals, profile content, request headers, provider body, URL or API key.
+`answer` is nonblank and at most 16 KiB. `usage` is the saturating sum of provider-reported prompt/completion tokens; the deterministic mock reports zero. `tool_trace` exposes only a bounded server-owned opaque `call_id` assigned in execution order, model-visible tool name and `succeeded | denied | failed`; provider-supplied correlation IDs remain private to the provider transcript. The trace exposes no private route, product payload, package/grant internals, profile content, request headers, provider body, URL or API key. For Affairs Navigator and ChangeRadar, `succeeded` requires the enclosed typed terminal outcome to be `found`; an admitted envelope carrying `not_found`, conflict or another non-`found` terminal is projected as `failed`, not successful completion.
 
-Errors are `{"schema":"ustc-agent-chat-error/v1","error":"stable_code"}`. Stable codes are:
+Host/Origin admission runs before Chat route dispatch and therefore uses the shared Web envelope rather than `ustc-agent-chat-error/v1`. Missing, malformed, userinfo-bearing or non-loopback `Host` returns HTTP `421` with `{"schema":"ustc-web-error/v1","error":"invalid_loopback_host"}`. A present non-HTTP or authority-mismatched `Origin` returns HTTP `403` with `{"schema":"ustc-web-error/v1","error":"cross_origin_request_forbidden"}`. Both occur before provider/tool I/O and carry the same hardened response headers as other loopback Web errors.
+
+Errors after Chat route admission are `{"schema":"ustc-agent-chat-error/v1","error":"stable_code"}`. Stable codes are:
 
 ```text
 invalid_chat_request
@@ -83,6 +85,7 @@ provider_rate_limited
 provider_timeout
 provider_unavailable
 provider_protocol_error
+context_budget_exceeded
 tool_call_rejected
 tool_result_too_large
 tool_budget_exhausted
@@ -105,12 +108,17 @@ Runtime configuration is server-only:
 | `UCA_AGENT_MODEL` | required for `openai-compatible`; bounded nonblank model ID |
 | `UCA_AGENT_API_KEY_FILE` | required for `openai-compatible`; regular non-symlink file read once at server startup |
 | `UCA_AGENT_TIMEOUT_MS` | integer 1000–60000; default 15000 |
+| `UCA_AGENT_CONTEXT_TOKENS` | required for `openai-compatible`; validated integer 16384–1048576 |
 
-The key file is UTF-8, nonblank after outer-whitespace trim and at most 4096 bytes. The normal runtime accepts no raw key through argv, HTTP, browser storage, checked-in environment or logs. Invalid OpenAI-compatible configuration fails startup without fallback to mock, another origin or another model.
+The packaged launchers require `.env` itself to be a readable regular non-symlink file when present, and require at most one exact column-zero `KEY=value` assignment for each of `UCA_AGENT_PROVIDER` and `UCA_AGENT_API_KEY_SOURCE`. Their values must be literal: the launchers reject all `$`-based Compose interpolation in either security-critical `.env` assignment before Docker, including an otherwise-unused key-source assignment in mock mode, so launcher-side security preflight cannot observe a value different from the Compose-resolved service. Operators needing dynamic configuration inject already-resolved literal process-environment values instead.
 
-The adapter sends non-streaming Chat Completions with the exact configured model, ordered complete messages, complete current tool definitions, `tool_choice: auto`, `parallel_tool_calls: false` and `stream: false`. It follows no redirects, uses one absolute timeout and accepts at most 256 KiB of response bytes. Production configuration requires HTTPS; plain HTTP exists only in the test-only loopback constructor.
+The key file is UTF-8, nonblank after outer-whitespace trim and at most 4096 bytes. On Unix, the opened key file must have no group/world permission bits (`mode & 077 == 0`). Because local Compose file-backed secrets preserve host ownership, Compose first drops every capability and then grants the root-only initialization phase exactly `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETGID`, `SETPCAP` and `SETUID`: the entrypoint can read the explicitly mounted owner-only source, copy it into an ephemeral mode-0600 tmpfs file owned by UID/GID 65532, and then re-exec itself through `setpriv` as UID/GID 65532 with cleared groups, no-new-privileges and an empty effective/bounding capability set before the daemon or proxy starts. The packaged Unix launcher enforces the same permission rule on the host source before Docker runs, while direct Compose use remains operator-responsible because the projected container secret cannot prove the host file's original mode. Both launchers, the container entrypoint and the authoritative Rust key reader reject the bundled mock placeholder after the same outer-whitespace normalization in `openai-compatible` mode. The normal runtime accepts no raw key through argv, HTTP, browser storage, checked-in environment or logs. Invalid OpenAI-compatible configuration fails startup without fallback to mock, another origin or another model.
 
-A successful provider message must carry the exact `assistant` role and either nonblank final text or function calls. Missing/non-assistant roles, malformed JSON, empty/multiple choices, invalid call objects and oversized output map to `provider_protocol_error`. HTTP 401/403, 429, timeout and remaining non-success transport classes map to their stable errors without returning the raw body.
+The adapter sends non-streaming Chat Completions with the exact configured model, ordered complete messages, complete current tool definitions, `tool_choice: auto`, `parallel_tool_calls: false`, `stream: false` and an 8192-token output ceiling. The response path accepts only exactly one `assistant` choice, requires `finish_reason: stop` for final text or `finish_reason: tool_calls` for a complete tool batch, and rejects truncated, content-filtered or mismatched termination before any tool execution. It follows no redirects, uses one absolute timeout and accepts at most 256 KiB of response bytes. Production configuration requires HTTPS; plain HTTP exists only in the test-only loopback constructor. The deterministic mock is network-free and routes only product-qualified transcript, academic-calendar and course-planning terms: successful tool `data` is included in the bounded visible final answer, denied and failed tool statuses remain explicit non-success answers, and a mixed request whose Opportunity tool is unavailable retains an explicit unexecuted-consent notice beside any successful public-tool data.
+
+Before network I/O the adapter serializes the complete wire request and applies `T(q) + O + S ≤ floor(L × 0.9)`, where `T(q)` is conservatively upper-bounded by serialized UTF-8 bytes, `O=8192`, `S=2048`, and `L=UCA_AGENT_CONTEXT_TOKENS`. Oversize input fails locally as `context_budget_exceeded`; no provider/profile context limit means no OpenAI-compatible call.
+
+A successful provider message must carry the exact `assistant` role and either nonblank final text or function calls. Missing/non-assistant roles, malformed JSON, empty/multiple choices, invalid call objects and oversized output map to `provider_protocol_error`. HTTP 401/403, 429, timeout and remaining non-success transport classes map to their stable errors without returning the raw body. The deterministic mock derives its wording from server-owned tool status/data. An operator-selected real provider remains an untrusted text generator: the server preserves the independently rendered tool-trace status but cannot prove that arbitrary provider prose describes a denied/failed result honestly; operators must treat the trace as authoritative.
 
 ## 5. Bounded sequential loop
 
@@ -145,13 +153,13 @@ The model cannot create, view, edit, consent to, revoke or delete a profile; cho
 
 ## 7. Web, Compose and package projection
 
-The thin static browser owns only page-lifetime draft/history presentation. It sends bounded user/assistant history, renders loading/final/error/tool-trace states, and includes Opportunity context only after profile creation plus explicit checkbox confirmation. It never receives or stores the provider key. Keyboard submit, visible focus, reduced motion and 390 px/mobile-to-desktop layout remain required.
+The thin static browser owns only page-lifetime draft/history presentation. It sends bounded user/assistant history, renders loading/final/error/tool-trace states, provides an explicit local-conversation clear control, and includes Opportunity context only after profile creation plus explicit checkbox confirmation. It never receives or stores the provider key. Keyboard submit, visible focus, reduced motion and 390 px/mobile-to-desktop layout remain required.
 
 The Compose package:
 
 - publishes only `127.0.0.1:${UCA_MVP_PORT}:8787`;
 - defaults to deterministic mock with no provider network call;
-- mounts a provider key file read-only and uses only a non-secret placeholder in mock mode;
+- mounts a provider key source read-only, copies it only in OpenAI-compatible mode into an ephemeral mode-0600 tmpfs file, uses only a non-secret placeholder in mock mode and rejects that placeholder in real-provider mode;
 - persists product state in a named volume across `stop`/restart;
 - deletes that volume only through explicit reset;
 - packages deterministic ZIP/tar archives with exact source commit, per-file checksums and a provider-secret scan;
