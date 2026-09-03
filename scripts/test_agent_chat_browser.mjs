@@ -353,6 +353,31 @@ try {
   assert.match(await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"), /MATH2001/);
   assert.match(await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"), /icourse\.club/);
 
+  await submitWithEnter(
+    "请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，同时记录事项：复习计划",
+    true
+  );
+  assert.equal(await evaluate("document.querySelector('#chat-opportunity-confirm').checked"), false);
+  const fourToolTrace = await evaluate(`(() => {
+    const trace = document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace');
+    return {
+      text: trace?.textContent ?? '',
+      count: trace?.querySelectorAll('li').length ?? 0,
+      statuses: [...(trace?.querySelectorAll('.chat-tool-state') ?? [])].map((node) => node.dataset.status)
+    };
+  })()`);
+  assert.equal(fourToolTrace.count, 4, "the browser must admit the server's full four-call budget");
+  assert.deepEqual(fourToolTrace.statuses, ["succeeded", "succeeded", "succeeded", "succeeded"]);
+  for (const label of ["办事导航", "变更雷达", "机会图谱", "简单日历"]) {
+    assert.match(fourToolTrace.text, new RegExp(label));
+  }
+  const fourToolAnswer = await evaluate(
+    "document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"
+  );
+  for (const signal of ["transcript-certificate", "academic-calendar", "MATH2001", "复习计划"]) {
+    assert.match(fourToolAnswer, new RegExp(signal));
+  }
+
   await submitWithEnter("普通问题 0");
   const unconfirmedHistory = await evaluate(`(() => {
     const request = window.__ucaChatRequests.at(-1);
@@ -428,7 +453,7 @@ try {
 
   const exceptions = cdp.events.filter((event) => event.method === "Runtime.exceptionThrown");
   assert.deepEqual(exceptions, [], `browser exceptions: ${JSON.stringify(exceptions)}`);
-  console.log("agent-chat-browser: PASS journeys=13 turn-pairs=PASS oversized-turn=OMITTED viewport=390 reduced-motion=PASS clear=PASS");
+  console.log("agent-chat-browser: PASS journeys=14 four-tool-trace=PASS turn-pairs=PASS oversized-turn=OMITTED viewport=390 reduced-motion=PASS clear=PASS");
 } catch (error) {
   console.error(error?.stack ?? error);
   if (serverOutput) console.error(`server output:\n${serverOutput}`);

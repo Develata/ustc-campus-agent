@@ -1,11 +1,12 @@
-# USTC Campus Agent · 三插件 MVP 测试包
+# USTC Campus Agent · 三插件 + Calendar companion MVP 测试包
 
 这是一个**本机、离线 fixture、Docker Compose** 演示包。它包含：
 
 - Affairs Navigator：办事流程与来源证据；
 - ChangeRadar：语义变更板与显式 demo publication；
-- Opportunity Graph：consent → private profile → 课程规划 → revoke/delete。
-- Web Chat：默认 deterministic mock provider；自然语言问题可进入以上三个受限产品路径。
+- Opportunity Graph：consent → private profile → 课程规划 → revoke/delete；
+- Simple Calendar：Rust owner-local 事项的记录、列出与删除；
+- Web Chat：默认 deterministic mock provider；自然语言问题可进入以上三个校园产品路径与 Calendar companion。
 
 它不是中国科学技术大学官方服务，不连接真实 USTC 账号，也不会抓取实时网页。
 
@@ -63,7 +64,9 @@ docker compose up --build -d
 4. **Affairs publication**：勾选确认，再发布固定 demo revision；刷新状态并重复提交，检查 receipt 是否稳定。
 5. **ChangeRadar**：先读取变更板，再勾选确认并发布固定变更；检查 JSON board 与 Atom 链接。
 6. **Opportunity Graph**：先显式同意并创建 profile；随后在 Chat 中再勾选一次“允许本次对话使用当前 synthetic profile”并询问课程规划。Chat 无权创建或删除 profile。
-7. **重启恢复**：执行 `docker compose restart`，刷新页面，确认 durable publication/profile 状态仍可读。
+7. **Simple Calendar**：发送“记录事项：提交开题报告”，再发送“列出我的待办事项”；确认重启前后 `calendar:item:N` 与标题稳定。
+8. **四工具组合**：重新勾选本次 Opportunity consent，发送“请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，同时记录事项：复习计划”；确认 trace 显示四个成功工具。
+9. **重启恢复**：执行 `docker compose restart`，刷新页面，确认 durable publication/profile/Calendar 状态仍可读。
 
 ## 停止、保留状态与重置
 

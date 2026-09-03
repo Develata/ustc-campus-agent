@@ -245,7 +245,7 @@ impl ChatProvider {
     }
 
     #[cfg(test)]
-    fn openai_compatible_for_test(
+    pub(crate) fn openai_compatible_for_test(
         base_url: &str,
         model: &str,
         key_file: &Path,

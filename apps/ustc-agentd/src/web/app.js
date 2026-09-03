@@ -20,6 +20,7 @@ const CHAT_MAX_PROFILE_SNAPSHOT_ID_BYTES = 4 * 1024;
 const CHAT_MAX_HISTORY_BYTES = 12 * 1024;
 const CHAT_MAX_BODY_BYTES = 16 * 1024;
 const CHAT_MAX_ANSWER_BYTES = 16 * 1024;
+const CHAT_MAX_TOOL_CALLS = 4;
 const chatTextEncoder = new TextEncoder();
 const chatHistory = [];
 let chatPending = false;
@@ -362,7 +363,7 @@ function validateChatResponse(payload) {
     payload.answer.trim().length === 0 ||
     utf8Length(payload.answer) > CHAT_MAX_ANSWER_BYTES ||
     !Array.isArray(payload.tool_trace) ||
-    payload.tool_trace.length > 3
+    payload.tool_trace.length > CHAT_MAX_TOOL_CALLS
   ) {
     throw chatFailure("invalid_response");
   }

@@ -1560,6 +1560,9 @@ fn hardened(mut response: Response) -> Response {
 }
 
 #[cfg(test)]
+mod configured_provider_route_tests;
+
+#[cfg(test)]
 mod tests {
     use super::{
         CONTENT_SECURITY_POLICY, WebRequestError, WebState, affairs_chat_outcome_succeeded,

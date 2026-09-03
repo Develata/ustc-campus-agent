@@ -34,7 +34,7 @@ The default mock mode needs no API key and is intended for deterministic judging
 ### Normal Agent Q&A
 
 - Multi-turn page-local conversation with bounded history.
-- Deterministic offline response or explicitly configured OpenAI-compatible Chat Completions provider.
+- Deterministic offline response or explicitly configured OpenAI-compatible Chat Completions provider; both cross the complete loopback HTTP route in retained tests.
 - Maximum 3 provider turns, 4 tool calls, 4 KiB arguments per call, 64 KiB result per call and 16 KiB final answer.
 - Redacted trace exposes only call order, tool name and `succeeded | denied | failed`.
 
@@ -103,8 +103,9 @@ After starting the loopback MVP, try:
 - `记录事项：提交开题报告`
 - `列出我的待办事项。`
 - Create an Opportunity profile in the page, enable the per-request consent checkbox, then ask `请根据我的偏好和评课社区信号推荐课程。`
+- To exercise the complete four-call budget, enable consent again and ask `请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，同时记录事项：复习计划`.
 
-The first four tool-backed requests should show a successful trace in deterministic mock mode. Course planning must be denied or omitted without the explicit profile context and per-request confirmation.
+Every admitted tool-backed request should show a successful trace in deterministic mock mode. The mixed request must render four trace entries rather than being rejected by the browser. Course planning must be denied or omitted without the explicit profile context and per-request confirmation.
 
 ## 6. Current boundaries and TODO
 
