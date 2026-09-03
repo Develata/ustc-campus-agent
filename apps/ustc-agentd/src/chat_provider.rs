@@ -9,6 +9,7 @@ use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use reqwest::header::CONTENT_TYPE;
 use reqwest::redirect::Policy;
 use reqwest::{Client, StatusCode, Url};
 use serde::{Deserialize, Serialize};
@@ -28,10 +29,20 @@ const MAX_PROVIDER_TEXT_BYTES: usize = 64 * 1024;
 const MAX_TOOL_CALL_ID_BYTES: usize = 256;
 const MAX_TOOL_NAME_BYTES: usize = 128;
 const MAX_TOOL_ARGUMENT_BYTES: usize = 4 * 1024;
+const MAX_MOCK_ANSWER_BYTES: usize = 12 * 1024;
+const MIN_CONTEXT_TOKENS: u64 = 16 * 1024;
+const MAX_CONTEXT_TOKENS: u64 = 1024 * 1024;
+#[cfg(test)]
+const DEFAULT_TEST_CONTEXT_TOKENS: u64 = 128 * 1024;
+const SEND_CEILING_BPS: u64 = 9_000;
+const OUTPUT_RESERVE_TOKENS: u64 = 8 * 1024;
+const ESTIMATOR_RESERVE_TOKENS: u64 = 2 * 1024;
 const MOCK_MODEL: &str = "deterministic-mock-v1";
 const AFFAIRS_TOOL: &str = "affairs_navigator_get";
 const CHANGE_TOOL: &str = "change_radar_get";
 const OPPORTUNITY_TOOL: &str = "opportunity_graph_plan_current_profile";
+const FORBIDDEN_MOCK_PROVIDER_KEY: &str = "unused-placeholder-for-deterministic-mock-mode";
+const OPPORTUNITY_UNAVAILABLE_NOTICE: &str = "课程规划请求未执行：需要先在 Opportunity Graph 面板明确同意并创建 synthetic profile，再为这一次请求单独勾选允许；我不会代你创建或读取私人档案。";
 
 #[derive(Clone)]
 pub(crate) enum ChatProvider {
@@ -104,6 +115,7 @@ pub(crate) enum ProviderError {
     Timeout,
     Unavailable,
     Protocol,
+    ContextBudgetExceeded,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,12 +129,19 @@ pub(crate) enum ProviderConfigError {
     MissingKeyFile,
     InvalidKeyFile,
     InvalidTimeout,
+    InvalidContextLimit,
     ClientUnavailable,
 }
 
 impl ChatProvider {
     pub(crate) fn from_env() -> Result<Self, ProviderConfigError> {
-        let profile = std::env::var("UCA_AGENT_PROVIDER").unwrap_or_else(|_| "mock".to_owned());
+        let profile = match std::env::var("UCA_AGENT_PROVIDER") {
+            Ok(profile) => profile,
+            Err(std::env::VarError::NotPresent) => "mock".to_owned(),
+            Err(std::env::VarError::NotUnicode(_)) => {
+                return Err(ProviderConfigError::UnknownProfile);
+            }
+        };
         match profile.as_str() {
             "mock" => Ok(Self::deterministic_mock()),
             "openai-compatible" => {
@@ -142,7 +161,20 @@ impl ChatProvider {
                         return Err(ProviderConfigError::InvalidTimeout);
                     }
                 };
-                Self::openai_compatible(&base_url, &model, Path::new(&key_file), timeout_ms, false)
+                let context_limit_tokens = required_env(
+                    "UCA_AGENT_CONTEXT_TOKENS",
+                    ProviderConfigError::InvalidContextLimit,
+                )?
+                .parse::<u64>()
+                .map_err(|_| ProviderConfigError::InvalidContextLimit)?;
+                Self::openai_compatible(
+                    &base_url,
+                    &model,
+                    Path::new(&key_file),
+                    timeout_ms,
+                    context_limit_tokens,
+                    false,
+                )
             }
             _ => Err(ProviderConfigError::UnknownProfile),
         }
@@ -178,6 +210,7 @@ impl ChatProvider {
         model: &str,
         key_file: &Path,
         timeout_ms: u64,
+        context_limit_tokens: u64,
         permit_test_loopback_http: bool,
     ) -> Result<Self, ProviderConfigError> {
         let endpoint = chat_completions_endpoint(base_url, permit_test_loopback_http)?;
@@ -186,6 +219,9 @@ impl ChatProvider {
             .to_owned();
         if !(MIN_TIMEOUT_MS..=MAX_TIMEOUT_MS).contains(&timeout_ms) {
             return Err(ProviderConfigError::InvalidTimeout);
+        }
+        if !(MIN_CONTEXT_TOKENS..=MAX_CONTEXT_TOKENS).contains(&context_limit_tokens) {
+            return Err(ProviderConfigError::InvalidContextLimit);
         }
         let api_key = read_api_key(key_file)?;
         let timeout = Duration::from_millis(timeout_ms);
@@ -199,6 +235,7 @@ impl ChatProvider {
             client,
             endpoint,
             api_key,
+            context_limit_tokens,
             identity: ProviderIdentity {
                 mode: "openai-compatible".to_owned(),
                 model,
@@ -213,7 +250,14 @@ impl ChatProvider {
         key_file: &Path,
         timeout_ms: u64,
     ) -> Result<Self, ProviderConfigError> {
-        Self::openai_compatible(base_url, model, key_file, timeout_ms, true)
+        Self::openai_compatible(
+            base_url,
+            model,
+            key_file,
+            timeout_ms,
+            DEFAULT_TEST_CONTEXT_TOKENS,
+            true,
+        )
     }
 }
 
@@ -230,6 +274,7 @@ pub(crate) struct OpenAiCompatibleProvider {
     client: Client,
     endpoint: Url,
     api_key: SecretString,
+    context_limit_tokens: u64,
     identity: ProviderIdentity,
 }
 
@@ -245,11 +290,14 @@ impl std::fmt::Debug for SecretString {
 impl OpenAiCompatibleProvider {
     async fn complete(&self, request: &ProviderRequest) -> Result<ProviderTurn, ProviderError> {
         let wire_request = build_wire_request(&self.identity.model, request)?;
+        let wire_bytes = serde_json::to_vec(&wire_request).map_err(|_| ProviderError::Protocol)?;
+        preflight_context_budget(wire_bytes.len(), self.context_limit_tokens)?;
         let response = self
             .client
             .post(self.endpoint.clone())
             .bearer_auth(&self.api_key.0)
-            .json(&wire_request)
+            .header(CONTENT_TYPE, "application/json")
+            .body(wire_bytes)
             .send()
             .await
             .map_err(map_transport_error)?;
@@ -295,6 +343,24 @@ fn map_transport_error(error: reqwest::Error) -> ProviderError {
     } else {
         ProviderError::Unavailable
     }
+}
+
+fn preflight_context_budget(
+    serialized_request_bytes: usize,
+    context_limit_tokens: u64,
+) -> Result<(), ProviderError> {
+    let send_ceiling = context_limit_tokens.saturating_mul(SEND_CEILING_BPS) / 10_000;
+    let input_budget = send_ceiling
+        .checked_sub(OUTPUT_RESERVE_TOKENS + ESTIMATOR_RESERVE_TOKENS)
+        .ok_or(ProviderError::ContextBudgetExceeded)?;
+    // Every tokenizer token covers at least one serialized UTF-8 byte, so byte count is a
+    // conservative tokenizer-independent upper bound for input tokens.
+    let estimated_input_tokens = u64::try_from(serialized_request_bytes)
+        .map_err(|_| ProviderError::ContextBudgetExceeded)?;
+    if estimated_input_tokens > input_budget {
+        return Err(ProviderError::ContextBudgetExceeded);
+    }
+    Ok(())
 }
 
 fn bounded_nonblank(value: &str, maximum_bytes: usize) -> Option<&str> {
@@ -371,6 +437,13 @@ fn read_api_key(path: &Path) -> Result<SecretString, ProviderConfigError> {
     if !opened.is_file() || opened.len() > MAX_API_KEY_BYTES as u64 {
         return Err(ProviderConfigError::InvalidKeyFile);
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if opened.permissions().mode() & 0o077 != 0 {
+            return Err(ProviderConfigError::InvalidKeyFile);
+        }
+    }
     let mut raw = Vec::new();
     file.take((MAX_API_KEY_BYTES + 1) as u64)
         .read_to_end(&mut raw)
@@ -380,7 +453,11 @@ fn read_api_key(path: &Path) -> Result<SecretString, ProviderConfigError> {
     }
     let value = String::from_utf8(raw).map_err(|_| ProviderConfigError::InvalidKeyFile)?;
     let value = value.trim();
-    if value.is_empty() || value.len() > MAX_API_KEY_BYTES || value.chars().any(char::is_control) {
+    if value.is_empty()
+        || value == FORBIDDEN_MOCK_PROVIDER_KEY
+        || value.len() > MAX_API_KEY_BYTES
+        || value.chars().any(char::is_control)
+    {
         return Err(ProviderConfigError::InvalidKeyFile);
     }
     Ok(SecretString(value.to_owned()))
@@ -462,6 +539,7 @@ struct OpenAiRequest<'a> {
     tool_choice: &'static str,
     parallel_tool_calls: bool,
     stream: bool,
+    max_tokens: u64,
 }
 
 #[derive(Serialize)]
@@ -573,6 +651,7 @@ fn build_wire_request<'a>(
         tool_choice: "auto",
         parallel_tool_calls: false,
         stream: false,
+        max_tokens: OUTPUT_RESERVE_TOKENS,
     })
 }
 
@@ -585,7 +664,16 @@ struct OpenAiResponse {
 
 #[derive(Deserialize)]
 struct OpenAiChoice {
+    finish_reason: String,
     message: OpenAiInboundMessage,
+}
+
+fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 #[derive(Deserialize)]
@@ -593,7 +681,7 @@ struct OpenAiInboundMessage {
     role: String,
     #[serde(default)]
     content: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     tool_calls: Vec<OpenAiInboundToolCall>,
 }
 
@@ -626,6 +714,14 @@ fn parse_wire_response(mut response: OpenAiResponse) -> Result<ProviderTurn, Pro
     if choice.message.role != "assistant" {
         return Err(ProviderError::Protocol);
     }
+    let expected_finish_reason = if choice.message.tool_calls.is_empty() {
+        "stop"
+    } else {
+        "tool_calls"
+    };
+    if choice.finish_reason != expected_finish_reason {
+        return Err(ProviderError::Protocol);
+    }
     if choice.message.tool_calls.is_empty()
         && choice
             .message
@@ -643,6 +739,10 @@ fn parse_wire_response(mut response: OpenAiResponse) -> Result<ProviderTurn, Pro
     {
         return Err(ProviderError::Protocol);
     }
+    let content = choice
+        .message
+        .content
+        .filter(|content| !content.trim().is_empty());
     let mut tool_calls = Vec::with_capacity(choice.message.tool_calls.len());
     for call in choice.message.tool_calls {
         let call = ProviderToolCall {
@@ -656,7 +756,7 @@ fn parse_wire_response(mut response: OpenAiResponse) -> Result<ProviderTurn, Pro
     }
     let usage = response.usage.unwrap_or_default();
     Ok(ProviderTurn {
-        content: choice.message.content,
+        content,
         tool_calls,
         usage: ProviderUsage {
             input_tokens: usage.prompt_tokens,
@@ -665,7 +765,65 @@ fn parse_wire_response(mut response: OpenAiResponse) -> Result<ProviderTurn, Pro
     })
 }
 
+fn bounded_mock_success_answer(data: &str, status_notice: &str) -> String {
+    const PREFIX: &str = "已完成校园工具查询。结构化结果：";
+    const SUFFIX: &str = "…（结果已按本次对话上限截断）";
+    if PREFIX.len() + data.len() + status_notice.len() <= MAX_MOCK_ANSWER_BYTES {
+        return format!("{PREFIX}{data}{status_notice}");
+    }
+    let budget =
+        MAX_MOCK_ANSWER_BYTES.saturating_sub(PREFIX.len() + SUFFIX.len() + status_notice.len());
+    let mut end = 0_usize;
+    for (offset, character) in data.char_indices() {
+        let next = offset + character.len_utf8();
+        if next > budget {
+            break;
+        }
+        end = next;
+    }
+    format!("{PREFIX}{}{SUFFIX}{status_notice}", &data[..end])
+}
+
+fn contains_ascii_term(text: &str, term: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    lower.match_indices(term).any(|(start, matched)| {
+        let end = start + matched.len();
+        let is_word_byte = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_';
+        let left_admitted = start == 0 || !is_word_byte(lower.as_bytes()[start - 1]);
+        let right_admitted = end == lower.len() || !is_word_byte(lower.as_bytes()[end]);
+        left_admitted && right_admitted
+    })
+}
+
 fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, ProviderError> {
+    let user = request
+        .messages
+        .iter()
+        .rev()
+        .find_map(|message| match message {
+            ProviderMessage::User { content } => Some(content.as_str()),
+            _ => None,
+        });
+    let wants_affairs = user.is_some_and(|user| {
+        user.contains("成绩单")
+            || user.contains("成绩证明")
+            || contains_ascii_term(user, "transcript")
+            || contains_ascii_term(user, "affairs navigator")
+    });
+    let wants_change = user.is_some_and(|user| {
+        user.contains("校历")
+            || contains_ascii_term(user, "academic calendar")
+            || contains_ascii_term(user, "change radar")
+    });
+    let wants_opportunity = user.is_some_and(|user| {
+        user.contains("选课")
+            || user.contains("课程规划")
+            || user.contains("规划课程")
+            || contains_ascii_term(user, "course plan")
+            || contains_ascii_term(user, "opportunity graph")
+    });
+    let has_tool = |name: &str| request.tools.iter().any(|tool| tool.name == name);
+    let opportunity_unavailable = wants_opportunity && !has_tool(OPPORTUNITY_TOOL);
     let tool_messages = request
         .messages
         .iter()
@@ -675,38 +833,65 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
         })
         .collect::<Vec<_>>();
     if !tool_messages.is_empty() {
+        let mut denied = 0_usize;
+        let mut failed = 0_usize;
+        let mut succeeded_data = Vec::new();
+        for message in &tool_messages {
+            let value: Value =
+                serde_json::from_str(message).map_err(|_| ProviderError::Protocol)?;
+            match value.get("status").and_then(Value::as_str) {
+                Some("succeeded") => {
+                    succeeded_data.push(value.get("data").cloned().ok_or(ProviderError::Protocol)?)
+                }
+                Some("denied") => denied = denied.saturating_add(1),
+                Some("failed") => failed = failed.saturating_add(1),
+                _ => return Err(ProviderError::Protocol),
+            }
+        }
+        let content = if succeeded_data.is_empty() {
+            let mut notices = Vec::new();
+            if denied > 0 {
+                notices.push(format!(
+                    "校园工具拒绝了 {denied} 次请求；我不会把缺失、过期或未授权的数据当作成功结果。请检查当前 profile 与本次授权后重试。"
+                ));
+            }
+            if failed > 0 {
+                notices.push(format!(
+                    "校园工具有 {failed} 次执行失败；本次没有可靠结果。请稍后重试，或改用页面中的对应功能。"
+                ));
+            }
+            if opportunity_unavailable {
+                notices.push(OPPORTUNITY_UNAVAILABLE_NOTICE.to_owned());
+            }
+            notices.join(" ")
+        } else {
+            let data =
+                serde_json::to_string(&succeeded_data).map_err(|_| ProviderError::Protocol)?;
+            let mut status_notice = String::new();
+            if denied > 0 {
+                status_notice.push_str(&format!(
+                    " 另有 {denied} 次请求被拒绝；拒绝项未被当作成功结果。"
+                ));
+            }
+            if failed > 0 {
+                status_notice.push_str(&format!(
+                    " 另有 {failed} 次执行失败；失败项未被当作成功结果。"
+                ));
+            }
+            if opportunity_unavailable {
+                status_notice.push(' ');
+                status_notice.push_str(OPPORTUNITY_UNAVAILABLE_NOTICE);
+            }
+            bounded_mock_success_answer(&data, &status_notice)
+        };
         return Ok(ProviderTurn {
-            content: Some(format!(
-                "已按本次允许的校园工具完成查询。工具返回了 {} 份受限结果；请以其中的来源、有效时间、冲突与不确定性字段为准。",
-                tool_messages.len()
-            )),
+            content: Some(content),
             tool_calls: Vec::new(),
             usage: ProviderUsage::default(),
         });
     }
 
-    let user = request
-        .messages
-        .iter()
-        .rev()
-        .find_map(|message| match message {
-            ProviderMessage::User { content } => Some(content.as_str()),
-            _ => None,
-        })
-        .ok_or(ProviderError::Protocol)?;
-    let has_tool = |name: &str| request.tools.iter().any(|tool| tool.name == name);
-    let wants_affairs = user.contains("成绩单")
-        || user.contains("证明")
-        || user.contains("怎么办")
-        || user.to_ascii_lowercase().contains("affairs");
-    let wants_change = user.contains("校历")
-        || user.contains("变化")
-        || user.contains("变更")
-        || user.to_ascii_lowercase().contains("change");
-    let wants_opportunity = user.contains("选课")
-        || user.contains("课程")
-        || user.contains("规划")
-        || user.to_ascii_lowercase().contains("opportunity");
+    user.ok_or(ProviderError::Protocol)?;
 
     let mut calls = Vec::new();
     if wants_affairs && has_tool(AFFAIRS_TOOL) {
@@ -734,7 +919,7 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
         });
     }
     let answer = if wants_opportunity {
-        "课程规划需要你先在 Opportunity Graph 面板明确同意并创建 synthetic profile，再为这一次请求单独勾选允许；我不会代你创建或读取私人档案。"
+        OPPORTUNITY_UNAVAILABLE_NOTICE
     } else {
         "这是离线 deterministic mock 回答。你可以询问成绩单证明、校历变更，或在逐次明确允许后询问课程规划。"
     };
@@ -777,6 +962,11 @@ mod tests {
             COUNTER.fetch_add(1, Ordering::SeqCst)
         ));
         fs::write(&path, b"test-secret-value\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
         path
     }
 
@@ -801,6 +991,39 @@ mod tests {
         }
     }
 
+    fn spawn_http_peer(
+        status_line: &str,
+        extra_headers: &[(&str, &str)],
+        body: Vec<u8>,
+        delay: Duration,
+    ) -> (String, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let mut response_head = format!(
+            "{status_line}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n",
+            body.len()
+        );
+        for (name, value) in extra_headers {
+            response_head.push_str(name);
+            response_head.push_str(": ");
+            response_head.push_str(value);
+            response_head.push_str("\r\n");
+        }
+        response_head.push_str("\r\n");
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request_bytes = vec![0_u8; 64 * 1024];
+            let _ = stream.read(&mut request_bytes);
+            thread::sleep(delay);
+            let _ = stream.write_all(response_head.as_bytes());
+            let _ = stream.write_all(&body);
+        });
+        (format!("http://{address}/v1"), handle)
+    }
+
     #[test]
     fn deterministic_mock_is_network_free_and_routes_exact_tools() {
         let provider = ChatProvider::deterministic_mock();
@@ -823,6 +1046,47 @@ mod tests {
             assert_eq!(turn.tool_calls[0].name, expected);
             assert_eq!(turn.usage, ProviderUsage::default());
         }
+
+        for prompt in [
+            "校园卡丢了怎么办？",
+            "student affairs office hours",
+            "exchange program changes",
+            "transcriptome analysis",
+            "career opportunity list",
+        ] {
+            let unrelated = runtime
+                .block_on(provider.complete(&request(
+                    prompt,
+                    &[AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL],
+                )))
+                .unwrap();
+            assert!(unrelated.tool_calls.is_empty(), "prompt={prompt}");
+            assert!(
+                unrelated
+                    .content
+                    .expect("bounded explanation")
+                    .contains("成绩单证明"),
+                "prompt={prompt}"
+            );
+        }
+
+        for (prompt, expected) in [
+            ("download my transcript", AFFAIRS_TOOL),
+            ("use Affairs Navigator", AFFAIRS_TOOL),
+            ("show the academic calendar", CHANGE_TOOL),
+            ("run Change Radar", CHANGE_TOOL),
+            ("build a course plan", OPPORTUNITY_TOOL),
+            ("use Opportunity Graph", OPPORTUNITY_TOOL),
+        ] {
+            let turn = runtime
+                .block_on(provider.complete(&request(
+                    prompt,
+                    &[AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL],
+                )))
+                .unwrap();
+            assert_eq!(turn.tool_calls.len(), 1, "prompt={prompt}");
+            assert_eq!(turn.tool_calls[0].name, expected, "prompt={prompt}");
+        }
     }
 
     #[test]
@@ -840,6 +1104,125 @@ mod tests {
     }
 
     #[test]
+    fn deterministic_mock_reports_unavailable_opportunity_in_a_mixed_request() {
+        let provider = ChatProvider::deterministic_mock();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let turn = runtime
+            .block_on(provider.complete(&ProviderRequest {
+                messages: vec![
+                    ProviderMessage::User {
+                        content: "请查成绩单并规划课程".to_owned(),
+                    },
+                    ProviderMessage::Tool {
+                        tool_call_id: "call-affairs".to_owned(),
+                        content: json!({
+                            "schema": "ustc-agent-chat-tool-result/v1",
+                            "trust": "untrusted_data",
+                            "status": "succeeded",
+                            "data": {"procedure_id": "transcript-certificate"}
+                        })
+                        .to_string(),
+                    },
+                ],
+                tools: vec![ProviderToolDefinition {
+                    name: AFFAIRS_TOOL.to_owned(),
+                    description: "bounded tool".to_owned(),
+                    input_schema: json!({"type": "object"}),
+                }],
+            }))
+            .unwrap();
+        let answer = turn.content.expect("mixed-intent answer");
+        assert!(answer.contains("transcript-certificate"));
+        assert!(answer.contains("课程规划请求未执行"));
+        assert!(answer.contains("明确同意"));
+        assert!(answer.len() <= MAX_MOCK_ANSWER_BYTES);
+    }
+
+    #[test]
+    fn deterministic_mock_preserves_denied_and_failed_tool_outcomes() {
+        let provider = ChatProvider::deterministic_mock();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        for (status, marker) in [("denied", "拒绝"), ("failed", "失败")] {
+            let turn = runtime
+                .block_on(provider.complete(&ProviderRequest {
+                    messages: vec![ProviderMessage::Tool {
+                        tool_call_id: "call-1".to_owned(),
+                        content: json!({
+                            "schema": "ustc-agent-chat-tool-result/v1",
+                            "trust": "untrusted_data",
+                            "status": status,
+                            "data": {"code": "bounded"}
+                        })
+                        .to_string(),
+                    }],
+                    tools: Vec::new(),
+                }))
+                .unwrap();
+            assert!(turn.content.expect("answer").contains(marker));
+        }
+
+        let success = runtime
+            .block_on(provider.complete(&ProviderRequest {
+                messages: vec![ProviderMessage::Tool {
+                    tool_call_id: "call-2".to_owned(),
+                    content: json!({
+                        "schema": "ustc-agent-chat-tool-result/v1",
+                        "trust": "untrusted_data",
+                        "status": "succeeded",
+                        "data": {"steps": ["submit form", "collect transcript"]}
+                    })
+                    .to_string(),
+                }],
+                tools: Vec::new(),
+            }))
+            .unwrap();
+        let answer = success.content.expect("successful answer");
+        assert!(answer.contains("submit form"));
+        assert!(answer.contains("collect transcript"));
+
+        for (status, marker) in [("denied", "拒绝"), ("failed", "失败")] {
+            let mixed = runtime
+                .block_on(provider.complete(&ProviderRequest {
+                    messages: vec![
+                        ProviderMessage::Tool {
+                            tool_call_id: "call-success".to_owned(),
+                            content: json!({
+                                "schema": "ustc-agent-chat-tool-result/v1",
+                                "trust": "untrusted_data",
+                                "status": "succeeded",
+                                "data": {"steps": ["submit form", "collect transcript"]}
+                            })
+                            .to_string(),
+                        },
+                        ProviderMessage::Tool {
+                            tool_call_id: "call-not-success".to_owned(),
+                            content: json!({
+                                "schema": "ustc-agent-chat-tool-result/v1",
+                                "trust": "untrusted_data",
+                                "status": status,
+                                "data": {"code": "bounded"}
+                            })
+                            .to_string(),
+                        },
+                    ],
+                    tools: Vec::new(),
+                }))
+                .unwrap();
+            let answer = mixed.content.expect("mixed-status answer");
+            assert!(answer.contains("submit form"));
+            assert!(answer.contains("collect transcript"));
+            assert!(answer.contains(marker));
+            assert!(answer.len() <= MAX_MOCK_ANSWER_BYTES);
+        }
+    }
+
+    #[test]
     fn openai_request_is_nonstreaming_ordered_and_disables_parallel_tools() {
         let request = request("成绩单怎么办", &[AFFAIRS_TOOL]);
         let wire = build_wire_request("model-fixed", &request).unwrap();
@@ -848,9 +1231,48 @@ mod tests {
         assert_eq!(value["stream"], false);
         assert_eq!(value["parallel_tool_calls"], false);
         assert_eq!(value["tool_choice"], "auto");
+        assert_eq!(value["max_tokens"], OUTPUT_RESERVE_TOKENS);
         assert_eq!(value["messages"][0]["role"], "system");
         assert_eq!(value["messages"][1]["role"], "user");
         assert_eq!(value["tools"][0]["function"]["name"], AFFAIRS_TOOL);
+    }
+
+    #[test]
+    fn context_budget_preflight_is_conservative_and_fail_closed() {
+        let input_budget = MIN_CONTEXT_TOKENS * SEND_CEILING_BPS / 10_000
+            - OUTPUT_RESERVE_TOKENS
+            - ESTIMATOR_RESERVE_TOKENS;
+        assert_eq!(
+            preflight_context_budget(input_budget as usize, MIN_CONTEXT_TOKENS),
+            Ok(())
+        );
+        assert_eq!(
+            preflight_context_budget(input_budget as usize + 1, MIN_CONTEXT_TOKENS),
+            Err(ProviderError::ContextBudgetExceeded)
+        );
+    }
+
+    #[test]
+    fn oversized_context_fails_before_provider_io() {
+        let key = key_file();
+        let provider = ChatProvider::openai_compatible(
+            "http://127.0.0.1:9/v1",
+            "fixed-model",
+            &key,
+            DEFAULT_TIMEOUT_MS,
+            MIN_CONTEXT_TOKENS,
+            true,
+        )
+        .unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        assert_eq!(
+            runtime.block_on(provider.complete(&request(&"x".repeat(8 * 1024), &[]))),
+            Err(ProviderError::ContextBudgetExceeded)
+        );
+        fs::remove_file(key).unwrap();
     }
 
     #[test]
@@ -894,6 +1316,19 @@ mod tests {
                 Err(ProviderConfigError::InvalidTimeout)
             ));
         }
+        for rejected in [MIN_CONTEXT_TOKENS - 1, MAX_CONTEXT_TOKENS + 1] {
+            assert!(matches!(
+                ChatProvider::openai_compatible(
+                    "http://127.0.0.1:8123/v1",
+                    "fixed-model",
+                    &key,
+                    DEFAULT_TIMEOUT_MS,
+                    rejected,
+                    true,
+                ),
+                Err(ProviderConfigError::InvalidContextLimit)
+            ));
+        }
 
         fs::write(&key, vec![b'x'; MAX_API_KEY_BYTES]).unwrap();
         assert!(read_api_key(&key).is_ok());
@@ -902,6 +1337,17 @@ mod tests {
             read_api_key(&key),
             Err(ProviderConfigError::InvalidKeyFile)
         ));
+        for forbidden in [
+            FORBIDDEN_MOCK_PROVIDER_KEY.to_owned(),
+            format!("\u{a0}{FORBIDDEN_MOCK_PROVIDER_KEY}\u{a0}"),
+            format!("\u{2003}{FORBIDDEN_MOCK_PROVIDER_KEY}\u{3000}"),
+        ] {
+            fs::write(&key, forbidden).unwrap();
+            assert!(matches!(
+                read_api_key(&key),
+                Err(ProviderConfigError::InvalidKeyFile)
+            ));
+        }
         fs::remove_file(key).unwrap();
     }
 
@@ -917,6 +1363,13 @@ mod tests {
             read_api_key(&link),
             Err(ProviderConfigError::InvalidKeyFile)
         ));
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&key, fs::Permissions::from_mode(0o640)).unwrap();
+        assert!(matches!(
+            read_api_key(&key),
+            Err(ProviderConfigError::InvalidKeyFile)
+        ));
+        fs::set_permissions(&key, fs::Permissions::from_mode(0o600)).unwrap();
         let secret = read_api_key(&key).unwrap();
         assert_eq!(format!("{secret:?}"), "[REDACTED]");
         assert!(!format!("{secret:?}").contains("test-secret-value"));
@@ -927,7 +1380,7 @@ mod tests {
     #[test]
     fn wire_response_maps_text_tools_usage_and_rejects_empty() {
         let text: OpenAiResponse = serde_json::from_value(json!({
-            "choices":[{"message":{"role":"assistant","content":"answer","tool_calls":[]}}],
+            "choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"answer","tool_calls":[]}}],
             "usage":{"prompt_tokens":7,"completion_tokens":3}
         }))
         .unwrap();
@@ -936,27 +1389,45 @@ mod tests {
         assert_eq!(turn.usage.input_tokens, 7);
         assert_eq!(turn.usage.output_tokens, 3);
 
+        let null_tools: OpenAiResponse = serde_json::from_value(json!({
+            "choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"answer","tool_calls":null}}]
+        }))
+        .unwrap();
+        let null_tools_turn = parse_wire_response(null_tools).unwrap();
+        assert_eq!(null_tools_turn.content.as_deref(), Some("answer"));
+        assert!(null_tools_turn.tool_calls.is_empty());
+
         let tools: OpenAiResponse = serde_json::from_value(json!({
-            "choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{
+            "choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{
                 "id":"call-1","type":"function","function":{"name":AFFAIRS_TOOL,"arguments":"{}"}
             }]}}]
         }))
         .unwrap();
         assert_eq!(parse_wire_response(tools).unwrap().tool_calls.len(), 1);
 
+        let tools_with_empty_content: OpenAiResponse = serde_json::from_value(json!({
+            "choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":"","tool_calls":[{
+                "id":"call-empty","type":"function","function":{"name":AFFAIRS_TOOL,"arguments":"{}"}
+            }]}}]
+        }))
+        .unwrap();
+        let empty_tool_turn = parse_wire_response(tools_with_empty_content).unwrap();
+        assert_eq!(empty_tool_turn.content, None);
+        assert_eq!(empty_tool_turn.tool_calls.len(), 1);
+
         let empty: OpenAiResponse = serde_json::from_value(json!({
-            "choices":[{"message":{"role":"assistant","content":" ","tool_calls":[]}}]
+            "choices":[{"finish_reason":"stop","message":{"role":"assistant","content":" ","tool_calls":[]}}]
         }))
         .unwrap();
         assert_eq!(parse_wire_response(empty), Err(ProviderError::Protocol));
 
         let missing_role = json!({
-            "choices":[{"message":{"content":"answer","tool_calls":[]}}]
+            "choices":[{"finish_reason":"stop","message":{"content":"answer","tool_calls":[]}}]
         });
         assert!(serde_json::from_value::<OpenAiResponse>(missing_role).is_err());
         for role in ["user", "tool"] {
             let wrong_role: OpenAiResponse = serde_json::from_value(json!({
-                "choices":[{"message":{"role":role,"content":"answer","tool_calls":[]}}]
+                "choices":[{"finish_reason":"stop","message":{"role":role,"content":"answer","tool_calls":[]}}]
             }))
             .unwrap();
             assert_eq!(
@@ -964,6 +1435,26 @@ mod tests {
                 Err(ProviderError::Protocol)
             );
         }
+        for finish_reason in ["length", "content_filter", "tool_calls"] {
+            let incomplete: OpenAiResponse = serde_json::from_value(json!({
+                "choices":[{"finish_reason":finish_reason,"message":{"role":"assistant","content":"partial","tool_calls":[]}}]
+            }))
+            .unwrap();
+            assert_eq!(
+                parse_wire_response(incomplete),
+                Err(ProviderError::Protocol)
+            );
+        }
+        let wrong_tool_finish: OpenAiResponse = serde_json::from_value(json!({
+            "choices":[{"finish_reason":"stop","message":{"role":"assistant","content":null,"tool_calls":[{
+                "id":"call-1","type":"function","function":{"name":AFFAIRS_TOOL,"arguments":"{}"}
+            }]}}]
+        }))
+        .unwrap();
+        assert_eq!(
+            parse_wire_response(wrong_tool_finish),
+            Err(ProviderError::Protocol)
+        );
     }
 
     #[test]
@@ -990,7 +1481,7 @@ mod tests {
             let request_text = String::from_utf8_lossy(&request);
             assert!(request_text.contains("POST /v1/chat/completions HTTP/1.1"));
             assert!(request_text.contains("authorization: Bearer test-secret-value"));
-            let body = r#"{"choices":[{"message":{"role":"assistant","content":"bounded answer","tool_calls":[]}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}"#;
+            let body = r#"{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"bounded answer","tool_calls":[]}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}"#;
             write!(
                 stream,
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -1018,6 +1509,89 @@ mod tests {
         assert_eq!(turn.content.as_deref(), Some("bounded answer"));
         assert_eq!(turn.usage.input_tokens, 2);
         server.join().unwrap();
+        fs::remove_file(key).unwrap();
+    }
+
+    #[test]
+    fn openai_transport_maps_status_timeout_redirect_and_oversize_without_body_echo() {
+        let key = key_file();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        for (status_line, expected) in [
+            ("HTTP/1.1 401 Unauthorized", ProviderError::Unauthorized),
+            ("HTTP/1.1 403 Forbidden", ProviderError::Unauthorized),
+            ("HTTP/1.1 429 Too Many Requests", ProviderError::RateLimited),
+            (
+                "HTTP/1.1 500 Internal Server Error",
+                ProviderError::Unavailable,
+            ),
+        ] {
+            let (base_url, peer) = spawn_http_peer(
+                status_line,
+                &[],
+                b"secret-provider-body-must-not-escape".to_vec(),
+                Duration::ZERO,
+            );
+            let provider = ChatProvider::openai_compatible_for_test(
+                &base_url,
+                "model-a",
+                &key,
+                MIN_TIMEOUT_MS,
+            )
+            .unwrap();
+            assert_eq!(
+                runtime.block_on(provider.complete(&request("hello", &[]))),
+                Err(expected)
+            );
+            peer.join().unwrap();
+        }
+
+        let (base_url, peer) = spawn_http_peer(
+            "HTTP/1.1 302 Found",
+            &[("location", "http://127.0.0.1:9/credential-target")],
+            Vec::new(),
+            Duration::ZERO,
+        );
+        let provider =
+            ChatProvider::openai_compatible_for_test(&base_url, "model-a", &key, MIN_TIMEOUT_MS)
+                .unwrap();
+        assert_eq!(
+            runtime.block_on(provider.complete(&request("hello", &[]))),
+            Err(ProviderError::Unavailable)
+        );
+        peer.join().unwrap();
+
+        let (base_url, peer) = spawn_http_peer(
+            "HTTP/1.1 200 OK",
+            &[],
+            vec![b'x'; MAX_RESPONSE_BYTES + 1],
+            Duration::ZERO,
+        );
+        let provider =
+            ChatProvider::openai_compatible_for_test(&base_url, "model-a", &key, MIN_TIMEOUT_MS)
+                .unwrap();
+        assert_eq!(
+            runtime.block_on(provider.complete(&request("hello", &[]))),
+            Err(ProviderError::Protocol)
+        );
+        peer.join().unwrap();
+
+        let (base_url, peer) = spawn_http_peer(
+            "HTTP/1.1 200 OK",
+            &[],
+            Vec::new(),
+            Duration::from_millis(MIN_TIMEOUT_MS + 250),
+        );
+        let provider =
+            ChatProvider::openai_compatible_for_test(&base_url, "model-a", &key, MIN_TIMEOUT_MS)
+                .unwrap();
+        assert_eq!(
+            runtime.block_on(provider.complete(&request("hello", &[]))),
+            Err(ProviderError::Timeout)
+        );
+        peer.join().unwrap();
         fs::remove_file(key).unwrap();
     }
 }

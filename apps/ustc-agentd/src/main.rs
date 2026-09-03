@@ -43,6 +43,10 @@ fn main() -> ExitCode {
             println!("ustc-agentd {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
+        Some("source-commit") => {
+            println!("{}", option_env!("UCA_SOURCE_COMMIT").unwrap_or("unknown"));
+            ExitCode::SUCCESS
+        }
         Some("serve") => run_serve(args, ServeMode::Framed),
         Some("serve-web") => run_serve(args, ServeMode::Web),
         Some("--help") | Some("help") | None => {

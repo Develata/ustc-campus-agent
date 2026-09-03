@@ -3,16 +3,18 @@
 ## Metadata
 
 - `Module ID`: `M90`
-- `Status`: Accepted blueprint; repository CI/checker baseline exists, production infrastructure planned
-- `Implementation State`: `governance-baseline`
+- `Status`: Accepted blueprint; bounded Compose MVP and app-private persistence evidence exist, production infrastructure planned
+- `Implementation State`: `partial-evidence`
 - `Version`: `m90-infrastructure/v1`
-- `Last Review`: `2026-07-25`
+- `Last Review`: `2026-09-03`
 - `Owning Governance`: [`../08-security-and-delivery.md`](../08-security-and-delivery.md)
 - `Primary code areas`: `crates/adapters/`, deployment/config modules and Docker Compose profile, `.github/`, `scripts/`
 
 ## 1. Purpose
 
 `M90` supplies replaceable implementations of infrastructure ports declared by other modules: durable repositories/journals, immutable evidence/artifacts, transactions, clock/scheduler/queue, secret references, safe HTTP, configuration, telemetry, deployment and recovery tooling.
+
+Current evidence is deliberately narrower than production M90 completion: repository CI/checkers, app-private secure canonical-JSON stores, and one bounded loopback Docker Compose package provide exact-source archives, least-privilege container settings, persistent-volume restart/read-back, reset/recovery and real Windows PowerShell 5.1 launcher checks. Managed production stores, migration/rollback, backup/restore and public/Android deployment surfaces remain planned.
 
 It makes domain rules durable and operable. It does not define those rules.
 

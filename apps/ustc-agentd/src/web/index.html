@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="USTC Campus Agent 有界 Web Chat：查询办事流程、语义变更与 consent-bound 课程机会规划。">
-  <title>科大校园助手 · USTC Campus Agent</title>
+  <title>USTC Campus Agent · Bounded campus demo</title>
   <link rel="stylesheet" href="/assets/styles.css">
   <script src="/assets/app.js" defer></script>
 </head>
@@ -53,7 +53,10 @@
               <input id="chat-opportunity-confirm" type="checkbox" aria-describedby="chat-opportunity-state" disabled>
               <span>仅这次请求使用当前 synthetic profile</span>
             </label>
-            <button id="chat-send" type="submit">发送</button>
+            <div class="chat-actions">
+              <button id="chat-clear" type="button">清空对话</button>
+              <button id="chat-send" type="submit">发送</button>
+            </div>
           </div>
           <p id="chat-opportunity-state" class="chat-context-state">尚无可用的 synthetic profile；可在下方 Opportunity Graph 面板中明确同意并创建。</p>
           <p id="chat-hint" class="chat-hint">Enter 发送 · Shift + Enter 换行 · 最近最多 12 条 user/assistant 消息参与请求</p>

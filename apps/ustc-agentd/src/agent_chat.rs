@@ -104,6 +104,7 @@ pub(crate) enum ChatError {
     ProviderTimeout,
     ProviderUnavailable,
     ProviderProtocolError,
+    ContextBudgetExceeded,
     ToolCallRejected,
     ToolResultTooLarge,
     ToolBudgetExhausted,
@@ -124,6 +125,7 @@ impl ChatError {
             Self::ProviderTimeout => "provider_timeout",
             Self::ProviderUnavailable => "provider_unavailable",
             Self::ProviderProtocolError => "provider_protocol_error",
+            Self::ContextBudgetExceeded => "context_budget_exceeded",
             Self::ToolCallRejected => "tool_call_rejected",
             Self::ToolResultTooLarge => "tool_result_too_large",
             Self::ToolBudgetExhausted => "tool_budget_exhausted",
@@ -162,6 +164,7 @@ impl From<ProviderError> for ChatError {
             ProviderError::Timeout => Self::ProviderTimeout,
             ProviderError::Unavailable => Self::ProviderUnavailable,
             ProviderError::Protocol => Self::ProviderProtocolError,
+            ProviderError::ContextBudgetExceeded => Self::ContextBudgetExceeded,
         }
     }
 }
@@ -480,7 +483,10 @@ fn validate_request(
         content: SYSTEM_PROMPT.to_owned(),
     });
     for message in request.messages {
-        if message.content.trim().is_empty() || message.content.len() > MAX_MESSAGE_BYTES {
+        if message.content.trim().is_empty()
+            || message.content.contains('\0')
+            || message.content.len() > MAX_MESSAGE_BYTES
+        {
             return Err(ChatError::InvalidChatRequest);
         }
         total_bytes = total_bytes
@@ -508,6 +514,7 @@ fn validate_request(
             }
             let profile_snapshot_id = context.profile_snapshot_id;
             if profile_snapshot_id.trim().is_empty()
+                || profile_snapshot_id.contains('\0')
                 || profile_snapshot_id.len() > MAX_PROFILE_SNAPSHOT_ID_BYTES
             {
                 return Err(ChatError::InvalidChatRequest);
@@ -661,7 +668,12 @@ mod tests {
 
     #[test]
     fn request_rejects_blank_per_message_and_total_byte_overflow() {
-        for content in ["".to_owned(), " \n\t".to_owned(), "界".repeat(1_366)] {
+        for content in [
+            "".to_owned(),
+            " \n\t".to_owned(),
+            "a\0b".to_owned(),
+            "界".repeat(1_366),
+        ] {
             assert!(matches!(
                 ChatRun::new("chat-run:x".to_owned(), request(&content), false),
                 Err(ChatError::InvalidChatRequest)
@@ -715,6 +727,14 @@ mod tests {
         });
         assert!(matches!(
             ChatRun::new("chat-run:x".to_owned(), blank, true),
+            Err(ChatError::InvalidChatRequest)
+        ));
+        let mut nul = opportunity_request();
+        nul.opportunity_context = Some(OpportunityContextDto {
+            profile_snapshot_id: "profile:\0private".to_owned(),
+        });
+        assert!(matches!(
+            ChatRun::new("chat-run:x".to_owned(), nul, true),
             Err(ChatError::InvalidChatRequest)
         ));
     }

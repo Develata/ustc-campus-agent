@@ -15,17 +15,17 @@
 
 只有你明确配置后才启用。不要把 key 写入 `.env`、Compose YAML、命令参数或聊天页面：
 
-1. 复制 `.env.example` 为 `.env`；
-2. 将 `.env` 中 `UCA_AGENT_PROVIDER` 改为 `openai-compatible`，填写 HTTPS `UCA_AGENT_BASE_URL` 与 `UCA_AGENT_MODEL`；
-3. 在本目录创建被 Git 忽略的 `secrets/llm-api-key.txt`，仅写入 key；
-4. 将 `UCA_AGENT_API_KEY_SOURCE` 改为 `./secrets/llm-api-key.txt`；
+1. 正式测试包已经生成带精确 `UCA_SOURCE_COMMIT` 的 `.env`：直接编辑它且不得覆盖或改写该字段；只有从源码模板单独组装、目录中尚无 `.env` 时，才复制 `.env.example` 为 `.env`；
+2. 将 `.env` 中 `UCA_AGENT_PROVIDER` 改为 `openai-compatible`，填写 HTTPS `UCA_AGENT_BASE_URL`、`UCA_AGENT_MODEL` 与模型真实的 `UCA_AGENT_CONTEXT_TOKENS`；
+3. 在本目录创建被 Git 忽略的 `secrets/llm-api-key.txt`，仅写入 key；在 macOS/Linux 上请用 `install -d -m 0700 secrets` 后执行 `umask 077` 再写入，并确认 `chmod 0600 secrets/llm-api-key.txt`；
+4. 将 `UCA_AGENT_API_KEY_SOURCE` 改为 `./secrets/llm-api-key.txt`；`.env` 必须是 regular non-symlink file，以上两个 security-critical key 各至多出现一次并使用 column-zero `KEY=value`；值必须是 literal，不支持 Compose `$VAR` / `${VAR:-default}` interpolation（跨平台 launcher 会在 Docker 启动前拒绝），如需动态注入请直接提供规范化后的 process environment literal；
 5. 重新运行启动脚本。
 
-服务只在容器启动时读取 `/run/secrets/uca_agent_api_key`。provider mode 配置不完整会 fail closed，不会回退到 mock 或其他模型。正常响应、浏览器资源与日志都不应包含 key。`mock-provider-key.txt` 只是为了让默认 Compose 配置可移植启动的非敏感占位文本；mock 不读取它。
+Compose 仅在 `openai-compatible` 模式下处理 secret。由于本地 Compose 的 file-backed secret 会保留宿主文件 ownership，Compose 先 drop 全部 capabilities，再仅向 root-only 初始化阶段补回 `CHOWN`、`DAC_OVERRIDE`、`FOWNER`、`SETGID`、`SETPCAP` 与 `SETUID`：entrypoint 因而能读取显式挂载的 owner-only source，把它复制为 `/run/uca-agent-private/uca_agent_api_key` 中由 UID/GID 65532 持有的 mode-0600 ephemeral tmpfs 文件；随后用 `setpriv` 清空 supplementary groups、effective/bounding capability set，设置 no-new-privileges，并以 UID/GID 65532 重新执行自身，daemon 与 loopback proxy 均只在降权后启动。原始 source 不进入镜像或持久 volume。`start.sh` 会在 macOS/Linux 上拒绝 group/world permission bits 非零的 source file，`start.ps1` 会拒绝 symlink/reparse-point source；直接执行 `docker compose` 时 Docker 的 secret projection 无法替容器证明宿主 Unix mode，因此操作者仍须先完成第 3 步的 `chmod 0600`。无论从 launcher 还是直接 Compose 启动，`openai-compatible` 都会由 launcher/container preflight 与权威 Rust key reader 共同拒绝 outer-whitespace-normalized bundled mock placeholder；provider mode 配置不完整或 context limit 不在 `16384..1048576` 时同样 fail closed，不会回退到 mock 或其他模型。每次真实 provider 请求还会在网络 I/O 前执行 conservative UTF-8-byte context preflight，并预留输出与估计误差预算。正常响应、浏览器资源与日志都不应包含 key。`mock-provider-key.txt` 只是为了让默认 Compose 配置可移植启动的非敏感占位文本；mock 不读取它。
 
 本包内置 `linux/amd64` binary；主验收目标是 Windows x64 + Docker Desktop。Intel macOS/Linux 可原生运行，Apple Silicon 由 Docker Desktop 的 amd64 emulation 运行，后者当前属于 best-effort compatibility。
 
-首次 `docker compose up --build` 需要联网拉取 `ubuntu:24.04`，并在 image build 阶段安装 `ca-certificates`、`curl`、`socat`；这与 MVP application 的 fixture-only runtime 不同。镜像层已缓存后，后续启动不需要 live source retrieval。
+首次 `docker compose up --build` 需要联网拉取 `ubuntu:24.04`，并在 image build 阶段安装 `ca-certificates`、`curl`、`socat`、`util-linux`；这与 MVP application 的 fixture-only runtime 不同。镜像层已缓存后，后续启动不需要 live source retrieval。
 
 ## Windows 一键启动
 
@@ -78,10 +78,10 @@ Windows 也可双击 `stop.cmd`。
 彻底删除本 MVP 的 Docker volume 并回到初始状态：
 
 ```bash
-docker compose down --volumes
+./reset.sh
 ```
 
-Windows 可双击 `reset.cmd`，脚本会再次确认。
+Windows 可双击 `reset.cmd`，两种入口都会再次确认。
 
 ## 端口
 

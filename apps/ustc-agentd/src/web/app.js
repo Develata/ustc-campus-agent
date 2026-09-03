@@ -1,5 +1,6 @@
 const chatForm = document.querySelector("#chat-form");
 const chatInput = document.querySelector("#chat-input");
+const chatClear = document.querySelector("#chat-clear");
 const chatSend = document.querySelector("#chat-send");
 const chatSurface = document.querySelector("#chat-surface");
 const chatMessages = document.querySelector("#chat-messages");
@@ -102,6 +103,7 @@ const CHAT_ERROR_MESSAGES = Object.freeze({
   provider_timeout: "等待回答超时；服务器没有返回完成结果。请稍后重试。",
   provider_unavailable: "回答服务暂时不可用。请稍后重试。",
   provider_protocol_error: "回答服务返回了无法安全读取的结果。请稍后重试。",
+  context_budget_exceeded: "这段对话超过当前模型的安全上下文预算。请清空对话或缩短问题后重试。",
   tool_call_rejected: "校园工具拒绝了这次调用。请换一种更具体的问法。",
   tool_result_too_large: "校园工具结果超过本次对话上限。请缩小问题范围。",
   tool_budget_exhausted: "这次问题需要的工具调用超过上限。请拆成更小的问题。",
@@ -125,44 +127,38 @@ function utf8Length(value) {
   return chatTextEncoder.encode(value).byteLength;
 }
 
-function truncateUtf8(value, maxBytes) {
-  if (utf8Length(value) <= maxBytes) {
-    return value;
-  }
-  let result = "";
-  let size = 0;
-  for (const character of value) {
-    const characterSize = utf8Length(character);
-    if (size + characterSize > maxBytes) {
-      break;
+function boundedChatMessages(userContent, opportunityProfileHint) {
+  const retainedHistory = chatHistory.filter(
+    (message) => message.opportunityProfileHint == null
+      || message.opportunityProfileHint === opportunityProfileHint
+  );
+  const current = { role: "user", content: userContent };
+  const selected = [current];
+  let totalBytes = utf8Length(current.content);
+  for (let index = retainedHistory.length - 2; index >= 0; index -= 2) {
+    const userMessage = retainedHistory[index];
+    const assistantMessage = retainedHistory[index + 1];
+    if (userMessage?.role !== "user" || assistantMessage?.role !== "assistant") {
+      throw chatFailure("invalid_chat_request");
     }
-    result += character;
-    size += characterSize;
-  }
-  return result;
-}
-
-function boundedChatMessages(userContent) {
-  const candidates = [...chatHistory, { role: "user", content: userContent }];
-  const selected = [];
-  let totalBytes = 0;
-  for (let index = candidates.length - 1; index >= 0; index -= 1) {
-    const candidate = candidates[index];
-    const candidateBytes = utf8Length(candidate.content);
+    const pairBytes = utf8Length(userMessage.content) + utf8Length(assistantMessage.content);
     if (
-      selected.length >= CHAT_MAX_MESSAGES ||
-      totalBytes + candidateBytes > CHAT_MAX_HISTORY_BYTES
+      selected.length + 2 > CHAT_MAX_MESSAGES ||
+      totalBytes + pairBytes > CHAT_MAX_HISTORY_BYTES
     ) {
       break;
     }
-    selected.unshift({ role: candidate.role, content: candidate.content });
-    totalBytes += candidateBytes;
+    selected.unshift(
+      { role: userMessage.role, content: userMessage.content },
+      { role: assistantMessage.role, content: assistantMessage.content }
+    );
+    totalBytes += pairBytes;
   }
   return selected;
 }
 
 function createChatRequest(userContent, opportunityProfileHint) {
-  const messages = boundedChatMessages(userContent);
+  const messages = boundedChatMessages(userContent, opportunityProfileHint);
   const opportunityContext = opportunityProfileHint == null
     ? null
     : { profile_snapshot_id: opportunityProfileHint };
@@ -174,7 +170,7 @@ function createChatRequest(userContent, opportunityProfileHint) {
   let body = JSON.stringify(request);
 
   while (utf8Length(body) > CHAT_MAX_BODY_BYTES && messages.length > 1) {
-    messages.shift();
+    messages.splice(0, 2);
     request = {
       schema: CHAT_REQUEST_SCHEMA,
       messages,
@@ -209,7 +205,8 @@ function assertChatRequestContract(request, headers, body) {
       Object.keys(message).sort().join(",") !== "content,role" ||
       (message.role !== "user" && message.role !== "assistant") ||
       typeof message.content !== "string" ||
-      message.content.trim().length === 0
+      message.content.trim().length === 0 ||
+      message.content.includes("\u0000")
     ) {
       throw chatFailure("invalid_chat_request");
     }
@@ -249,6 +246,7 @@ function assertChatDomContract() {
   const failures = [];
   if (chatForm?.tagName !== "FORM") failures.push("chat-form");
   if (chatInput?.tagName !== "TEXTAREA" || chatInput.maxLength !== 4096) failures.push("chat-input");
+  if (chatClear?.tagName !== "BUTTON" || chatClear.type !== "button") failures.push("chat-clear");
   if (chatSend?.tagName !== "BUTTON" || chatSend.type !== "submit") failures.push("chat-send");
   if (chatOpportunityConfirm?.type !== "checkbox") failures.push("chat-opportunity-confirm");
   if (chatMessages?.getAttribute("aria-live") !== "polite") failures.push("chat-messages-live");
@@ -260,6 +258,21 @@ function assertChatDomContract() {
 
 function syncChatEmptyState() {
   chatEmpty.hidden = chatMessages.querySelector(".chat-message") !== null;
+}
+
+function clearChatConversation() {
+  if (chatPending) {
+    return;
+  }
+  chatHistory.splice(0, chatHistory.length);
+  for (const item of chatMessages.querySelectorAll(".chat-message")) {
+    item.remove();
+  }
+  chatError.hidden = true;
+  chatInput.value = "";
+  chatInput.setCustomValidity("");
+  syncChatEmptyState();
+  chatInput.focus({ preventScroll: true });
 }
 
 function trimChatTranscript() {
@@ -314,13 +327,27 @@ function appendChatMessage(role, content, toolTrace = []) {
   return item;
 }
 
-function commitChatHistory(role, content) {
-  chatHistory.push({
-    role,
-    content: truncateUtf8(content, CHAT_MAX_MESSAGE_BYTES)
-  });
+function commitChatTurn(userContent, assistantContent, opportunityProfileHint) {
+  if (
+    utf8Length(userContent) > CHAT_MAX_MESSAGE_BYTES ||
+    utf8Length(assistantContent) > CHAT_MAX_MESSAGE_BYTES
+  ) {
+    return;
+  }
+  chatHistory.push(
+    {
+      role: "user",
+      content: userContent,
+      opportunityProfileHint
+    },
+    {
+      role: "assistant",
+      content: assistantContent,
+      opportunityProfileHint
+    }
+  );
   while (chatHistory.length > CHAT_MAX_MESSAGES) {
-    chatHistory.shift();
+    chatHistory.splice(0, 2);
   }
 }
 
@@ -376,6 +403,8 @@ function setChatBusy(busy) {
   chatPending = busy;
   chatSurface.setAttribute("aria-busy", String(busy));
   chatProgress.hidden = !busy;
+  chatClear.disabled = busy;
+  chatClear.setAttribute("aria-disabled", String(busy));
   chatSend.disabled = busy;
   chatSend.setAttribute("aria-disabled", String(busy));
   chatSend.textContent = busy ? "发送中…" : "发送";
@@ -457,8 +486,7 @@ async function submitChat() {
   setChatBusy(true);
   try {
     const response = await requestChat(prepared.body, headers);
-    commitChatHistory("user", userContent);
-    commitChatHistory("assistant", response.answer);
+    commitChatTurn(userContent, response.answer, opportunityProfileHint);
     appendChatMessage("assistant", response.answer, response.toolTrace);
     trimChatTranscript();
   } catch (error) {
@@ -1426,6 +1454,7 @@ chatForm.addEventListener("submit", (event) => {
   event.preventDefault();
   void submitChat();
 });
+chatClear.addEventListener("click", clearChatConversation);
 chatInput.addEventListener("input", () => {
   chatInput.setCustomValidity("");
 });

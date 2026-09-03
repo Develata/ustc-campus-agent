@@ -3,15 +3,15 @@
 ## Metadata
 
 - `Layer`: Runtime architecture
-- `Status`: R0 platform-owned transition kernel implemented; finite harness, orchestration, persistence and production adapters planned
-- `Version`: `0.8.0`
-- `Last Review`: `2026-09-01`
+- `Status`: R0 platform-owned transition kernel, provider-free turns and one bounded app-private provider/tool Chat coordinator implemented; durable finite harness, orchestration, persistence and production adapters planned
+- `Version`: `0.9.0`
+- `Last Review`: `2026-09-03`
 - `Authority Owns`: finite HarnessRun/TaskGraph, Plugin-neutral node AgentRun state, context budget, versioned Agent tool protocol, tool-effect ordering, framework/provider adapter boundary, selective production persistence policy and the application-level RunExecutionCoordinator contract
 - `Authority Defers To`: platform authority for domain state and adapter implementations for protocol details
 - `Counterpart Features`: `docs/features/04-bounded-agent-harness.md`; current Market and product features
-- `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
-- `Counterpart Acceptance`: planned `HARNESS-*`; active `AGENT-001`, `AGENT-002`, `AGENT-017` and implemented P0a `MARKET-005/006`; planned `AGENT-018`, `PKG-019/020`, `MARKET-007` and `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
-- `Primary Code Areas`: `crates/agent-runtime/`, future orchestration modules and `crates/adapters/`
+- `Counterpart Contracts`: `docs/contracts/agent-harness.md`, `docs/contracts/agent-chat.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
+- `Counterpart Acceptance`: active `CHAT-001/002`, `AGENT-001`, `AGENT-002`, `AGENT-017` and implemented P0a `MARKET-005/006`; planned `HARNESS-*`, `AGENT-018`, `PKG-019/020`, `MARKET-007` and `RUNTIME-*`; long-horizon `AI-*`, `MCP-*`, `RUN-*` and remaining `AGENT-*`
+- `Primary Code Areas`: `crates/agent-runtime/`, bounded app-private Chat evidence under `apps/ustc-agentd/src/`, future orchestration modules and `crates/adapters/`
 - `Large-module Blueprints`: [`M30 Agent`](modules/40-agent-harness-runtime.md), [`M40 Tool Gateway`](modules/50-tool-gateway-execution.md), [`M50 Model Provider`](modules/60-model-provider-integration.md), [`M51 MCP`](modules/61-mcp-binding-executor.md)
 
 ## 1. Principle
@@ -288,9 +288,9 @@ Implemented now:
 - `agent-runtime` production/test dependency independence from Market, Plugin and adapter crates, enforced by the repository checker;
 - P0a→`RunSpec` cross-boundary proof owned by `ustc-agentd`, the composition root.
 
-This is an R0 node-local domain kernel, not the complete finite user-task `HarnessRun`. `agent-tool-protocol/v0` values/fake conformance and provider-free deterministic Harness-turn compositions for Affairs and ChangeRadar are implemented: transaction-current Market projection/recheck precedes effect intent, owning first-party execution, receipt and correlated result. Opportunity Graph's current tenant-private operations are static M72 application use cases and are not M30/M40 evidence. Generic package-portable ToolGateway hosting, durable generic Agent journal composition/restart, model provider profiles, MCP binding, out-of-process native/WASM Plugin execution, clarification/review supervisors and model-backed planning remain future work.
+This is an R0 node-local domain kernel, not the complete finite user-task `HarnessRun`. `agent-tool-protocol/v0` values/fake conformance and provider-free deterministic Harness-turn compositions for Affairs and ChangeRadar are implemented: transaction-current Market projection/recheck precedes effect intent, owning first-party execution, receipt and correlated result. The app-private Chat MVP also implements a closed three-turn/three-call M30 coordinator over the bounded M50 provider port and exact sequential tools. Its confirmed Opportunity call invokes the separately owned static M72 planning use case; Opportunity consent/profile/planning semantics remain M72 evidence, not M30/M40 evidence. Generic package-portable ToolGateway hosting, durable generic Agent journal composition/restart, generic model provider profiles/streaming, MCP binding, out-of-process native/WASM Plugin execution, clarification/review supervisors and autonomous model-backed planning remain future work.
 
-The accepted finite harness, TaskGraph, clarification/review supervisor and context-budget/compaction contracts are H0 target architecture only; no production harness, tokenizer, compactor, subagent supervisor or plan panel exists yet.
+The accepted finite harness, TaskGraph, clarification/review supervisor and context-budget/compaction contracts are H0 target architecture only; no durable generic production harness, tokenizer, compactor, subagent supervisor or plan panel exists yet.
 
 Active implemented proof:
 
@@ -298,6 +298,8 @@ Active implemented proof:
 - `AGENT-002`: immutable run spec pins exact platform identities and budgets;
 - `AGENT-017`: runtime dependencies remain confined while composition owns cross-boundary proof;
 - `AGENT-019`: frozen tool definitions, private routes and fake gateway/executor calls fail closed and correlate results;
+- `CHAT-001`: closed loopback Chat transport, deterministic mock and bounded OpenAI-compatible provider behavior pass;
+- `CHAT-002`: the bounded three-turn coordinator preserves exact sequential tool outcomes and Opportunity confirmation/context limits;
 - `MARKET-005`: one deterministic per-turn projection binds model exposure and no-fallback dispatch;
 - `MARKET-006`: projection-time authority mismatches return typed denial with no partial run.
 

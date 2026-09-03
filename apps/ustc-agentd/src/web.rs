@@ -9,8 +9,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{DefaultBodyLimit, Path as AxumPath, State};
+use axum::extract::{DefaultBodyLimit, Path as AxumPath, Request, State};
+use axum::http::uri::Authority;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, Uri, header};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -585,6 +587,52 @@ struct DeleteOpportunityProfileBody {
     revoked_at: i64,
 }
 
+fn is_admitted_loopback_authority(value: &str) -> bool {
+    !value.contains('@')
+        && value.parse::<Authority>().is_ok_and(|authority| {
+            let host = authority.host();
+            let numeric_host = host
+                .strip_prefix('[')
+                .and_then(|value| value.strip_suffix(']'))
+                .unwrap_or(host);
+            host.eq_ignore_ascii_case("localhost")
+                || numeric_host
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|address| address.is_loopback())
+        })
+}
+
+fn origin_matches_host(origin: &str, host: &str) -> bool {
+    origin.parse::<Uri>().is_ok_and(|origin| {
+        origin.scheme_str() == Some("http")
+            && origin.authority().is_some_and(|authority| {
+                is_admitted_loopback_authority(authority.as_str())
+                    && authority.as_str().eq_ignore_ascii_case(host)
+            })
+    })
+}
+
+async fn admit_loopback_request(request: Request, next: Next) -> Response {
+    let Some(host) = request
+        .headers()
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return web_error(StatusCode::MISDIRECTED_REQUEST, "invalid_loopback_host");
+    };
+    if !is_admitted_loopback_authority(host) {
+        return web_error(StatusCode::MISDIRECTED_REQUEST, "invalid_loopback_host");
+    }
+    if request.headers().get(header::ORIGIN).is_some_and(|value| {
+        value
+            .to_str()
+            .map_or(true, |origin| !origin_matches_host(origin, host))
+    }) {
+        return web_error(StatusCode::FORBIDDEN, "cross_origin_request_forbidden");
+    }
+    next.run(request).await
+}
+
 /// Builds the bounded same-origin Web router over one composition.
 pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
     web_router_with_provider(composition, ChatProvider::deterministic_mock())
@@ -627,6 +675,7 @@ fn web_router_with_provider(
             post(opportunity_profile_delete),
         )
         .layer(DefaultBodyLimit::max(16 * 1024))
+        .layer(middleware::from_fn(admit_loopback_request))
         .with_state(WebState::new(composition, chat_provider))
 }
 
@@ -705,11 +754,29 @@ async fn capability_list(headers: HeaderMap) -> Response {
     }
 }
 
+fn has_application_json_content_type(headers: &HeaderMap) -> bool {
+    let mut values = headers.get_all(header::CONTENT_TYPE).iter();
+    let Some(value) = values.next() else {
+        return false;
+    };
+    if values.next().is_some() {
+        return false;
+    }
+    value
+        .to_str()
+        .ok()
+        .and_then(|value| value.split(';').next())
+        .is_some_and(|media_type| media_type.trim().eq_ignore_ascii_case("application/json"))
+}
+
 async fn agent_chat(
     State(state): State<WebState>,
     headers: HeaderMap,
     body: Result<Json<ChatRequestDto>, JsonRejection>,
 ) -> Response {
+    if !has_application_json_content_type(&headers) {
+        return chat_error_response(ChatError::InvalidChatRequest);
+    }
     let Json(request) = match body {
         Ok(body) => body,
         Err(_) => return chat_error_response(ChatError::InvalidChatRequest),
@@ -737,6 +804,19 @@ async fn agent_chat(
         Ok(response) => typed_json_response(StatusCode::OK, response),
         Err(error) => chat_error_response(error),
     }
+}
+
+fn opportunity_chat_response_is_denied(response: &ClientResponseDto) -> bool {
+    matches!(
+        response,
+        ClientResponseDto::OpportunityRejected { rejection, .. }
+            if !matches!(rejection, OpportunityRejectionDto::SourceUnavailable)
+    ) || matches!(
+        response,
+        ClientResponseDto::Error {
+            error: ClientErrorDto::Admission { .. },
+        }
+    )
 }
 
 fn execute_chat_tool(state: &WebState, request: ChatToolRequest) -> ChatToolExecution {
@@ -782,28 +862,31 @@ fn execute_chat_tool(state: &WebState, request: ChatToolRequest) -> ChatToolExec
                     );
                 }
             };
-            match state.submit_opportunity(
+            project_opportunity_chat_result(state.submit_opportunity(
                 OpportunityCommandDto::GeneratePlan {
                     profile_snapshot_id,
                     max_results: u16::from(max_results),
                     beam_width,
                 },
                 OpportunityConfirmationDto::Confirmed,
-            ) {
-                Ok(response) => project_chat_tool_response(
-                    matches!(&response, ClientResponseDto::OpportunityAccepted { .. }),
-                    matches!(
-                        &response,
-                        ClientResponseDto::OpportunityRejected { .. }
-                            | ClientResponseDto::Error {
-                                error: ClientErrorDto::Admission { .. },
-                            }
-                    ),
-                    response,
-                ),
-                Err(_) => ChatToolExecution::failed(json!({"code": "composition_unavailable"})),
-            }
+            ))
         }
+    }
+}
+
+fn project_opportunity_chat_result(
+    result: Result<ClientResponseDto, WebRequestError>,
+) -> ChatToolExecution {
+    match result {
+        Ok(response) => project_chat_tool_response(
+            matches!(&response, ClientResponseDto::OpportunityAccepted { .. }),
+            opportunity_chat_response_is_denied(&response),
+            response,
+        ),
+        Err(WebRequestError::InvalidOpportunityRequest) => {
+            ChatToolExecution::denied(json!({"code": "invalid_opportunity_request"}))
+        }
+        Err(_) => ChatToolExecution::failed(json!({"code": "composition_unavailable"})),
     }
 }
 
@@ -839,7 +922,8 @@ fn chat_error_response(error: ChatError) -> Response {
         ChatError::ToolCallRejected
         | ChatError::ToolResultTooLarge
         | ChatError::ToolBudgetExhausted
-        | ChatError::TurnBudgetExhausted => StatusCode::UNPROCESSABLE_ENTITY,
+        | ChatError::TurnBudgetExhausted
+        | ChatError::ContextBudgetExceeded => StatusCode::UNPROCESSABLE_ENTITY,
         ChatError::OpportunityConfirmationRequired => StatusCode::FORBIDDEN,
         ChatError::Internal => StatusCode::INTERNAL_SERVER_ERROR,
     };
@@ -1384,12 +1468,14 @@ fn hardened(mut response: Response) -> Response {
 mod tests {
     use super::{
         CONTENT_SECURITY_POLICY, WebRequestError, WebState, affairs_response_status,
-        static_response,
+        is_admitted_loopback_authority, opportunity_chat_response_is_denied, origin_matches_host,
+        project_opportunity_chat_result, static_response,
     };
+    use crate::chat_tools::ChatToolStatus;
     use axum::http::{StatusCode, header};
     use ustc_campus_agent_client_protocol::{
-        ClientErrorDto, ClientResponseDto, EchoPayloadDto, M10WireErrorDto, RetryabilityDto,
-        WireErrorClassDto, WireText,
+        ClientErrorDto, ClientResponseDto, EchoPayloadDto, M10WireErrorDto,
+        OpportunityRejectionDto, RetryabilityDto, WireErrorClassDto, WireText,
     };
 
     fn wire(value: &str) -> WireText {
@@ -1442,6 +1528,59 @@ mod tests {
         assert_eq!(
             affairs_response_status(&unexpected),
             StatusCode::BAD_GATEWAY
+        );
+    }
+
+    #[test]
+    fn loopback_authority_admission_matches_bind_policy_and_rejects_userinfo() {
+        for authority in [
+            "127.0.0.1:8787",
+            "127.0.0.2:8787",
+            "[::1]:8787",
+            "localhost:8787",
+        ] {
+            assert!(is_admitted_loopback_authority(authority), "{authority}");
+        }
+        for authority in [
+            "campus.example:8787",
+            "user@127.0.0.1:8787",
+            "192.168.1.1:8787",
+        ] {
+            assert!(!is_admitted_loopback_authority(authority), "{authority}");
+        }
+        assert!(origin_matches_host("http://[::1]:8787", "[::1]:8787"));
+        assert!(!origin_matches_host(
+            "http://localhost:8788",
+            "localhost:8787"
+        ));
+    }
+
+    #[test]
+    fn opportunity_source_unavailable_is_a_failed_tool_outcome() {
+        let unavailable = ClientResponseDto::OpportunityRejected {
+            command_id: wire("cmd:unavailable"),
+            operation_id: wire("op:unavailable"),
+            rejection: OpportunityRejectionDto::SourceUnavailable,
+        };
+        let denied = ClientResponseDto::OpportunityRejected {
+            command_id: wire("cmd:denied"),
+            operation_id: wire("op:denied"),
+            rejection: OpportunityRejectionDto::AccessDenied,
+        };
+        assert!(!opportunity_chat_response_is_denied(&unavailable));
+        assert!(opportunity_chat_response_is_denied(&denied));
+    }
+
+    #[test]
+    fn opportunity_request_and_composition_errors_keep_distinct_tool_statuses() {
+        assert_eq!(
+            project_opportunity_chat_result(Err(WebRequestError::InvalidOpportunityRequest))
+                .status(),
+            ChatToolStatus::Denied
+        );
+        assert_eq!(
+            project_opportunity_chat_result(Err(WebRequestError::CompositionUnavailable)).status(),
+            ChatToolStatus::Failed
         );
     }
 
