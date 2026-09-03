@@ -1367,8 +1367,8 @@ class ModuleRegistryContractTests(unittest.TestCase):
         text = path.read_text(encoding="utf-8")
         path.write_text(
             text.replace(
-                "`long-horizon:AI-*`",
-                "`active:AI-*`",
+                "`long-horizon:MCP-*`",
+                "`active:MCP-*`",
                 1,
             ),
             encoding="utf-8",
@@ -1387,7 +1387,7 @@ class ModuleRegistryContractTests(unittest.TestCase):
         text = path.read_text(encoding="utf-8")
         path.write_text(
             text.replace(
-                "`long-horizon:AI-*`",
+                "`long-horizon:MCP-*`",
                 "`long-horizon:MOBILE-*`",
                 1,
             ),

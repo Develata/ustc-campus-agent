@@ -131,6 +131,27 @@ Hot paths are request serialization, token measurement, streaming decode and bou
 - timeout/cancel/rate-limit/error mapping;
 - no silent fallback and redacted telemetry.
 
+### 12.1 Bounded chat + first-party Plugin implementation slice
+
+Before the full M50 MVP above, one explicitly bounded loopback slice may retain
+supporting evidence under `AI-005/006`:
+
+- one server-environment profile with a fixed OpenAI-compatible Responses API
+  origin, exact model and process-environment credential;
+- one provider-neutral non-streaming request/result port declared by M30 and
+  implemented by the M50 adapter;
+- either one direct text response or exactly one strict function-call round
+  followed by one final text response;
+- only the two names and schemas frozen in
+  [`chat-plugin-mvp.md`](../../tasks/chat-plugin-mvp.md);
+- redirect refusal, bounded timeout and output, `store: false`, redacted errors,
+  and no provider/model/tool fallback.
+
+This slice is not `OfficialCentral`, `UserCloud`, durable profile storage,
+stream/final parity, complete context estimation or full M50 conformance. Its
+retained evidence therefore leaves the module state key `planned` and cannot
+satisfy the §14 exit gate by itself.
+
 **Later**
 
 - additional provider peers;

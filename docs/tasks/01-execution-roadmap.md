@@ -112,7 +112,7 @@ A missing dependency is replaced by an equal-contract fake during standalone wor
 | `M20` Market/Package | `partial-evidence` | typed package/catalog + capability-registry + bounded managed-installation fake + bounded reviewed-grant aggregate/replay/semantic repository + bounded package-update aggregate/semantic repository + pure resolver evidence | hold current bounded evidence; durable installation/grant adapters activate only with the first production installation, while artifact switching and update/rollback composition stay deferred | unassigned | `MARKET-*` current-scope rows |
 | `M30` Agent Harness/Runtime | `partial-evidence` | node kernel plus provider-free deterministic Harness-turn paths for Affairs and ChangeRadar, with replay and zero fabricated model usage; Opportunity's four private operations are static M72 use cases and not M30 evidence | finite user-task harness/graph/context/review and durable generic journal composition | unassigned | `HARNESS-*` + owned `AGENT-*` |
 | `M40` Tool Gateway/Execution | `partial-evidence` | protocol/fake proof plus bounded plan-recognized owning adapters for Affairs and ChangeRadar; Opportunity's former in-process execution-spine conflict is removed by the separately authorized static-M72 use-case classification and contributes no M40 evidence | durable generic intent/receipt journal, package-portable gateway and out-of-process executor-host work | unassigned | `AGENT-018/019`, `MARKET-007`; historical W1 M40-B0 remains paused without blocking the separate static-M72 candidate |
-| `M50` Model Provider | `planned` | planned | typed profiles + one provider adapter | unassigned | provider conformance + real bounded turn |
+| `M50` Model Provider | `planned` | bounded server-environment OpenAI-compatible Responses contract accepted under `AI-005/006`; implementation evidence pending | non-streaming basic chat + one strict first-party Plugin tool round; durable profiles/streaming remain later | Hermes/default Integration Authority Owner; bounded runtime lane | deterministic fake conformance + one optional credentialed real bounded turn |
 | `M51` MCP Binding/Executor | `planned` | planned | one reviewed read-only remote binding | unassigned | MCP lifecycle/security/executor proof |
 | `M60` Campus Trust/Source | `planned` | `source-import/v1` and `source-retrieval/v0` accepted contract authority under R11 per `ACCEPT_EXACT_M60_B2_R11_PACKET` (2026-08-13); bounded B1 registry, first offline-only B2 pure policy, canonical-URL-bound deterministic-ID `DemoReviewed` revision values and an M60-owned health type exist; no transport/network effect, approved concrete source, parser, durable baseline or publication composition; superseded V10 `DEC-M60-B2-ACCEPTANCE` is historical evidence only | one reviewed source/revision/baseline | Hermes/default for three-plugin critical path | `SRC-*` current-scope rows |
 | `M70` ChangeRadar | `partial-evidence` | fixed M00-admitted administrator publication now adds strict durable review/publication state, exact retry, checked zero-M60 recovery, uncertain-rename reconciliation and real JSON/Atom process/browser restart to the existing source-pinned M60 review and ordinary current-Market/Harness/ToolGateway read path; `AUTH-024` and `RADAR-001` are implemented | approved live source, production administration and M80 peers; `RADAR-002` maintainer leases stay separate | Hermes/default Integration Authority Owner; bounded OMO audit lane | bounded durable-publication MVP passes; broader `RADAR-002` and production source/admin remain planned |
@@ -228,6 +228,14 @@ Handlers contain mapping and coordination only. Domain validation remains in own
 No denied call reaches an executor. No executor success becomes an Agent result before receipt evidence.
 
 ## 10. M50 lane — Model Provider Integration
+
+The accepted one-day chat + first-party Plugin MVP slice is scheduled by
+[`chat-plugin-mvp.md`](chat-plugin-mvp.md). It admits one server-environment
+OpenAI-compatible Responses adapter, one non-streaming direct answer or one
+strict tool round, and the existing Affairs/M72 application paths. It does not
+promote M50 beyond `planned` until the active `AI-005/006` evidence passes, and
+it does not implement durable provider profiles, streaming, fallback, arbitrary
+tools or source/network authority.
 
 - `M50-B1 provider-profile`: `OfficialCentral`/`UserCloud`, fixed origin/model/secret-ref/capability snapshot.
 - `M50-B2 model-port`: complete request, ordered events, final/usage/error contract.

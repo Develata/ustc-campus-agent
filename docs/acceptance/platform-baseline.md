@@ -410,6 +410,8 @@ Current projection: `SRC-001` is implemented as the bounded pure `M60-B1 source-
 | `AI-002` | UserCloud profile stores encrypted secret ref and performs one call | rust-integration | demo |
 | `AI-003` | provider URL/credential validation prevents SSRF/token leakage | rust-integration | release |
 | `AI-004` | provider failure is structured; no silent identity/model fallback | rust-integration | release |
+| `AI-005` | one server-environment OpenAI-compatible Responses adapter completes a bounded non-streaming text turn without serializing or logging its credential | rust-integration | demo |
+| `AI-006` | one bounded chat turn executes at most one validated Affairs or consent-bound course-advice Plugin call and returns the typed result for one final provider response with no direct-domain or provider fallback | rust-integration | demo |
 | `CLIENT-001` | Dioxus Web/PWA completes login/chat/tool-status/Market launch through admitted typed server-function calls/events with the selected SSR-plus-hydration or explicit CSR path | browser-automation | demo |
 | `CLIENT-002` | Dioxus Android launches on emulator and real device, uses the shared ingress/reducer contract against the HTTPS server, survives lifecycle/reconnect and opens external service in Custom Tab | external-conformance | demo |
 | `CLIENT-003` | raw transcript local archive and central durable memory remain distinct | rust-integration | integration |
