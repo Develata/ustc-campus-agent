@@ -41,16 +41,18 @@ const ADMINISTRATOR_DEMO_HEADER: &str = "x-ustc-agent-administrator-demo";
 const ADMINISTRATOR_DEMO_CONFIRMATION: &str = "confirm-v1";
 
 #[derive(Clone)]
-struct WebState {
+pub(crate) struct WebState {
     composition: Arc<Mutex<AffairsComposition>>,
     next_request: Arc<AtomicU64>,
+    chat: Arc<super::chat::ChatService>,
 }
 
 impl WebState {
-    fn new(composition: Arc<Mutex<AffairsComposition>>) -> Self {
+    pub(crate) fn new(composition: Arc<Mutex<AffairsComposition>>) -> Self {
         Self {
             composition,
             next_request: Arc::new(AtomicU64::new(1)),
+            chat: Arc::new(super::chat::ChatService::from_env()),
         }
     }
 
@@ -60,7 +62,7 @@ impl WebState {
             .map_err(|_| WebRequestError::CompositionUnavailable)
     }
 
-    fn submit(
+    pub(crate) fn submit(
         &self,
         procedure_id: String,
         as_of: Option<UnixMillis>,
@@ -130,7 +132,7 @@ impl WebState {
         Ok(self.lock()?.handle_change_submit(&request))
     }
 
-    fn submit_opportunity(
+    pub(crate) fn submit_opportunity(
         &self,
         command: OpportunityCommandDto,
         confirmation: OpportunityConfirmationDto,
@@ -572,6 +574,7 @@ pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
         .route("/assets/app.js", get(app_js))
         .route("/assets/styles.css", get(styles_css))
         .route("/healthz", get(healthz))
+        .route("/api/v1/agent/chat", post(agent_chat))
         .route("/api/v1/server/info", get(server_info))
         .route("/api/v1/client/capabilities", get(capability_list))
         .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
