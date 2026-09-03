@@ -716,7 +716,7 @@ async fn agent_chat(
     };
     let run_id = match state.next_chat_run_id() {
         Ok(run_id) => run_id,
-        Err(_) => return chat_error_response(ChatError::InternalChatError),
+        Err(_) => return chat_error_response(ChatError::Internal),
     };
     let opportunity_confirmed = matches!(
         opportunity_confirmation(&headers),
@@ -841,7 +841,7 @@ fn chat_error_response(error: ChatError) -> Response {
         | ChatError::ToolBudgetExhausted
         | ChatError::TurnBudgetExhausted => StatusCode::UNPROCESSABLE_ENTITY,
         ChatError::OpportunityConfirmationRequired => StatusCode::FORBIDDEN,
-        ChatError::InternalChatError => StatusCode::INTERNAL_SERVER_ERROR,
+        ChatError::Internal => StatusCode::INTERNAL_SERVER_ERROR,
     };
     typed_json_response(status, error.response())
 }
