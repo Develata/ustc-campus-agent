@@ -766,23 +766,69 @@ fn parse_wire_response(mut response: OpenAiResponse) -> Result<ProviderTurn, Pro
     })
 }
 
-fn bounded_mock_success_answer(data: &str, status_notice: &str) -> String {
-    const PREFIX: &str = "已完成校园工具查询。结构化结果：";
-    const SUFFIX: &str = "…（结果已按本次对话上限截断）";
-    if PREFIX.len() + data.len() + status_notice.len() <= MAX_MOCK_ANSWER_BYTES {
-        return format!("{PREFIX}{data}{status_notice}");
+fn bounded_mock_success_answer(
+    data: &[Value],
+    status_notice: &str,
+) -> Result<String, ProviderError> {
+    const PREFIX: &str = "已完成校园工具查询。结果摘要：";
+    const FRAGMENT_SUFFIX: &str = "…（片段已截断）";
+
+    let serialized = data
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| ProviderError::Protocol)?;
+    let labels = (1..=serialized.len())
+        .map(|index| format!("\n[结果 {index}/{}] ", serialized.len()))
+        .collect::<Vec<_>>();
+    let fixed_bytes =
+        PREFIX.len() + status_notice.len() + labels.iter().map(String::len).sum::<usize>();
+    let mut remaining_bytes = MAX_MOCK_ANSWER_BYTES.saturating_sub(fixed_bytes);
+    let include_all = serialized.iter().map(String::len).sum::<usize>() <= remaining_bytes;
+
+    let mut answer = String::with_capacity(MAX_MOCK_ANSWER_BYTES);
+    answer.push_str(PREFIX);
+    for (index, (label, value)) in labels.iter().zip(&serialized).enumerate() {
+        answer.push_str(label);
+        let remaining_results = serialized.len().saturating_sub(index).max(1);
+        let fragment_budget = if include_all {
+            value.len()
+        } else {
+            remaining_bytes / remaining_results
+        };
+        let used = if value.len() <= fragment_budget {
+            answer.push_str(value);
+            value.len()
+        } else if fragment_budget > FRAGMENT_SUFFIX.len() {
+            let content_budget = fragment_budget - FRAGMENT_SUFFIX.len();
+            let mut end = 0_usize;
+            for (offset, character) in value.char_indices() {
+                let next = offset + character.len_utf8();
+                if next > content_budget {
+                    break;
+                }
+                end = next;
+            }
+            answer.push_str(&value[..end]);
+            answer.push_str(FRAGMENT_SUFFIX);
+            end + FRAGMENT_SUFFIX.len()
+        } else {
+            let mut end = 0_usize;
+            for (offset, character) in value.char_indices() {
+                let next = offset + character.len_utf8();
+                if next > fragment_budget {
+                    break;
+                }
+                end = next;
+            }
+            answer.push_str(&value[..end]);
+            end
+        };
+        remaining_bytes = remaining_bytes.saturating_sub(used);
     }
-    let budget =
-        MAX_MOCK_ANSWER_BYTES.saturating_sub(PREFIX.len() + SUFFIX.len() + status_notice.len());
-    let mut end = 0_usize;
-    for (offset, character) in data.char_indices() {
-        let next = offset + character.len_utf8();
-        if next > budget {
-            break;
-        }
-        end = next;
-    }
-    format!("{PREFIX}{}{SUFFIX}{status_notice}", &data[..end])
+    answer.push_str(status_notice);
+    debug_assert!(answer.len() <= MAX_MOCK_ANSWER_BYTES);
+    Ok(answer)
 }
 
 fn contains_ascii_term(text: &str, term: &str) -> bool {
@@ -917,8 +963,6 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
             }
             notices.join(" ")
         } else {
-            let data =
-                serde_json::to_string(&succeeded_data).map_err(|_| ProviderError::Protocol)?;
             let mut status_notice = String::new();
             if denied > 0 {
                 status_notice.push_str(&format!(
@@ -934,7 +978,7 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
                 status_notice.push(' ');
                 status_notice.push_str(OPPORTUNITY_UNAVAILABLE_NOTICE);
             }
-            bounded_mock_success_answer(&data, &status_notice)
+            bounded_mock_success_answer(&succeeded_data, &status_notice)?
         };
         return Ok(ProviderTurn {
             content: Some(content),
@@ -1196,6 +1240,29 @@ mod tests {
         assert!(answer.contains("课程规划请求未执行"));
         assert!(answer.contains("明确同意"));
         assert!(answer.len() <= MAX_MOCK_ANSWER_BYTES);
+    }
+
+    #[test]
+    fn bounded_mock_answer_preserves_each_success_under_the_global_limit() {
+        let data = vec![
+            json!({"a_marker": "first-affairs"}),
+            json!({
+                "a_marker": "second-change",
+                "z_large_payload": "x".repeat(MAX_MOCK_ANSWER_BYTES * 2)
+            }),
+            json!({"a_marker": "third-opportunity"}),
+            json!({"a_marker": "fourth-calendar", "item_id": "calendar:item:1"}),
+        ];
+        let answer = bounded_mock_success_answer(&data, "").expect("bounded mock answer");
+
+        assert!(answer.len() <= MAX_MOCK_ANSWER_BYTES);
+        assert!(answer.contains("first-affairs"));
+        assert!(answer.contains("second-change"));
+        assert!(answer.contains("third-opportunity"));
+        assert!(answer.contains("fourth-calendar"));
+        assert!(answer.contains("calendar:item:1"));
+        assert!(answer.contains("片段已截断"));
+        assert!(answer.contains("[结果 4/4]"));
     }
 
     #[test]
