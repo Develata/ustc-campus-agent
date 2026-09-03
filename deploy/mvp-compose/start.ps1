@@ -18,7 +18,7 @@ $deadline = (Get-Date).AddMinutes(5)
 while ((Get-Date) -lt $deadline) {
   try {
     $health = Invoke-RestMethod -Uri "$url/healthz" -TimeoutSec 3
-    if (($health.schema -eq "ustc-agent-health/v1") -and ($health.status -eq "ok")) {
+    if (($health.schema -eq "ustc-agentd-health/v1") -and ($health.status -eq "ok")) {
       Write-Host "MVP 已就绪：$url" -ForegroundColor Green
       Start-Process $url
       exit 0

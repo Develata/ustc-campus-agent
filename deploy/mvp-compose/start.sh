@@ -7,7 +7,9 @@ docker compose up --build -d
 port=${UCA_MVP_PORT:-8787}
 url="http://127.0.0.1:${port}"
 for _ in $(seq 1 150); do
-  if curl --fail --silent "${url}/healthz" | grep -q '"status":"ok"'; then
+  health=$(curl --fail --silent "${url}/healthz" || true)
+  if printf '%s' "$health" | grep -Fq '"schema":"ustc-agentd-health/v1"' \
+    && printf '%s' "$health" | grep -Fq '"status":"ok"'; then
     printf 'MVP is ready: %s\n' "$url"
     exit 0
   fi

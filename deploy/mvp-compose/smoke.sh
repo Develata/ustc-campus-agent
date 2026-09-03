@@ -34,7 +34,7 @@ fi
 python3 - "$work/health.json" <<'PY'
 import json, pathlib, sys
 value = json.loads(pathlib.Path(sys.argv[1]).read_text())
-assert value == {'schema': 'ustc-agent-health/v1', 'status': 'ok'}, value
+assert value == {'schema': 'ustc-agentd-health/v1', 'status': 'ok'}, value
 PY
 curl --fail --silent "$base/" > "$work/index.html"
 for marker in 'AFFAIRS NAVIGATOR' 'CHANGE RADAR' 'OPPORTUNITY GRAPH'; do
