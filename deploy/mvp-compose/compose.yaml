@@ -12,6 +12,14 @@ services:
     init: true
     ports:
       - "127.0.0.1:${UCA_MVP_PORT:-8787}:8787"
+    environment:
+      UCA_AGENT_PROVIDER: ${UCA_AGENT_PROVIDER:-mock}
+      UCA_AGENT_BASE_URL: ${UCA_AGENT_BASE_URL:-}
+      UCA_AGENT_MODEL: ${UCA_AGENT_MODEL:-}
+      UCA_AGENT_API_KEY_FILE: /run/secrets/uca_agent_api_key
+      UCA_AGENT_TIMEOUT_MS: ${UCA_AGENT_TIMEOUT_MS:-15000}
+    secrets:
+      - uca_agent_api_key
     volumes:
       - mvp-state:/data
     read_only: true
@@ -26,3 +34,7 @@ services:
 
 volumes:
   mvp-state:
+
+secrets:
+  uca_agent_api_key:
+    file: ${UCA_AGENT_API_KEY_SOURCE:-./mock-provider-key.txt}
