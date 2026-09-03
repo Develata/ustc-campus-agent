@@ -2,7 +2,7 @@
 
 ## Mutable state
 
-- `Stage`: `PROPOSAL_ONLY_R57_REVIEWED_RECEIPT_BOUND`
+- `Stage`: `PROPOSAL_ONLY_R60_REVIEWED_RECEIPT_BOUND`
 - `Disposition`: `READY_FOR_NON_AUTHORITATIVE_DIRECTION_DECISION_NOT_ACCEPTED_CONTRACT`
 - `Bound source commit`: `54d758fbf2f1c08df2e1993919287569b501b115`
 - `Bound source tree`: `973b999d14feb91f5ebe84b1712006e18e21baeb`
@@ -10,9 +10,11 @@
 - `Exact URL`: `https://www.teach.ustc.edu.cn/calendar/20135.html`
 - `Permission/rate/retention posture`: selected by Develata on 2026-09-02 (Asia/Shanghai)
 - `Current SourceStatus`: `Proposed candidate only; no durable source row exists`
-- `Packet digest`: `sha256:e73f943e86840ae6cfa1de226053ae4e2f83cc31016cec12fe88fc9d50ce4ddb` over `187421` bytes beginning immediately after the packet `BEGIN` marker newline and ending immediately before the `END` marker token, including the final packet newline
-- `Candidate generation`: `R57`
-- `Remote posture`: no push, Draft PR, CI, merge, source-status mutation, live retrieval, retained Rust implementation, deployment, release or publication is authorized by this packet
+- `Packet digest`: `sha256:3ae530de616c1f2ada1ef2204b15b041e33ab91777ee1a437b016049ed242dba` over `208066` bytes beginning immediately after the packet `BEGIN` marker newline and ending immediately before the `END` marker token, including the final packet newline
+- `Candidate generation`: `R60`
+- `Current blockers`: none on exact R60 semantic candidate or its marker-external review receipt; mandatory Codex and independent DeepSeek returned exact-identity semantic `PASS`, and mandatory Codex returned receipt-only delta-binding `PASS`
+- `Next allowed mutation`: stage exactly this one proposal path, rerun scoped/full proposal gates against the index, commit the reviewed tree, then update the authorized existing PR without changing packet bytes or any accepted owner/source/implementation carrier
+- `Remote posture`: R57 remains exact remote PR #66 head `89a4f3cc69a0d90c5476caad245d3760a754aa4a`; PR #66 is open and non-draft, exact-head CI/governance passed, but two unresolved R57 GitHub Codex threads and the unpushed R60 receipt closeout prevent merge. R58/R59 were never pushed. No source-status mutation, live retrieval, DNS/socket/HTTP, retained Rust implementation, deployment, release or publication is authorized by this proposal/review receipt
 
 ## Authority receipt
 
@@ -304,10 +306,24 @@ M00AdmittedActorV1 =
   Public |
   Authenticated { tenant_id, user_id, session_id }
 
+PlatformOperatorGrantStateV1 = Active | Disabled | Revoked
+
+PlatformOperatorGrantSnapshotV1 {
+  admitted_user_id, capability_id, grant_id, grant_revision,
+  operation_id, schema_digest, policy_snapshot_id,
+  grant_not_before, grant_not_after,
+  grant_state: PlatformOperatorGrantStateV1
+}
+
+PlatformOperatorGrantDispositionV1 =
+  Granted(PlatformOperatorGrantSnapshotV1) |
+  Missing | Disabled | Revoked | NotYetActive | Expired
+
 PlatformOperatorAdmissionV1 {
   admitted_user_id, capability_id, grant_id, grant_revision,
   operation_id, schema_digest, policy_snapshot_id,
-  grant_not_before, grant_not_after, grant_state, observed_at
+  grant_not_before, grant_not_after,
+  grant_state: PlatformOperatorGrantStateV1, observed_at
 }
 
 PlatformRequestContextV1 {
@@ -366,15 +382,47 @@ M00AdmittedDispositionV1 {
 PersistedAdmittedActorDtoV1 =
   Public | Authenticated { tenant_id, user_id, session_id }
 
+PersistedActorReferenceDtoV1 =
+  Anonymous | Authenticated { session_id }
+
+PersistedEnvelopeBasisDtoV1 {
+  operation_id: OperationId,
+  actor_reference: PersistedActorReferenceDtoV1,
+  payload_digest: PayloadDigest,
+  causation_id: Option<CausationId>
+}
+
+PersistedAdmittedOperationDtoV1 {
+  operation_id, schema_identity, schema_digest,
+  permission_class: PermissionClassV1,
+  effect_class: EffectClassV1,
+  decoder_identity, dispatcher_identity,
+  adapter_allowlist, descriptor_snapshot_id
+}
+
+PersistedPlatformOperatorAdmissionDtoV1 {
+  admitted_user_id, capability_id, grant_id, grant_revision,
+  operation_id, schema_digest, policy_snapshot_id,
+  grant_not_before, grant_not_after,
+  grant_state: PlatformOperatorGrantStateV1, observed_at
+}
+
+PersistedAdmissionBindingDtoV1 {
+  request_id, command_id, correlation_id, causation_id?,
+  admitted_actor: PersistedAdmittedActorDtoV1,
+  admitted_operation: PersistedAdmittedOperationDtoV1,
+  policy_snapshot_id, observed_at, client_provenance,
+  platform_operator_admission: Option<PersistedPlatformOperatorAdmissionDtoV1>,
+  admitted_payload_digest, admission_binding_digest
+}
+
 PersistedFrozenPrerequisitesDtoV1 {
   policy_snapshot_id, observed_at, session_id?, admitted_operation_id
 }
 
 PersistedAdmittedDispositionDtoV1 {
-  command_id, correlation_id, descriptor_snapshot_id,
-  admitted_actor: PersistedAdmittedActorDtoV1,
-  frozen_prerequisites: PersistedFrozenPrerequisitesDtoV1,
-  admission_binding_digest
+  original_binding: PersistedAdmissionBindingDtoV1,
+  frozen_prerequisites: PersistedFrozenPrerequisitesDtoV1
 }
 
 PersistedAdmissionRejectionDtoV1 =
@@ -386,31 +434,37 @@ PersistedPriorDispositionDtoV1 =
 
 PersistedPriorDispositionEnvelopeV1 {
   schema_identity: "platform-request-context/v1/prior-disposition",
+  envelope_basis: PersistedEnvelopeBasisDtoV1,
+  envelope_hash: Sha256Digest,
   value: PersistedPriorDispositionDtoV1
 }
 
 IdempotencyReservationTokenV1 {
+  idempotency_key?, envelope_basis: PersistedEnvelopeBasisDtoV1,
+  envelope_hash: Sha256Digest,
   command_id, reservation_version, fencing_token: NonZeroU64, deadline
 }
 
 IdempotencyReservationV1 =
   New(IdempotencyReservationTokenV1) |
   Reclaimed(IdempotencyReservationTokenV1) |
-  PriorIdentical(PersistedPriorDispositionDtoV1) |
+  PriorIdentical(PersistedPriorDispositionEnvelopeV1) |
   InFlight(IdempotencyReservationTokenV1)
 
 IdempotencyErrorV1 =
-  StoreUnavailable | ConflictingEnvelope { idempotency_key }
+  StoreUnavailable | ConflictingEnvelope { idempotency_key } |
+  CorruptState { idempotency_key }
 
 FinalizeIdempotencyOutcomeV1 =
   Committed |
-  AlreadySame(PersistedPriorDispositionDtoV1) |
+  PriorWon(PersistedPriorDispositionEnvelopeV1) |
   LostReservation(IdempotencyReservationTokenV1)
 
 EnvelopeHashV1(Sha256Digest)
 
 FinalAdmissionDispositionV1 =
-  Admitted(M00AdmittedDispositionV1) |
+  Admitted { disposition: M00AdmittedDispositionV1,
+             original_binding: PersistedAdmissionBindingDtoV1 } |
   Rejected(RequestContextRejectionV1)
 
 M00IncompleteReservationV1 {
@@ -426,6 +480,9 @@ AdmissionPortsV1
   load_session(session_id) -> Result<Option<SessionSnapshot>, AdmissionPortError>
   check_capability(operation_id, actor_kind, observed_at)
     -> Result<CapabilityDisposition, AdmissionPortError>
+  resolve_platform_operator_grant(admitted_user_id, operation_id, schema_digest,
+                                  policy_snapshot_id, observed_at)
+    -> Result<PlatformOperatorGrantDispositionV1, AdmissionPortError>
   finalize_idempotency(&IdempotencyReservationTokenV1,
                        &FinalAdmissionDispositionV1)
     -> Result<FinalizeIdempotencyOutcomeV1, IdempotencyErrorV1>
@@ -469,13 +526,17 @@ ControlEvidenceReadPortV1
 6. Platform-operator admission: exactly one byte `0x00` and no fields when absent; or `0x01 || enc(admitted_user_id) || enc(capability_id) || enc(grant_id) || u64_be(grant_revision) || enc(operation_id) || schema_digest[32] || enc(policy_snapshot_id) || i128_be(grant_not_before) || i128_be(grant_not_after) || enc(grant_state.wire_tag()) || i128_be(observed_at)` when present. `grant_state` is mandatory in the `0x01` branch and forbidden in the `0x00` branch; there is no second presence bit.
 7. The raw fixed-length 32-byte admitted payload digest.
 
-All integer conversions are checked before hashing; any overflow/invalid time maps to `RequestContextRejectionV1 { projection: AdmissionRejectionProjectionV1::MalformedCommand { operation_id: Some(current_operation_id) }, diagnostic_source: Coordinator }`, and no digest/context is minted. The digest field itself is excluded. M00 computes it from the same validated values used to construct `PlatformRequestContextV1`, stores it unchanged in the live context, admitted disposition and persisted admitted DTO, and recomputes/equality-checks it before promoting any prior admission. No caller supplies it.
+All integer conversions are checked before hashing; any overflow/invalid time maps to `RequestContextRejectionV1 { projection: AdmissionRejectionProjectionV1::MalformedCommand { operation_id: Some(current_operation_id) }, diagnostic_source: Coordinator }`, and no digest/context is minted. The digest field itself is excluded. M00 computes it from the same validated values used to construct `PlatformRequestContextV1`, stores it unchanged in the live context and admitted disposition, and invokes the owner-private `PersistedAdmissionBindingDtoV1::from_sealed_context_v1(&PlatformRequestContextV1)` to copy the complete original canonical preimage plus that digest. The admitted finalization carrier owns both the live reduced disposition and this complete durable original binding; neither the digest nor the durable binding is caller-supplied. Promotion later recomputes the digest solely from those retained original-binding fields.
 
-The v1 admission/rejection/idempotency family is closed as one versioned persistence boundary. `AdmissionRejectionProjectionV1` and `PersistedAdmissionRejectionDtoV1` have the same fourteen variant field lists displayed above; their exact explicit `kind` tags are the accepted logical tags, but the durable DTO is decoded only inside `PersistedPriorDispositionEnvelopeV1` with the exact v1 schema identity and
-`deny_unknown_fields`. `PolicyDenied.permission_class` is `PermissionClassV1` in both live and persisted forms. `EnvelopeHashV1` is computed before authority lookup from accepted `BuildRequestContextCommand` fields with exact preimage: ASCII domain `"platform-request-context/v1/envelope\0"`; `enc(operation_id)`; actor byte `0x00` for `ActorReference::Anonymous` with no following actor field or `0x01 || enc(session_id)` for
-`Authenticated`; `enc(payload_digest.as_str())` where the checked payload digest is 64 lowercase hexadecimal bytes; then causation byte `0x00` when absent or `0x01 || enc(causation_id)` when present. No other tag/field order is valid. This is the accepted v0 field/tag/encoding order with only the domain changed, so it cannot equal a v0 `EnvelopeHash` for the same logical input. A v1 idempotency key can return/promote only
-`PersistedPriorDispositionDtoV1`, and `finalize_idempotency` accepts only the v1 token/final disposition and returns only the v1 outcome. Same-key cross-version bytes are `IdempotencyErrorV1::ConflictingEnvelope`, never equal replay. The only intentionally shared types on `AdmissionPortsV1` are checked identity/time leaves and policy/session/capability/port observations that contain no permission/effect or persisted admission
-aggregate; accepted v0 rejection, disposition, prior DTO, reservation, token, envelope hash, finalization and incomplete-result types are forbidden anywhere in the v1 coordinator signature, implementation or adapter.
+The v1 admission/rejection/idempotency family is closed as one versioned persistence boundary. `AdmissionRejectionProjectionV1` and `PersistedAdmissionRejectionDtoV1` have the same fourteen variant field lists displayed above; their exact explicit `kind` tags are the accepted logical tags, but the durable DTO is decoded only inside `PersistedPriorDispositionEnvelopeV1` with the exact v1 schema identity and `deny_unknown_fields`. `PolicyDenied.permission_class` is `PermissionClassV1` in both live and persisted forms. Every prior envelope retains the exact original envelope basis; an admitted prior additionally retains the complete original canonical admission-binding preimage in `PersistedAdmissionBindingDtoV1`. `PersistedActorReferenceDtoV1` is derived exactly as `M00AdmittedActorV1::Public -> Anonymous` and `Authenticated { tenant_id, user_id, session_id } -> Authenticated { session_id }`; no tenant/user field enters envelope identity. The nested actor-reference, operation, admitted-actor and operator-admission DTOs have exactly the displayed fields, preserve adapter order, deny unknown fields and use the same checked scalar/enum decoding as the live v1 carriers.
+
+`EnvelopeHashV1` is computed before authority lookup from accepted `BuildRequestContextCommand` fields with exact preimage: ASCII domain `"platform-request-context/v1/envelope\0"`; `enc(operation_id)`; actor byte `0x00` for `ActorReference::Anonymous` with no following actor field or `0x01 || enc(session_id)` for `Authenticated`; `enc(payload_digest.as_str())` where the checked payload digest is 64 lowercase hexadecimal bytes; then causation byte `0x00` when absent or `0x01 || enc(causation_id)` when present. No other tag/field order is valid. This is the accepted v0 field/tag/encoding order with only the domain changed, so it cannot equal a v0 `EnvelopeHash` for the same logical input. Request ID, correlation ID, client provenance and admission time are intentionally not envelope-identity fields: an ordinary retry may renew them while remaining the same idempotent admission request, but those retry-local values may never replace or be compared as if they were the retained original admission binding.
+
+`PersistedPriorDispositionEnvelopeV1.envelope_hash` is the raw 32-byte digest from the exact original `EnvelopeHashV1`, and `envelope_basis` retains exactly its operation, actor-reference, payload and causation inputs. Every `New`/`Reclaimed` token privately retains the optional key plus that same current basis/hash. Before returning either `PriorIdentical` or `PriorWon`, the idempotency boundary must run one complete `validate_persisted_prior_envelope_v1` pass: exact outer schema plus `deny_unknown_fields`; exact nested admitted/rejected tag and field shape; nested rejected-projection parity; and, for admitted content, original-binding digest, envelope-basis, reduced-disposition and frozen-prerequisite coherence. It then recomputes the prior hash from its basis and requires equality with the stored/current hash for `PriorIdentical`; for `PriorWon`, it additionally requires the prior basis/hash to equal the token's retained basis/hash. An outer-only validation is forbidden. A current/token envelope difference returns `ConflictingEnvelope`; any nested or internal validation failure returns `CorruptState` before either prior outcome is constructed.
+For an admitted finalization the boundary also requires `original_binding` to reproduce the token basis/hash, its own `admission_binding_digest`, the reduced `disposition` fields and `frozen_prerequisites` before atomically persisting the admitted DTO; the complete binding is therefore present at the only write boundary rather than inferred from a digest. For an admitted prior the coordinator repeats the same basis/original-binding/disposition/frozen-prerequisite checks.
+Unknown schema/tag/field, malformed nested DTO, basis/hash inconsistency, token/prior-envelope inconsistency, basis/original-binding disagreement, original-binding digest mismatch, or disagreement between an admitted DTO's reduced/frozen fields and its original actor/operation/policy/time fields returns `IdempotencyErrorV1::CorruptState { idempotency_key }`. Both `StoreUnavailable` and `CorruptState` map to the same non-authoritative `IdempotencyStoreUnavailable { operation_id }` projection with `diagnostic_source: Port(IdempotencyStore)`, reveal no retained prior content, perform no idempotency mutation and invoke no M10/M60 port; `ConflictingEnvelope` keeps its dedicated projection.
+
+A v1 idempotency key can return/promote only `PersistedPriorDispositionEnvelopeV1`, and `finalize_idempotency` accepts only the v1 token/final disposition and returns only the v1 outcome. Same-key cross-version bytes are `IdempotencyErrorV1::ConflictingEnvelope`, never equal replay. The only intentionally shared types on `AdmissionPortsV1` are checked identity/time leaves and policy/session/capability/port observations that contain no permission/effect or persisted admission aggregate; accepted v0 rejection, disposition, prior DTO, reservation, token, envelope hash, finalization and incomplete-result types are forbidden anywhere in the v1 coordinator signature, implementation or adapter.
 
 All v1 authority-bearing struct carriers above are distinct from accepted v0 names, have private fields and expose no public unchecked constructor; the result and port surfaces are closed as displayed.
 `PlatformRequestContextV1` is sealed only by the v1 M00 coordinator after the same ordered validation, retains the same checked identity/time/policy facts, and exposes read-only accessors corresponding to the displayed fields.
@@ -487,9 +548,9 @@ There is no conversion between v0 and v1 context/operation/snapshot carriers, an
 Before append and again after read-back, M10 independently recomputes that digest from the sealed v1 context, descriptor snapshot, operator admission, client provenance and admitted payload digest; mismatch fails closed before M60.
 M10 uses only `ControlEvidenceAppendPortV1`/`ControlEvidenceReadPortV1`, requires `Appended | AlreadySame` plus byte-equal v1 event read-back, and only then mints `VerifiedRequestAdmissionEvidence`; the accepted `PlatformControlEvent`, `from_admitted_request`, `ControlEvidenceAppendPort` and `ControlEvidenceReadPort` remain byte/API unchanged and cannot decode/load a v1 event as v0.
 
-Both permissions are private platform-operator permissions: an anonymous actor or an incoherent descriptor is `MalformedCommand { operation_id: Some(current_operation_id) }`; policy/session/capability/infrastructure denials reproduce the exact fourteen-class v0 rejection semantics and order through the distinct `AdmissionRejectionClassV1` / `AdmissionRejectionProjectionV1` / `RequestContextRejectionV1` / persisted-v1 family
-above, including `PolicyDenied | PolicyExpired`, `SessionNotFound | SessionIdMismatch | SessionNotAdmitted`, `CapabilityMissing | CapabilityDisabled | CapabilityRevoked`, `InfrastructurePortUnavailable` and `IdempotencyStoreUnavailable`. Those denials are terminal under the distinct v1 idempotency fence with the accepted precedence semantics; correcting a descriptor/grant/policy requires a fresh idempotency key or unkeyed
-attempt, while an infrastructure-incomplete reservation returns `M00IncompleteReservationV1`. No new retryable domain projection is invented. The approval operation descriptor is:
+Both new permissions are private platform-operator permissions: an anonymous actor or an incoherent descriptor is `MalformedCommand { operation_id: Some(current_operation_id) }`. For the four inherited v1 permission/effect pairs, M00 uses `check_capability` exactly as accepted v0 and requires `platform_operator_admission = None`. For `PlatformOperatorWrite | PlatformOperatorEffect`, only an admitted authenticated actor may proceed and M00 calls `resolve_platform_operator_grant` after descriptor, policy and session currentness. Its closed mapping is `Missing -> CapabilityMissing`, `Disabled | NotYetActive -> CapabilityDisabled`, and `Revoked | Expired -> CapabilityRevoked`. `Granted(snapshot)` is admitted only when `snapshot.admitted_user_id` equals the admitted actor, operation/schema/policy IDs equal the current validated descriptor and policy, `grant_state == Active`, and `grant_not_before <= observed_at < grant_not_after`; a malformed range or any identity/state/time disagreement in `Granted` is an impossible adapter observation mapped to `InfrastructurePortUnavailable { operation_id, port: Capability }` with `diagnostic_source: Port(Capability)`. M00 then owner-mints `PlatformOperatorAdmissionV1` by copying the checked snapshot and the one trusted `observed_at`; neither callers nor DTO decoders can construct it.
+
+Policy/session/capability/infrastructure denials reproduce the exact fourteen-class v0 rejection semantics and order through the distinct `AdmissionRejectionClassV1` / `AdmissionRejectionProjectionV1` / `RequestContextRejectionV1` / persisted-v1 family above, including `PolicyDenied | PolicyExpired`, `SessionNotFound | SessionIdMismatch | SessionNotAdmitted`, `CapabilityMissing | CapabilityDisabled | CapabilityRevoked`, `InfrastructurePortUnavailable` and `IdempotencyStoreUnavailable`. Those denials are terminal under the distinct v1 idempotency fence with the explicit rejection-race rule below; correcting a descriptor/grant/policy requires a fresh idempotency key or unkeyed attempt, while an infrastructure-incomplete reservation returns `M00IncompleteReservationV1`. No new retryable domain projection is invented. The approval operation descriptor is:
 
 ```text
 OperationId: source.approve
@@ -548,27 +609,26 @@ M60 domain denial remains the closed admission/start algebra below; M00 denial r
 No approval/evidence-record context, generic dispatcher, public route or caller-authored effect witness can start retrieval.
 This descriptor and executable consumer are in R1/R3/R4 before R5's first retrieval.
 
-The v1 first stage preserves the exact ordering and failure precedence of accepted `platform-request-context/v0` §§5–6 while using only the distinct v1 carrier family above:
+For `New`/`Reclaimed` attempts, the v1 first stage preserves accepted `platform-request-context/v0` §§5–6 operations 1–3 check order and ordinary failure precedence while using only the distinct v1 carrier family above. Relative to v0, prior projection is deliberately successor-hardened at both routes without moving reservation lookup: `PriorIdentical` is retained opaquely until the current descriptor/policy/session/capability-or-grant gate passes, and `PriorWon` is promoted only from a currently admitted path; a current local denial that loses rejection finalization to `PriorWon` never projects the winning prior. These are the two explicit prior-projection deviations from v0, not changes to new-attempt failure order.
 
 1. Compute `EnvelopeHashV1` from domain `"platform-request-context/v1/envelope\0"` and the accepted preimage field order; schema identity/digest remain deliberately absent from that preimage and are validated from `OperationSnapshotV1` after reservation.
 2. Reserve or retrieve `IdempotencyReservationV1` through `AdmissionPortsV1`.
 3. Classify only v1 prior or in-flight state before descriptor lookup; no accepted v0 prior DTO may enter this branch.
 
-`IdempotencyErrorV1::StoreUnavailable` maps only to `RequestContextRejectionV1 { projection: AdmissionRejectionProjectionV1::IdempotencyStoreUnavailable { operation_id }, diagnostic_source: Port(IdempotencyStore) }`; `ConflictingEnvelope { idempotency_key }` maps only to the corresponding v1 projection with the current operation ID and key. Neither error projects prior content or constructs any accepted v0 rejection/result.
+`IdempotencyErrorV1::StoreUnavailable | CorruptState { .. }` map only to `RequestContextRejectionV1 { projection: AdmissionRejectionProjectionV1::IdempotencyStoreUnavailable { operation_id }, diagnostic_source: Port(IdempotencyStore) }`; `ConflictingEnvelope { idempotency_key }` maps only to the corresponding v1 projection with the current operation ID and key. No error projects prior content or constructs any accepted v0 rejection/result.
 
-After those three numbered operations complete in ascending order, M00 retains prior/in-flight state for the same validated values only as an opaque non-projecting v1 handle, while retaining a distinct private `IdempotencyReservationTokenV1` for `New`/`Reclaimed`; then it validates the exact descriptor snapshot and permission/effect coherence; reads one trusted clock; validates platform-policy currentness, authenticated-session currentness and exact platform-operator capability/grant currentness; finalizes the sealed `PlatformRequestContextV1`; and only then unseals/returns the matching prior or in-flight projection.
-The lookup always follows input validation, including denial paths, and its public shape exposes no state discriminant or payload before M00's private post-context unseal.
-If a post-reservation check rejects and M00 owns `New`/`Reclaimed`, the coordinator calls the v1 owner-private `AdmissionPortsV1::finalize_idempotency(&token, &FinalAdmissionDispositionV1::Rejected(rejection))`: `Committed` returns `M00AdmissionResultV1::Rejected(rejection)` and the winning finalizer releases capacity; equal `AlreadySame(prior: PersistedPriorDispositionDtoV1)` requires the persisted v1 prior to be the same
-rejection, returns `promote_persisted_prior_v1(prior) = M00AdmissionResultV1::PriorRejected(rejection)`, performs no second release and leaves no owned reservation because the winning finalizer already terminalized it; `LostReservation(lost: IdempotencyReservationTokenV1)` returns `M00AdmissionResultV1::Incomplete(M00IncompleteReservationV1::from_token_v1(&lost))` and no context; post-reservation `IdempotencyErrorV1` returns
-`M00AdmissionResultV1::Incomplete(M00IncompleteReservationV1::from_token_v1(&token))` and leaves recovery/reclamation, not the caller, responsible for any uncertain reservation.
+After those three numbered operations complete in ascending order, M00 retains prior/in-flight state only as an opaque non-projecting v1 handle, while retaining a distinct private `IdempotencyReservationTokenV1` for `New`/`Reclaimed`; then it validates the exact descriptor snapshot and permission/effect coherence, reads one trusted clock, and validates platform-policy currentness and authenticated-session currentness. For inherited permissions it runs the accepted-shaped `check_capability`; for either platform-operator permission it instead obtains and independently validates `PlatformOperatorGrantDispositionV1` exactly as above before minting `PlatformOperatorAdmissionV1`. `New`/`Reclaimed` seals the resulting current `PlatformRequestContextV1`, derives the complete `PersistedAdmissionBindingDtoV1` from it, and carries both binding and reduced disposition to admitted finalization. A prior handle uses the current validated values only as the authorization gate for whether prior state may be projected; it never substitutes or compares retry-local request ID, correlation ID, provenance, policy/grant revision or trusted time against the retained original admission binding. If an opaque `PriorIdentical` handle reaches the end of this gate, M00 calls `promote_persisted_prior_v1` and returns only `PriorAdmitted | PriorRejected`—never a current context, re-finalization, M10 call or M60 call; an in-flight handle returns only `M00AdmissionResultV1::Incomplete` with no context.
+The lookup always follows input validation, including denial paths, and its public shape exposes no state discriminant or payload before M00's private post-gate unseal.
+If a post-reservation check rejects and M00 owns `New`/`Reclaimed`, the coordinator calls the v1 owner-private `AdmissionPortsV1::finalize_idempotency(&token, &FinalAdmissionDispositionV1::Rejected(rejection))`: `Committed` returns `M00AdmissionResultV1::Rejected(rejection)` and the winning finalizer releases capacity; `PriorWon(prior_envelope)` is returned by the boundary only after the complete nested `validate_persisted_prior_envelope_v1` pass plus token/prior basis/hash validation above, but this local-rejection branch deliberately does not decode or promote the already validated value and returns the current `M00AdmissionResultV1::Rejected(rejection)`, performs no second release and leaves no owned reservation because the winning finalizer already terminalized it; `LostReservation(lost: IdempotencyReservationTokenV1)` returns `M00AdmissionResultV1::Incomplete(M00IncompleteReservationV1::from_token_v1(&lost))` and no context; any post-reservation `IdempotencyErrorV1`, including `CorruptState`, returns `M00AdmissionResultV1::Incomplete(M00IncompleteReservationV1::from_token_v1(&token))` and leaves recovery/reclamation, not the caller, responsible for any uncertain reservation. Thus an equal replay of an already-committed finalize resolves to the retained terminal only on the admitted/currently-authorized path; rejection finalization preserves the current denial, and every loss/corruption/uncertainty branch remains closed without prior projection.
 Every non-authoritative branch calls no M10/M60 port, and no branch silently drops an owned token as success.
-If the opaque handle names prior/in-flight state, denial mutates nothing and projects none of that state.
-Anonymous, session-stale, grant-missing/revoked/expired, actor-mismatched or schema-stale calls receive the current typed denial and cannot distinguish prior absence/content through any typed result, field or error; no M10/M60 port runs.
+If the opaque handle names prior/in-flight state, a current denial mutates nothing and projects none of that state. If a `New`/`Reclaimed` rejection finalizer instead loses to a valid `PriorWon`, it likewise returns the current denial without decoding the prior; only loss/error may replace it with the non-projecting incomplete carrier.
+Anonymous, session-stale, grant-missing/revoked/expired, actor-mismatched or schema-stale calls never receive prior content through any typed result, field or error; committed/valid-prior-won rejection finalization returns the current typed denial, while lost/uncertain finalization returns only `Incomplete`. No M10/M60 port runs.
 The contract does not claim timing-side-channel equivalence.
-A replay is returned only when the recomputed `admission_binding_digest` equals the persisted digest and its actor, operation, schema, grant, policy, time, provenance and payload bindings exactly match the newly sealed current context.
+
+`promote_persisted_prior_v1(prior_envelope, current_command, current_envelope_hash, idempotency_key)` first requires the exact envelope schema, derives the current envelope basis from `BuildRequestContextCommand`, requires it to equal `prior_envelope.envelope_basis`, recomputes `EnvelopeHashV1` from that retained basis, and requires equality with both the stored and current hashes. For an admitted value it requires that basis to equal the original binding's operation, exact Public→Anonymous or authenticated-session actor-reference projection, payload and causation, recomputes `admission_binding_digest` solely from `original_binding`, requires equality with the retained digest, and requires `frozen_prerequisites` to equal the original binding's policy snapshot, observed time, authenticated-session presence/ID and admitted operation ID; it then reconstructs `M00AdmittedDispositionV1` from those retained original fields and returns `PriorAdmitted` without a context. For a rejected value it validates the exact persisted-v1 rejection shape and returns `PriorRejected(RequestContextRejectionV1 { projection: persisted_projection, diagnostic_source: RestoredPriorDisposition })`. Any mismatch returns `CorruptState`, mapped as above, and projects no prior. Current request ID, correlation ID, client provenance, policy/grant revision and trusted time are neither inputs to prior equality nor substitutes for original fields.
 The sealed `PlatformRequestContextV1` retains private-field `PlatformOperatorAdmissionV1 { admitted_user_id, capability_id, grant_id, grant_revision, operation_id, schema_digest, policy_snapshot_id, grant_not_before, grant_not_after, grant_state, observed_at }`; only M00 constructs it, all fields are read-only, and it has no Serde, `Default` or public constructor.
 
-On an admitted v1 path, the coordinator finalizes only `FinalAdmissionDispositionV1::Admitted(M00AdmittedDispositionV1)`: `Committed` returns `M00AdmissionResultV1::Admitted { context: PlatformRequestContextV1, disposition: M00AdmittedDispositionV1 }`; equal `AlreadySame(PersistedPriorDispositionDtoV1::Admitted(...))` first recomputes and validates exact `admission_binding_digest` plus actor/operation/schema/grant/policy bindings against the newly sealed context and returns `PriorAdmitted(M00AdmittedDispositionV1)` without a context; rejected or unequal prior content is corruption/conflict, not conversion; lost reservation or finalization uncertainty returns the v1 incomplete carrier exactly as above. This branch constructs no accepted v0 disposition, prior DTO, result or context.
+On an admitted `New`/`Reclaimed` v1 path, the coordinator finalizes only `FinalAdmissionDispositionV1::Admitted { disposition: M00AdmittedDispositionV1, original_binding: PersistedAdmissionBindingDtoV1::from_sealed_context_v1(&context) }`: `Committed` returns `M00AdmissionResultV1::Admitted { context: PlatformRequestContextV1, disposition: M00AdmittedDispositionV1 }`; `PriorWon(prior_envelope)` uses the same original-binding promotion above and returns the retained `PriorAdmitted` or `PriorRejected` without a context; a different current envelope is `ConflictingEnvelope`, malformed/incoherent retained content is `CorruptState`, and lost reservation or finalization uncertainty returns the v1 incomplete carrier exactly as above. This branch constructs no accepted v0 disposition, prior DTO, result or context.
 
 External ingress replay semantics are deliberately fail-closed and distinct from M60 repository replay.
 A same-idempotency-key resubmission that returns `M00AdmissionResultV1::PriorAdmitted` or `PriorRejected` terminates at that platform-admission result; it invokes neither M10 nor M60 and does **not** claim or synthesize any `SourceApproveResultV1`, evidence-record terminal or retrieval terminal.
@@ -1042,16 +1102,38 @@ AbandonedWorkRecoveryCoordinatorErrorV1 =
   ClockUnavailable | OwnerStateUnavailable | RepositoryUnavailable |
   RepositoryCorrupt | RawSnapshotUnavailable | ReadBackFailed
 
+BoundedRawSnapshotBytesErrorV1 =
+  LengthOverflow |
+  LimitExceeded { maximum_response_bytes: u32,
+                  observed_body_byte_count: u64 }
+
+BoundedRawSnapshotBytesV1 {
+  bytes: Box<[u8]>
+}
+
+RawSnapshotWriteReceipt {
+  snapshot_identity, source_id, attempt_id,
+  body_byte_count, body_sha256
+}
+
+RawSnapshotReadObservationV1 {
+  snapshot_identity, source_id, attempt_id,
+  bounded_bytes: BoundedRawSnapshotBytesV1,
+  maximum_response_bytes: u32,
+  body_byte_count, body_sha256, read_observation_digest
+}
+
 RawSnapshotEvidencePort
-  put_if_absent(snapshot_identity, source_id, attempt_id, bounded_bytes, sha256)
+  put_if_absent(snapshot_identity, source_id, attempt_id,
+                bounded_bytes: BoundedRawSnapshotBytesV1, sha256)
     -> Result<RawSnapshotPutResultV1, RawSnapshotEvidenceErrorV1>
-  read_back(snapshot_identity)
+  read_back(snapshot_identity, maximum_response_bytes: u32)
     -> Result<RawSnapshotReadResultV1, RawSnapshotEvidenceErrorV1>
 
 RawSnapshotPutResultV1 = Stored(RawSnapshotWriteReceipt) |
                          AlreadySame(RawSnapshotWriteReceipt) |
                          ExistingContentConflict
-RawSnapshotReadResultV1 = Found(RawSnapshotReadObservation) | Missing
+RawSnapshotReadResultV1 = Found(RawSnapshotReadObservationV1) | Missing
 RawSnapshotEvidenceErrorV1 = MalformedRequest | RepositoryUnavailable |
                              RepositoryCorrupt | CommitFailed
 
@@ -1171,8 +1253,8 @@ The caller's already-registered attempt-unique `OwnerLeaseV1` must be current, a
 Insufficient coverage maps exactly to `SourcePostStartErrorV1::InsufficientOwnerLeaseCoverage`; arithmetic overflow maps to `ArithmeticOverflow`; either result performs no claim/storage read and preserves the prior row for retry.
 A passing transaction atomically replaces the prior snapshot owner/epoch/deadline with the fresh bindings, advances the durable-state digest and returns one `Claimed(SnapshotWorkAuthorizationV1 { origin: RecoveryAfterFence, ...
 })` containing the fresh deadline.
-This recovery-origin authorization cannot enter `cancel_snapshot_work_before_dispatch` and cannot begin `put_if_absent`; its first raw operation must be the authoritative `read_back` that reconciles a possible prior-owner commit.
-`Found` is validated against retained success metadata and proceeds to exact success/failure terminalization; authoritative `Missing` may mint only `BodyUnavailableAfterFencedOwner` and terminalize the declared recovery failure.
+This recovery-origin authorization cannot enter `cancel_snapshot_work_before_dispatch` and cannot begin `put_if_absent`; its first raw operation must be the authoritative `read_back(snapshot_identity, retained_maximum_response_bytes)` that reconciles a possible prior-owner commit.
+`Found` first validates its bounded returned bytes against the maximum, declared count/hash and canonical read digest, then compares exact identity/content with retained success metadata and proceeds to exact success/failure terminalization; authoritative `Missing` may mint only `BodyUnavailableAfterFencedOwner` and terminalize the declared recovery failure.
 A cancellation request while recovery owns the authorization is ignored until that reconciliation path reaches a terminal receipt or infrastructure uncertainty leaves `TransportStopped` for a later fenced retry.
 An unexpired/live owner returns `Busy` without mutation; a terminal row returns its receipt; stale/cross-bound evidence fails closed.
 Consequently a recovery caller cannot observe `Missing` while the normal writer remains authoritative, an old writer cannot pass the epoch/state checks after handoff, and recovery receives a fresh 25-second read-back-plus-fence budget but no put budget or initial cancellation path.
@@ -1187,17 +1269,16 @@ before interpreting evidence infrastructure/content.
 It also requires the exact `RetrievalAdmissionEnvelopeV1` fields, exact `validate_retrieval_request_admission_bindings(context: &PlatformRequestContextV1, witness: &VerifiedRequestAdmissionEvidence, command: &RetrievalAttemptCommand)` before any M60 retrieval ledger/source lookup, and exact `decide_admission(context: &PlatformRequestContextV1, VerifiedRequestAdmissionEvidence, command: RetrievalAttemptCommand)` signature plus
 `Result<SourceAdmissionResultV1, SourceAdmissionErrorV1>` and `Result<SourceStartResultV1, SourceStartErrorV1>`, the three phase-specific `ClockUnavailable` application errors plus post-start `ClockRegression` across start-to-stop, initial pre-put/post-put and recovery-read boundaries with their replay-first/zero-mutation mappings, exact owner-private `TrustedStopTimeObservationV1` construction and consumption through the
 declared `ValidatedTransportResultMetadataV1::Success.trusted_stop_time` field in `record_transport_stopped`, with failure-field absence and no second clock observation, the exact `RawSnapshotStored` field list and closed `InitialWriteReadback | RecoveryReadback` origins with origin-matched write-receipt/recovery-claim requirements, the trusted-time fresh-deadline snapshot recovery/authorization plus
-completion-failure-decision signatures, including receipt-free `RecoveryEvidenceConflict -> SnapshotRecoveryEvidenceConflict` terminal isolation with complete expected/observed evidence and slot release, and all declared typed owner-lease operations exactly once;
+completion-failure-decision signatures, including the exact five-field `RawSnapshotWriteReceipt`, `BoundedRawSnapshotBytesErrorV1`, checked-only `BoundedRawSnapshotBytesV1` constructor/accessors, `RawSnapshotReadObservationV1` with retained maximum, `read_back(snapshot_identity, maximum_response_bytes: u32)`, canonical `read_observation_digest` including `u32_be(maximum_response_bytes)`, independent observed/requested/retained-bound and returned-byte size/count/hash validation, receipt-free `RecoveryEvidenceConflict -> SnapshotRecoveryEvidenceConflict` terminal isolation only for a requested deterministic snapshot/source/attempt identity whose self-consistent `Found` count or digest differs from retained success metadata, complete expected/observed evidence, slot release, and nonterminal `RepositoryCorrupt` for every oversize/bound/integrity/identity disagreement, and all declared typed owner-lease operations exactly once;
 it requires the exact pre-dispatch-only snapshot cancellation method plus linear M60 snapshot-workflow authorization custody and the synchronous bounded raw-call model, including exact `InitialAfterTransport | RecoveryAfterFence` authorization origin, recovery-first read-back/no-cancel/no-put, and pending-cancellation `Stored | AlreadySame` continuation through read-back/terminalization versus conflict/uncertain non-result branches, the one-second live reservation-expiry coordinator/start-race algebra, and the one-second live abandoned-work recovery coordinator for both `Started | TransportStopped`, each with exact `Complete | Partial | Failed` progress/error carriers;
 it requires the exact full `VerifiedRequestAdmissionEvidence` parameter on `transact_record`, including sealed `admission_observed_at`, the M60-owned `record_body_digest` domain, closed evidence-record result/rejection carriers, closed bundle-load outcome/error mapping, declaration-order future-timestamp rejection on record and approval, the closed execution/snapshot owner-coverage outcomes plus exhaustive `OwnerLeaseErrorV1` renewal-to-`SourcePostStartErrorV1` mapping with error-zero/successful-short-exact-CAS mutation semantics, and the closed 50-second snapshot lease/45-second two-call `InsufficientSnapshotLeaseBudget` decision/reason/predicate mapping;
 omission, overload, pre-transaction infrastructure return, reordered source/evidence precedence, an undeclared clock, or decoy prose fails.
-The parser also requires `platform-request-context/v1` to declare the distinct full `PermissionClassV1`/`EffectClassV1` inventories above, preserve accepted v0 declarations byte/API exact, add only the four v1-only values and two new coherence pairs, reproduce the fourteen rejection classes/mappings through the distinct v1 rejection/persistence family, and bind each v1 descriptor to the M10/M60 executable consumer; naming a descriptor without the separate v1 enum/wire declarations or widening a v0 enum fails.
+The parser also requires `platform-request-context/v1` to declare the distinct full `PermissionClassV1`/`EffectClassV1` inventories above, preserve accepted v0 declarations byte/API exact, add only the four v1-only values and two new coherence pairs, reproduce the fourteen rejection classes/mappings through the distinct v1 rejection/persistence family, expose the exact checked platform-operator grant snapshot/disposition resolver and mapping, and bind each v1 descriptor to the M10/M60 executable consumer; naming a descriptor without the separate v1 enum/wire declarations or widening a v0 enum fails.
 The same R1 checker must require the exact `RetrievalTransportRequestV1` accessor list and `SourceTransportPortV1::transport` signature in the `source-retrieval/v1` owning section, prove the accepted v0 request/port block remains byte/API unchanged, reject `canonical_host_text` on the v0 type and bind the M60/M90 consumer to the v1 type/port.
 
 R1's M00 successor structural checker must independently parse the accepted v0 and proposed v1 declarations: accepted public Serde `PermissionClass` remains exactly four variants and `EffectClass` exactly three with current tags/coherence; exactly one distinct `PermissionClassV1` and one `EffectClassV1` declaration contain the displayed six/five variants and explicit tags; v1 coherence contains exactly the four old-shape pairs plus the two displayed operator pairs.
-It also requires exactly one displayed `OperationDescriptorProjectionV1`, `OperationSnapshotV1`, `AdmittedOperationV1`, `PlatformRequestContextV1`, `AdmissionPortsV1`, `M00AdmissionResultV1`, `AdmissionRejectionClassV1`, `AdmissionRejectionProjectionV1`, `RequestContextRejectionV1`, `PersistedAdmissionRejectionDtoV1`, `PersistedPriorDispositionEnvelopeV1`, `PersistedPriorDispositionDtoV1`, `IdempotencyReservationTokenV1`,
-`IdempotencyReservationV1`, `IdempotencyErrorV1`, `EnvelopeHashV1`, `FinalAdmissionDispositionV1`, `FinalizeIdempotencyOutcomeV1`, `M00IncompleteReservationV1`, `RequestAdmissionCoordinatorV1`, `PlatformControlEventV1`, `ControlEvidenceAppendPortV1` and `ControlEvidenceReadPortV1` surface; all three M60 entry ports accept only `&PlatformRequestContextV1`, and the v1 event carries only v1 enum types plus the exact
-`admission_binding_digest`, M00/M10 independently recompute the displayed complete digest preimage, and M10 requires byte-equal read-back before M60.
+It also requires exactly one displayed `OperationDescriptorProjectionV1`, `OperationSnapshotV1`, `AdmittedOperationV1`, `PlatformRequestContextV1`, `PlatformOperatorGrantStateV1`, `PlatformOperatorGrantSnapshotV1`, `PlatformOperatorGrantDispositionV1`, `PlatformOperatorAdmissionV1`, `AdmissionPortsV1`, `M00AdmissionResultV1`, `AdmissionRejectionClassV1`, `AdmissionRejectionProjectionV1`, `RequestContextRejectionV1`, `PersistedAdmittedActorDtoV1`, `PersistedActorReferenceDtoV1`, `PersistedEnvelopeBasisDtoV1`, `PersistedAdmittedOperationDtoV1`, `PersistedPlatformOperatorAdmissionDtoV1`, `PersistedAdmissionBindingDtoV1`, `PersistedFrozenPrerequisitesDtoV1`, `PersistedAdmittedDispositionDtoV1`, `PersistedAdmissionRejectionDtoV1`, `PersistedPriorDispositionEnvelopeV1`, `PersistedPriorDispositionDtoV1`, `IdempotencyReservationTokenV1`,
+`IdempotencyReservationV1`, `IdempotencyErrorV1`, `EnvelopeHashV1`, `FinalAdmissionDispositionV1`, `FinalizeIdempotencyOutcomeV1`, `M00IncompleteReservationV1`, `RequestAdmissionCoordinatorV1`, `PlatformControlEventV1`, `ControlEvidenceAppendPortV1` and `ControlEvidenceReadPortV1` surface; it requires the exact typed envelope-basis/hash fields, exact Public/Authenticated actor-reference projection, complete original-binding field closure, the admitted finalization variant carrying that binding, finalization-boundary binding/disposition validation, complete nested `validate_persisted_prior_envelope_v1` before either `PriorIdentical | PriorWon`, exact two-route current-authority projection hardening, the explicit successful `PriorIdentical -> PriorAdmitted | PriorRejected` non-context branch, rejection-path `PriorWon` non-projection, `RestoredPriorDisposition` reconstruction, `CorruptState` mapping, retained-original digest recomputation and fresh-current-gate/original-replay separation above. All three M60 entry ports accept only `&PlatformRequestContextV1`; the v1 event carries only v1 enum types plus the exact `admission_binding_digest`, M00/M10 independently recompute the displayed complete digest preimage, and M10 requires byte-equal read-back before M60.
 Appending either v1-only variant to a v0 enum, reusing any v0 context/operation/event/port/rejection/disposition/prior-reservation/token/envelope/finalization aggregate in either new descriptor path, adding a cross-version conversion/alias/fallback, accepting any seventh v1 pair, or changing any accepted v0 declaration/fixture fails.
 Prose occurrences do not satisfy this checker.
 
@@ -1329,8 +1410,8 @@ The new exact owning-contract wire tags are `CompletionFailureReasonV1::Snapshot
 Decision-to-reason mapping is exact: `BodyUnavailableAfterFencedOwner -> SnapshotBodyUnavailableAfterCrash`, `InsufficientSnapshotLeaseBudget -> InsufficientSnapshotLeaseBudget`, `ContentConflict -> SnapshotContentConflict`, `MissingAfterWrite -> SnapshotMissingAfterWrite`, `ReadbackMismatch -> SnapshotReadbackMismatch`, and `RecoveryEvidenceConflict -> SnapshotRecoveryEvidenceConflict`.
 The insufficient-budget decision is M60-owner-minted only when checked arithmetic proves `observed_at + 20s + 20s + 5s > snapshot_lease_expires_at`; if any addition overflows, the method returns `SourcePostStartErrorV1::ArithmeticOverflow`, constructs no decision/raw future and preserves `TransportStopped` unchanged.
 `required_budget_seconds` must equal `45`, no raw future/call may have been constructed, and the current snapshot authorization plus observation/deadline digest must match the row.
-`RecoveryEvidenceConflict` is M60-owner-minted only under a current `RecoveryAfterFence` authorization after authoritative `Found` returned a well-formed observation whose snapshot/source/attempt identity, count or digest differs from the exact retained successful metadata.
-It binds both complete expected and observed public tuples, the current recovery-claim durable-state digest and read-observation digest, requires no write receipt and forbids one.
+`RecoveryEvidenceConflict` is M60-owner-minted only under a current `RecoveryAfterFence` authorization after authoritative `Found` passed the independent maximum-size, returned-byte-count, returned-byte-hash and canonical read-observation-digest checks above, its snapshot identity equals the one deterministic identity requested by M60 and its source ID and attempt ID equal the retained row, while at least one of the resulting self-consistent byte count or body digest differs from the exact retained successful metadata.
+It binds both complete expected and observed public tuples—the identity components are required byte-equal and the content metadata supplies the conflict—plus the current recovery-claim durable-state digest and read-observation digest; it requires no write receipt and forbids one. Any snapshot/source/attempt identity disagreement is an impossible adapter observation and returns `RepositoryCorrupt` with `TransportStopped` unchanged, no failure decision, no release and no raw mutation.
 `complete_failure` atomically persists that complete decision payload plus digest, enters `CompletedFailure(SnapshotRecoveryEvidenceConflict)`, releases source/host/global slots, and leaves the immutable raw object untouched under its deterministic snapshot identity for operator inspection; equal replay returns the same terminal receipt without another release.
 A malformed/impossible adapter observation remains `RepositoryCorrupt`, and repository/adapter uncertainty remains non-terminal `TransportStopped`; neither can be relabeled as conflict.
 No other mapping exists; post-put budget uncertainty and raw-adapter uncertainty cannot construct a terminal decision and remain recoverable as `TransportStopped`.
@@ -1388,14 +1469,14 @@ receives `SourceStartResultV1::FirstDispatch(EffectReadyPlan)`. Equal replay ret
 outbox/retry design requires a new accepted protocol.
 
 `RawSnapshotEvidencePort` identity is exactly `sha256("ustc-raw-source-snapshot/v1\0" || enc(source_id) || enc(attempt_id))`, using §6.1 `enc`; M60 computes it and M90 cannot choose or rewrite it.
-`RawSnapshotWriteReceipt` and `RawSnapshotReadObservation` are public data-only values containing exactly snapshot identity, source ID, attempt ID, byte count and SHA-256.
+`RawSnapshotWriteReceipt` is the displayed public data-only five-field metadata value. `RawSnapshotReadObservationV1` is the corresponding M60-consumed read carrier and additionally owns `BoundedRawSnapshotBytesV1` plus the exact bound used for that read. The byte carrier is move-only, has private fields and no Serde/`Clone`/`Default` or unchecked constructor; its sole public data-only constructor is `BoundedRawSnapshotBytesV1::try_from_bytes(bytes: Box<[u8]>, maximum_response_bytes: u32) -> Result<Self, BoundedRawSnapshotBytesErrorV1>`, which performs checked `u64::try_from(bytes.len())` and requires the result not exceed the bound. Its only accessors are `as_bytes()`, checked `len_u64()` and consuming `into_boxed_bytes()`. M60 uses that constructor for the successful transport body before `put_if_absent`; a conforming raw adapter uses it before returning `Found`. Initial read-back derives/passes the current sealed request limit; recovery derives/passes the attempt row's retained transaction-current `maximum_response_bytes`; no external caller supplies either value. Constructor failure maps to the owning path's existing nonterminal `RepositoryCorrupt` and performs no raw/journal/release mutation.
 `put_if_absent` atomically stores absent bytes, returns `AlreadySame` only when retained bytes, count and digest are equal, and returns `ExistingContentConflict` without mutation for the same identity with any unequal content.
-`Missing` is a successful read outcome; partial records, impossible receipt/read observations, digest disagreement or identity disagreement are `RepositoryCorrupt`, never `Missing`.
-`RawSnapshotStored` is owner-private and minted only through one of two closed origins after an exact `Found` proves all five public observation fields and retained bytes against durable successful transport metadata.
+For every `Found`, M60 independently requires the observation's `maximum_response_bytes` to equal the exact derived-and-passed retained bound, `bounded_bytes.len_u64() <= u64::from(maximum_response_bytes)`, checked `bounded_bytes.len_u64() == body_byte_count`, and `sha256(bounded_bytes.as_bytes()) == body_sha256` before comparing any observation field with retained successful transport metadata. `read_observation_digest` is SHA-256 over ASCII domain `"ustc-raw-source-snapshot-read/v1\0"`, then `enc(snapshot_identity) || enc(source_id) || enc(attempt_id) || u32_be(maximum_response_bytes) || u64_be(body_byte_count) || body_sha256[32]`; M60 recomputes it only after the byte checks and requires equality. Thus the retained bound is protected both by transaction-current row/recovery-claim state and by this exact read witness. Oversize bytes, observed/requested/retained-bound disagreement, partial records, observation count/digest disagreement with returned bytes, digest-preimage mismatch, impossible receipt/read shapes, or snapshot/source/attempt identity disagreement are `RepositoryCorrupt`, never `Missing` or a terminal content conflict. A self-consistent exact-identity `Found` whose recomputed count/digest differs only from retained successful transport metadata is instead an initial `ReadbackMismatch` or recovery `RecoveryEvidenceConflict` according to authorization origin, as frozen below.
+`RawSnapshotStored` is owner-private and minted only through one of two closed origins after an exact `Found` proves every displayed metadata field, the retained maximum and the returned bounded bytes against durable successful transport metadata.
 `InitialWriteReadback` additionally requires the current `InitialAfterTransport` authorization plus the exact `Stored | AlreadySame` write receipt and binds its digest.
 `RecoveryReadback` requires the current `RecoveryAfterFence` authorization, a matching authoritative `Found`, and the exact recovery-claim durable-state digest; it requires no unavailable write receipt and forbids one.
 The witness origin must equal the supplied `SnapshotWorkAuthorizationV1` origin or the terminal transaction returns `RepositoryCorrupt` without mutation.
-The journal stores the witness digest/identity and typed origin, not raw bytes.
+The journal stores the witness digest/identity and typed origin, not raw bytes; read-back bytes remain only in the scoped M60 workflow frame and are dropped after comparison/terminalization.
 `raw_snapshot_stored_digest` is SHA-256 over ASCII domain `"raw-snapshot-stored/v1\0"`, then the displayed common fields in declaration order (`enc` for IDs, big-endian `u64` byte count, raw 32-byte digests), then the owning-contract wire tag for the origin and exactly one raw 32-byte origin digest: `write_receipt_digest` for `InitialWriteReadback` or `recovery_claim_state_digest` for `RecoveryReadback`.
 The other origin digest is absent; unknown tags, extra fields or origin/authorization mismatch are `RepositoryCorrupt`.
 
@@ -1410,7 +1491,7 @@ read-back and then atomically complete success or persist an exact owner-validat
 The physical snapshot adapter returns only the closed data-only results above. M60 compares observations against the retained successful body and alone mints `RawSnapshotStored`; M90 cannot construct that witness. `list_recoverable` is bounded to `1..=256` rows, ordered by `RetrievalAttemptId`, and uses an exclusive cursor so recovery is finite and replayable. Startup runs pages to exhaustion before accepting retrieval
 admissions. For `TransportStopped`, it may inspect raw storage only after `claim_snapshot_recovery` fenced the expired prior owner and returned fresh snapshot-work authority; before that, `Busy` is not body absence. A repository/adapter unavailable or corrupt result keeps retrieval admission unavailable rather than silently leaking capacity. Runtime infrastructure uncertainty leaves `TransportStopped` unchanged and wakes the
 same recovery loop. Under `InitialAfterTransport`, existing-content conflict, missing after an acknowledged write, or read-back mismatch mints the matching owner-private failure decision because that workflow retains the exact put/write receipt. Under `RecoveryAfterFence`, no such write receipt exists: exact `Found` matching durable success metadata mints `RawSnapshotStored` and completes success; authoritative `Missing` alone
-may mint `BodyUnavailableAfterFencedOwner`; a well-formed `Found` whose identity/count/digest tuple mismatches retained successful metadata mints `RecoveryEvidenceConflict` with both complete tuples plus claim/read digests, terminalizes `SnapshotRecoveryEvidenceConflict`, preserves immutable raw bytes, and releases all slots; malformed/impossible observations remain `RepositoryCorrupt`. Each valid owner-minted decision then
+may mint `BodyUnavailableAfterFencedOwner`; a bounded-byte/count/hash/read-digest-validated `Found` under the exact requested deterministic snapshot identity and equal source/attempt IDs whose self-consistent count or digest differs from retained successful metadata mints `RecoveryEvidenceConflict` with both complete tuples plus claim/read digests, terminalizes `SnapshotRecoveryEvidenceConflict`, preserves immutable raw bytes, and releases all slots; any oversize/read-integrity failure, identity disagreement or other malformed/impossible observation is `RepositoryCorrupt` and leaves `TransportStopped` nonterminal. Each valid owner-minted decision then
 releases slots through the terminal failure transaction.
 
 The execution lease governs `Started`, where the transport owner may still exist; the distinct snapshot-owner lease governs `TransportStopped`, where transport resources are gone but a normal raw writer may still be live. Durable-state CAS serializes journal transitions but does not by itself serialize the external raw put, so no recovery caller may inspect or interpret storage merely by loading `TransportStopped`. The normal
@@ -1478,8 +1559,8 @@ ExecutionAbandoned
 | `Started` | `record_transport_stopped` failure | exact attempt/owner epoch/request digest; same stopped proof; fieldless `SourceTransportError` is closed and valid; trusted-stop-time carrier is absent | atomically persist minimal failure metadata, enter `CompletedFailure`, release all slots; no recoverable intermediate |
 | `Started` | `cancel_started_after_drop` | M60 owns and drops exact future; `OwnerFenceWitnessV1::DroppedFuture` matches exact attempt/owner/request witness; epoch read-back is newer; lease expiry not required | `Cancelled`; persist receipt and release slots; no stop receipt or transport observation is fabricated |
 | `TransportStopped` | `claim_snapshot_recovery` | prior snapshot lease expired; `OwnerFenceWitnessV1::ExpiredLease` matches retained attempt/owner/epoch; fresh attempt-unique recovery owner lease expiry and incarnation cap both cover `checked(trusted_now + 50s + 5s)`; no raw-store read occurred before claim | atomically replace snapshot owner/epoch/deadline with `fresh_snapshot_lease_expires_at = checked(trusted_now + 50s)` and return one `Claimed(SnapshotWorkAuthorizationV1 { origin: RecoveryAfterFence, ... })`; live/unexpired owner returns `Busy`; insufficient owner coverage returns `InsufficientOwnerLeaseCoverage`, overflow returns `ArithmeticOverflow`, both without mutation |
-| `TransportStopped` | `mark_snapshot_stored_and_complete_success` | current snapshot-work authorization; bounded successful body metadata; either `InitialWriteReadback` from exact `Stored | AlreadySame` plus matching `Found`, or `RecoveryReadback` from exact recovery claim plus matching authoritative `Found`; typed witness origin matches authorization | atomically persist witness/digest/origin, enter `CompletedSuccess`, release slots; no durable `SnapshotStored` intermediate |
-| `TransportStopped` | recovery `Found` evidence conflict | current `RecoveryAfterFence` authorization; authoritative `Found` is well-formed but its complete public tuple differs from retained successful metadata; exact recovery-claim/read digests bind the observation | mint `RecoveryEvidenceConflict`; atomically persist complete expected/observed evidence, enter `CompletedFailure(SnapshotRecoveryEvidenceConflict)`, preserve immutable raw bytes and release all slots; no write receipt or raw mutation |
+| `TransportStopped` | `mark_snapshot_stored_and_complete_success` | current snapshot-work authorization; `Found` passed maximum-size, returned-byte-count/hash and canonical read-digest validation and equals retained successful body metadata; either `InitialWriteReadback` from exact `Stored | AlreadySame` plus matching `Found`, or `RecoveryReadback` from exact recovery claim plus matching authoritative `Found`; typed witness origin matches authorization | atomically persist witness/digest/origin, enter `CompletedSuccess`, release slots; no durable `SnapshotStored` intermediate |
+| `TransportStopped` | recovery `Found` content conflict | current `RecoveryAfterFence` authorization; authoritative `Found` passed maximum-size, returned-byte-count/hash and canonical read-digest validation under the requested deterministic snapshot identity, source and attempt all equal the retained row, and at least one of its self-consistent byte count or body digest differs; exact recovery-claim/read digests bind the observation | mint `RecoveryEvidenceConflict`; atomically persist complete expected/observed evidence with equal identities and conflicting content metadata, enter `CompletedFailure(SnapshotRecoveryEvidenceConflict)`, preserve immutable raw bytes and release all slots; no write receipt or raw mutation; any oversize/read-integrity failure or identity disagreement is instead nonterminal `RepositoryCorrupt` |
 | `TransportStopped` | `complete_failure` | current snapshot-work authorization; exact owner-validated failure decision; no infrastructure uncertainty represented as terminal evidence | `CompletedFailure`; success/cancellation forbidden; release slots |
 | `TransportStopped` | `cancel_snapshot_work_before_dispatch` | unspent current `InitialAfterTransport` snapshot-work authorization remains in M60 and no raw adapter call has begun; `RecoveryAfterFence` is forbidden | `Cancelled(BeforeSnapshotWrite)` only for initial origin; recovery origin returns `InvalidStateTransition` without mutation and must reconcile storage; persist no raw witness on valid initial cancellation; release slots |
 | `Started` or `TransportStopped` | post-start clock regression | stopped time `< durable started_at`, pre-put time `< stopped_at`, post-put time `<` pre-put time, or recovery-read time `<` claim time | typed `SourcePostStartErrorV1::ClockRegression`; before stop commit, no renewal/owner/journal/raw mutation and row remains `Started`; after stop, no next raw call/failure decision/journal mutation and row remains recoverable |
@@ -1540,7 +1621,7 @@ Suspend/revoke/revision before `start` forces `StartRejected`. A retrieval alrea
 - crash or live coordinator loss after a new expired-lease fence commits but before `reap_abandoned_execution` or `claim_snapshot_recovery`: the next live/startup abandonment tick equal-replays the byte-identical `OwnerFenceWitnessV1` for retained `(attempt_id, owner_id, expected_epoch)`, reads back the already-advanced epoch and continues without a second increment;
 - crash around transport failure terminalization: before the atomic failure commit the row stays `Started` and needs fenced abandonment; after commit it is terminal `CompletedFailure` with released slots;
 - crash or live snapshot-task loss after successful `TransportStopped` commit but before raw put: the old snapshot lease first expires, the next live/startup abandonment tick fences/read-backs that owner and atomically claims snapshot work; only then may its first read return `Missing` and mint `BodyUnavailableAfterFencedOwner`, which terminalizes as `SnapshotBodyUnavailableAfterCrash` and releases slots;
-- crash during or after raw put but before journal witness: recovery performs the same fenced claim before any read; exact `Found` bytes are verified against durable successful metadata, mint `RawSnapshotStored`, and call `mark_snapshot_stored_and_complete_success`; authoritative `Missing` alone mints `BodyUnavailableAfterFencedOwner` and terminalizes `SnapshotBodyUnavailableAfterCrash`; a well-formed mismatching `Found` mints `RecoveryEvidenceConflict` from both complete tuples plus the current claim/read digests, atomically terminalizes `SnapshotRecoveryEvidenceConflict`, preserves the immutable raw object and releases every slot; corrupt or impossible read observations are `RepositoryCorrupt`; a still-`Started` attempt never advances from raw bytes and remains eligible only for fenced cancellation/abandonment;
+- crash during or after raw put but before journal witness: recovery performs the same fenced claim before any read; an exact-identity `Found` first passes maximum-size, returned-byte-count/hash and canonical read-digest validation, then equal bytes/metadata mint `RawSnapshotStored` and call `mark_snapshot_stored_and_complete_success`; authoritative `Missing` alone mints `BodyUnavailableAfterFencedOwner` and terminalizes `SnapshotBodyUnavailableAfterCrash`; validated returned bytes with the exact requested snapshot/source/attempt identity but self-consistent count or digest conflicting with retained successful metadata mint `RecoveryEvidenceConflict` from both complete tuples plus the current claim/read digests, atomically terminalize `SnapshotRecoveryEvidenceConflict`, preserve the immutable raw object and release every slot; any oversize/read-integrity failure, identity disagreement or other corrupt/impossible read observation is `RepositoryCorrupt`, leaves `TransportStopped` nonterminal and releases no slot; a still-`Started` attempt never advances from raw bytes and remains eligible only for fenced cancellation/abandonment;
 - crash around snapshot completion: before the atomic witness/completion commit the row remains `TransportStopped` under its current snapshot owner lease; after owner death/expiry it can be fenced and reclaimed again; after commit it is terminal `CompletedSuccess` with released slots; no durable `SnapshotStored` intermediate exists;
 - crash after terminal commit: replay returns the same terminal result.
 
@@ -1714,17 +1795,48 @@ Gate before R5. Exact executable R1/R3/R4 tests must pass for: every adjacent
     accepted v0 operation/context/admission-result/rejection/prior-disposition/
     reservation/token/envelope/finalization/control-event/append/read declarations
     and fixtures remain exact; the displayed v1 snapshot, operation, context,
-    admission-result, rejection/persistence/idempotency/finalization, control-event
-    and evidence-port chain constructs and
-    byte-equal reads back only v1 events, and every v0/v1 carrier or port substitution
-    fails at compile time or decoding without M60 invocation;
+    platform-operator grant snapshot/disposition/resolver, admission-result,
+    rejection/persistence/idempotency/finalization, control-event and evidence-port
+    chain construct and byte-equal read back only v1 events, and every v0/v1 carrier
+    or port substitution fails at compile time or decoding without M60 invocation;
     `PolicyDenied` for each new v1 permission serializes only inside the exact v1
-    prior-disposition envelope and equal-replays through `PriorRejected`; the v0
-    decoder rejects that envelope, a v1 decoder rejects a v0 prior DTO, and a same-key
-    cross-version reservation returns `ConflictingEnvelope` without projecting prior
-    content or widening either decoder;
-    external same-key `PriorAdmitted | PriorRejected` returns only that v1 platform
-    admission result with zero M10/M60 calls and cannot synthesize an M60 terminal;
+    prior-disposition envelope and equal-replays through `PriorRejected` rebuilt with
+    `diagnostic_source: RestoredPriorDisposition`; the v0 decoder rejects that envelope,
+    a v1 decoder rejects a v0 prior DTO, and a same-key cross-version reservation returns
+    `ConflictingEnvelope` without projecting prior content or widening either decoder;
+    an admitted first-finalization carrier contains the complete original binding made
+    from the sealed context plus the reduced disposition; one-axis omission/mutation of
+    request/causation/actor/descriptor/provenance/operator-grant/payload fields or any
+    binding-to-token/disposition/frozen mismatch fails at the finalization boundary and
+    persists no terminal prior;
+    every `PriorIdentical | PriorWon` passes the complete nested prior-envelope validator
+    before the outcome exists; the admitted envelope retains its typed original basis/hash
+    and complete admission-binding preimage, while rejected content has exact projection
+    parity; one-axis mutation of every envelope basis, Public/Authenticated actor projection,
+    nested admitted actor, descriptor, adapter order, policy/time, provenance, operator
+    grant, payload, digest, schema, frozen prerequisite or rejected tag/field returns
+    `CorruptState`, maps to the closed non-projecting outcome and performs no M10/M60;
+    a malformed nested rejection in a losing local-denial finalization therefore cannot
+    become valid `PriorWon` and yields only the declared incomplete retry carrier;
+    `resolve_platform_operator_grant` returns every displayed disposition: Missing,
+    Disabled/NotYetActive and Revoked/Expired map to the exact existing rejection classes;
+    a valid exact active/window-current snapshot mints `PlatformOperatorAdmissionV1`,
+    while one-axis user/operation/schema/policy/state/window/range mismatches in Granted
+    map to capability-port infrastructure rejection with no context or M10/M60 call;
+    an ordinary `PriorIdentical` same-key/same-envelope retry may change request ID,
+    correlation ID, client provenance and current trusted admission time, passes the
+    then-current descriptor/session/policy/grant gate, invokes the exact promotion helper,
+    reconstructs the retained original binding and returns only `PriorAdmitted |
+    PriorRejected` without context, re-finalization or M10/M60; it never compares a fresh
+    current digest to the original;
+    current grant/session/policy denial on `PriorIdentical` returns only that denial and
+    no prior content; a New/Reclaimed rejection finalization returning valid `PriorWon`
+    also returns the current denial without decoding prior content, while LostReservation
+    or finalization error returns only `Incomplete`; mutation rows include a winning
+    admitted prior racing a losing current denial and prove zero prior projection/M10/M60;
+    same-key changes to operation, actor reference/session ID, payload or causation
+    change `EnvelopeHashV1` and return `ConflictingEnvelope`; external same-key prior
+    results cannot synthesize an M60 terminal;
     fresh-key reuse of the same command ID with any changed binding/payload fact flips
     `admission_binding_digest`, makes the v1 event byte-unequal and fails M10 with
     zero M60 calls; mutation rows cover capability, grant ID/revision/window/state,
@@ -1790,7 +1902,23 @@ Gate before R5. Exact executable R1/R3/R4 tests must pass for: every adjacent
     exact snapshot authorization origin: initial origin alone may cancel before put,
     recovery origin rejects cancellation/put without mutation and must first read back;
     whole-packet sweep forbids every recovery-origin write/put/cancel license;
-    recovery well-formed mismatching `Found` mints `RecoveryEvidenceConflict`, persists both expected/observed tuples plus claim/read digests, terminalizes `SnapshotRecoveryEvidenceConflict`, preserves raw bytes and releases slots without a write receipt, while exact `Found` succeeds and authoritative `Missing` alone mints `BodyUnavailableAfterFencedOwner`;
+    exact five-field `RawSnapshotWriteReceipt` and checked-only bounded-byte carrier
+    declaration compile; constructor success/length-overflow/limit-exceeded, accessor and
+    consuming paths are covered, and any unchecked/default/Serde/Clone construction fails;
+    recovery matching-identity `Found` first returns bounded bytes plus the exact retained
+    `maximum_response_bytes`; exact observed/requested/retained-bound equality, checked
+    byte-count, SHA-256 and canonical `read_observation_digest` including the u32 bound is
+    mandatory before retained-metadata comparison; a one-axis mutation of returned-byte
+    length, declared count, body digest, read digest or either bound returns nonterminal
+    `RepositoryCorrupt` with zero decision/release/raw mutation;
+    only byte-validated matching-identity `Found` whose self-consistent count or digest
+    differs from retained successful metadata mints `RecoveryEvidenceConflict`, persists
+    both expected/observed tuples with equal snapshot/source/attempt identities plus
+    claim/read digests, terminalizes `SnapshotRecoveryEvidenceConflict`, preserves raw
+    bytes and releases slots without a write receipt; one-axis snapshot/source/attempt
+    identity mismatches likewise return nonterminal `RepositoryCorrupt`, while exact
+    validated `Found` succeeds and authoritative `Missing` alone mints
+    `BodyUnavailableAfterFencedOwner`;
     `RawSnapshotStored` initial origin requires exact write receipt plus matching
     `Found`, recovery origin requires exact recovery-claim state plus matching `Found`
     and forbids a write receipt; origin/authorization cross-pairs and digest mutations
@@ -1852,6 +1980,53 @@ Stop before mutation when:
 - `origin/main` moves before local commit or separately authorized shipping;
 - another fetch would violate the `21600`-second interval.
 <!-- M60_CALENDAR_SOURCE_ACTIVATION_PACKET:END -->
+
+## R60 independent review receipt
+
+```text
+receipt_schema: m60-source-proposal-independent-review/v1
+receipt_status: ISSUED_DELTA_BOUND
+candidate_generation: R60
+review_stage: DELTA_BINDING
+candidate_path: docs/tasks/m60-calendar-source-activation-readiness.md
+semantic_candidate_bytes: 322918
+semantic_candidate_sha256: 59abfd5fbc5956c7642918281312bb9370771b766007218b3dfe40cb286f6bc1
+semantic_candidate_worktree_blob: 80ced4b94b283d6680e193c96a5a9837c1f6abac
+semantic_packet_bytes: 208066
+semantic_packet_sha256: 3ae530de616c1f2ada1ef2204b15b041e33ab91777ee1a437b016049ed242dba
+candidate_manifest_sha256: 857f4f3f468994b344079c444e094603760d8841f149f4488c513ffa24b9e351
+r59_to_r60_delta_sha256: c043e0e5f8def67f81d272687cc4cb89436cbedf18e73be46858b9e5f464bc50
+review_prompt_sha256: ed5ee3360c76424d3a023778275a443db1ee47ad93b4f48030fadb9058062ac5
+bound_source_commit: 54d758fbf2f1c08df2e1993919287569b501b115
+bound_source_tree: 973b999d14feb91f5ebe84b1712006e18e21baeb
+producer_head: 89a4f3cc69a0d90c5476caad245d3760a754aa4a
+completed_at: 2026-09-03T13:56:41+08:00
+mandatory_profile: codex-reviewer
+mandatory_provider: custom
+mandatory_model: codex-auto-review
+mandatory_session_id: 20260903_135309_601fb0
+mandatory_terminal_verdict: PASS
+mandatory_result_sha256: cfb1f5d7a5fcedc8b103a49fd9ad3cbd614a207fd595fe06f03a16fb234565cb
+mandatory_usage_sha256: 1f6c3a8f85db80fbf1e15678297444520a04ddc58e6480e51af481dc7caeefc5
+independent_profile: deepseek-reviewer
+independent_provider: deepseek
+independent_model: deepseek-v4-flash
+independent_session_id: 20260903_135310_ee5775
+independent_terminal_verdict: PASS
+independent_result_sha256: a0f28195273accaf086b789653615a740a6f61c95ce6b17116ae74dd226b07d6
+independent_usage_sha256: 67d6ef3e0909f860205d1d9bebd891afa3ced31315b7a806d5e378895819da36
+parent_identity_recomputation: PASS
+parent_source_replay: PASS
+parent_reviewer_finding_adjudication: PASS
+receipt_delta_binding: PASS
+receipt_delta_binding_session_id: 20260903_140104_6ae434
+receipt_delta_binding_completed_at: 2026-09-03T14:02:23+08:00
+receipt_delta_binding_result_sha256: 93766520b69fd9851a52e6ce44cb25e77e901c007ce6d5bbc76435b622346332
+receipt_delta_binding_usage_sha256: 80e3ce902d3ba51368e05b1c2ed2a89277ab82c8662c9932a2cfca2886c63365
+authority_boundary: proposal-only; no source approval; no live retrieval; no DNS/socket/HTTP; no network effect; no Rust implementation; no owning-contract acceptance; no merge authority
+```
+
+Both exact-identity R60 lanes returned substantive `PASS`. Parent replay confirmed the complete nested prior validator precedes both prior outcomes; successful `PriorIdentical` and non-projecting denial-race `PriorWon` behavior are explicit; operator grant construction remains closed; and raw evidence now has a constructible checked-only byte carrier, exact five-field write receipt, returned bytes plus retained maximum, and maximum-bound canonical read digest. DeepSeek's `LengthOverflow` reachability and stage-specific `CorruptState` wording observations remain non-blocking clarity backlog: current supported Rust targets cannot realize a `usize > u64::MAX`, while both initial and post-reservation branches already state distinct closed non-projecting outcomes. This marker-external receipt is non-authoritative and grants no source, owning-contract, Rust, network, merge, deployment, release or publication authority.
 
 ## R57 independent review receipt
 
