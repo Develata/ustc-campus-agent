@@ -87,6 +87,7 @@ function text(element, value) {
 const CHAT_TOOL_LABELS = Object.freeze({
   affairs_navigator_get: "办事导航 · 查询公开流程",
   change_radar_get: "变更雷达 · 查询校历变更",
+  simple_calendar_items: "简单日历 · 记录与查看事项",
   opportunity_graph_plan_current_profile: "机会图谱 · 规划当前档案"
 });
 

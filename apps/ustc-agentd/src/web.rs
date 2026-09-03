@@ -34,8 +34,9 @@ use ustc_campus_agent_client_protocol::{
 
 use super::agent_chat::{ChatError, ChatRequestDto, run_bounded_chat};
 use super::chat_provider::ChatProvider;
-use super::chat_tools::{ChatToolExecution, ChatToolRequest};
+use super::chat_tools::{CalendarAction, ChatToolExecution, ChatToolRequest};
 use super::{AffairsComposition, parse_loopback_socket_addr};
+use ustc_campus_agent_simple_calendar::CalendarError;
 
 const INDEX_HTML: &str = include_str!("web/index.html");
 const APP_JS: &str = include_str!("web/app.js");
@@ -886,6 +887,84 @@ fn execute_chat_tool(state: &WebState, request: ChatToolRequest) -> ChatToolExec
                 },
                 OpportunityConfirmationDto::Confirmed,
             ))
+        }
+        ChatToolRequest::CalendarItems {
+            action,
+            title,
+            scheduled_for,
+            item_id,
+        } => execute_calendar_chat_tool(state, action, title, scheduled_for, item_id),
+    }
+}
+
+fn execute_calendar_chat_tool(
+    state: &WebState,
+    action: CalendarAction,
+    title: Option<String>,
+    scheduled_for: Option<String>,
+    item_id: Option<String>,
+) -> ChatToolExecution {
+    let mut composition = match state.lock() {
+        Ok(composition) => composition,
+        Err(_) => {
+            return ChatToolExecution::failed(json!({"code": "calendar_store_unavailable"}));
+        }
+    };
+    match action {
+        CalendarAction::List => ChatToolExecution::succeeded(json!({
+            "schema": "ustc-simple-calendar-result/v1",
+            "package_id": "ustc.simple-calendar",
+            "action": "list",
+            "items": composition.calendar_items(),
+        })),
+        CalendarAction::Record => {
+            let Some(title) = title else {
+                return ChatToolExecution::denied(json!({"code": "invalid_calendar_item"}));
+            };
+            match composition.record_calendar_item(&title, scheduled_for.as_deref()) {
+                Ok(item) => ChatToolExecution::succeeded(json!({
+                    "schema": "ustc-simple-calendar-result/v1",
+                    "package_id": "ustc.simple-calendar",
+                    "action": "record",
+                    "item": item,
+                })),
+                Err(error) => calendar_error_execution(error),
+            }
+        }
+        CalendarAction::Delete => {
+            let Some(item_id) = item_id else {
+                return ChatToolExecution::denied(json!({"code": "invalid_calendar_item"}));
+            };
+            match composition.delete_calendar_item(&item_id) {
+                Ok(item) => ChatToolExecution::succeeded(json!({
+                    "schema": "ustc-simple-calendar-result/v1",
+                    "package_id": "ustc.simple-calendar",
+                    "action": "delete",
+                    "item": item,
+                })),
+                Err(error) => calendar_error_execution(error),
+            }
+        }
+    }
+}
+
+fn calendar_error_execution(error: CalendarError) -> ChatToolExecution {
+    match error {
+        CalendarError::InvalidTitle | CalendarError::InvalidScheduledFor => {
+            ChatToolExecution::denied(json!({"code": "invalid_calendar_item"}))
+        }
+        CalendarError::ItemLimitExceeded => {
+            ChatToolExecution::denied(json!({"code": "calendar_item_limit_exceeded"}))
+        }
+        CalendarError::ItemNotFound => {
+            ChatToolExecution::denied(json!({"code": "calendar_item_not_found"}))
+        }
+        CalendarError::InvalidPath
+        | CalendarError::InvalidStore
+        | CalendarError::ClockUnavailable
+        | CalendarError::CounterExhausted
+        | CalendarError::PersistenceUnavailable => {
+            ChatToolExecution::failed(json!({"code": "calendar_store_unavailable"}))
         }
     }
 }

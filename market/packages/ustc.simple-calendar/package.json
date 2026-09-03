@@ -1,0 +1,31 @@
+{
+  "id": "ustc.simple-calendar",
+  "version": "0.1.0",
+  "publisher": "first-party",
+  "tier": "FirstParty",
+  "displayName": "USTC Simple Calendar",
+  "description": "Minimal owner-local calendar item recording for the bounded loopback Agent demo.",
+  "implementationStatus": "implemented",
+  "installPolicy": {
+    "class": "UserInstalledPlugin",
+    "defaultInstalled": false,
+    "defaultEnabled": false,
+    "userDisableAllowed": true
+  },
+  "components": [
+    {
+      "type": "NativeRustComponent",
+      "path": "crates/simple-calendar/src/lib.rs",
+      "mode": "in-process-demo"
+    }
+  ],
+  "capabilities": [
+    "user.own_calendar_items.read",
+    "user.own_calendar_items.write"
+  ],
+  "sourcePolicy": {
+    "network": "none; the MVP component performs no remote fetch or calendar synchronization",
+    "personalData": "owner-local bounded titles and optional RFC 3339 timestamps in the configured private state directory",
+    "execution": "the competition loopback profile bundles this optional package; generic install/grant lifecycle remains future work"
+  }
+}

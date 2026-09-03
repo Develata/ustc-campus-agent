@@ -24,7 +24,7 @@ const MAX_KEY_FILE_PATH_BYTES: usize = 4_096;
 const MAX_API_KEY_BYTES: usize = 4_096;
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 const MAX_PROVIDER_MESSAGES: usize = 24;
-const MAX_PROVIDER_TOOLS: usize = 3;
+const MAX_PROVIDER_TOOLS: usize = 4;
 const MAX_PROVIDER_TEXT_BYTES: usize = 64 * 1024;
 const MAX_TOOL_CALL_ID_BYTES: usize = 256;
 const MAX_TOOL_NAME_BYTES: usize = 128;
@@ -41,6 +41,7 @@ const MOCK_MODEL: &str = "deterministic-mock-v1";
 const AFFAIRS_TOOL: &str = "affairs_navigator_get";
 const CHANGE_TOOL: &str = "change_radar_get";
 const OPPORTUNITY_TOOL: &str = "opportunity_graph_plan_current_profile";
+const CALENDAR_TOOL: &str = "simple_calendar_items";
 const FORBIDDEN_MOCK_PROVIDER_KEY: &str = "unused-placeholder-for-deterministic-mock-mode";
 const OPPORTUNITY_UNAVAILABLE_NOTICE: &str = "课程规划请求未执行：需要先在 Opportunity Graph 面板明确同意并创建 synthetic profile，再为这一次请求单独勾选允许；我不会代你创建或读取私人档案。";
 
@@ -795,6 +796,53 @@ fn contains_ascii_term(text: &str, term: &str) -> bool {
     })
 }
 
+fn deterministic_calendar_arguments(user: &str) -> Option<String> {
+    let wants_calendar = user.contains("日历")
+        || user.contains("待办")
+        || user.contains("事项")
+        || contains_ascii_term(user, "calendar")
+        || contains_ascii_term(user, "reminder");
+    if !wants_calendar {
+        return None;
+    }
+    if user.contains("查看")
+        || user.contains("列出")
+        || user.contains("有哪些")
+        || contains_ascii_term(user, "list")
+        || contains_ascii_term(user, "show")
+    {
+        return Some(serde_json::json!({"action": "list"}).to_string());
+    }
+    if user.contains("删除") || contains_ascii_term(user, "delete") {
+        let start = user.find("calendar:item:")?;
+        let suffix = &user[start..];
+        let end = suffix
+            .char_indices()
+            .find_map(|(index, character)| {
+                (index > "calendar:item:".len() && !character.is_ascii_digit()).then_some(index)
+            })
+            .unwrap_or(suffix.len());
+        let item_id = &suffix[..end];
+        let sequence = item_id.strip_prefix("calendar:item:")?;
+        if sequence.is_empty()
+            || sequence.starts_with('0')
+            || !sequence.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return None;
+        }
+        return Some(serde_json::json!({"action": "delete", "item_id": item_id}).to_string());
+    }
+    let title = user
+        .split_once('：')
+        .or_else(|| user.split_once(':'))
+        .map_or(user, |(_, title)| title)
+        .trim();
+    if title.is_empty() || title.len() > 256 || title.chars().any(char::is_control) {
+        return None;
+    }
+    Some(serde_json::json!({"action": "record", "title": title}).to_string())
+}
+
 fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, ProviderError> {
     let user = request
         .messages
@@ -822,6 +870,7 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
             || contains_ascii_term(user, "course plan")
             || contains_ascii_term(user, "opportunity graph")
     });
+    let calendar_arguments = user.and_then(deterministic_calendar_arguments);
     let has_tool = |name: &str| request.tools.iter().any(|tool| tool.name == name);
     let opportunity_unavailable = wants_opportunity && !has_tool(OPPORTUNITY_TOOL);
     let tool_messages = request
@@ -911,6 +960,9 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
     if wants_opportunity && has_tool(OPPORTUNITY_TOOL) {
         calls.push(mock_call(calls.len() + 1, OPPORTUNITY_TOOL, "{}"));
     }
+    if let Some(arguments) = calendar_arguments.filter(|_| has_tool(CALENDAR_TOOL)) {
+        calls.push(mock_call(calls.len() + 1, CALENDAR_TOOL, &arguments));
+    }
     if !calls.is_empty() {
         return Ok(ProviderTurn {
             content: None,
@@ -921,7 +973,7 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
     let answer = if wants_opportunity {
         OPPORTUNITY_UNAVAILABLE_NOTICE
     } else {
-        "这是离线 deterministic mock 回答。你可以询问成绩单证明、校历变更，或在逐次明确允许后询问课程规划。"
+        "这是离线 deterministic mock 回答。你可以询问成绩单证明、校历变更、日历事项，或在逐次明确允许后询问课程规划。"
     };
     Ok(ProviderTurn {
         content: Some(answer.to_owned()),
@@ -1035,11 +1087,12 @@ mod tests {
             ("成绩单证明怎么办", AFFAIRS_TOOL),
             ("校历最近有什么变化", CHANGE_TOOL),
             ("帮我规划课程", OPPORTUNITY_TOOL),
+            ("记录事项：提交开题报告", CALENDAR_TOOL),
         ] {
             let turn = runtime
                 .block_on(provider.complete(&request(
                     prompt,
-                    &[AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL],
+                    &[AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL, CALENDAR_TOOL],
                 )))
                 .unwrap();
             assert_eq!(turn.tool_calls.len(), 1);
@@ -1057,7 +1110,7 @@ mod tests {
             let unrelated = runtime
                 .block_on(provider.complete(&request(
                     prompt,
-                    &[AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL],
+                    &[AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL, CALENDAR_TOOL],
                 )))
                 .unwrap();
             assert!(unrelated.tool_calls.is_empty(), "prompt={prompt}");
@@ -1077,11 +1130,12 @@ mod tests {
             ("run Change Radar", CHANGE_TOOL),
             ("build a course plan", OPPORTUNITY_TOOL),
             ("use Opportunity Graph", OPPORTUNITY_TOOL),
+            ("show my calendar", CALENDAR_TOOL),
         ] {
             let turn = runtime
                 .block_on(provider.complete(&request(
                     prompt,
-                    &[AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL],
+                    &[AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL, CALENDAR_TOOL],
                 )))
                 .unwrap();
             assert_eq!(turn.tool_calls.len(), 1, "prompt={prompt}");

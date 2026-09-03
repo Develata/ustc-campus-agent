@@ -4,7 +4,7 @@
 
 - `Status`: Implemented bounded MVP contract
 - `Version`: `agent-chat/v1`
-- `Last Review`: `2026-09-03`
+- `Last Review`: `2026-09-04`
 - `Owning Plan`: [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md)
 - `Feature Projection`: [`../features/04-bounded-agent-harness.md`](../features/04-bounded-agent-harness.md)
 - `Acceptance`: active `CHAT-001`, `CHAT-002`, `CHAT-003`
@@ -21,11 +21,12 @@ Composition-owned static Web Chat shell (not M80 module evidence)
 → M50 deterministic mock or operator-configured OpenAI-compatible adapter
 → exact sequential tool bridge
 → existing Affairs / ChangeRadar fixed read path
+   or optional owner-local Simple Calendar path
    or existing consent-bound static M72 planner path
 → natural-language answer + redacted tool trace
 ```
 
-The server owns request validation, provider selection, budgets, tool registration and product composition. The browser and provider mint no route, tenant, user, grant, profile, source, publication or administrator authority. All three product tools continue to use only reviewed/synthetic repository fixtures; this contract grants no USTC network or real-source permission.
+The server owns request validation, provider selection, budgets, tool registration and product composition. The browser and provider mint no route, tenant, user, grant, profile, source, publication or administrator authority. The three campus-data tools use only reviewed repository fixtures; the planner fixture includes bounded public iCourse aggregate-rating link-outs as orientation-level soft evidence but no copied review text. The Calendar tool uses only owner-local state. This contract grants no USTC network or real-source activation permission.
 
 ## 2. HTTP request
 
@@ -125,7 +126,7 @@ A successful provider message must carry the exact `assistant` role and either n
 One accepted request creates one finite in-memory `ChatRun` and pins:
 
 - at most three provider turns;
-- at most three total tool calls;
+- at most four total tool calls;
 - strictly sequential execution in provider order;
 - at most 4 KiB raw JSON arguments per call;
 - at most 64 KiB serialized tool result per call;
@@ -145,6 +146,10 @@ Input is exactly `{"procedure_id":"proc:ustc:undergraduate:transcript-certificat
 
 Input is exactly `{"board_id":"board:ustc:academic-calendar"}`. The bridge invokes only the existing typed ChangeRadar query. No administrator publication operation is model-visible.
 
+### `simple_calendar_items`
+
+Input is a closed object with exact `action = record | list | delete`. `record` additionally requires a nonblank title of at most 256 UTF-8 bytes and optionally accepts one RFC 3339 `scheduled_for`; `list` accepts no other field; `delete` requires one stable `calendar:item:N` ID. Rust revalidates the action-specific shape before execution. The loopback profile persists at most 128 owner-local items in a sibling state file and returns success only after the mutation is durably written. It has no reminder, recurrence, sharing, synchronization or natural-language time semantics. Calendar writes must reflect an explicit user instruction.
+
 ### `opportunity_graph_plan_current_profile`
 
 Input is exactly `{}`. This definition is omitted unless the exact request has both a valid `opportunity_context` and the confirmation header. Composition inserts the profile ID out of band and invokes the existing static `GeneratePlan` operation with `max_results=3` and `beam_width=1024`.
@@ -160,7 +165,7 @@ The Compose package:
 - publishes only `127.0.0.1:${UCA_MVP_PORT}:8787`;
 - defaults to deterministic mock with no provider network call;
 - mounts a provider key source read-only, copies it only in OpenAI-compatible mode into an ephemeral mode-0600 tmpfs file, uses only a non-secret placeholder in mock mode and rejects that placeholder in real-provider mode;
-- persists product state in a named volume across `stop`/restart;
+- persists product and Simple Calendar state in a named volume across `stop`/restart;
 - deletes that volume only through explicit reset;
 - packages deterministic ZIP/tar archives with exact source commit, per-file checksums and a provider-secret scan;
 - keeps `.ps1`/`.cmd` launchers ASCII-only, BOM/NUL-free and LF-terminated for Windows PowerShell 5.1, with native-command `$LASTEXITCODE` checks;
@@ -168,4 +173,4 @@ The Compose package:
 
 ## 8. Non-goals
 
-This version does not claim real campus sources, CAS/SSO, multi-tenancy, generic Plugin installation/execution, provider fallback, streaming, RAG, durable chat history, long-term memory, parallel tools, multi-agent graphs, Dioxus parity or production hosting. Real-provider smoke remains `not-run` unless an operator separately supplies runtime configuration and grants provider-network permission.
+This version does not claim live campus-source ingestion, CAS/SSO, multi-tenancy, generic Plugin installation/execution, provider fallback, streaming, RAG, durable chat history, long-term memory, reminders, calendar synchronization, parallel tools, multi-agent graphs, Dioxus parity or production hosting. Real-provider smoke remains `not-run` unless an operator separately supplies runtime configuration and grants provider-network permission.

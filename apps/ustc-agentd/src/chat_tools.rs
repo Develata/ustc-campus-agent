@@ -7,14 +7,18 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 pub(crate) const AFFAIRS_TOOL_NAME: &str = "affairs_navigator_get";
 pub(crate) const CHANGE_TOOL_NAME: &str = "change_radar_get";
 pub(crate) const OPPORTUNITY_TOOL_NAME: &str = "opportunity_graph_plan_current_profile";
+pub(crate) const CALENDAR_TOOL_NAME: &str = "simple_calendar_items";
 pub(crate) const AFFAIRS_PROCEDURE_ID: &str = "proc:ustc:undergraduate:transcript-certificate";
 pub(crate) const CHANGE_BOARD_ID: &str = "board:ustc:academic-calendar";
 pub(crate) const MAX_TOOL_ARGUMENT_BYTES: usize = 4 * 1024;
 pub(crate) const MAX_TOOL_RESULT_BYTES: usize = 64 * 1024;
+const MAX_CALENDAR_TITLE_BYTES: usize = 256;
+const MAX_CALENDAR_TIME_BYTES: usize = 64;
 
 const TOOL_RESULT_SCHEMA: &str = "ustc-agent-chat-tool-result/v1";
 const UNTRUSTED_DATA_LABEL: &str = "untrusted_data";
@@ -76,6 +80,21 @@ impl ChatToolCatalog {
                     "additionalProperties": false
                 }),
             },
+            ChatToolDefinition {
+                name: CALENDAR_TOOL_NAME,
+                description: "Record, list, or delete bounded owner-local calendar items. scheduled_for must be RFC 3339.",
+                input_schema: json!({
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["record", "list", "delete"]},
+                        "title": {"type": "string", "minLength": 1, "maxLength": MAX_CALENDAR_TITLE_BYTES},
+                        "scheduled_for": {"type": "string", "format": "date-time", "maxLength": MAX_CALENDAR_TIME_BYTES},
+                        "item_id": {"type": "string", "pattern": "^calendar:item:[1-9][0-9]*$"}
+                    },
+                    "required": ["action"],
+                    "additionalProperties": false
+                }),
+            },
         ];
         if self.opportunity_profile_snapshot_id.is_some() {
             definitions.push(ChatToolDefinition {
@@ -120,6 +139,7 @@ impl ChatToolCatalog {
                     board_id: CHANGE_BOARD_ID.to_owned(),
                 })
             }
+            CALENDAR_TOOL_NAME => validate_calendar_arguments(raw_arguments),
             OPPORTUNITY_TOOL_NAME => {
                 let _: EmptyArguments = parse_exact_arguments(raw_arguments)?;
                 let profile_snapshot_id = self
@@ -166,6 +186,97 @@ struct ChangeArguments {
 #[serde(deny_unknown_fields)]
 struct EmptyArguments {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum CalendarAction {
+    Record,
+    List,
+    Delete,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CalendarArguments {
+    action: CalendarAction,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    scheduled_for: Option<String>,
+    #[serde(default)]
+    item_id: Option<String>,
+}
+
+fn validate_calendar_arguments(
+    raw_arguments: &str,
+) -> Result<ChatToolRequest, ChatToolValidationError> {
+    let arguments: CalendarArguments = parse_exact_arguments(raw_arguments)?;
+    match arguments.action {
+        CalendarAction::Record => {
+            let title = arguments
+                .title
+                .filter(|value| bounded_calendar_text(value, MAX_CALENDAR_TITLE_BYTES))
+                .ok_or(ChatToolValidationError::InvalidArguments)?;
+            if arguments.item_id.is_some()
+                || arguments.scheduled_for.as_deref().is_some_and(|value| {
+                    !bounded_calendar_text(value, MAX_CALENDAR_TIME_BYTES)
+                        || OffsetDateTime::parse(value, &Rfc3339).is_err()
+                })
+            {
+                return Err(ChatToolValidationError::InvalidArguments);
+            }
+            Ok(ChatToolRequest::CalendarItems {
+                action: CalendarAction::Record,
+                title: Some(title),
+                scheduled_for: arguments.scheduled_for,
+                item_id: None,
+            })
+        }
+        CalendarAction::List => {
+            if arguments.title.is_some()
+                || arguments.scheduled_for.is_some()
+                || arguments.item_id.is_some()
+            {
+                return Err(ChatToolValidationError::InvalidArguments);
+            }
+            Ok(ChatToolRequest::CalendarItems {
+                action: CalendarAction::List,
+                title: None,
+                scheduled_for: None,
+                item_id: None,
+            })
+        }
+        CalendarAction::Delete => {
+            let item_id = arguments
+                .item_id
+                .filter(|value| valid_calendar_item_id(value))
+                .ok_or(ChatToolValidationError::InvalidArguments)?;
+            if arguments.title.is_some() || arguments.scheduled_for.is_some() {
+                return Err(ChatToolValidationError::InvalidArguments);
+            }
+            Ok(ChatToolRequest::CalendarItems {
+                action: CalendarAction::Delete,
+                title: None,
+                scheduled_for: None,
+                item_id: Some(item_id),
+            })
+        }
+    }
+}
+
+fn bounded_calendar_text(value: &str, maximum_bytes: usize) -> bool {
+    !value.trim().is_empty() && value.len() <= maximum_bytes && !value.chars().any(char::is_control)
+}
+
+fn valid_calendar_item_id(value: &str) -> bool {
+    value
+        .strip_prefix("calendar:item:")
+        .is_some_and(|sequence| {
+            !sequence.is_empty()
+                && !sequence.starts_with('0')
+                && sequence.bytes().all(|byte| byte.is_ascii_digit())
+        })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ChatToolRequest {
     AffairsNavigatorGet {
@@ -179,6 +290,12 @@ pub(crate) enum ChatToolRequest {
         profile_snapshot_id: String,
         max_results: u8,
         beam_width: u16,
+    },
+    CalendarItems {
+        action: CalendarAction,
+        title: Option<String>,
+        scheduled_for: Option<String>,
+        item_id: Option<String>,
     },
 }
 
@@ -290,7 +407,12 @@ mod tests {
                 .iter()
                 .map(|definition| definition.name)
                 .collect::<Vec<_>>(),
-            vec![AFFAIRS_TOOL_NAME, CHANGE_TOOL_NAME, OPPORTUNITY_TOOL_NAME]
+            vec![
+                AFFAIRS_TOOL_NAME,
+                CHANGE_TOOL_NAME,
+                CALENDAR_TOOL_NAME,
+                OPPORTUNITY_TOOL_NAME,
+            ]
         );
         assert_eq!(
             definitions[0].input_schema["properties"]["procedure_id"]["enum"][0],
@@ -300,16 +422,22 @@ mod tests {
             definitions[1].input_schema["properties"]["board_id"]["enum"][0],
             CHANGE_BOARD_ID
         );
-        for definition in definitions {
+        for definition in &definitions {
             assert_eq!(definition.input_schema["type"], "object");
             assert_eq!(definition.input_schema["additionalProperties"], false);
         }
+        assert_eq!(
+            definitions[2].input_schema["properties"]["action"]["enum"]
+                .as_array()
+                .map(Vec::len),
+            Some(3)
+        );
     }
 
     #[test]
     fn opportunity_definition_is_omitted_without_confirmed_context() {
         let definitions = ChatToolCatalog::without_opportunity().definitions();
-        assert_eq!(definitions.len(), 2);
+        assert_eq!(definitions.len(), 3);
         assert!(
             definitions
                 .iter()
@@ -338,6 +466,58 @@ mod tests {
                 board_id: CHANGE_BOARD_ID.to_owned(),
             })
         );
+    }
+
+    #[test]
+    fn calendar_actions_are_closed_and_typed() {
+        let catalog = confirmed_catalog();
+        assert_eq!(
+            catalog.validate_call(
+                CALENDAR_TOOL_NAME,
+                r#"{"action":"record","title":"提交开题报告","scheduled_for":"2026-09-10T09:00:00+08:00"}"#,
+            ),
+            Ok(ChatToolRequest::CalendarItems {
+                action: CalendarAction::Record,
+                title: Some("提交开题报告".to_owned()),
+                scheduled_for: Some("2026-09-10T09:00:00+08:00".to_owned()),
+                item_id: None,
+            })
+        );
+        assert_eq!(
+            catalog.validate_call(CALENDAR_TOOL_NAME, r#"{"action":"list"}"#),
+            Ok(ChatToolRequest::CalendarItems {
+                action: CalendarAction::List,
+                title: None,
+                scheduled_for: None,
+                item_id: None,
+            })
+        );
+        assert_eq!(
+            catalog.validate_call(
+                CALENDAR_TOOL_NAME,
+                r#"{"action":"delete","item_id":"calendar:item:7"}"#,
+            ),
+            Ok(ChatToolRequest::CalendarItems {
+                action: CalendarAction::Delete,
+                title: None,
+                scheduled_for: None,
+                item_id: Some("calendar:item:7".to_owned()),
+            })
+        );
+        for arguments in [
+            r#"{"action":"record","title":""}"#,
+            r#"{"action":"record","title":"事项","scheduled_for":"tomorrow"}"#,
+            r#"{"action":"list","title":"smuggled"}"#,
+            r#"{"action":"delete","item_id":"calendar:item:0"}"#,
+            r#"{"action":"delete","item_id":"calendar:item:1","title":"smuggled"}"#,
+            r#"{"action":"publish"}"#,
+        ] {
+            assert_eq!(
+                catalog.validate_call(CALENDAR_TOOL_NAME, arguments),
+                Err(ChatToolValidationError::InvalidArguments),
+                "arguments should be rejected: {arguments}"
+            );
+        }
     }
 
     #[test]

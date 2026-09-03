@@ -1298,6 +1298,7 @@ dependencies = [
  "ustc-campus-agent-course-planning",
  "ustc-campus-agent-opportunity-graph",
  "ustc-campus-agent-runtime",
+ "ustc-campus-agent-simple-calendar",
 ]
 
 [[package]]
@@ -1395,6 +1396,15 @@ dependencies = [
  "serde",
  "serde_json",
  "ustc-agent-tool-protocol",
+]
+
+[[package]]
+name = "ustc-campus-agent-simple-calendar"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "time",
 ]
 
 [[package]]

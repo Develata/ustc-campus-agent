@@ -32,6 +32,9 @@ class MarketContractTests(unittest.TestCase):
         self.root = Path(self.temporary_directory.name)
         shutil.copytree(REPO_ROOT / "market", self.root / "market")
         shutil.copytree(REPO_ROOT / "plugins", self.root / "plugins")
+        shutil.copytree(
+            REPO_ROOT / "crates/simple-calendar", self.root / "crates/simple-calendar"
+        )
         shutil.copytree(REPO_ROOT / "docs/contracts", self.root / "docs/contracts")
         shutil.copytree(
             REPO_ROOT / "fixtures/opportunity-graph",

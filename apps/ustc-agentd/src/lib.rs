@@ -64,6 +64,7 @@ use ustc_campus_agent_core::request_context::{
     ActorReference, CapabilityDisposition, ClientProvenance, IdempotencyKey,
 };
 use ustc_campus_agent_core::session_port::{SessionHistoryReadPort, SessionRepositoryError};
+use ustc_campus_agent_simple_calendar::{CalendarError, CalendarItem, CalendarStore};
 
 const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -82,6 +83,7 @@ pub struct AffairsComposition {
     idempotency: DurableIdempotencyStore,
     control_evidence: DurableControlEvidenceJournal,
     sessions: DurableCurrentSessionStore,
+    calendar: CalendarStore,
     publication_counters: AffairsPublicationCounters,
     publication_capability: CapabilityDisposition,
     change_publication_counters: ChangePublicationCounters,
@@ -214,6 +216,7 @@ impl AffairsComposition {
         ensure_secure_state_parent(idempotency_path)?;
         let publication_path = idempotency_path.with_extension("affairs-publication.json");
         let control_evidence_path = idempotency_path.with_extension("control-evidence.json");
+        let calendar_path = idempotency_path.with_extension("calendar-items.json");
         let fixture = AffairsFixture::load(
             fixture_path,
             &publication_path,
@@ -250,6 +253,8 @@ impl AffairsComposition {
         }
         let current_tenant_id = current.snapshot().tenant_id().clone();
         let current_user_id = current.snapshot().user_id().clone();
+        let calendar = CalendarStore::open(&calendar_path)
+            .map_err(|error| format!("simple calendar open failed: {error}"))?;
         Ok(Self {
             fixture,
             change: None,
@@ -258,6 +263,7 @@ impl AffairsComposition {
             idempotency,
             control_evidence,
             sessions,
+            calendar,
             publication_counters: AffairsPublicationCounters::default(),
             publication_capability: CapabilityDisposition::Enabled,
             change_publication_counters: ChangePublicationCounters::default(),
@@ -483,6 +489,25 @@ impl AffairsComposition {
         );
         let now_ms = i64::try_from(self.fixture.now.as_unix_millis()).unwrap_or(i64::MAX);
         m10.submit(request, &mut ports, now_ms)
+    }
+
+    pub(crate) fn calendar_items(&self) -> Vec<CalendarItem> {
+        self.calendar.items().to_vec()
+    }
+
+    pub(crate) fn record_calendar_item(
+        &mut self,
+        title: &str,
+        scheduled_for: Option<&str>,
+    ) -> Result<CalendarItem, CalendarError> {
+        self.calendar.record(title, scheduled_for)
+    }
+
+    pub(crate) fn delete_calendar_item(
+        &mut self,
+        item_id: &str,
+    ) -> Result<CalendarItem, CalendarError> {
+        self.calendar.delete(item_id)
     }
 
     /// Publishes the reviewed demo procedure through M10 admission, durable

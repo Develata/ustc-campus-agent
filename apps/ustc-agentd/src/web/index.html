@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="USTC Campus Agent 有界 Web Chat：查询办事流程、语义变更与 consent-bound 课程机会规划。">
+  <meta name="description" content="USTC Campus Agent 有界 Web Chat：查询办事流程、课程建议与校历变更，并记录本地日历事项。">
   <title>USTC Campus Agent · Bounded campus demo</title>
   <link rel="stylesheet" href="/assets/styles.css">
   <script src="/assets/app.js" defer></script>
@@ -23,14 +23,14 @@
       <header class="chat-heading">
         <p class="eyebrow">BOUNDED CAMPUS AGENT · 本机演示</p>
         <h1 id="chat-title">先说你要做什么。</h1>
-        <p class="lead">询问办事流程、校历变更，或在你逐次允许后使用当前 synthetic profile 规划课程。回答只来自这个有界演示允许调用的校园工具。</p>
+        <p class="lead">询问办事流程、校历变更、记录本地事项，或在你逐次允许后使用当前 synthetic profile 规划课程。回答只来自这个有界演示允许调用的工具。</p>
       </header>
 
       <section id="chat-surface" class="chat-surface" aria-label="与校园 Agent 对话" aria-busy="false">
         <ol id="chat-messages" class="chat-messages" aria-label="对话记录" aria-live="polite" aria-relevant="additions text">
           <li id="chat-empty" class="chat-empty">
             <strong>从一个具体问题开始</strong>
-            <span>例如：“成绩单证明怎么办？”或“最近校历有什么变化？”</span>
+            <span>例如：“成绩单证明怎么办？”、“推荐课程”，或“记录事项：提交开题报告”。</span>
           </li>
         </ol>
 

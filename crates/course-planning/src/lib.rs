@@ -224,8 +224,21 @@ pub struct PlanCandidate {
     pub hard_constraint_violations: Vec<String>,
     /// Concise deterministic rationale.
     pub rationale: Vec<String>,
+    /// Non-stale community-review signals used only for soft ranking.
+    pub community_evidence: Vec<CommunityEvidence>,
     /// Fact-level provenance for selected offerings and requirements.
     pub provenance: Vec<FactProvenance>,
+}
+
+/// Link-out evidence for one community signal affecting a selected course.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommunityEvidence {
+    pub course_code: String,
+    pub source_id: String,
+    pub source_revision: String,
+    pub retrieved_at: String,
+    pub score: u16,
+    pub link: String,
 }
 
 /// Conflict state recorded for a material output fact.
@@ -995,7 +1008,28 @@ fn build_candidate(
     provenance.sort_by(|left, right| left.fact.cmp(&right.fact));
     provenance.dedup_by(|left, right| left.fact == right.fact);
 
-    let rationale = vec![
+    let mut community_evidence = Vec::new();
+    for signal in &fixture.community_signals {
+        if !selected_codes.contains(signal.course_code.as_str()) {
+            continue;
+        }
+        if let Some(source) = sources.get(signal.source_id.as_str()) {
+            if source.stale {
+                continue;
+            }
+            community_evidence.push(CommunityEvidence {
+                course_code: signal.course_code.clone(),
+                source_id: source.id.clone(),
+                source_revision: source.revision.clone(),
+                retrieved_at: source.retrieved_at.clone(),
+                score: signal.score,
+                link: signal.link.clone(),
+            });
+        }
+    }
+    community_evidence.sort_by(|left, right| left.course_code.cmp(&right.course_code));
+
+    let mut rationale = vec![
         format!(
             "selected {} courses within {}..={} credits",
             course_codes.len(),
@@ -1005,6 +1039,12 @@ fn build_candidate(
         "all requirement groups meet their minimum credit coverage".to_owned(),
         "non-stale community signals affect soft ranking only".to_owned(),
     ];
+    rationale.extend(community_evidence.iter().map(|evidence| {
+        format!(
+            "{} community signal {}/100; verify the linked iCourse page before deciding: {}",
+            evidence.course_code, evidence.score, evidence.link
+        )
+    }));
 
     PlanCandidate {
         course_codes,
@@ -1013,6 +1053,7 @@ fn build_candidate(
         soft_score: state.soft_score,
         hard_constraint_violations,
         rationale,
+        community_evidence,
         provenance,
     }
 }
@@ -1043,6 +1084,16 @@ mod tests {
     #[test]
     fn minimal_fixture_produces_multiple_zero_violation_candidates() {
         let fixture = fixture();
+        let real_analysis_signal = fixture
+            .community_signals
+            .iter()
+            .find(|signal| signal.course_code == "MATH2001")
+            .expect("Real Analysis community signal");
+        assert_eq!(real_analysis_signal.score, 97);
+        assert_eq!(
+            real_analysis_signal.link,
+            "https://icourse.club/course/2059/"
+        );
         let result = plan_fixture(&fixture, PlanningConfig::default());
         let Ok(result) = result else {
             panic!("minimal-v0 fixture must produce a plan");
@@ -1053,6 +1104,17 @@ mod tests {
             candidate.hard_constraint_violations.is_empty()
                 && candidate.total_credits >= fixture.profile.min_credits
                 && candidate.total_credits <= fixture.profile.max_credits
+        }));
+        assert!(result.candidates.iter().all(|candidate| {
+            !candidate.community_evidence.is_empty()
+                && candidate
+                    .community_evidence
+                    .iter()
+                    .all(|evidence| evidence.link.starts_with("https://icourse.club/"))
+                && candidate
+                    .rationale
+                    .iter()
+                    .any(|line| line.contains("community signal"))
         }));
         assert!(result.candidates.iter().all(|candidate| {
             !candidate

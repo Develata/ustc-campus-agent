@@ -11,6 +11,7 @@ members = [
   "crates/opportunity-graph",
   "crates/change-radar",
   "crates/affairs-navigator",
+  "crates/simple-calendar",
   "crates/client-core",
   "crates/client-protocol",
   "crates/application-ingress",

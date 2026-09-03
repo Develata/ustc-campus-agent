@@ -82,6 +82,24 @@
       "autoGrant": "Never",
       "confirmationDefault": "Ask",
       "status": "Active"
+    },
+    {
+      "id": "user.own_calendar_items.read",
+      "effectClass": "Read",
+      "dataClass": "UserProfile",
+      "scopeKind": "TenantPrivateUser",
+      "autoGrant": "Never",
+      "confirmationDefault": "Ask",
+      "status": "Active"
+    },
+    {
+      "id": "user.own_calendar_items.write",
+      "effectClass": "Write",
+      "dataClass": "UserProfile",
+      "scopeKind": "TenantPrivateUser",
+      "autoGrant": "Never",
+      "confirmationDefault": "Ask",
+      "status": "Active"
     }
   ]
 }

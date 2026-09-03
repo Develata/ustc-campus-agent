@@ -1379,10 +1379,17 @@ def check_market(issues: list[str]) -> None:
     ):
         return
 
-    expected_first_party_statuses = {
+    expected_default_first_party_statuses = {
         "ustc.affairs-navigator": "planned",
         "ustc.change-radar": "development",
         "ustc.opportunity-graph": "development",
+    }
+    expected_optional_first_party_statuses = {
+        "ustc.simple-calendar": "implemented",
+    }
+    expected_first_party_statuses = {
+        **expected_default_first_party_statuses,
+        **expected_optional_first_party_statuses,
     }
     expected_first_party_versions = {
         package_id: "0.1.0" for package_id in expected_first_party_statuses
@@ -1400,6 +1407,10 @@ def check_market(issues: list[str]) -> None:
             "user.own_academic_snapshot.read",
             "user.own_academic_snapshot.write",
             "user.own_plan_draft.write",
+        ],
+        "ustc.simple-calendar": [
+            "user.own_calendar_items.read",
+            "user.own_calendar_items.write",
         ],
     }
     expected_capability_axes = {
@@ -1475,9 +1486,26 @@ def check_market(issues: list[str]) -> None:
             "Ask",
             "Active",
         ),
+        "user.own_calendar_items.read": (
+            "Read",
+            "UserProfile",
+            "TenantPrivateUser",
+            "Never",
+            "Ask",
+            "Active",
+        ),
+        "user.own_calendar_items.write": (
+            "Write",
+            "UserProfile",
+            "TenantPrivateUser",
+            "Never",
+            "Ask",
+            "Active",
+        ),
     }
     expected_capability_ids = set(expected_capability_axes)
     expected_first_party_ids = set(expected_first_party_statuses)
+    expected_default_first_party_ids = set(expected_default_first_party_statuses)
     required = set(schema.get("required", []))
     allowed = set(schema.get("properties", {}))
     expected_required = {
@@ -1621,8 +1649,9 @@ def check_market(issues: list[str]) -> None:
         }:
             fail(f"{rel_path}: invalid package tier", issues)
 
-        is_default_first_party = package_id in expected_first_party_ids
-        if is_default_first_party:
+        is_default_first_party = package_id in expected_default_first_party_ids
+        is_registered_first_party = package_id in expected_first_party_ids
+        if is_registered_first_party:
             if manifest.get("publisher") != publishers.get("id"):
                 fail(f"{rel_path}: publisher does not match first-party registry", issues)
             if manifest.get("tier") != "FirstParty":
@@ -1635,8 +1664,9 @@ def check_market(issues: list[str]) -> None:
         status = manifest.get("implementationStatus")
         if status not in {"planned", "development", "implemented"}:
             fail(f"{rel_path}: invalid implementationStatus", issues)
-        elif is_default_first_party and status != expected_first_party_statuses[package_id]:
-            fail(f"{rel_path}: default package implementationStatus drift", issues)
+        elif is_registered_first_party and status != expected_first_party_statuses[package_id]:
+            package_class = "default" if is_default_first_party else "optional first-party"
+            fail(f"{rel_path}: {package_class} package implementationStatus drift", issues)
 
         install_policy = manifest.get("installPolicy")
         if not isinstance(install_policy, dict) or set(install_policy) != {
@@ -1707,10 +1737,11 @@ def check_market(issues: list[str]) -> None:
         if len(set(manifest_capabilities)) != len(manifest_capabilities):
             fail(f"{rel_path}: duplicate capabilities", issues)
         if (
-            is_default_first_party
+            is_registered_first_party
             and manifest_capabilities != expected_first_party_capabilities[package_id]
         ):
-            fail(f"{rel_path}: default package capability set drift", issues)
+            package_class = "default" if is_default_first_party else "optional first-party"
+            fail(f"{rel_path}: {package_class} package capability set drift", issues)
         for capability in manifest_capabilities:
             if capability not in registered:
                 fail(f"{rel_path}: capability not registered: {capability}", issues)
@@ -1723,8 +1754,8 @@ def check_market(issues: list[str]) -> None:
             isinstance(key, str) and isinstance(value, str) for key, value in source_policy.items()
         ):
             fail(f"{rel_path}: sourcePolicy must be a non-empty string map", issues)
-        elif is_default_first_party and not source_policy.get("personalData"):
-            fail(f"{rel_path}: default package sourcePolicy must state personalData scope", issues)
+        elif is_registered_first_party and not source_policy.get("personalData"):
+            fail(f"{rel_path}: first-party package sourcePolicy must state personalData scope", issues)
 
     first_party_ids = {
         manifest.get("id")
@@ -1733,7 +1764,7 @@ def check_market(issues: list[str]) -> None:
     }
     if first_party_ids != expected_first_party_ids:
         fail(
-            "default first-party package identity drift: "
+            "default first-party package identity drift; registered first-party inventory drift: "
             f"expected={sorted(expected_first_party_ids)} actual={sorted(str(item) for item in first_party_ids)}",
             issues,
         )

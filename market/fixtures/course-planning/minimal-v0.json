@@ -37,6 +37,15 @@
       "effective_time": "2026-fall",
       "stale": false,
       "note": "Link-out metadata only; no iCourse review text is embedded or cached."
+    },
+    {
+      "id": "icourse-public-aggregate-2026-09-03",
+      "authority": "community_signal",
+      "revision": "public-course-page-aggregate-2026-09-03",
+      "retrieved_at": "2026-09-03T20:59:18Z",
+      "effective_time": "retrieval-snapshot",
+      "stale": false,
+      "note": "Public iCourse aggregate ratings used only as orientation-level soft signals for title-matched synthetic demo courses; no review text is embedded. Verify teacher, term, and offering identity on the linked page."
     }
   ],
   "profile": {
@@ -317,9 +326,9 @@
     }
   ],
   "community_signals": [
-    {"course_code": "MATH2001", "source_id": "icourse-linkout", "score": 86, "link": "https://icourse.club/"},
+    {"course_code": "MATH2001", "source_id": "icourse-public-aggregate-2026-09-03", "score": 97, "link": "https://icourse.club/course/2059/"},
     {"course_code": "MATH2002", "source_id": "icourse-linkout", "score": 72, "link": "https://icourse.club/"},
-    {"course_code": "MATH2003", "source_id": "icourse-linkout", "score": 91, "link": "https://icourse.club/"},
+    {"course_code": "MATH2003", "source_id": "icourse-public-aggregate-2026-09-03", "score": 94, "link": "https://icourse.club/course/3839/"},
     {"course_code": "CS2001", "source_id": "icourse-linkout", "score": 78, "link": "https://icourse.club/"},
     {"course_code": "CS2003", "source_id": "icourse-linkout", "score": 69, "link": "https://icourse.club/"},
     {"course_code": "CS2006", "source_id": "icourse-linkout", "score": 88, "link": "https://icourse.club/"},
