@@ -1270,7 +1270,14 @@ mod tests {
             !evidence.source_id.is_empty()
                 && !evidence.revision.is_empty()
                 && !evidence.retrieved_at.is_empty()
-                && evidence.effective_time.as_deref() == Some("2026-fall")
+                && evidence
+                    .effective_time
+                    .as_deref()
+                    .is_some_and(|value| !value.is_empty())
+        }));
+        assert!(candidate.provenance.iter().all(|evidence| {
+            evidence.fact.starts_with("community-signal:")
+                || evidence.effective_time.as_deref() == Some("2026-fall")
         }));
         assert!(
             candidate
@@ -1457,14 +1464,19 @@ mod tests {
     #[test]
     fn stale_community_signals_are_warned_and_excluded_from_provenance() {
         let mut fixture = fixture();
-        let source = fixture
+        let mut stale_source_count = 0;
+        for source in fixture
             .sources
             .iter_mut()
-            .find(|source| source.id == "icourse-linkout");
-        let Some(source) = source else {
-            panic!("community fixture source must exist");
-        };
-        source.stale = true;
+            .filter(|source| source.authority == CoursePlanningAuthority::CommunitySignal)
+        {
+            source.stale = true;
+            stale_source_count += 1;
+        }
+        assert!(
+            stale_source_count > 0,
+            "community fixture source must exist"
+        );
         let result = plan_fixture(&fixture, PlanningConfig::default());
         let Ok(result) = result else {
             panic!("stale soft signals must not block hard planning");
@@ -1475,10 +1487,11 @@ mod tests {
             })
         );
         assert!(result.candidates.iter().all(|candidate| {
-            candidate
-                .provenance
-                .iter()
-                .all(|evidence| !evidence.fact.starts_with("community-signal:"))
+            candidate.community_evidence.is_empty()
+                && candidate
+                    .provenance
+                    .iter()
+                    .all(|evidence| !evidence.fact.starts_with("community-signal:"))
         }));
     }
 
