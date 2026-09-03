@@ -319,7 +319,7 @@ try {
   await submitWithEnter("记录事项：提交开题报告");
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
-    /简明日历/
+    /简单日历/
   );
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"),
@@ -333,7 +333,7 @@ try {
   await submitWithEnter("删除事项 calendar:item:1");
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
-    /简明日历/
+    /简单日历/
   );
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"),
