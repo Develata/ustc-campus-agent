@@ -1,3 +1,11 @@
+const chatForm = document.querySelector("#chat-form");
+const chatMessage = document.querySelector("#chat-message");
+const chatCourseConsent = document.querySelector("#chat-course-consent");
+const chatSubmit = document.querySelector("#chat-submit");
+const chatStatus = document.querySelector("#chat-status");
+const chatTranscript = document.querySelector("#chat-transcript");
+const chatEmpty = document.querySelector("#chat-empty");
+const chatPromptButtons = document.querySelectorAll("[data-chat-prompt]");
 const form = document.querySelector("#lookup-form");
 const procedureInput = document.querySelector("#procedure-id");
 const procedurePreview = document.querySelector("#procedure-id-preview");
@@ -47,6 +55,7 @@ const OPPORTUNITY_DEMO_TEMPLATE = {
   ]
 };
 let opportunityProfileId = null;
+let chatPending = false;
 
 function clear(element) {
   while (element.firstChild) {
@@ -56,6 +65,185 @@ function clear(element) {
 
 function text(element, value) {
   element.textContent = value ?? "—";
+}
+
+function setChatStatus(message, state) {
+  chatStatus.textContent = message;
+  chatStatus.dataset.state = state;
+}
+
+function setChatBusy(busy) {
+  chatPending = busy;
+  chatForm.setAttribute("aria-busy", String(busy));
+  chatTranscript.setAttribute("aria-busy", String(busy));
+  chatMessage.disabled = busy;
+  chatCourseConsent.disabled = busy;
+  chatSubmit.disabled = busy;
+  chatSubmit.textContent = busy ? "发送中…" : "发送消息";
+  for (const button of chatPromptButtons) {
+    button.disabled = busy;
+  }
+}
+
+function appendChatTurn(role, content) {
+  if (chatEmpty.isConnected) {
+    chatEmpty.remove();
+  }
+
+  const labels = {
+    user: "你",
+    assistant: "Agent",
+    status: "请求状态"
+  };
+  const article = document.createElement("article");
+  article.className = `chat-turn chat-turn-${role}`;
+  article.dataset.chatRole = role;
+  article.setAttribute("aria-label", `${labels[role] ?? "消息"}的消息`);
+
+  const roleLabel = document.createElement("p");
+  roleLabel.className = "chat-turn-role";
+  roleLabel.textContent = labels[role] ?? "消息";
+
+  const body = document.createElement("p");
+  body.className = "chat-turn-content";
+  body.textContent = content;
+
+  article.append(roleLabel, body);
+  chatTranscript.appendChild(article);
+  return { article, roleLabel, body };
+}
+
+function appendChatTurnMeta(turn, values) {
+  const meta = document.createElement("div");
+  meta.className = "chat-turn-meta";
+  meta.setAttribute("aria-label", "回答来源与边界");
+  for (const value of values) {
+    const item = document.createElement("span");
+    item.textContent = value;
+    meta.appendChild(item);
+  }
+  turn.article.appendChild(meta);
+}
+
+function renderChatAnswer(turn, payload) {
+  if (
+    typeof payload?.answer !== "string" ||
+    payload.answer.trim().length === 0 ||
+    typeof payload?.model !== "string" ||
+    payload.model.trim().length === 0 ||
+    !Array.isArray(payload?.used_tools) ||
+    !payload.used_tools.every((tool) => typeof tool === "string") ||
+    typeof payload?.grounded !== "boolean"
+  ) {
+    throw new Error("服务器响应缺少可呈现的 answer、model、used_tools 或 grounded 状态。");
+  }
+
+  turn.article.classList.remove("chat-turn-loading");
+  turn.body.textContent = payload.answer;
+  const metadata = [
+    payload.grounded
+      ? "Grounded · 已使用 typed Plugin 结果"
+      : "Not grounded · 未使用 Plugin 结果",
+    `模型 · ${payload.model}`
+  ];
+  if (payload.used_tools.length === 0) {
+    metadata.push("工具 · 未调用");
+  } else {
+    for (const tool of payload.used_tools) {
+      metadata.push(`工具 · ${tool}`);
+    }
+  }
+  appendChatTurnMeta(turn, metadata);
+}
+
+function renderChatError(turn, message) {
+  turn.article.classList.remove("chat-turn-assistant", "chat-turn-loading");
+  turn.article.classList.add("chat-turn-status", "chat-turn-error");
+  turn.article.dataset.chatRole = "status";
+  turn.article.setAttribute("aria-label", "请求失败");
+  turn.article.setAttribute("role", "alert");
+  turn.roleLabel.textContent = "请求失败";
+  turn.body.textContent = message;
+}
+
+function chatErrorDetail(payload, statusCode) {
+  const candidates = [
+    payload?.error?.error?.wire_code,
+    payload?.error?.wire_code,
+    payload?.error?.message,
+    payload?.rejection?.kind,
+    payload?.error,
+    payload?.message
+  ];
+  const detail = candidates.find((value) => typeof value === "string" && value.trim());
+  return detail ?? `请求未完成（HTTP ${statusCode}）。`;
+}
+
+async function readChatPayload(response) {
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (_error) {
+    throw new Error(`服务器返回了无法读取的响应（HTTP ${response.status}）。`);
+  }
+  if (!response.ok) {
+    throw new Error(chatErrorDetail(payload, response.status));
+  }
+  return payload;
+}
+
+async function sendChatMessage() {
+  if (chatPending) {
+    return;
+  }
+
+  const message = chatMessage.value.trim();
+  if (!message) {
+    chatMessage.setAttribute("aria-invalid", "true");
+    setChatStatus("请输入消息后再发送。", "error");
+    chatMessage.focus();
+    return;
+  }
+
+  chatMessage.removeAttribute("aria-invalid");
+  const courseProfileConsent = chatCourseConsent.checked;
+  const userTurn = appendChatTurn("user", message);
+  appendChatTurnMeta(userTurn, [
+    courseProfileConsent
+      ? "本次请求 · 已明确允许课程资料处理"
+      : "本次请求 · 未授予课程资料处理许可"
+  ]);
+  const assistantTurn = appendChatTurn("assistant", "正在等待服务端模型返回…");
+  assistantTurn.article.classList.add("chat-turn-loading");
+  setChatBusy(true);
+  setChatStatus("正在发送一个独立的有界请求…", "loading");
+
+  try {
+    const response = await fetch("/api/v1/agent/chat", {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "X-USTC-Client-Protocol-Major": "1"
+      },
+      body: JSON.stringify({
+        message,
+        course_profile_consent: courseProfileConsent
+      }),
+      cache: "no-store"
+    });
+    const payload = await readChatPayload(response);
+    renderChatAnswer(assistantTurn, payload);
+    chatMessage.value = "";
+    setChatStatus("已收到回答。Grounding 与工具状态按服务端响应显示。", "success");
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "未知错误";
+    renderChatError(assistantTurn, `请求失败：${detail}`);
+    setChatStatus("请求未完成；输入已保留，可以修正后重试。", "error");
+  } finally {
+    chatCourseConsent.checked = false;
+    setChatBusy(false);
+  }
 }
 
 function syncProcedurePreview() {
@@ -995,6 +1183,30 @@ async function deleteOpportunityProfile() {
     `${deletion.deletion_receipt_id} · profile ${deletion.profile_snapshot_id} · deleted ${formatTime(deletion.deleted_at)}`
   );
   opportunityStatus.textContent = "删除收据已持久化；tombstone 不含 completed courses 或 preference weights。下方 Synthetic profile 只是可再次 consent 的公开 demo 模板，不是已删除档案。";
+}
+
+chatForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void sendChatMessage();
+});
+
+chatMessage.addEventListener("input", () => {
+  chatMessage.removeAttribute("aria-invalid");
+});
+chatMessage.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+    event.preventDefault();
+    chatForm.requestSubmit();
+  }
+});
+
+for (const button of chatPromptButtons) {
+  button.addEventListener("click", () => {
+    chatMessage.value = button.dataset.chatPrompt ?? "";
+    chatMessage.removeAttribute("aria-invalid");
+    setChatStatus("示例已填入；课程资料许可不会自动勾选。", "ready");
+    chatMessage.focus();
+  });
 }
 
 publicationConfirm.addEventListener("change", () => {
