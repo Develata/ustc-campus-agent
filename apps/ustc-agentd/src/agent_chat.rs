@@ -9,13 +9,17 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+use crate::chat_provider::ProviderUsage;
 use crate::chat_provider::{
     ChatProvider, ProviderConfigError, ProviderError, ProviderIdentity, ProviderMessage,
-    ProviderRequest, ProviderToolCall, ProviderToolDefinition, ProviderTurn, ProviderUsage,
+    ProviderRequest, ProviderToolCall, ProviderToolDefinition, ProviderTurn,
 };
+#[cfg(test)]
+use crate::chat_tools::ChatToolRequest;
 use crate::chat_tools::{
-    ChatToolCatalog, ChatToolDefinition, ChatToolExecutor, ChatToolRequest,
-    ChatToolResultValidationError, ChatToolStatus,
+    ChatToolCatalog, ChatToolDefinition, ChatToolExecutor, ChatToolResultValidationError,
+    ChatToolStatus,
 };
 
 pub(crate) const CHAT_REQUEST_SCHEMA: &str = "ustc-agent-chat-request/v1";
@@ -99,6 +103,7 @@ pub(crate) enum ChatError {
     ToolBudgetExhausted,
     TurnBudgetExhausted,
     OpportunityConfirmationRequired,
+    #[allow(dead_code)]
     CompositionUnavailable,
     InternalChatError,
 }

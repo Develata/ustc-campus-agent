@@ -15,12 +15,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 const DEFAULT_TIMEOUT_MS: u64 = 15_000;
-const MIN_TIMEOUT_MS: u64 = 100;
-const MAX_TIMEOUT_MS: u64 = 120_000;
+const MIN_TIMEOUT_MS: u64 = 1_000;
+const MAX_TIMEOUT_MS: u64 = 60_000;
 const MAX_BASE_URL_BYTES: usize = 2_048;
 const MAX_MODEL_BYTES: usize = 256;
 const MAX_KEY_FILE_PATH_BYTES: usize = 4_096;
-const MAX_API_KEY_BYTES: usize = 8_192;
+const MAX_API_KEY_BYTES: usize = 4_096;
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 const MAX_PROVIDER_MESSAGES: usize = 24;
 const MAX_PROVIDER_TOOLS: usize = 3;
@@ -41,7 +41,7 @@ pub(crate) enum ChatProvider {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct ProviderIdentity {
-    pub(crate) profile: String,
+    pub(crate) mode: String,
     pub(crate) model: String,
 }
 
@@ -155,7 +155,7 @@ impl ChatProvider {
     pub(crate) fn identity(&self) -> ProviderIdentity {
         match self {
             Self::DeterministicMock => ProviderIdentity {
-                profile: "mock".to_owned(),
+                mode: "mock".to_owned(),
                 model: MOCK_MODEL.to_owned(),
             },
             Self::OpenAiCompatible(provider) => provider.identity.clone(),
@@ -200,7 +200,7 @@ impl ChatProvider {
             endpoint,
             api_key,
             identity: ProviderIdentity {
-                profile: "openai-compatible".to_owned(),
+                mode: "openai-compatible".to_owned(),
                 model,
             },
         }))
@@ -226,7 +226,7 @@ fn required_env(name: &str, missing: ProviderConfigError) -> Result<String, Prov
 }
 
 #[derive(Clone)]
-struct OpenAiCompatibleProvider {
+pub(crate) struct OpenAiCompatibleProvider {
     client: Client,
     endpoint: Url,
     api_key: SecretString,
@@ -863,6 +863,42 @@ mod tests {
         assert_eq!(accepted.as_str(), "https://example.com/v1/chat/completions");
         assert!(chat_completions_endpoint("http://127.0.0.1:8123/v1", true).is_ok());
         assert!(chat_completions_endpoint("http://example.com/v1", true).is_err());
+    }
+
+    #[test]
+    fn timeout_and_key_limits_match_the_frozen_contract() {
+        let key = key_file();
+        for accepted in [MIN_TIMEOUT_MS, MAX_TIMEOUT_MS] {
+            assert!(
+                ChatProvider::openai_compatible_for_test(
+                    "http://127.0.0.1:8123/v1",
+                    "fixed-model",
+                    &key,
+                    accepted,
+                )
+                .is_ok()
+            );
+        }
+        for rejected in [MIN_TIMEOUT_MS - 1, MAX_TIMEOUT_MS + 1] {
+            assert!(matches!(
+                ChatProvider::openai_compatible_for_test(
+                    "http://127.0.0.1:8123/v1",
+                    "fixed-model",
+                    &key,
+                    rejected,
+                ),
+                Err(ProviderConfigError::InvalidTimeout)
+            ));
+        }
+
+        fs::write(&key, vec![b'x'; MAX_API_KEY_BYTES]).unwrap();
+        assert!(read_api_key(&key).is_ok());
+        fs::write(&key, vec![b'x'; MAX_API_KEY_BYTES + 1]).unwrap();
+        assert!(matches!(
+            read_api_key(&key),
+            Err(ProviderConfigError::InvalidKeyFile)
+        ));
+        fs::remove_file(key).unwrap();
     }
 
     #[cfg(unix)]
