@@ -77,6 +77,26 @@ for file in "${template_files[@]}"; do
     exit 66
   }
 done
+python3 - "$repo_root/deploy/mvp-compose" <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+for name in ('start.ps1', 'stop.ps1', 'reset.ps1', 'start.cmd', 'stop.cmd', 'reset.cmd'):
+    path = root / name
+    raw = path.read_bytes()
+    if raw.startswith((b'\xef\xbb\xbf', b'\xff\xfe', b'\xfe\xff')):
+        raise SystemExit(f'Windows launcher must not contain a BOM: {path}')
+    try:
+        text = raw.decode('ascii')
+    except UnicodeDecodeError as exc:
+        raise SystemExit(
+            f'Windows launcher must be ASCII-only for Windows PowerShell 5.1: {path}'
+        ) from exc
+    if '\x00' in text or not text.endswith('\n'):
+        raise SystemExit(f'Windows launcher must be NUL-free and LF-terminated: {path}')
+print('WINDOWS_LAUNCHER_ASCII_CHECK=PASS')
+PY
 fixture_files=(
   fixtures/affairs/proc-011-reviewed.json
   fixtures/change-radar/academic-calendar-demo-reviewed.json
@@ -136,7 +156,7 @@ install -m 0644 "$repo_root/market/fixtures/course-planning/minimal-v0.json" "$p
 printf 'UCA_MVP_PORT=8787\nUCA_SOURCE_COMMIT=%s\n' "$source_commit" > "$package_dir/.env"
 printf '%s\n' \
   'schema=ustc-campus-agent-mvp-compose-build/v1' \
-  'package_version=0.1.0' \
+  'package_version=0.1.1' \
   "source_commit=$source_commit" \
   'binary_target=x86_64-unknown-linux-gnu' \
   "binary_version=$binary_version" \

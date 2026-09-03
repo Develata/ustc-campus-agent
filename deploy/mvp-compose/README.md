@@ -18,6 +18,8 @@
 2. 解压本包，双击 `start.cmd`。
 3. 健康检查通过后，浏览器会打开 <http://127.0.0.1:8787>。
 
+包内 `.cmd` / `.ps1` 启动脚本刻意只使用 ASCII 字节，兼容仍按系统代码页读取无 BOM 脚本的 Windows PowerShell 5.1。请勿把这些脚本另存为无 BOM 的非 ASCII 文本；需要本地化提示时，应保留这一兼容约束或改用明确的 UTF-8 BOM。
+
 若 Windows 阻止 PowerShell 脚本，可在本目录打开 PowerShell 后执行：
 
 ```powershell
