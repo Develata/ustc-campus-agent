@@ -195,6 +195,7 @@ print('PROVIDER_SECRET_SCAN=PASS')
 PY
 
 archive_prefix="${package_name}-${source_commit:0:12}"
+output_dir=$(CDPATH= cd -- "$output_dir" && pwd)
 tar_path="$output_dir/${archive_prefix}.tar.gz"
 zip_path="$output_dir/${archive_prefix}.zip"
 (
