@@ -1516,6 +1516,11 @@ mod tests {
 
     #[test]
     fn local_openai_peer_receives_bearer_and_returns_one_turn() {
+        let key = key_file();
+        let expected_bearer = format!(
+            "authorization: Bearer {}",
+            fs::read_to_string(&key).unwrap().trim()
+        );
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         let server = thread::spawn(move || {
@@ -1537,7 +1542,7 @@ mod tests {
             }
             let request_text = String::from_utf8_lossy(&request);
             assert!(request_text.contains("POST /v1/chat/completions HTTP/1.1"));
-            assert!(request_text.contains("authorization: Bearer test-secret-value"));
+            assert!(request_text.contains(&expected_bearer));
             let body = r#"{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"bounded answer","tool_calls":[]}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}"#;
             write!(
                 stream,
@@ -1548,7 +1553,6 @@ mod tests {
             .unwrap();
         });
 
-        let key = key_file();
         let provider = ChatProvider::openai_compatible_for_test(
             &format!("http://{address}/v1"),
             "fixed-model",
