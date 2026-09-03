@@ -320,7 +320,7 @@ mod tests {
         drop(store);
 
         let mut reopened = CalendarStore::open(&path).unwrap();
-        assert_eq!(reopened.items(), &[item.clone()]);
+        assert_eq!(reopened.items(), std::slice::from_ref(&item));
         assert_eq!(reopened.delete(&item.id).unwrap(), item);
         drop(reopened);
         assert!(CalendarStore::open(&path).unwrap().items().is_empty());
