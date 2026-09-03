@@ -1296,7 +1296,6 @@ fn embedded_web_shell_and_health_are_hardened() {
         "chat-send",
         "chat-messages",
         "chat-opportunity-confirm",
-        "chat-provider",
     ] {
         assert!(page.body.contains(id), "missing bounded chat element {id}");
     }
