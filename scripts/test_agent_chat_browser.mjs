@@ -269,13 +269,22 @@ try {
     const original = window.fetch.bind(window);
     let delayChatOnce = true;
     window.__ucaChatRequests = [];
+    window.__ucaReleaseDelayedChat = null;
     window.fetch = (...args) => {
       if (args[0] === '/api/v1/agent/chat') {
         window.__ucaChatRequests.push(JSON.parse(args[1].body));
       }
       if (delayChatOnce && args[0] === '/api/v1/agent/chat') {
         delayChatOnce = false;
-        return new Promise((resolveFetch) => setTimeout(() => resolveFetch(original(...args)), 250));
+        return new Promise((resolveFetch) => {
+          let released = false;
+          window.__ucaReleaseDelayedChat = () => {
+            if (released) return;
+            released = true;
+            window.__ucaReleaseDelayedChat = null;
+            resolveFetch(original(...args));
+          };
+        });
       }
       return original(...args);
     };
@@ -293,6 +302,8 @@ try {
   await waitFor("document.querySelector('#chat-surface').getAttribute('aria-busy') === 'true'", "Affairs chat busy");
   assert.equal(await evaluate("document.querySelector('#chat-send').disabled"), true);
   assert.equal(await evaluate("document.querySelector('#chat-progress').hidden"), false);
+  assert.equal(await evaluate("typeof window.__ucaReleaseDelayedChat"), "function");
+  await evaluate("window.__ucaReleaseDelayedChat()");
   await cdp.send("Input.dispatchKeyEvent", {
     type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13
   }, sessionId);
