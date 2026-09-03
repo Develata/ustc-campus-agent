@@ -1288,7 +1288,18 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(page.headers.contains("content-type: text/html"));
     assert!(page.headers.contains("content-security-policy:"));
     assert!(page.headers.contains("x-frame-options: deny"));
-    assert!(page.body.contains("科大办事导航"));
+    assert!(page.body.contains("科大校园助手"));
+    assert!(page.body.contains("先说你要做什么。"));
+    for id in [
+        "chat-form",
+        "chat-input",
+        "chat-send",
+        "chat-messages",
+        "chat-opportunity-confirm",
+        "chat-provider",
+    ] {
+        assert!(page.body.contains(id), "missing bounded chat element {id}");
+    }
     assert!(page.body.contains("/assets/app.js"));
     assert!(page.body.contains("办理条件"));
     assert!(page.body.contains("时间边界"));
@@ -1329,6 +1340,10 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(script.body.contains("textContent"));
     assert!(script.body.contains("X-USTC-Client-Protocol-Major"));
     assert!(script.body.contains("syncProcedurePreview"));
+    assert!(script.body.contains("createChatRequest"));
+    assert!(script.body.contains("submitChat"));
+    assert!(script.body.contains("/api/v1/agent/chat"));
+    assert!(script.body.contains("X-USTC-Opportunity-Confirmation"));
     assert!(script.body.contains("renderChangeFeed"));
     assert!(script.body.contains("loadChangeFeed"));
     assert!(script.body.contains("createOpportunityProfile"));
