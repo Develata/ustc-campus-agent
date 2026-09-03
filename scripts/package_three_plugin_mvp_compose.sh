@@ -200,7 +200,7 @@ zip_path="$output_dir/${archive_prefix}.zip"
 (
   cd "$output_dir"
   tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
-    -czf "$tar_path" "$package_name"
+    -czf "$(basename "$tar_path")" "$package_name"
 )
 python3 - "$package_dir" "$zip_path" <<'PY'
 from __future__ import annotations

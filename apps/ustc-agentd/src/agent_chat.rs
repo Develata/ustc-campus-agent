@@ -42,7 +42,13 @@ pub(crate) struct ChatRequestDto {
     pub(crate) schema: String,
     pub(crate) messages: Vec<ChatInputMessageDto>,
     #[serde(default)]
-    pub(crate) opportunity_profile_hint: Option<String>,
+    pub(crate) opportunity_context: Option<OpportunityContextDto>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct OpportunityContextDto {
+    pub(crate) profile_snapshot_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -494,12 +500,13 @@ fn validate_request(
         });
     }
 
-    let catalog = match request.opportunity_profile_hint {
+    let catalog = match request.opportunity_context {
         None => ChatToolCatalog::without_opportunity(),
-        Some(profile_snapshot_id) => {
+        Some(context) => {
             if !opportunity_confirmed {
                 return Err(ChatError::OpportunityConfirmationRequired);
             }
+            let profile_snapshot_id = context.profile_snapshot_id;
             if profile_snapshot_id.trim().is_empty()
                 || profile_snapshot_id.len() > MAX_PROFILE_SNAPSHOT_ID_BYTES
             {
@@ -551,13 +558,15 @@ mod tests {
         ChatRequestDto {
             schema: CHAT_REQUEST_SCHEMA.to_owned(),
             messages: vec![message(ChatInputRole::User, content)],
-            opportunity_profile_hint: None,
+            opportunity_context: None,
         }
     }
 
     fn opportunity_request() -> ChatRequestDto {
         ChatRequestDto {
-            opportunity_profile_hint: Some("profile-snapshot:current".to_owned()),
+            opportunity_context: Some(OpportunityContextDto {
+                profile_snapshot_id: "profile-snapshot:current".to_owned(),
+            }),
             ..request("请规划")
         }
     }
@@ -672,17 +681,38 @@ mod tests {
     }
 
     #[test]
-    fn opportunity_hint_is_nonblank_and_confirmation_bound() {
+    fn opportunity_context_is_closed_nonblank_and_confirmation_bound() {
         let unknown = serde_json::from_str::<ChatRequestDto>(
-            r#"{"schema":"ustc-agent-chat-request/v1","messages":[{"role":"user","content":"x"}],"opportunity_profile_hint":"profile:1","tenant_id":"tenant:other"}"#,
+            r#"{"schema":"ustc-agent-chat-request/v1","messages":[{"role":"user","content":"x"}],"opportunity_context":{"profile_snapshot_id":"profile:1"},"tenant_id":"tenant:other"}"#,
         );
         assert!(unknown.is_err());
+        let scalar = serde_json::from_str::<ChatRequestDto>(
+            r#"{"schema":"ustc-agent-chat-request/v1","messages":[{"role":"user","content":"x"}],"opportunity_context":"profile:1"}"#,
+        );
+        assert!(scalar.is_err());
+        let nested_unknown = serde_json::from_str::<ChatRequestDto>(
+            r#"{"schema":"ustc-agent-chat-request/v1","messages":[{"role":"user","content":"x"}],"opportunity_context":{"profile_snapshot_id":"profile:1","tenant_id":"other"}}"#,
+        );
+        assert!(nested_unknown.is_err());
+        let valid = serde_json::from_str::<ChatRequestDto>(
+            r#"{"schema":"ustc-agent-chat-request/v1","messages":[{"role":"user","content":"x"}],"opportunity_context":{"profile_snapshot_id":"profile:1"}}"#,
+        )
+        .expect("closed opportunity context");
+        assert_eq!(
+            valid
+                .opportunity_context
+                .expect("context")
+                .profile_snapshot_id,
+            "profile:1"
+        );
         assert!(matches!(
             ChatRun::new("chat-run:x".to_owned(), opportunity_request(), false),
             Err(ChatError::OpportunityConfirmationRequired)
         ));
         let mut blank = opportunity_request();
-        blank.opportunity_profile_hint = Some(" ".to_owned());
+        blank.opportunity_context = Some(OpportunityContextDto {
+            profile_snapshot_id: " ".to_owned(),
+        });
         assert!(matches!(
             ChatRun::new("chat-run:x".to_owned(), blank, true),
             Err(ChatError::InvalidChatRequest)
@@ -698,7 +728,7 @@ mod tests {
                 message(ChatInputRole::Assistant, "prior"),
                 message(ChatInputRole::User, "second"),
             ],
-            opportunity_profile_hint: None,
+            opportunity_context: None,
         };
         let mut run = new_run(request, false);
         let snapshot = run.next_provider_request().expect("first turn");

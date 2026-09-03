@@ -590,6 +590,7 @@ struct OpenAiChoice {
 
 #[derive(Deserialize)]
 struct OpenAiInboundMessage {
+    role: String,
     #[serde(default)]
     content: Option<String>,
     #[serde(default)]
@@ -622,6 +623,9 @@ fn parse_wire_response(mut response: OpenAiResponse) -> Result<ProviderTurn, Pro
         return Err(ProviderError::Protocol);
     }
     let choice = response.choices.pop().ok_or(ProviderError::Protocol)?;
+    if choice.message.role != "assistant" {
+        return Err(ProviderError::Protocol);
+    }
     if choice.message.tool_calls.is_empty()
         && choice
             .message
@@ -923,7 +927,7 @@ mod tests {
     #[test]
     fn wire_response_maps_text_tools_usage_and_rejects_empty() {
         let text: OpenAiResponse = serde_json::from_value(json!({
-            "choices":[{"message":{"content":"answer","tool_calls":[]}}],
+            "choices":[{"message":{"role":"assistant","content":"answer","tool_calls":[]}}],
             "usage":{"prompt_tokens":7,"completion_tokens":3}
         }))
         .unwrap();
@@ -933,7 +937,7 @@ mod tests {
         assert_eq!(turn.usage.output_tokens, 3);
 
         let tools: OpenAiResponse = serde_json::from_value(json!({
-            "choices":[{"message":{"content":null,"tool_calls":[{
+            "choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{
                 "id":"call-1","type":"function","function":{"name":AFFAIRS_TOOL,"arguments":"{}"}
             }]}}]
         }))
@@ -941,10 +945,25 @@ mod tests {
         assert_eq!(parse_wire_response(tools).unwrap().tool_calls.len(), 1);
 
         let empty: OpenAiResponse = serde_json::from_value(json!({
-            "choices":[{"message":{"content":" ","tool_calls":[]}}]
+            "choices":[{"message":{"role":"assistant","content":" ","tool_calls":[]}}]
         }))
         .unwrap();
         assert_eq!(parse_wire_response(empty), Err(ProviderError::Protocol));
+
+        let missing_role = json!({
+            "choices":[{"message":{"content":"answer","tool_calls":[]}}]
+        });
+        assert!(serde_json::from_value::<OpenAiResponse>(missing_role).is_err());
+        for role in ["user", "tool"] {
+            let wrong_role: OpenAiResponse = serde_json::from_value(json!({
+                "choices":[{"message":{"role":role,"content":"answer","tool_calls":[]}}]
+            }))
+            .unwrap();
+            assert_eq!(
+                parse_wire_response(wrong_role),
+                Err(ProviderError::Protocol)
+            );
+        }
     }
 
     #[test]
@@ -971,7 +990,7 @@ mod tests {
             let request_text = String::from_utf8_lossy(&request);
             assert!(request_text.contains("POST /v1/chat/completions HTTP/1.1"));
             assert!(request_text.contains("authorization: Bearer test-secret-value"));
-            let body = r#"{"choices":[{"message":{"content":"bounded answer","tool_calls":[]}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}"#;
+            let body = r#"{"choices":[{"message":{"role":"assistant","content":"bounded answer","tool_calls":[]}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}"#;
             write!(
                 stream,
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",

@@ -6,15 +6,19 @@ cd "$ROOT"
 port=${UCA_MVP_PORT:-8787}
 base="http://127.0.0.1:${port}"
 work=$(mktemp -d)
+project="uca-mvp-smoke-$$"
+compose() {
+  docker compose --project-name "$project" "$@"
+}
 cleanup() {
-  docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+  compose down --volumes --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$work"
 }
 trap cleanup EXIT
 
-docker compose config --quiet
-docker compose build --pull
-docker compose up -d
+compose config --quiet
+compose build --pull
+compose up -d
 
 healthy=0
 for _ in $(seq 1 150); do
@@ -25,8 +29,8 @@ for _ in $(seq 1 150); do
   sleep 2
 done
 if [ "$healthy" -ne 1 ]; then
-  docker compose ps
-  docker compose logs --no-color --tail 200
+  compose ps
+  compose logs --no-color --tail 200
   printf 'health timeout\n' >&2
   exit 1
 fi
@@ -71,7 +75,7 @@ assert status['publication_revision'] is not None, status
 assert status['control_evidence_event_count'] > 0, status
 PY
 
-docker compose restart
+compose restart
 healthy=0
 for _ in $(seq 1 60); do
   if curl --fail --silent "$base/healthz" >/dev/null; then
@@ -87,5 +91,5 @@ curl --fail --silent \
   > "$work/status-after.json"
 cmp "$work/status-before.json" "$work/status-after.json"
 
-docker compose ps
+compose ps
 printf 'MVP_COMPOSE_SMOKE=PASS\n'

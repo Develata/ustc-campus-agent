@@ -279,6 +279,7 @@ KEY_FILES = [
     "docs/contracts/cli.md",
     "docs/contracts/agent-runtime.md",
     "docs/contracts/agent-harness.md",
+    "docs/contracts/agent-chat.md",
     "docs/contracts/agent-plugin-boundary.md",
     "docs/contracts/client-shell.md",
     "docs/contracts/data-models.md",
@@ -9681,7 +9682,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
         M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "e6e4e7ecacc70d446eab6947f8a28e55b2d78a74a72523908a1bb8a46dd9e88c",
         "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
-        "docs/acceptance/matrix.tsv": "d2c0238eaa9cd0daddc8f2698d0dfc3f3f873d8f9122f017b1be5d79eeb562a1",
+        "docs/acceptance/matrix.tsv": "0650453b51d426bd977b2ba0151c69d83efd975022925b78909e2d08a4692829",
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
         "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
         "docs/contracts/module-boundaries.md": "d064bfcf0832962780678bddd848d0516e53d678b0389883144adec724e460a8",
@@ -9692,7 +9693,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
         "docs/tasks/01-execution-roadmap.md": "05136dbe30d9e3db1d6af08bc3d46b4d6c318d5bb72de5bdec264afdce317f9e",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
-        "docs/coverage-matrix.md": "2daa74003b0ba6bd1c9434c6396cda2a3237352de9ee4caae9ed7789e9f12df1",
+        "docs/coverage-matrix.md": "ff09f542eb02026de5f1622ed74bb42e5a99a646bc387f8e851f994d7856435d",
     }
     if tuple(frozen_projection_sha256) != declared_projection_paths:
         fail(
@@ -13727,7 +13728,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "2b5a2ba3c5120b84f9cd3fe4c89513729b65389e1bbad529cf9182563aa1f60c", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "a2ad02a9f5d88de73b8b6fba8294d5f92dc1717f8c084b436b4f48cc3c1fcf1a", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},

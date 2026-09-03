@@ -163,10 +163,13 @@ function boundedChatMessages(userContent) {
 
 function createChatRequest(userContent, opportunityProfileHint) {
   const messages = boundedChatMessages(userContent);
+  const opportunityContext = opportunityProfileHint == null
+    ? null
+    : { profile_snapshot_id: opportunityProfileHint };
   let request = {
     schema: CHAT_REQUEST_SCHEMA,
     messages,
-    opportunity_profile_hint: opportunityProfileHint
+    opportunity_context: opportunityContext
   };
   let body = JSON.stringify(request);
 
@@ -175,7 +178,7 @@ function createChatRequest(userContent, opportunityProfileHint) {
     request = {
       schema: CHAT_REQUEST_SCHEMA,
       messages,
-      opportunity_profile_hint: opportunityProfileHint
+      opportunity_context: opportunityContext
     };
     body = JSON.stringify(request);
   }
@@ -187,7 +190,7 @@ function createChatRequest(userContent, opportunityProfileHint) {
 
 function assertChatRequestContract(request, headers, body) {
   const requestKeys = Object.keys(request).sort().join(",");
-  if (requestKeys !== "messages,opportunity_profile_hint,schema") {
+  if (requestKeys !== "messages,opportunity_context,schema") {
     throw chatFailure("invalid_chat_request");
   }
   if (
@@ -224,15 +227,18 @@ function assertChatRequestContract(request, headers, body) {
     headers,
     "X-USTC-Opportunity-Confirmation"
   );
-  if (request.opportunity_profile_hint == null) {
+  if (request.opportunity_context == null) {
     if (hasConfirmationHeader) {
       throw chatFailure("invalid_chat_request");
     }
     return;
   }
   if (
-    typeof request.opportunity_profile_hint !== "string" ||
-    request.opportunity_profile_hint.trim().length === 0 ||
+    typeof request.opportunity_context !== "object" ||
+    Array.isArray(request.opportunity_context) ||
+    Object.keys(request.opportunity_context).sort().join(",") !== "profile_snapshot_id" ||
+    typeof request.opportunity_context.profile_snapshot_id !== "string" ||
+    request.opportunity_context.profile_snapshot_id.trim().length === 0 ||
     headers["X-USTC-Opportunity-Confirmation"] !== "confirmed"
   ) {
     throw chatFailure("invalid_chat_request");
