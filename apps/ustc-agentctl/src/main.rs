@@ -1,3 +1,8 @@
+use argon2::password_hash::{PasswordHasher, SaltString};
+use argon2::{Algorithm, Argon2, Params, Version};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
+use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::PathBuf;
@@ -32,6 +37,10 @@ fn run(args: &[String]) -> Result<(), String> {
             println!("ustc-agentctl {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
+        [cmd] if cmd == "source-commit" => {
+            println!("{}", option_env!("UCA_SOURCE_COMMIT").unwrap_or("unknown"));
+            Ok(())
+        }
         [cmd] if cmd == "doctor" => {
             println!("product={PRODUCT_NAME}");
             for plugin in DEFAULT_FIRST_PARTY_PLUGIN_IDENTITIES {
@@ -53,6 +62,7 @@ fn run(args: &[String]) -> Result<(), String> {
             }
             Ok(())
         }
+        [cmd, sub] if cmd == "admin" && sub == "hash-password" => run_hash_password(),
         [cmd, sub, rest @ ..] if cmd == "course" && sub == "plan" => run_course_plan(rest),
         [cmd, sub, rest @ ..] if cmd == "affairs" && sub == "publication-status" => {
             run_affairs_publication(rest, AffairsPublicationAction::Status)
@@ -72,6 +82,56 @@ fn run(args: &[String]) -> Result<(), String> {
         }
         _ => Err("unknown command; run `ustc-agentctl help`".to_owned()),
     }
+}
+
+fn run_hash_password() -> Result<(), String> {
+    let mut encoded = Vec::new();
+    std::io::stdin()
+        .take(2_049)
+        .read_to_end(&mut encoded)
+        .map_err(|_| "failed to read password input".to_owned())?;
+    if encoded.len() > 2_048 {
+        return Err("password input exceeds the bounded encoding size".to_owned());
+    }
+    while encoded
+        .last()
+        .is_some_and(|byte| matches!(byte, b'\r' | b'\n'))
+    {
+        encoded.pop();
+    }
+    let mut password = STANDARD
+        .decode(&encoded)
+        .map_err(|_| "password input must be base64".to_owned())?;
+    encoded.fill(0);
+    if password.len() < 12 || password.len() > 1_024 || password.contains(&0) {
+        password.fill(0);
+        return Err("password must be 12..1024 UTF-8 bytes and contain no NUL".to_owned());
+    }
+    if std::str::from_utf8(&password).is_err() {
+        password.fill(0);
+        return Err("password must be valid UTF-8".to_owned());
+    }
+    let mut salt = [0_u8; 16];
+    File::open("/dev/urandom")
+        .and_then(|mut source| source.read_exact(&mut salt))
+        .map_err(|_| "operating-system randomness is unavailable".to_owned())?;
+    let verifier = hash_password(&password, &salt);
+    password.fill(0);
+    salt.fill(0);
+    println!("{}", verifier?);
+    Ok(())
+}
+
+fn hash_password(password: &[u8], salt: &[u8; 16]) -> Result<String, String> {
+    let params = Params::new(19_456, 2, 1, Some(32))
+        .map_err(|_| "invalid fixed Argon2 parameters".to_owned())?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let salt =
+        SaltString::encode_b64(salt).map_err(|_| "failed to encode random salt".to_owned())?;
+    argon2
+        .hash_password(password, &salt)
+        .map(|hash| hash.to_string())
+        .map_err(|_| "failed to hash password".to_owned())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -351,7 +411,7 @@ fn parse_course_plan_options(args: &[String]) -> Result<CoursePlanOptions, Strin
 
 fn print_help() {
     println!(
-        "{PRODUCT_NAME} operator CLI\n\nCommands:\n  doctor                         print repository/product invariants\n  market validate                point to the market contract validator\n  course plan --fixture PATH     produce deterministic Course Planning JSON\n              [--format json]\n  affairs publication-status     read bounded durable Affairs publication status\n              --server LOOPBACK:PORT\n  affairs publish-demo           run the fixed M10 → M00/evidence → M71 demo command\n              --server LOOPBACK:PORT --confirm\n  change publication-status      read bounded durable ChangeRadar publication status\n              --server LOOPBACK:PORT\n  change publish-demo            run the fixed M10 → M00/evidence → M70 demo command\n              --server LOOPBACK:PORT --confirm\n  changes ...                    accepted alias for the ChangeRadar commands\n  --version                      show binary version\n  help                           show this message"
+        "{PRODUCT_NAME} operator CLI\n\nCommands:\n  doctor                         print repository/product invariants\n  market validate                point to the market contract validator\n  admin hash-password            read one base64 UTF-8 password from stdin and print only an Argon2id PHC verifier\n  course plan --fixture PATH     produce deterministic Course Planning JSON\n              [--format json]\n  affairs publication-status     read bounded durable Affairs publication status\n              --server LOOPBACK:PORT\n  affairs publish-demo           run the fixed M10 → M00/evidence → M71 demo command\n              --server LOOPBACK:PORT --confirm\n  change publication-status      read bounded durable ChangeRadar publication status\n              --server LOOPBACK:PORT\n  change publish-demo            run the fixed M10 → M00/evidence → M70 demo command\n              --server LOOPBACK:PORT --confirm\n  changes ...                    accepted alias for the ChangeRadar commands\n  --version                      show binary version\n  help                           show this message"
     );
 }
 
@@ -433,6 +493,14 @@ mod tests {
     fn course_plan_options_require_fixture() {
         let result = parse_course_plan_options(&strings(&["--format", "json"]));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn admin_password_hash_uses_the_server_admitted_argon2_profile() {
+        let verifier =
+            hash_password(b"correct horse battery staple", &[9_u8; 16]).expect("hash password");
+        assert!(verifier.starts_with("$argon2id$v=19$m=19456,t=2,p=1$"));
+        assert_eq!(verifier.split('$').count(), 6);
     }
 
     #[test]

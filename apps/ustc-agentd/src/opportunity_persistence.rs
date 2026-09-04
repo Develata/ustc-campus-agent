@@ -78,8 +78,7 @@ pub(crate) struct DurableOpportunityProfileRepository {
 }
 
 fn current_uid() -> Result<u32, String> {
-    fs::metadata("/proc/self")
-        .map(|metadata| metadata.uid())
+    crate::unix_identity::effective_uid()
         .map_err(|error| format!("profile state current uid: {error}"))
 }
 

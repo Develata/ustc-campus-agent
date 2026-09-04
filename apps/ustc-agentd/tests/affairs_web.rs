@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use argon2::password_hash::{PasswordHasher, SaltString};
+use argon2::{Algorithm, Argon2, Params, Version};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -21,6 +23,7 @@ struct WebServer {
     child: Child,
     endpoint: String,
     temp_dir: PathBuf,
+    session_cookie: String,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -89,6 +92,19 @@ fn fixture_with_market_state(
     destination.to_path_buf()
 }
 
+fn write_test_admin_hash(path: &std::path::Path) {
+    let params = Params::new(19_456, 2, 1, Some(32)).expect("test Argon2 parameters");
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let salt = SaltString::encode_b64(&[7u8; 16]).expect("test Argon2 salt");
+    let hash = argon2
+        .hash_password(b"web integration password", &salt)
+        .expect("hash web integration password")
+        .to_string();
+    fs::write(path, hash).expect("write web integration password hash");
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+        .expect("secure web integration password hash");
+}
+
 impl WebServer {
     fn start() -> Self {
         Self::start_with_market_states(
@@ -142,6 +158,8 @@ impl WebServer {
         fs::create_dir_all(&temp_dir).expect("create web test directory");
         fs::set_permissions(&temp_dir, fs::Permissions::from_mode(0o700))
             .expect("secure web test directory");
+        let admin_hash = temp_dir.join("admin-password.phc");
+        write_test_admin_hash(&admin_hash);
         let fixture = fixture_with_market_state(
             &fixture,
             &temp_dir.join("affairs-fixture.json"),
@@ -170,6 +188,9 @@ impl WebServer {
         let opportunity_profile_store = temp_dir.join("opportunity-profiles.json");
 
         let mut command = Command::new(env!("CARGO_BIN_EXE_ustc-agentd"));
+        command
+            .env("UCA_ADMIN_USERNAME", "admin")
+            .env("UCA_ADMIN_PASSWORD_HASH_FILE", &admin_hash);
         command.args([
             "serve-web",
             "--bind",
@@ -249,10 +270,37 @@ impl WebServer {
                 "web server did not publish endpoint for affairs={affairs_state:?}, change={change_state:?}, opportunity={opportunity_state:?}: {stderr}"
             );
         });
-        Self {
+        let mut server = Self {
             child,
             endpoint,
             temp_dir,
+            session_cookie: String::new(),
+        };
+        let login = server.post_raw_with_confirmation(
+            "/api/v1/auth/login",
+            "application/json",
+            r#"{"schema":"ustc-local-access-login/v1","username":"admin","password":"web integration password"}"#,
+            false,
+        );
+        assert!(login.status.contains(" 200 "), "{}", login.status);
+        server.session_cookie = login
+            .raw_headers
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("set-cookie: ")
+                    .or_else(|| line.strip_prefix("Set-Cookie: "))
+            })
+            .and_then(|value| value.split(';').next())
+            .expect("login Set-Cookie header")
+            .to_owned();
+        server
+    }
+
+    fn cookie_header(&self) -> String {
+        if self.session_cookie.is_empty() {
+            String::new()
+        } else {
+            format!("Cookie: {}\r\n", self.session_cookie)
         }
     }
 
@@ -277,9 +325,10 @@ impl WebServer {
             .iter()
             .map(|major| format!("X-USTC-Client-Protocol-Major: {major}\r\n"))
             .collect::<String>();
+        let cookie_header = self.cookie_header();
         write!(
             stream,
-            "GET {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json,text/html,*/*\r\n{protocol_headers}X-USTC-Opportunity-Confirmation: confirmed\r\nConnection: close\r\n\r\n",
+            "GET {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json,text/html,*/*\r\n{protocol_headers}{cookie_header}X-USTC-Opportunity-Confirmation: confirmed\r\nConnection: close\r\n\r\n",
             self.endpoint,
         )
         .expect("write HTTP request");
@@ -294,9 +343,10 @@ impl WebServer {
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
             .expect("set read timeout");
+        let cookie_header = self.cookie_header();
         write!(
             stream,
-            "GET {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nX-USTC-Agent-Administrator-Demo: confirm-v1\r\nConnection: close\r\n\r\n",
+            "GET {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\n{cookie_header}X-USTC-Agent-Administrator-Demo: confirm-v1\r\nConnection: close\r\n\r\n",
             self.endpoint
         )
         .expect("write administrator HTTP request");
@@ -314,9 +364,10 @@ impl WebServer {
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
             .expect("set read timeout");
+        let cookie_header = self.cookie_header();
         write!(
             stream,
-            "POST {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nX-USTC-Agent-Administrator-Demo: confirm-v1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "POST {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\n{cookie_header}X-USTC-Agent-Administrator-Demo: confirm-v1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             self.endpoint,
             body.len(),
             body
@@ -360,9 +411,10 @@ impl WebServer {
         } else {
             ""
         };
+        let cookie_header = self.cookie_header();
         write!(
             stream,
-            "POST {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nContent-Type: {content_type}\r\n{confirmation_header}Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "POST {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nContent-Type: {content_type}\r\n{confirmation_header}{cookie_header}Content-Length: {}\r\nConnection: close\r\n\r\n{}",
             self.endpoint,
             body.len(),
             body
@@ -389,9 +441,10 @@ impl WebServer {
         let origin_header = origin
             .map(|value| format!("Origin: {value}\r\n"))
             .unwrap_or_default();
+        let cookie_header = self.cookie_header();
         write!(
             stream,
-            "POST {path} HTTP/1.1\r\nHost: {host}\r\n{origin_header}Accept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "POST {path} HTTP/1.1\r\nHost: {host}\r\n{origin_header}Accept: application/json\r\nContent-Type: application/json\r\n{cookie_header}Content-Length: {}\r\nConnection: close\r\n\r\n{}",
             body.len(),
             body,
         )
@@ -414,6 +467,7 @@ impl Drop for WebServer {
 struct HttpResponse {
     status: String,
     headers: String,
+    raw_headers: String,
     body: String,
 }
 
@@ -423,9 +477,11 @@ impl HttpResponse {
         let (head, body) = text.split_once("\r\n\r\n").expect("HTTP separator");
         let mut lines = head.lines();
         let status = lines.next().expect("HTTP status").to_owned();
+        let raw_headers = lines.collect::<Vec<_>>().join("\n");
         Self {
             status,
-            headers: lines.collect::<Vec<_>>().join("\n").to_ascii_lowercase(),
+            headers: raw_headers.to_ascii_lowercase(),
+            raw_headers,
             body: body.to_owned(),
         }
     }
@@ -875,15 +931,7 @@ fn administrator_publication_http_requires_explicit_demo_confirmation_and_is_ide
     const PATH: &str = "/api/v1/demo/administrator/affairs/publication";
     let server = WebServer::start_affairs_only();
 
-    let denied = server.get(PATH);
-    assert!(denied.status.contains(" 403 "), "{}", denied.status);
-    assert!(
-        denied
-            .body
-            .contains("administrator_demo_confirmation_required")
-    );
-
-    let initial = server.get_admin(PATH);
+    let initial = server.get(PATH);
     assert!(initial.status.contains(" 200 "), "{}", initial.status);
     let initial: Value = serde_json::from_str(&initial.body).expect("publication status JSON");
     assert_eq!(initial["schema"], "ustc-affairs-publication-status/v1");
@@ -1575,8 +1623,14 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(page.headers.contains("x-frame-options: deny"));
     assert!(page.body.contains("USTC Campus Agent"));
     assert!(!page.body.contains("科大校园助手"));
-    assert!(page.body.contains("先说你要做什么。"));
+    assert!(page.body.contains("今天想处理什么？"));
     for id in [
+        "login-screen",
+        "login-form",
+        "app-shell",
+        "nav-chat",
+        "nav-tools",
+        "provider-status",
         "chat-form",
         "chat-input",
         "chat-clear",

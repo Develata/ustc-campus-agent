@@ -7,7 +7,7 @@
 - `Scope`: one loopback Web Chat vertical slice over the three existing DemoReviewed/synthetic Plugin journeys
 - `Normative contract`: [`../contracts/agent-chat.md`](../contracts/agent-chat.md)
 - `Acceptance`: active `CHAT-001`, `CHAT-002`, `CHAT-003`
-- `Decision provenance`: Develata selected “Web Chat + OpenAI-compatible provider + three-Plugin tool calling”; real campus-source and real-provider network access remain forbidden without separate approval
+- `Decision provenance`: Develata selected “Web Chat + OpenAI-compatible provider + three-Plugin tool calling”, then requested a ChatGPT-like chat-first shell and account login while allowing administration to remain CLI-only; real campus-source activation remains forbidden and real-provider smoke requires separately supplied runtime configuration
 
 This taskbook records implementation boundaries and fan-in order. It owns no wire schema, authority rule, provider behavior, budget, tool mapping, error code or delivery lifecycle; those are governed by `agent-chat/v1` and the active acceptance matrix.
 
@@ -15,6 +15,7 @@ This taskbook records implementation boundaries and fan-in order. It owns no wir
 
 ```text
 Web Chat
+→ one deployment-local login (no registration/SSO)
 → POST /api/v1/agent/chat
 → deterministic mock by default or operator-configured OpenAI-compatible provider
 → finite sequential tool loop
@@ -23,7 +24,7 @@ Web Chat
 → loopback Docker Compose ZIP
 ```
 
-The work retains reviewed/synthetic fixtures and introduces no campus retrieval, USTC source activation, CAS/SSO, production database, generic Plugin runtime, streaming, RAG, durable chat history or multi-agent graph.
+The work retains reviewed/synthetic fixtures and introduces no campus retrieval, USTC source activation, CAS/SSO, production/multi-user identity, production database, generic Plugin runtime, streaming, RAG, durable chat history or multi-agent graph. The chat-first sidebar therefore exposes only New chat, the current page-lifetime conversation, a secondary campus-tools view, safe runtime/provider status and local-account logout; it never fabricates saved conversations or projects.
 
 ## 2. Implementation ownership
 

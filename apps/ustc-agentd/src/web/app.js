@@ -11,6 +11,30 @@ const chatErrorMessage = document.querySelector("#chat-error-message");
 const chatErrorCode = document.querySelector("#chat-error-code");
 const chatOpportunityConfirm = document.querySelector("#chat-opportunity-confirm");
 const chatOpportunityState = document.querySelector("#chat-opportunity-state");
+const bootStatus = document.querySelector("#boot-status");
+const loginScreen = document.querySelector("#login-screen");
+const loginForm = document.querySelector("#login-form");
+const loginUsername = document.querySelector("#login-username");
+const loginPassword = document.querySelector("#login-password");
+const loginSubmit = document.querySelector("#login-submit");
+const loginError = document.querySelector("#login-error");
+const appShell = document.querySelector("#app-shell");
+const appSidebar = document.querySelector("#app-sidebar");
+const appColumn = document.querySelector(".app-column");
+const navOpen = document.querySelector("#nav-open");
+const navClose = document.querySelector("#nav-close");
+const navChat = document.querySelector("#nav-chat");
+const navTools = document.querySelector("#nav-tools");
+const drawerScrim = document.querySelector("#drawer-scrim");
+const chatView = document.querySelector("#chat-view");
+const toolsView = document.querySelector("#tools-view");
+const viewTitle = document.querySelector("#view-title");
+const providerStatus = document.querySelector("#provider-status");
+const accountName = document.querySelector("#account-name");
+const logoutButton = document.querySelector("#logout-button");
+const promptExamples = document.querySelectorAll("[data-chat-prompt]");
+const LOCAL_ACCESS_SCHEMA = "ustc-local-access/v1";
+const LOCAL_ACCESS_LOGIN_SCHEMA = "ustc-local-access-login/v1";
 const CHAT_REQUEST_SCHEMA = "ustc-agent-chat-request/v1";
 const CHAT_RESPONSE_SCHEMA = "ustc-agent-chat-response/v1";
 const CHAT_ERROR_SCHEMA = "ustc-agent-chat-error/v1";
@@ -24,6 +48,9 @@ const CHAT_MAX_TOOL_CALLS = 4;
 const chatTextEncoder = new TextEncoder();
 const chatHistory = [];
 let chatPending = false;
+let pageAuthenticated = false;
+let toolsInitialized = false;
+let drawerReturnFocus = null;
 
 const form = document.querySelector("#lookup-form");
 const procedureInput = document.querySelector("#procedure-id");
@@ -85,6 +112,216 @@ function text(element, value) {
   element.textContent = value ?? "—";
 }
 
+function assertLocalAccessEnvelope(value) {
+  if (
+    value == null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join(",") !== "account,authenticated,provider,schema" ||
+    value.schema !== LOCAL_ACCESS_SCHEMA ||
+    typeof value.authenticated !== "boolean"
+  ) {
+    throw new Error("invalid_local_access_response");
+  }
+  if (!value.authenticated) {
+    if (value.account !== null || value.provider !== null) {
+      throw new Error("invalid_local_access_response");
+    }
+    return;
+  }
+  if (
+    value.account == null ||
+    Object.keys(value.account).sort().join(",") !== "boundary,username" ||
+    typeof value.account.username !== "string" ||
+    value.account.username.length < 1 ||
+    value.provider == null ||
+    Object.keys(value.provider).sort().join(",") !== "mode,model" ||
+    (value.provider.mode !== "mock" && value.provider.mode !== "openai-compatible") ||
+    typeof value.provider.model !== "string"
+  ) {
+    throw new Error("invalid_local_access_response");
+  }
+}
+
+function providerLabel(provider) {
+  if (provider.mode === "mock") {
+    return "Mock · offline deterministic";
+  }
+  return `External compatible · ${provider.model}`;
+}
+
+function closeDrawer({ restoreFocus = true } = {}) {
+  document.body.classList.remove("drawer-open");
+  navOpen.setAttribute("aria-expanded", "false");
+  drawerScrim.hidden = true;
+  appColumn.inert = false;
+  if (restoreFocus && drawerReturnFocus instanceof HTMLElement) {
+    drawerReturnFocus.focus();
+  }
+  drawerReturnFocus = null;
+}
+
+function openDrawer() {
+  if (window.matchMedia("(min-width: 800px)").matches) return;
+  drawerReturnFocus = document.activeElement;
+  document.body.classList.add("drawer-open");
+  navOpen.setAttribute("aria-expanded", "true");
+  drawerScrim.hidden = false;
+  appColumn.inert = true;
+  navClose.focus();
+}
+
+function initializeTools() {
+  if (toolsInitialized) return;
+  toolsInitialized = true;
+  syncProcedurePreview();
+  setOpportunityHint(readOpportunityHint());
+  if (opportunityProfileId) void viewOpportunityProfile();
+  void lookup();
+  void loadPublicationStatus();
+  void loadChangePublicationStatus();
+  void loadChangeFeed();
+}
+
+function switchView(nextView, { focusHeading = true } = {}) {
+  const toolsActive = nextView === "tools";
+  chatView.hidden = toolsActive;
+  toolsView.hidden = !toolsActive;
+  if (toolsActive) {
+    navChat.removeAttribute("aria-current");
+    navTools.setAttribute("aria-current", "page");
+  } else {
+    navTools.removeAttribute("aria-current");
+    navChat.setAttribute("aria-current", "page");
+  }
+  viewTitle.textContent = toolsActive ? "校园工具" : "对话";
+  closeDrawer({ restoreFocus: false });
+  if (toolsActive) initializeTools();
+  if (focusHeading) {
+    const target = toolsActive ? document.querySelector("#diagnostics-title") : chatInput;
+    target?.focus({ preventScroll: true });
+  }
+}
+
+function showLoggedOut(message = "", { preserveConversation = true } = {}) {
+  pageAuthenticated = false;
+  closeDrawer({ restoreFocus: false });
+  bootStatus.hidden = true;
+  appShell.hidden = true;
+  loginScreen.hidden = false;
+  if (!preserveConversation) clearChatConversation();
+  loginPassword.value = "";
+  loginError.textContent = message;
+  loginError.hidden = message.length === 0;
+  queueMicrotask(() => loginUsername.focus());
+}
+
+function showAuthenticated(value) {
+  assertLocalAccessEnvelope(value);
+  if (!value.authenticated) {
+    showLoggedOut();
+    return;
+  }
+  pageAuthenticated = true;
+  bootStatus.hidden = true;
+  loginScreen.hidden = true;
+  appShell.hidden = false;
+  accountName.textContent = value.account.username;
+  providerStatus.textContent = providerLabel(value.provider);
+  setOpportunityHint(readOpportunityHint());
+  loginPassword.value = "";
+  loginError.hidden = true;
+  switchView("chat", { focusHeading: false });
+  queueMicrotask(() => chatInput.focus());
+}
+
+async function bootstrapLocalAccess() {
+  try {
+    const response = await fetch("/api/v1/auth/session", {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      credentials: "same-origin",
+      cache: "no-store"
+    });
+    if (!response.ok) throw new Error("session_check_failed");
+    const payload = await response.json();
+    assertLocalAccessEnvelope(payload);
+    if (payload.authenticated) showAuthenticated(payload);
+    else showLoggedOut();
+  } catch (_error) {
+    bootStatus.textContent = "无法连接本机 Agent 服务。请确认容器仍在运行后刷新页面。";
+  }
+}
+
+async function submitLocalLogin() {
+  const username = loginUsername.value.trim();
+  const password = loginPassword.value;
+  if (username.length < 1 || password.length < 1) {
+    loginError.textContent = "请输入账号和密码。";
+    loginError.hidden = false;
+    return;
+  }
+  loginSubmit.disabled = true;
+  loginSubmit.textContent = "正在登录…";
+  loginError.hidden = true;
+  try {
+    const response = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+      body: JSON.stringify({ schema: LOCAL_ACCESS_LOGIN_SCHEMA, username, password })
+    });
+    const payload = await response.json().catch(() => null);
+    if (response.status === 429) {
+      throw new Error("rate_limited");
+    }
+    if (!response.ok) {
+      throw new Error("invalid_credentials");
+    }
+    assertLocalAccessEnvelope(payload);
+    showAuthenticated(payload);
+  } catch (error) {
+    loginPassword.value = "";
+    loginError.textContent = error instanceof Error && error.message === "rate_limited"
+      ? "尝试次数过多，请约一分钟后再试。"
+      : "账号或密码不正确。";
+    loginError.hidden = false;
+    loginPassword.focus();
+  } finally {
+    loginSubmit.disabled = false;
+    loginSubmit.textContent = "登录";
+  }
+}
+
+function expireLocalSession() {
+  showLoggedOut("本机登录已过期，请重新登录。", { preserveConversation: true });
+}
+
+async function logoutLocalSession() {
+  logoutButton.disabled = true;
+  try {
+    const response = await fetch("/api/v1/auth/logout", {
+      method: "POST",
+      headers: { "Accept": "application/json" },
+      credentials: "same-origin",
+      cache: "no-store"
+    });
+    if (!response.ok && response.status !== 401) throw new Error("logout_failed");
+    showLoggedOut("", { preserveConversation: false });
+  } catch (_error) {
+    switchView("chat", { focusHeading: false });
+    showChatError("network_error");
+  } finally {
+    logoutButton.disabled = false;
+  }
+}
+
+function resizeComposer() {
+  chatInput.style.height = "auto";
+  chatInput.style.height = `${Math.min(chatInput.scrollHeight, 160)}px`;
+}
+
 const CHAT_TOOL_LABELS = Object.freeze({
   affairs_navigator_get: "办事导航 · 查询公开流程",
   change_radar_get: "变更雷达 · 查询校历变更",
@@ -117,7 +354,8 @@ const CHAT_ERROR_MESSAGES = Object.freeze({
   message_too_large: "这条消息编码后超过 4 KiB。请缩短后重试。",
   invalid_response: "服务器返回了无法安全呈现的回答。请稍后重试。",
   request_failed: "服务器拒绝了这次请求，但没有返回可识别的恢复信息。",
-  network_error: "无法连接到本机 Agent 服务。请确认演示仍在运行后重试。"
+  network_error: "无法连接到本机 Agent 服务。请确认演示仍在运行后重试。",
+  authentication_required: "本机登录已过期，请重新登录。"
 });
 
 function chatFailure(code) {
@@ -274,6 +512,7 @@ function clearChatConversation() {
   chatError.hidden = true;
   chatInput.value = "";
   chatInput.setCustomValidity("");
+  resizeComposer();
   syncChatEmptyState();
   chatInput.focus({ preventScroll: true });
 }
@@ -287,23 +526,28 @@ function trimChatTranscript() {
 }
 
 function renderChatToolTrace(messageItem, toolTrace) {
-  if (toolTrace.length === 0) {
-    return;
-  }
   const details = document.createElement("details");
   details.className = "chat-tool-trace";
+  details.open = toolTrace.some((entry) => entry.status !== "succeeded");
   const summary = document.createElement("summary");
-  summary.textContent = `工具记录 · ${toolTrace.length} 次`;
+  summary.textContent = toolTrace.length === 0
+    ? "服务端执行记录 · 本轮未调用校园工具"
+    : `服务端执行记录 · ${toolTrace.length} 项工具证据`;
   const list = document.createElement("ul");
-  for (const trace of toolTrace) {
+  const entries = toolTrace.length === 0
+    ? [{ tool: "模型回答", status: "denied", empty: true }]
+    : toolTrace;
+  for (const entry of entries) {
     const item = document.createElement("li");
-    const tool = document.createElement("span");
-    tool.textContent = CHAT_TOOL_LABELS[trace.tool];
+    const label = document.createElement("span");
+    label.textContent = entry.empty
+      ? "没有 authoritative server trace；以下仅为模型生成摘要"
+      : CHAT_TOOL_LABELS[entry.tool];
     const state = document.createElement("span");
     state.className = "chat-tool-state";
-    state.dataset.status = trace.status;
-    state.textContent = CHAT_STATUS_LABELS[trace.status];
-    item.append(tool, state);
+    state.dataset.status = entry.status;
+    state.textContent = entry.empty ? "仅模型" : CHAT_STATUS_LABELS[entry.status];
+    item.append(label, state);
     list.appendChild(item);
   }
   details.append(summary, list);
@@ -311,6 +555,7 @@ function renderChatToolTrace(messageItem, toolTrace) {
 }
 
 function appendChatMessage(role, content, toolTrace = []) {
+  const shouldFollow = chatMessages.scrollHeight - chatMessages.clientHeight - chatMessages.scrollTop < 160;
   const item = document.createElement("li");
   item.className = "chat-message";
   item.dataset.role = role;
@@ -321,12 +566,18 @@ function appendChatMessage(role, content, toolTrace = []) {
   const body = document.createElement("p");
   body.className = "chat-message-body";
   body.textContent = content;
-  item.append(speaker, body);
+  item.appendChild(speaker);
   if (role === "assistant") {
     renderChatToolTrace(item, toolTrace);
   }
+  item.appendChild(body);
   chatMessages.appendChild(item);
   syncChatEmptyState();
+  if (shouldFollow) {
+    queueMicrotask(() => {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    });
+  }
   return item;
 }
 
@@ -410,7 +661,7 @@ function setChatBusy(busy) {
   chatClear.setAttribute("aria-disabled", String(busy));
   chatSend.disabled = busy;
   chatSend.setAttribute("aria-disabled", String(busy));
-  chatSend.textContent = busy ? "发送中…" : "发送";
+  chatSend.setAttribute("aria-label", busy ? "正在发送" : "发送消息");
   chatOpportunityConfirm.disabled = busy || !opportunityProfileId;
   chatOpportunityConfirm.setAttribute(
     "aria-disabled",
@@ -425,10 +676,16 @@ async function requestChat(body, headers) {
       method: "POST",
       headers,
       body,
+      credentials: "same-origin",
       cache: "no-store"
     });
   } catch (_error) {
     throw chatFailure("network_error");
+  }
+
+  if (response.status === 401) {
+    expireLocalSession();
+    throw chatFailure("authentication_required");
   }
 
   let payload;
@@ -485,6 +742,7 @@ async function submitChat() {
   chatError.hidden = true;
   const pendingItem = appendChatMessage("user", userContent);
   chatInput.value = "";
+  resizeComposer();
   chatOpportunityConfirm.checked = false;
   setChatBusy(true);
   try {
@@ -497,11 +755,14 @@ async function submitChat() {
     syncChatEmptyState();
     if (!chatInput.value) {
       chatInput.value = userContent;
+      resizeComposer();
     }
-    showChatError(error?.code ?? "network_error");
+    if (error?.code !== "authentication_required") {
+      showChatError(error?.code ?? "network_error");
+    }
   } finally {
     setChatBusy(false);
-    chatInput.focus({ preventScroll: true });
+    if (pageAuthenticated) chatInput.focus({ preventScroll: true });
   }
 }
 
@@ -771,6 +1032,7 @@ async function lookup() {
 async function requestPublication(method, body) {
   const response = await fetch("/api/v1/demo/administrator/affairs/publication", {
     method,
+    credentials: "same-origin",
     headers: {
       "Accept": "application/json",
       "Content-Type": "application/json",
@@ -779,6 +1041,10 @@ async function requestPublication(method, body) {
     body,
     cache: "no-store"
   });
+  if (response.status === 401) {
+    expireLocalSession();
+    throw new Error("authentication_required");
+  }
   const payload = await response.json();
   if (!response.ok) {
     const detail = payload?.outcome?.error ?? payload?.error ?? `HTTP ${response.status}`;
@@ -839,6 +1105,7 @@ async function publishAffairsDemo() {
 async function requestChangePublication(method, body) {
   const response = await fetch("/api/v1/demo/administrator/changes/publication", {
     method,
+    credentials: "same-origin",
     headers: {
       "Accept": "application/json",
       "Content-Type": "application/json",
@@ -847,6 +1114,10 @@ async function requestChangePublication(method, body) {
     body,
     cache: "no-store"
   });
+  if (response.status === 401) {
+    expireLocalSession();
+    throw new Error("authentication_required");
+  }
   const payload = await response.json();
   if (!response.ok) {
     throw new Error(payload?.error ?? `HTTP ${response.status}`);
@@ -1153,6 +1424,7 @@ function reusableOperationEnvelope(operation, profileId) {
 async function requestOpportunity(url, options) {
   const response = await fetch(url, {
     cache: "no-store",
+    credentials: "same-origin",
     ...options,
     headers: {
       "Accept": "application/json",
@@ -1161,6 +1433,10 @@ async function requestOpportunity(url, options) {
       "X-USTC-Opportunity-Confirmation": "confirmed"
     }
   });
+  if (response.status === 401) {
+    expireLocalSession();
+    throw new Error("authentication_required");
+  }
   const payload = await response.json();
   if (!response.ok) {
     const rejection = payload?.rejection?.kind;
@@ -1204,6 +1480,7 @@ async function submitOpportunityOperation(url, body) {
   const response = await fetch(url, {
     method: "POST",
     cache: "no-store",
+    credentials: "same-origin",
     headers: {
       "Accept": "application/json",
       "Content-Type": "application/json",
@@ -1211,6 +1488,10 @@ async function submitOpportunityOperation(url, body) {
     },
     body
   });
+  if (response.status === 401) {
+    expireLocalSession();
+    throw new Error("authentication_required");
+  }
   let payload = null;
   try {
     payload = await response.json();
@@ -1461,6 +1742,51 @@ async function deleteOpportunityProfile() {
 }
 
 assertChatDomContract();
+loginForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void submitLocalLogin();
+});
+logoutButton.addEventListener("click", () => {
+  void logoutLocalSession();
+});
+navChat.addEventListener("click", () => switchView("chat"));
+navTools.addEventListener("click", () => switchView("tools"));
+navOpen.addEventListener("click", openDrawer);
+navClose.addEventListener("click", () => closeDrawer());
+drawerScrim.addEventListener("click", () => closeDrawer());
+for (const example of promptExamples) {
+  example.addEventListener("click", () => {
+    chatInput.value = example.dataset.chatPrompt ?? "";
+    resizeComposer();
+    chatInput.focus();
+  });
+}
+appSidebar.addEventListener("keydown", (event) => {
+  if (!document.body.classList.contains("drawer-open")) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeDrawer();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = Array.from(appSidebar.querySelectorAll("button:not(:disabled), a[href], input:not(:disabled)"))
+    .filter((element) => !element.hidden && element.getClientRects().length > 0);
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+window.addEventListener("resize", () => {
+  if (window.matchMedia("(min-width: 800px)").matches) {
+    closeDrawer({ restoreFocus: false });
+  }
+});
 chatForm.addEventListener("submit", (event) => {
   event.preventDefault();
   void submitChat();
@@ -1468,6 +1794,7 @@ chatForm.addEventListener("submit", (event) => {
 chatClear.addEventListener("click", clearChatConversation);
 chatInput.addEventListener("input", () => {
   chatInput.setCustomValidity("");
+  resizeComposer();
 });
 chatInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
@@ -1527,13 +1854,5 @@ procedureInput.addEventListener("keydown", (event) => {
     form.requestSubmit();
   }
 });
-syncProcedurePreview();
-setOpportunityHint(readOpportunityHint());
-if (opportunityProfileId) {
-  void viewOpportunityProfile();
-}
-
-void lookup();
-void loadPublicationStatus();
-void loadChangePublicationStatus();
-void loadChangeFeed();
+resizeComposer();
+void bootstrapLocalAccess();

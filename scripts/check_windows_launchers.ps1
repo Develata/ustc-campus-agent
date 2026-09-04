@@ -63,6 +63,7 @@ $oldPath = $env:PATH
 $oldLocation = (Get-Location).Path
 $oldProvider = [Environment]::GetEnvironmentVariable("UCA_AGENT_PROVIDER", "Process")
 $oldKeySource = [Environment]::GetEnvironmentVariable("UCA_AGENT_API_KEY_SOURCE", "Process")
+$oldAdminHashSource = [Environment]::GetEnvironmentVariable("UCA_ADMIN_PASSWORD_HASH_SOURCE", "Process")
 $dotenvLauncherRoot = Join-Path $env:RUNNER_TEMP "uca-commented-dotenv-launchers"
 try {
   $env:PATH = "$shim;$oldPath"
@@ -80,6 +81,7 @@ try {
   )
   [Environment]::SetEnvironmentVariable("UCA_AGENT_PROVIDER", $null, "Process")
   [Environment]::SetEnvironmentVariable("UCA_AGENT_API_KEY_SOURCE", $null, "Process")
+  [Environment]::SetEnvironmentVariable("UCA_ADMIN_PASSWORD_HASH_SOURCE", $null, "Process")
   $commentedProviderRejected = $false
   try {
     & (Join-Path $dotenvLauncherRoot "start.ps1")
@@ -107,6 +109,11 @@ try {
       Expected = "Compose interpolation is not supported for security-critical .env values; use a literal value."
     },
     @{
+      Name = "admin-hash-source-interpolation"
+      Lines = @('UCA_AGENT_PROVIDER=mock', 'UCA_ADMIN_PASSWORD_HASH_SOURCE=${ADMIN_HASH_SOURCE:-./secrets/admin-password.phc}')
+      Expected = "Compose interpolation is not supported for security-critical .env values; use a literal value."
+    },
+    @{
       Name = "duplicate-provider"
       Lines = @('UCA_AGENT_PROVIDER=mock', 'UCA_AGENT_PROVIDER=openai-compatible')
       Expected = "Duplicate UCA_AGENT_PROVIDER definitions are forbidden in .env."
@@ -115,6 +122,11 @@ try {
       Name = "duplicate-key-source"
       Lines = @('UCA_AGENT_PROVIDER=mock', 'UCA_AGENT_API_KEY_SOURCE=./first.txt', 'UCA_AGENT_API_KEY_SOURCE=./second.txt')
       Expected = "Duplicate UCA_AGENT_API_KEY_SOURCE definitions are forbidden in .env."
+    },
+    @{
+      Name = "duplicate-admin-hash-source"
+      Lines = @('UCA_AGENT_PROVIDER=mock', 'UCA_ADMIN_PASSWORD_HASH_SOURCE=./first.phc', 'UCA_ADMIN_PASSWORD_HASH_SOURCE=./second.phc')
+      Expected = "Duplicate UCA_ADMIN_PASSWORD_HASH_SOURCE definitions are forbidden in .env."
     },
     @{
       Name = "leading-provider"
@@ -219,7 +231,7 @@ try {
     throw "start.ps1 accepted a failing Docker command."
   }
 
-  foreach ($wrapperName in @("start.cmd", "stop.cmd", "reset.cmd")) {
+  foreach ($wrapperName in @("start.cmd", "stop.cmd", "reset.cmd", "set-admin-password.cmd")) {
     $wrapper = Join-Path $launcherRoot $wrapperName
     if ($wrapperName -eq "reset.cmd") {
       & $env:ComSpec /d /c "echo RESET| call `"$wrapper`""
@@ -234,6 +246,7 @@ try {
   $env:PATH = $oldPath
   $env:UCA_AGENT_PROVIDER = $oldProvider
   $env:UCA_AGENT_API_KEY_SOURCE = $oldKeySource
+  $env:UCA_ADMIN_PASSWORD_HASH_SOURCE = $oldAdminHashSource
   Set-Location -LiteralPath $oldLocation
   if (Test-Path -LiteralPath $dotenvLauncherRoot) {
     Remove-Item -LiteralPath $dotenvLauncherRoot -Recurse -Force

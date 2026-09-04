@@ -20,10 +20,11 @@ trap cleanup EXIT
 mkdir -p "$work/readback"
 
 UCA_SOURCE_COMMIT="$source_commit" \
-  cargo build --locked --release -p ustc-agentd --bin ustc-agentd
+  cargo build --locked --release -p ustc-agentd --bin ustc-agentd -p ustc-agentctl --bin ustc-agentctl
 for output in "$work/package-a" "$work/package-b"; do
   scripts/package_three_plugin_mvp_compose.sh \
     --binary target/release/ustc-agentd \
+    --operator-binary target/release/ustc-agentctl \
     --output-dir "$output" \
     --source-commit "$source_commit"
 done
@@ -42,6 +43,7 @@ tar -xzf "$work/package-a/ustc-campus-agent-mvp-compose-${short_commit}.tar.gz" 
   cd "$work/readback/ustc-campus-agent-mvp-compose"
   sha256sum -c SHA256SUMS
   test "$(bin/ustc-agentd source-commit)" = "$source_commit"
+  test "$(bin/ustc-agentctl source-commit)" = "$source_commit"
   mkdir -p "$work/fake-bin" "$work/launcher-secrets"
   printf '%s\n' '#!/usr/bin/env sh' ': > "${DOCKER_MARKER:?}"' 'exit 23' \
     > "$work/fake-bin/docker"

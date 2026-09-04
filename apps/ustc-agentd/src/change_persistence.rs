@@ -803,9 +803,7 @@ fn direct_parent(path: &Path) -> Result<&Path, ChangePublicationRepositoryError>
 }
 
 fn current_uid() -> Result<u32, ChangePublicationRepositoryError> {
-    fs::metadata("/proc/self")
-        .map(|metadata| metadata.uid())
-        .map_err(|_| ChangePublicationRepositoryError::Unavailable)
+    crate::unix_identity::effective_uid().map_err(|_| ChangePublicationRepositoryError::Unavailable)
 }
 
 fn unpredictable_temporary(

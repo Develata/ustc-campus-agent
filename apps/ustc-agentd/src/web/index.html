@@ -10,65 +10,124 @@
   <script src="/assets/app.js" defer></script>
 </head>
 <body>
-  <header class="site-header" aria-label="产品标识">
-    <a class="brand" href="/" aria-label="USTC Campus Agent 首页">
-      <span class="brand-mark" aria-hidden="true">科</span>
-      <span>USTC Campus Agent</span>
-    </a>
-    <span class="demo-badge">Bounded demo</span>
-  </header>
+  <div id="boot-status" class="boot-status" role="status">正在检查本机登录状态…</div>
 
-  <main>
-    <section class="chat-hero" aria-labelledby="chat-title">
-      <header class="chat-heading">
-        <p class="eyebrow">BOUNDED CAMPUS AGENT · 本机演示</p>
-        <h1 id="chat-title">先说你要做什么。</h1>
-        <p class="lead">询问办事流程、校历变更、记录本地事项，或在你逐次允许后使用当前 synthetic profile 规划课程。回答只来自这个有界演示允许调用的工具。</p>
+  <section id="login-screen" class="login-screen" aria-labelledby="login-title" hidden>
+    <div class="login-panel">
+      <div class="login-brand" aria-label="USTC Campus Agent">
+        <span class="brand-mark" aria-hidden="true">科</span>
+        <span>USTC Campus Agent · 非官方演示</span>
+      </div>
+      <p class="eyebrow">LOCAL DEPLOYMENT</p>
+      <h1 id="login-title">登录本机校园 Agent</h1>
+      <p class="login-boundary">这是部署者管理的非官方本机演示。请只使用本包设置的本地凭据；请勿输入 USTC 统一身份认证 / CAS 账号或密码。</p>
+      <form id="login-form" class="login-form" novalidate>
+        <label for="login-username">本地账号</label>
+        <input id="login-username" name="username" type="text" maxlength="64" autocomplete="username" required>
+        <label for="login-password">本地密码</label>
+        <input id="login-password" name="password" type="password" maxlength="1024" autocomplete="current-password" required>
+        <p id="login-error" class="login-error" role="alert" hidden>账号或密码不正确。</p>
+        <button id="login-submit" type="submit">登录</button>
+      </form>
+      <p class="login-footnote">仅用于本机 deployment access · 不代表中国科大官方身份</p>
+    </div>
+  </section>
+
+  <div id="app-shell" class="app-shell" hidden>
+    <aside id="app-sidebar" class="app-sidebar" aria-label="应用导航">
+      <div class="sidebar-heading">
+        <a class="brand" href="/" aria-label="USTC Campus Agent">
+          <span class="brand-mark" aria-hidden="true">科</span>
+          <span>USTC Campus Agent</span>
+        </a>
+        <button id="nav-close" class="icon-button sidebar-close" type="button" aria-label="关闭导航">×</button>
+      </div>
+      <button id="chat-clear" class="new-chat-button" type="button">
+        <span aria-hidden="true">＋</span><span>新对话</span>
+      </button>
+      <nav class="primary-nav" aria-label="主要功能">
+        <button id="nav-chat" class="nav-item" type="button" aria-current="page">
+          <span aria-hidden="true">◇</span><span>对话</span>
+        </button>
+        <button id="nav-tools" class="nav-item" type="button">
+          <span aria-hidden="true">⌘</span><span>校园工具</span>
+        </button>
+      </nav>
+      <p class="history-boundary">对话记录只保留在当前页面；本轮不伪造服务器历史或项目列表。</p>
+      <div class="sidebar-status">
+        <div>
+          <span class="status-label">Provider</span>
+          <strong id="provider-status">状态不可用</strong>
+        </div>
+        <div>
+          <span class="status-label">Local account</span>
+          <strong id="account-name">—</strong>
+          <small>部署访问门禁 · 非 USTC 身份</small>
+        </div>
+        <button id="logout-button" type="button">退出登录</button>
+      </div>
+    </aside>
+    <button id="drawer-scrim" class="drawer-scrim" type="button" aria-label="关闭导航" hidden></button>
+
+    <div class="app-column">
+      <header id="app-topbar" class="app-topbar">
+        <button id="nav-open" class="icon-button menu-button" type="button" aria-label="打开导航" aria-controls="app-sidebar" aria-expanded="false">☰</button>
+        <strong id="view-title">对话</strong>
+        <span>Bounded local demo</span>
       </header>
 
-      <section id="chat-surface" class="chat-surface" aria-label="与校园 Agent 对话" aria-busy="false">
-        <ol id="chat-messages" class="chat-messages" aria-label="对话记录" aria-live="polite" aria-relevant="additions text">
-          <li id="chat-empty" class="chat-empty">
-            <strong>从一个具体问题开始</strong>
-            <span>例如：“成绩单证明怎么办？”、“推荐课程”，或“记录事项：提交开题报告”。</span>
-          </li>
-        </ol>
+      <main id="app-main-content" class="app-main-content">
+        <section id="chat-view" class="chat-view" aria-labelledby="chat-title">
+          <h1 id="chat-title" class="visually-hidden">校园 Agent 对话</h1>
+          <section id="chat-surface" class="chat-surface" aria-label="与校园 Agent 对话" aria-busy="false">
+            <ol id="chat-messages" class="chat-messages" aria-label="对话记录" aria-live="polite" aria-relevant="additions text">
+              <li id="chat-empty" class="chat-empty">
+                <span class="empty-mark" aria-hidden="true">科</span>
+                <strong>今天想处理什么？</strong>
+                <span>可以查询办事流程、校历变更、课程建议，或记录本地事项。</span>
+                <div class="prompt-examples" aria-label="示例问题">
+                  <button type="button" data-chat-prompt="成绩单证明怎么办？">成绩单证明怎么办？</button>
+                  <button type="button" data-chat-prompt="校历最近有什么变化？">查看校历变更</button>
+                  <button type="button" data-chat-prompt="记录事项：提交开题报告">记录一个事项</button>
+                </div>
+              </li>
+            </ol>
 
-        <div id="chat-progress" class="chat-progress" role="status" aria-live="polite" hidden>
-          <span class="progress-mark" aria-hidden="true"></span>
-          <span>Agent 正在核对可用工具与来源…</span>
-        </div>
-
-        <div id="chat-error" class="chat-error" role="alert" hidden>
-          <strong>这次没有得到回答</strong>
-          <p id="chat-error-message">请检查连接后重试。</p>
-          <p class="chat-error-reference">参考代码：<code id="chat-error-code">network_error</code></p>
-        </div>
-
-        <form id="chat-form" class="chat-composer" aria-describedby="chat-hint chat-opportunity-state">
-          <label class="visually-hidden" for="chat-input">发送给校园 Agent 的消息</label>
-          <textarea id="chat-input" name="message" rows="3" maxlength="4096" enterkeyhint="send" autocomplete="off" aria-describedby="chat-hint chat-opportunity-state" placeholder="问一个校园事务问题…" required></textarea>
-          <div class="chat-composer-footer">
-            <label class="chat-opportunity-control" for="chat-opportunity-confirm">
-              <input id="chat-opportunity-confirm" type="checkbox" aria-describedby="chat-opportunity-state" disabled>
-              <span>仅这次请求使用当前 synthetic profile</span>
-            </label>
-            <div class="chat-actions">
-              <button id="chat-clear" type="button">清空对话</button>
-              <button id="chat-send" type="submit">发送</button>
+            <div id="chat-progress" class="chat-progress" role="status" aria-live="polite" hidden>
+              <span class="progress-mark" aria-hidden="true"></span>
+              <span>正在核对可用工具与来源…</span>
             </div>
-          </div>
-          <p id="chat-opportunity-state" class="chat-context-state">尚无可用的 synthetic profile；可在下方 Opportunity Graph 面板中明确同意并创建。</p>
-          <p id="chat-hint" class="chat-hint">Enter 发送 · Shift + Enter 换行 · 最近最多 12 条 user/assistant 消息参与请求</p>
-        </form>
-      </section>
-    </section>
 
-    <section class="diagnostics-intro" aria-labelledby="diagnostics-title">
-      <p class="eyebrow">DETAILS &amp; CONTROLS · 诊断与明确同意</p>
-      <h2 id="diagnostics-title">核对来源、发布状态与 consent。</h2>
-      <p>以下详细面板保留原有查询与管理员演示控件。Chat 不会替你创建、读取或删除 profile，也不会执行发布操作。</p>
-    </section>
+            <div id="chat-error" class="chat-error" role="alert" hidden>
+              <strong>这次没有得到回答</strong>
+              <p id="chat-error-message">请检查连接后重试。</p>
+              <p class="chat-error-reference">参考代码：<code id="chat-error-code">network_error</code></p>
+            </div>
+
+            <div class="composer-dock">
+              <form id="chat-form" class="chat-composer" aria-describedby="chat-hint chat-opportunity-state">
+                <label class="visually-hidden" for="chat-input">发送给校园 Agent 的消息</label>
+                <textarea id="chat-input" name="message" rows="1" maxlength="4096" enterkeyhint="send" autocomplete="off" aria-describedby="chat-hint chat-opportunity-state" placeholder="给校园 Agent 发消息" required></textarea>
+                <div class="chat-composer-footer">
+                  <label class="chat-opportunity-control" for="chat-opportunity-confirm">
+                    <input id="chat-opportunity-confirm" type="checkbox" aria-describedby="chat-opportunity-state" disabled>
+                    <span>使用当前 synthetic profile</span>
+                  </label>
+                  <button id="chat-send" class="send-button" type="submit" aria-label="发送消息"><span aria-hidden="true">↑</span></button>
+                </div>
+                <p id="chat-opportunity-state" class="chat-context-state">尚无 synthetic profile；可在“校园工具”中明确同意并创建。</p>
+              </form>
+              <p id="chat-hint" class="chat-hint">Agent 生成的摘要可能有误；工具证据与官方来源优先。Enter 发送 · Shift + Enter 换行</p>
+            </div>
+          </section>
+        </section>
+
+        <section id="tools-view" class="tools-view" aria-labelledby="diagnostics-title" hidden>
+          <header class="tools-heading">
+            <p class="eyebrow">CAMPUS TOOLS · 证据与明确同意</p>
+            <h1 id="diagnostics-title" tabindex="-1">校园工具与证据</h1>
+            <p>查询公开来源、核对持久状态，并在需要时明确同意。这里不是生产管理后台。</p>
+          </header>
 
     <section class="hero diagnostics-hero" aria-labelledby="hero-title">
       <p class="eyebrow">AFFAIRS NAVIGATOR · 办事导航</p>
@@ -354,11 +413,9 @@
       <h2 id="boundary-title">这是可验证的三插件 + 本地 Calendar companion 演示纵切，不是自动审批或选课系统。</h2>
       <p>页面仅绑定本机 loopback。Affairs 与 ChangeRadar 使用显著标识的 DemoReviewed source snapshots；Opportunity Graph 使用 synthetic private profile，并将 active payload 与不含原始 profile 的 deletion tombstone 写入本机 durable store；Simple Calendar 只保存 owner-local 事项。它们不代表正式 USTC SSO、实时官方 M60 导入、自动审批、自动选课或提醒服务；最终要求仍以中国科学技术大学官方页面和现场通知为准。</p>
     </section>
-  </main>
-
-  <footer>
-    <span>USTC Campus Agent</span>
-    <span>Source-aware · Fail-closed · Human-verifiable</span>
-  </footer>
+        </section>
+      </main>
+    </div>
+  </div>
 </body>
 </html>

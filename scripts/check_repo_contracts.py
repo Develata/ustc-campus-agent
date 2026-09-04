@@ -4748,6 +4748,7 @@ CRATES_IO_SOURCE = "registry+https://github.com/rust-lang/crates.io-index"
 # requirement; a table is compared key for key, so adding `path`, `git`, `registry` or
 # `default-features` is drift rather than an unnoticed redirect.
 WORKSPACE_ADMITTED_DEPENDENCIES = {
+    "argon2": {"version": "0.5.3", "features": ["std"]},
     "axum": {
         "version": "0.8.9",
         "default-features": False,
@@ -9713,18 +9714,18 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
         M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "e6e4e7ecacc70d446eab6947f8a28e55b2d78a74a72523908a1bb8a46dd9e88c",
         "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
-        "docs/acceptance/matrix.tsv": "b26c156c619c88ff24cf6683b1f9ab1eba85681cae9288bb49fd070bd67b940f",
+        "docs/acceptance/matrix.tsv": "674d82f70ffe7cc1a9b4566a7cc084653ab5f6f835b6e1dd7555cf57249beee6",
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
         "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
         "docs/contracts/module-boundaries.md": "8c663d411613713ca41502c894590976aa77009da181a4a07da333f7a1b11538",
-        "docs/overview/architecture.md": "164f0529ce4725077535cb8ca054a4719d960d5d92df81980569e2328e312270",
+        "docs/overview/architecture.md": "a0080aa772055a80a7ec25910ba029e2fb6a91a5ef50e65023d659adbf1b09c9",
         "docs/features/02-ustc-change-radar.md": "27be5c7f4bebdd6bb2dc6938ecffa185b4d0cd53aeb050b031b46bf698478153",
         "docs/plan/05-campus-trust-kernel.md": "26ebed21efb3cfcf09a08864ec890fd75dea7322d296433d120557b1614e26db",
         "docs/plan/modules/00-module-map.md": "9c3cf28317ebf2665fcf7a1109e55a18ff527134b173ffa53d2c3f0ff4165d2a",
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
-        "docs/tasks/01-execution-roadmap.md": "5b93155d140267dfe9aeff3e77a0a72f8e6134e79547838d9eecad66ba45b262",
+        "docs/tasks/01-execution-roadmap.md": "de59ca3bf20e96374982edc1f0818a321445f7958746cb3c9b8f149890aaa2b3",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
-        "docs/coverage-matrix.md": "a7b41e65f3d6212a34f4d62656be26dc6e4031eb52e67c82cabb756626fe47a9",
+        "docs/coverage-matrix.md": "4540171a11b96cf57d5b405f58ffa15c3a4d55cd12324c7577f81e6b130f16d5",
     }
     if tuple(frozen_projection_sha256) != declared_projection_paths:
         fail(
@@ -12420,7 +12421,7 @@ CI_GOVERNANCE_BASELINE_CI_STRUCTURE: tuple[
     (True, ("jobs", "rust", "steps", "name"), "Test"),
     (False, ("jobs", "rust", "steps", "run"), "cargo test --locked --all-targets --all-features"),
     (True, ("jobs", "rust", "steps", "name"), "Browser Chat behavior"),
-    (False, ("jobs", "rust", "steps", "run"), "UCA_SOURCE_COMMIT=$GITHUB_SHA cargo build --locked -p ustc-agentd --bin ustc-agentd && node scripts/test_agent_chat_browser.mjs target/debug/ustc-agentd"),
+    (False, ("jobs", "rust", "steps", "run"), "UCA_SOURCE_COMMIT=$GITHUB_SHA cargo build --locked -p ustc-agentd --bin ustc-agentd -p ustc-agentctl --bin ustc-agentctl && node scripts/test_agent_chat_browser.mjs target/debug/ustc-agentd"),
     (True, ("jobs", "rust", "steps", "name"), "Doc tests"),
     (False, ("jobs", "rust", "steps", "run"), "cargo test --locked --all-features --doc"),
     (True, ("jobs", "rust", "steps", "name"), "Compose MVP delivery"),
@@ -13773,7 +13774,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "0fb1a1effa5d74207beae034479367823e5dd653c4b75cfa89f62e10823bc7ab", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "efd2dde5d354292a4e544f4c10bbedfe600a26629dd14a6b1ff2b67cb2609130", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},

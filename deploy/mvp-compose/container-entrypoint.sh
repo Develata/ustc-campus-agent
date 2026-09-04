@@ -5,6 +5,8 @@ STATE_DIR=/data
 KEY_SOURCE=/run/secrets/uca_agent_api_key
 KEY_PRIVATE_DIR=/run/uca-agent-private
 KEY_PRIVATE=$KEY_PRIVATE_DIR/uca_agent_api_key
+ADMIN_HASH_SOURCE=/run/secrets/uca_admin_password_hash
+ADMIN_HASH_PRIVATE=$KEY_PRIVATE_DIR/admin-password.phc
 APP_BIND=127.0.0.1:8788
 PROXY_BIND=0.0.0.0:8787
 
@@ -50,6 +52,17 @@ if [ "$current_uid" -eq 0 ]; then
   install -d -o 65532 -g 65532 -m 0700 "$STATE_DIR"
   umask 077
 
+  if [ ! -f "$ADMIN_HASH_SOURCE" ] || [ ! -r "$ADMIN_HASH_SOURCE" ] || [ -L "$ADMIN_HASH_SOURCE" ]; then
+    printf 'local access password verifier is missing, unreadable, or a symlink\n' >&2
+    exit 66
+  fi
+  case "$(cat "$ADMIN_HASH_SOURCE")" in
+    '$argon2id$v=19$m=19456,t=2,p=1$'*) ;;
+    *) printf 'local access password verifier is malformed\n' >&2; exit 66 ;;
+  esac
+  install -d -o 65532 -g 65532 -m 0700 "$KEY_PRIVATE_DIR"
+  install -o 65532 -g 65532 -m 0600 "$ADMIN_HASH_SOURCE" "$ADMIN_HASH_PRIVATE"
+
   if [ "${UCA_AGENT_PROVIDER:-mock}" = openai-compatible ]; then
     if [ ! -f "$KEY_SOURCE" ] || [ ! -r "$KEY_SOURCE" ] || [ -L "$KEY_SOURCE" ]; then
       printf 'provider key source is missing, unreadable, or a symlink\n' >&2
@@ -60,7 +73,6 @@ if [ "$current_uid" -eq 0 ]; then
       printf 'the bundled mock provider placeholder is forbidden in openai-compatible mode\n' >&2
       exit 66
     fi
-    install -d -o 65532 -g 65532 -m 0700 "$KEY_PRIVATE_DIR"
     install -o 65532 -g 65532 -m 0600 "$KEY_SOURCE" "$KEY_PRIVATE"
   fi
 
@@ -85,6 +97,11 @@ if [ -L "$STATE_DIR" ] || [ ! -d "$STATE_DIR" ] || [ ! -w "$STATE_DIR" ]; then
   exit 73
 fi
 umask 077
+
+if [ ! -f "$ADMIN_HASH_PRIVATE" ] || [ ! -r "$ADMIN_HASH_PRIVATE" ] || [ -L "$ADMIN_HASH_PRIVATE" ]; then
+  printf 'private local access password verifier is missing, unreadable, or a symlink\n' >&2
+  exit 66
+fi
 
 if [ "${UCA_AGENT_PROVIDER:-mock}" = openai-compatible ]; then
   if [ ! -f "$KEY_PRIVATE" ] || [ ! -r "$KEY_PRIVATE" ] || [ -L "$KEY_PRIVATE" ]; then
@@ -117,6 +134,10 @@ if [ "${UCA_ENTRYPOINT_SECRET_PROBE:-}" = 1 ]; then
   fi
   if [ "$(stat -c '%u:%g:%a' "$KEY_PRIVATE")" != 65532:65532:600 ]; then
     printf 'private provider key ownership or mode is invalid\n' >&2
+    exit 66
+  fi
+  if [ "$(stat -c '%u:%g:%a' "$ADMIN_HASH_PRIVATE")" != 65532:65532:600 ]; then
+    printf 'private administrator verifier ownership or mode is invalid\n' >&2
     exit 66
   fi
   if ! grep -Eq '^CapEff:[[:space:]]+0+$' /proc/self/status \

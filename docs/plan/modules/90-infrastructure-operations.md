@@ -14,7 +14,7 @@
 
 `M90` supplies replaceable implementations of infrastructure ports declared by other modules: durable repositories/journals, immutable evidence/artifacts, transactions, clock/scheduler/queue, secret references, safe HTTP, configuration, telemetry, deployment and recovery tooling.
 
-Current evidence is deliberately narrower than production M90 completion: repository CI/checkers, app-private secure canonical-JSON stores, and one bounded loopback Docker Compose package provide exact-source archives, least-privilege container settings, persistent-volume restart/read-back, reset/recovery and real Windows PowerShell 5.1 launcher checks. Managed production stores, migration/rollback, backup/restore and public/Android deployment surfaces remain planned.
+Current evidence is deliberately narrower than production M90 completion: repository CI/checkers, app-private secure canonical-JSON stores, and one bounded loopback Docker Compose package provide exact-source archives, least-privilege container settings, persistent-volume restart/read-back, reset/recovery and real Windows PowerShell 5.1 launcher checks. The package also carries one operator-created Argon2id verifier through a read-only secret source into ephemeral owner-only runtime storage, while setup/rotation launchers keep the raw password out of argv, files and logs. Managed production stores, migration/rollback, backup/restore and public/Android deployment surfaces remain planned.
 
 It makes domain rules durable and operable. It does not define those rules.
 

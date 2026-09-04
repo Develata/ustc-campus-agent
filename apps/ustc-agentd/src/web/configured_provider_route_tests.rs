@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use super::web_router_with_provider;
 use crate::AffairsComposition;
 use crate::chat_provider::ChatProvider;
+use crate::local_access::deterministic_access_for_tests;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -183,8 +184,11 @@ async fn configured_provider_serves_one_complete_http_chat_route() {
         5_000,
     )
     .expect("configure loopback provider");
-    let router =
-        web_router_with_provider(Arc::new(Mutex::new(environment.composition())), provider);
+    let router = web_router_with_provider(
+        Arc::new(Mutex::new(environment.composition())),
+        provider,
+        deterministic_access_for_tests(),
+    );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind chat route");
@@ -195,13 +199,91 @@ async fn configured_provider_serves_one_complete_http_chat_route() {
             .expect("serve chat route");
     });
 
-    let response = reqwest::Client::new()
+    let client = reqwest::Client::new();
+    let chat_body = json!({
+        "schema": "ustc-agent-chat-request/v1",
+        "messages": [{"role": "user", "content": "你好，请正常回答。"}],
+        "opportunity_context": null
+    });
+    let unauthorized = client
         .post(format!("http://{address}/api/v1/agent/chat"))
+        .json(&chat_body)
+        .send()
+        .await
+        .expect("send unauthenticated chat request");
+    assert_eq!(unauthorized.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    for path in [
+        "/api/v1/demo/administrator/affairs/publication",
+        "/api/v1/demo/administrator/changes/publication",
+    ] {
+        let public_status = client
+            .get(format!("http://{address}{path}"))
+            .send()
+            .await
+            .expect("send anonymous publication status request");
+        assert!(
+            matches!(
+                public_status.status(),
+                reqwest::StatusCode::OK | reqwest::StatusCode::SERVICE_UNAVAILABLE
+            ),
+            "anonymous publication status must reach the domain handler"
+        );
+    }
+
+    let unauthorized_publication = client
+        .post(format!(
+            "http://{address}/api/v1/demo/administrator/affairs/publication"
+        ))
+        .header("x-ustc-agent-administrator-demo", "confirm-v1")
+        .json(&json!({}))
+        .send()
+        .await
+        .expect("send unauthenticated publication request");
+    assert_eq!(
+        unauthorized_publication.status(),
+        reqwest::StatusCode::UNAUTHORIZED
+    );
+
+    let login = client
+        .post(format!("http://{address}/api/v1/auth/login"))
         .json(&json!({
-            "schema": "ustc-agent-chat-request/v1",
-            "messages": [{"role": "user", "content": "你好，请正常回答。"}],
-            "opportunity_context": null
+            "schema": "ustc-local-access-login/v1",
+            "username": "admin",
+            "password": "correct horse battery staple"
         }))
+        .send()
+        .await
+        .expect("send login request");
+    assert_eq!(login.status(), reqwest::StatusCode::OK);
+    let set_cookie = login
+        .headers()
+        .get(reqwest::header::SET_COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .expect("login sets one session cookie");
+    for required in [
+        "uca_session=",
+        "Path=/",
+        "HttpOnly",
+        "SameSite=Strict",
+        "Max-Age=43200",
+    ] {
+        assert!(
+            set_cookie.contains(required),
+            "missing cookie attribute: {required}"
+        );
+    }
+    assert!(!set_cookie.contains("Secure"));
+    let session_cookie = set_cookie
+        .split(';')
+        .next()
+        .expect("login sets one session cookie")
+        .to_owned();
+
+    let response = client
+        .post(format!("http://{address}/api/v1/agent/chat"))
+        .header(reqwest::header::COOKIE, session_cookie)
+        .json(&chat_body)
         .send()
         .await
         .expect("send configured-provider chat request");

@@ -81,6 +81,7 @@ validate_dotenv_contract() {
   local line trimmed key
   local provider_count=0
   local key_source_count=0
+  local admin_hash_source_count=0
   if [ -L .env ]; then
     printf '.env must be a regular non-symlink file\n' >&2
     return 66
@@ -94,7 +95,7 @@ validate_dotenv_contract() {
   fi
   while IFS= read -r line || [ -n "$line" ]; do
     trimmed=$(trim_rust_whitespace "$line")
-    if [[ "$trimmed" =~ ^(export[[:space:]]+)?(UCA_AGENT_PROVIDER|UCA_AGENT_API_KEY_SOURCE)([[:space:]]*=|[[:space:]]*$) ]]; then
+    if [[ "$trimmed" =~ ^(export[[:space:]]+)?(UCA_AGENT_PROVIDER|UCA_AGENT_API_KEY_SOURCE|UCA_ADMIN_PASSWORD_HASH_SOURCE)([[:space:]]*=|[[:space:]]*$) ]]; then
       key=${BASH_REMATCH[2]}
       case "$line" in
         "$key"=*) ;;
@@ -115,6 +116,13 @@ validate_dotenv_contract() {
           key_source_count=$((key_source_count + 1))
           [ "$key_source_count" -eq 1 ] || {
             printf 'duplicate UCA_AGENT_API_KEY_SOURCE definitions are forbidden in .env\n' >&2
+            return 66
+          }
+          ;;
+        UCA_ADMIN_PASSWORD_HASH_SOURCE)
+          admin_hash_source_count=$((admin_hash_source_count + 1))
+          [ "$admin_hash_source_count" -eq 1 ] || {
+            printf 'duplicate UCA_ADMIN_PASSWORD_HASH_SOURCE definitions are forbidden in .env\n' >&2
             return 66
           }
           ;;
@@ -197,8 +205,41 @@ if [ "$provider" = openai-compatible ]; then
 fi
 
 docker info >/dev/null
+if [ "${UCA_ADMIN_PASSWORD_HASH_SOURCE+x}" = x ]; then
+  admin_hash_source=$(normalize_value "$UCA_ADMIN_PASSWORD_HASH_SOURCE")
+  [ -n "$admin_hash_source" ] || {
+    printf 'UCA_ADMIN_PASSWORD_HASH_SOURCE must not be empty\n' >&2
+    exit 66
+  }
+else
+  admin_hash_source=$(dotenv_value UCA_ADMIN_PASSWORD_HASH_SOURCE || printf './secrets/admin-password.phc')
+fi
+if [ ! -f "$admin_hash_source" ] || [ -L "$admin_hash_source" ]; then
+  case "$admin_hash_source" in
+    ./secrets/admin-password.phc|secrets/admin-password.phc) "$ROOT/set-admin-password.sh" --initial ;;
+    *) printf 'configured UCA_ADMIN_PASSWORD_HASH_SOURCE is missing or not a regular file\n' >&2; exit 66 ;;
+  esac
+fi
+case "$(< "$admin_hash_source")" in
+  '$argon2id$v=19$m=19456,t=2,p=1$'*) ;;
+  *) printf 'local administrator password verifier is invalid; run ./set-admin-password.sh\n' >&2; exit 66 ;;
+esac
 docker compose up --build -d
-published=$(docker compose port mvp 8787)
+published=
+i=0
+while [ "$i" -lt 30 ]; do
+  if published=$(docker compose port mvp 8787 2>/dev/null) && [ -n "$published" ]; then
+    break
+  fi
+  sleep 1
+  i=$((i + 1))
+done
+[ -n "$published" ] || {
+  docker compose ps -a
+  docker compose logs --no-color --tail 120 mvp
+  printf 'timed out waiting for docker compose port mvp 8787 after 30 seconds\n' >&2
+  exit 1
+}
 case "$published" in
   127.0.0.1:*) port=${published##*:} ;;
   *) printf 'unexpected Compose published address: %s\n' "$published" >&2; exit 1 ;;
@@ -217,6 +258,7 @@ while [ "$i" -lt 150 ]; do
   if printf '%s' "$health" | grep -Fq '"schema":"ustc-agentd-health/v1"' \
     && printf '%s' "$health" | grep -Fq '"status":"ok"'; then
     printf 'MVP is ready: %s\n' "$url"
+    printf 'Local deployment access username: admin\n'
     exit 0
   fi
   sleep 1

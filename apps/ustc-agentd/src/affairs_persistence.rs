@@ -573,8 +573,7 @@ fn direct_parent(path: &Path) -> Result<&Path, ProcedurePublicationRepositoryErr
 }
 
 fn current_uid() -> Result<u32, ProcedurePublicationRepositoryError> {
-    fs::metadata("/proc/self")
-        .map(|metadata| metadata.uid())
+    crate::unix_identity::effective_uid()
         .map_err(|_| ProcedurePublicationRepositoryError::PersistenceUnavailable)
 }
 

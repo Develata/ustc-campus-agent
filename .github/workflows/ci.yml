@@ -32,7 +32,7 @@ jobs:
       - name: Test
         run: cargo test --locked --all-targets --all-features
       - name: Browser Chat behavior
-        run: UCA_SOURCE_COMMIT=$GITHUB_SHA cargo build --locked -p ustc-agentd --bin ustc-agentd && node scripts/test_agent_chat_browser.mjs target/debug/ustc-agentd
+        run: UCA_SOURCE_COMMIT=$GITHUB_SHA cargo build --locked -p ustc-agentd --bin ustc-agentd -p ustc-agentctl --bin ustc-agentctl && node scripts/test_agent_chat_browser.mjs target/debug/ustc-agentd
       - name: Doc tests
         run: cargo test --locked --all-features --doc
       - name: Compose MVP delivery

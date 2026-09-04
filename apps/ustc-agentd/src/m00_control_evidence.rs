@@ -409,9 +409,7 @@ fn direct_parent(path: &Path) -> Result<&Path, ControlEvidenceJournalError> {
 }
 
 fn current_uid() -> Result<u32, ControlEvidenceJournalError> {
-    fs::metadata("/proc/self")
-        .map(|metadata| metadata.uid())
-        .map_err(|_| ControlEvidenceJournalError::Unavailable)
+    crate::unix_identity::effective_uid().map_err(|_| ControlEvidenceJournalError::Unavailable)
 }
 
 fn unpredictable_temporary(
