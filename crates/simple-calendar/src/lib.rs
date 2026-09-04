@@ -16,6 +16,9 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
+#[cfg(unix)]
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+
 pub const STORE_SCHEMA_VERSION: &str = "ustc-simple-calendar-store/v1";
 pub const MAX_ITEMS: usize = 128;
 pub const MAX_TITLE_BYTES: usize = 256;
@@ -74,10 +77,20 @@ impl fmt::Display for CalendarError {
 
 impl Error for CalendarError {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PersistOutcome {
+    Durable,
+    RenamedParentSyncUncertainExact,
+    RenamedParentSyncUncertainUnknown,
+}
+
 /// Durable owner-local store. Mutations persist before success is returned.
 pub struct CalendarStore {
     path: PathBuf,
     state: PersistedCalendar,
+    durability_uncertain: bool,
+    #[cfg(test)]
+    fail_next_parent_sync_after_rename: bool,
 }
 
 impl CalendarStore {
@@ -86,37 +99,18 @@ impl CalendarStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, CalendarError> {
         let path = path.as_ref();
         validate_store_path(path)?;
-        let state = match fs::symlink_metadata(path) {
-            Ok(metadata) => {
-                if metadata.file_type().is_symlink()
-                    || !metadata.is_file()
-                    || metadata.len() > MAX_STORE_BYTES
-                {
-                    return Err(CalendarError::InvalidStore);
-                }
-                let file = OpenOptions::new()
-                    .read(true)
-                    .open(path)
-                    .map_err(|_| CalendarError::InvalidStore)?;
-                let mut bytes = Vec::new();
-                file.take(MAX_STORE_BYTES + 1)
-                    .read_to_end(&mut bytes)
-                    .map_err(|_| CalendarError::InvalidStore)?;
-                if bytes.len() as u64 > MAX_STORE_BYTES {
-                    return Err(CalendarError::InvalidStore);
-                }
-                serde_json::from_slice::<PersistedCalendar>(&bytes)
-                    .map_err(|_| CalendarError::InvalidStore)?
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                PersistedCalendar::default()
-            }
-            Err(_) => return Err(CalendarError::InvalidPath),
+        let state = match read_existing(path)? {
+            Some(bytes) => serde_json::from_slice::<PersistedCalendar>(&bytes)
+                .map_err(|_| CalendarError::InvalidStore)?,
+            None => PersistedCalendar::default(),
         };
         validate_state(&state)?;
         Ok(Self {
             path: path.to_path_buf(),
             state,
+            durability_uncertain: false,
+            #[cfg(test)]
+            fail_next_parent_sync_after_rename: false,
         })
     }
 
@@ -136,12 +130,20 @@ impl CalendarStore {
                 if !bootstrap_is_fresh {
                     return Err(CalendarError::InvalidStore);
                 }
-                let store = Self {
+                let mut store = Self {
                     path: path.to_path_buf(),
                     state: PersistedCalendar::default(),
+                    durability_uncertain: false,
+                    #[cfg(test)]
+                    fail_next_parent_sync_after_rename: false,
                 };
-                store.persist()?;
-                Ok(store)
+                match store.persist()? {
+                    PersistOutcome::Durable => Ok(store),
+                    PersistOutcome::RenamedParentSyncUncertainExact
+                    | PersistOutcome::RenamedParentSyncUncertainUnknown => {
+                        Err(CalendarError::PersistenceUnavailable)
+                    }
+                }
             }
             Err(_) => Err(CalendarError::InvalidPath),
         }
@@ -158,6 +160,7 @@ impl CalendarStore {
         title: &str,
         scheduled_for: Option<&str>,
     ) -> Result<CalendarItem, CalendarError> {
+        self.resolve_uncertain_durability()?;
         if self.state.items.len() >= MAX_ITEMS {
             return Err(CalendarError::ItemLimitExceeded);
         }
@@ -183,34 +186,55 @@ impl CalendarStore {
         self.state
             .items
             .sort_by(|left, right| left.id.cmp(&right.id));
-        if let Err(error) = self.persist() {
-            self.state = previous;
-            return Err(error);
+        match self.persist() {
+            Ok(PersistOutcome::Durable) => Ok(item),
+            Ok(PersistOutcome::RenamedParentSyncUncertainExact)
+            | Ok(PersistOutcome::RenamedParentSyncUncertainUnknown) => {
+                self.durability_uncertain = true;
+                Err(CalendarError::PersistenceUnavailable)
+            }
+            Err(error) => {
+                self.state = previous;
+                Err(error)
+            }
         }
-        Ok(item)
     }
 
     /// Deletes one exact item id and durably commits the removal.
     pub fn delete(&mut self, item_id: &str) -> Result<CalendarItem, CalendarError> {
+        self.resolve_uncertain_durability()?;
         let Some(index) = self.state.items.iter().position(|item| item.id == item_id) else {
             return Err(CalendarError::ItemNotFound);
         };
         let previous = self.state.clone();
         let removed = self.state.items.remove(index);
-        if let Err(error) = self.persist() {
-            self.state = previous;
-            return Err(error);
+        match self.persist() {
+            Ok(PersistOutcome::Durable) => Ok(removed),
+            Ok(PersistOutcome::RenamedParentSyncUncertainExact)
+            | Ok(PersistOutcome::RenamedParentSyncUncertainUnknown) => {
+                self.durability_uncertain = true;
+                Err(CalendarError::PersistenceUnavailable)
+            }
+            Err(error) => {
+                self.state = previous;
+                Err(error)
+            }
         }
-        Ok(removed)
     }
 
-    fn persist(&self) -> Result<(), CalendarError> {
+    fn persist(&mut self) -> Result<PersistOutcome, CalendarError> {
         let bytes =
             serde_json::to_vec(&self.state).map_err(|_| CalendarError::PersistenceUnavailable)?;
         if bytes.len() as u64 > MAX_STORE_BYTES {
             return Err(CalendarError::ItemLimitExceeded);
         }
-        let parent = self.path.parent().ok_or(CalendarError::InvalidPath)?;
+        let parent = self
+            .path
+            .parent()
+            .ok_or(CalendarError::InvalidPath)?
+            .to_path_buf();
+        validate_store_path(&self.path)?;
+        validate_existing_destination(&self.path)?;
         let file_name = self
             .path
             .file_name()
@@ -225,33 +249,143 @@ impl CalendarStore {
         options.write(true).create_new(true);
         #[cfg(unix)]
         {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
+            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
         }
         let result = (|| {
             let mut file = options
                 .open(&temp_path)
                 .map_err(|_| CalendarError::PersistenceUnavailable)?;
+            validate_primary_metadata(
+                &file
+                    .metadata()
+                    .map_err(|_| CalendarError::PersistenceUnavailable)?,
+            )?;
             file.write_all(&bytes)
                 .and_then(|()| file.sync_all())
                 .map_err(|_| CalendarError::PersistenceUnavailable)?;
+            drop(file);
             fs::rename(&temp_path, &self.path)
                 .map_err(|_| CalendarError::PersistenceUnavailable)?;
-            #[cfg(unix)]
-            {
-                OpenOptions::new()
-                    .read(true)
-                    .open(parent)
-                    .and_then(|directory| directory.sync_all())
-                    .map_err(|_| CalendarError::PersistenceUnavailable)?;
+            if self.sync_parent(&parent).is_ok() {
+                return Ok(PersistOutcome::Durable);
             }
-            Ok(())
+            Ok(match read_existing(&self.path) {
+                Ok(Some(actual)) if actual == bytes => {
+                    PersistOutcome::RenamedParentSyncUncertainExact
+                }
+                _ => PersistOutcome::RenamedParentSyncUncertainUnknown,
+            })
         })();
         if result.is_err() {
             let _ = fs::remove_file(&temp_path);
         }
         result
     }
+
+    fn resolve_uncertain_durability(&mut self) -> Result<(), CalendarError> {
+        if !self.durability_uncertain {
+            return Ok(());
+        }
+        let expected =
+            serde_json::to_vec(&self.state).map_err(|_| CalendarError::PersistenceUnavailable)?;
+        if !matches!(read_existing(&self.path), Ok(Some(actual)) if actual == expected) {
+            return Err(CalendarError::InvalidStore);
+        }
+        let parent = self
+            .path
+            .parent()
+            .ok_or(CalendarError::InvalidPath)?
+            .to_path_buf();
+        self.sync_parent(&parent)
+            .map_err(|_| CalendarError::PersistenceUnavailable)?;
+        self.durability_uncertain = false;
+        Ok(())
+    }
+
+    fn sync_parent(&mut self, parent: &Path) -> std::io::Result<()> {
+        #[cfg(test)]
+        if self.fail_next_parent_sync_after_rename {
+            self.fail_next_parent_sync_after_rename = false;
+            return Err(std::io::Error::other(
+                "injected calendar parent sync failure",
+            ));
+        }
+        fs::File::open(parent).and_then(|directory| directory.sync_all())
+    }
+
+    #[cfg(test)]
+    fn fail_next_parent_sync_after_rename(&mut self) {
+        self.fail_next_parent_sync_after_rename = true;
+    }
+}
+
+fn read_existing(path: &Path) -> Result<Option<Vec<u8>>, CalendarError> {
+    validate_store_path(path)?;
+    let path_metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(CalendarError::InvalidPath),
+    };
+    validate_primary_metadata(&path_metadata)?;
+
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_NOFOLLOW);
+    let mut file = options
+        .open(path)
+        .map_err(|_| CalendarError::InvalidStore)?;
+    let opened_metadata = file.metadata().map_err(|_| CalendarError::InvalidStore)?;
+    validate_primary_metadata(&opened_metadata)?;
+    let after_metadata = fs::symlink_metadata(path).map_err(|_| CalendarError::InvalidStore)?;
+    validate_primary_metadata(&after_metadata)?;
+    #[cfg(unix)]
+    if path_metadata.dev() != opened_metadata.dev()
+        || path_metadata.ino() != opened_metadata.ino()
+        || after_metadata.dev() != opened_metadata.dev()
+        || after_metadata.ino() != opened_metadata.ino()
+    {
+        return Err(CalendarError::InvalidStore);
+    }
+
+    let mut bytes = Vec::new();
+    Read::by_ref(&mut file)
+        .take(MAX_STORE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| CalendarError::InvalidStore)?;
+    if bytes.len() as u64 > MAX_STORE_BYTES {
+        return Err(CalendarError::InvalidStore);
+    }
+    Ok(Some(bytes))
+}
+
+fn validate_existing_destination(path: &Path) -> Result<(), CalendarError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => validate_primary_metadata(&metadata),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err(CalendarError::InvalidStore),
+    }
+}
+
+fn validate_primary_metadata(metadata: &fs::Metadata) -> Result<(), CalendarError> {
+    if !metadata.file_type().is_file() || metadata.len() > MAX_STORE_BYTES {
+        return Err(CalendarError::InvalidStore);
+    }
+    #[cfg(unix)]
+    if metadata.permissions().mode() & 0o7777 != 0o600
+        || metadata.uid() != current_uid()?
+        || metadata.nlink() != 1
+    {
+        return Err(CalendarError::InvalidStore);
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn current_uid() -> Result<u32, CalendarError> {
+    fs::metadata("/proc/self")
+        .map(|metadata| metadata.uid())
+        .map_err(|_| CalendarError::InvalidStore)
 }
 
 fn validate_store_path(path: &Path) -> Result<(), CalendarError> {
@@ -295,10 +429,42 @@ fn validate_state(state: &PersistedCalendar) -> Result<(), CalendarError> {
 
 fn validate_title(title: &str) -> Result<&str, CalendarError> {
     let title = title.trim();
-    if title.is_empty() || title.len() > MAX_TITLE_BYTES || title.chars().any(char::is_control) {
+    if title.is_empty()
+        || title.len() > MAX_TITLE_BYTES
+        || title
+            .chars()
+            .any(|character| character.is_control() || is_unicode_format(character))
+    {
         return Err(CalendarError::InvalidTitle);
     }
     Ok(title)
+}
+
+fn is_unicode_format(character: char) -> bool {
+    matches!(
+        character,
+        '\u{00ad}'
+            | '\u{0600}'..='\u{0605}'
+            | '\u{061c}'
+            | '\u{06dd}'
+            | '\u{070f}'
+            | '\u{0890}'..='\u{0891}'
+            | '\u{08e2}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206f}'
+            | '\u{feff}'
+            | '\u{fff9}'..='\u{fffb}'
+            | '\u{110bd}'
+            | '\u{110cd}'
+            | '\u{13430}'..='\u{1343f}'
+            | '\u{1bca0}'..='\u{1bca3}'
+            | '\u{1d173}'..='\u{1d17a}'
+            | '\u{e0001}'
+            | '\u{e0020}'..='\u{e007f}'
+    )
 }
 
 fn validate_scheduled_for(value: Option<&str>) -> Result<Option<String>, CalendarError> {
@@ -363,6 +529,9 @@ mod tests {
             store.record("事项", Some("tomorrow")),
             Err(CalendarError::InvalidScheduledFor)
         );
+        for title in ["事项\u{202e}", "事项\u{200b}", "事项\u{feff}"] {
+            assert_eq!(store.record(title, None), Err(CalendarError::InvalidTitle));
+        }
         assert!(!path.exists());
         fs::remove_dir_all(root).unwrap();
     }
@@ -411,6 +580,64 @@ mod tests {
             CalendarStore::open_for_state_set(&path, false),
             Err(CalendarError::InvalidStore)
         ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn existing_store_rejects_unsafe_mode_hard_links_and_symlinks() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+
+        let (path, root) = temp_store();
+        CalendarStore::open(&path)
+            .unwrap()
+            .record("安全事项", None)
+            .unwrap();
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(matches!(
+            CalendarStore::open(&path),
+            Err(CalendarError::InvalidStore)
+        ));
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+
+        let hard_link = root.join("calendar-hard-link.json");
+        fs::hard_link(&path, &hard_link).unwrap();
+        assert!(matches!(
+            CalendarStore::open(&path),
+            Err(CalendarError::InvalidStore)
+        ));
+        fs::remove_file(&hard_link).unwrap();
+
+        let target = root.join("calendar-target.json");
+        fs::rename(&path, &target).unwrap();
+        symlink(&target, &path).unwrap();
+        assert!(matches!(
+            CalendarStore::open(&path),
+            Err(CalendarError::InvalidStore)
+        ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn parent_sync_uncertainty_keeps_exact_published_memory_and_reconciles() {
+        let (path, root) = temp_store();
+        let mut store = CalendarStore::open(&path).unwrap();
+        store.record("第一项", None).unwrap();
+        store.fail_next_parent_sync_after_rename();
+        assert_eq!(
+            store.record("第二项", None),
+            Err(CalendarError::PersistenceUnavailable)
+        );
+        assert_eq!(store.items().len(), 2);
+
+        let third = store.record("第三项", None).unwrap();
+        assert_eq!(third.id, "calendar:item:3");
+        drop(store);
+
+        let reopened = CalendarStore::open(&path).unwrap();
+        assert_eq!(reopened.items().len(), 3);
+        assert_eq!(reopened.items()[1].title, "第二项");
         fs::remove_dir_all(root).unwrap();
     }
 }

@@ -309,13 +309,11 @@ impl CalendarMutationIntent {
             ChatToolRequest::CalendarItems {
                 action: CalendarAction::Record,
                 title: Some(title),
-                scheduled_for: None,
                 item_id: None,
             } => matches!(self, Self::Record { title: intended } if intended == title),
             ChatToolRequest::CalendarItems {
                 action: CalendarAction::Delete,
                 title: None,
-                scheduled_for: None,
                 item_id: Some(item_id),
             } => matches!(self, Self::Delete { item_id: intended } if intended == item_id),
             ChatToolRequest::CalendarItems {
@@ -1360,14 +1358,6 @@ mod tests {
                 json!({"action": "record", "title": " 提交开题报告 "}),
             ),
             (
-                request("记录事项：提交开题报告"),
-                json!({
-                    "action": "record",
-                    "title": "提交开题报告",
-                    "scheduled_for": "2026-09-10T09:00:00+08:00"
-                }),
-            ),
-            (
                 request("删除事项 calendar:item:1 hidden"),
                 json!({"action": "delete", "item_id": "calendar:item:1"}),
             ),
@@ -1403,6 +1393,31 @@ mod tests {
             assert_eq!(result["status"], "denied");
             assert_eq!(result["data"]["code"], "calendar_mutation_intent_mismatch");
         }
+
+        let mut run = new_run(request("记录事项：提交开题报告"), false);
+        run.next_provider_request().expect("turn");
+        let mut operation_count = 0;
+        assert_eq!(
+            run.accept_provider_turn(
+                turn(
+                    None,
+                    vec![calendar_call(
+                        "call-scheduled",
+                        json!({
+                            "action": "record",
+                            "title": "提交开题报告",
+                            "scheduled_for": "2026-09-10T09:00:00+08:00"
+                        }),
+                    )],
+                ),
+                &mut |_| {
+                    operation_count += 1;
+                    crate::chat_tools::ChatToolExecution::succeeded(json!({}))
+                },
+            ),
+            Err(ChatError::ToolCallRejected)
+        );
+        assert_eq!(operation_count, 0);
 
         let historical_request = ChatRequestDto {
             schema: CHAT_REQUEST_SCHEMA.to_owned(),

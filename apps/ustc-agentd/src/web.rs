@@ -891,9 +891,8 @@ fn execute_chat_tool(state: &WebState, request: ChatToolRequest) -> ChatToolExec
         ChatToolRequest::CalendarItems {
             action,
             title,
-            scheduled_for,
             item_id,
-        } => execute_calendar_chat_tool(state, action, title, scheduled_for, item_id),
+        } => execute_calendar_chat_tool(state, action, title, item_id),
     }
 }
 
@@ -901,7 +900,6 @@ fn execute_calendar_chat_tool(
     state: &WebState,
     action: CalendarAction,
     title: Option<String>,
-    scheduled_for: Option<String>,
     item_id: Option<String>,
 ) -> ChatToolExecution {
     let mut composition = match state.lock() {
@@ -921,7 +919,7 @@ fn execute_calendar_chat_tool(
             let Some(title) = title else {
                 return ChatToolExecution::denied(json!({"code": "invalid_calendar_item"}));
             };
-            match composition.record_calendar_item(&title, scheduled_for.as_deref()) {
+            match composition.record_calendar_item(&title, None) {
                 Ok(item) => ChatToolExecution::succeeded(json!({
                     "schema": "ustc-simple-calendar-result/v1",
                     "package_id": "ustc.simple-calendar",
