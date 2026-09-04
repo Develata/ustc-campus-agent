@@ -129,4 +129,4 @@ Merging such a PR records bounded partial evidence only. It normally moves a `pl
 
 ## Public repository guard
 
-This repository is intentionally public and source-visible. Public visibility does not grant an open-source license or establish release, deployment, data-use or official-affiliation readiness. Before adding a tag, GitHub Release, Pages site, stable download or public runtime: complete the applicable license/notice, reachable-history, fixture, source-permission, non-official-disclaimer, artifact read-back and public-readiness gates.
+This repository is intentionally public, and its project-authored software and documentation are licensed under the MIT License. Public visibility and MIT licensing do not establish release, deployment, third-party data-use or official-affiliation readiness. Before adding a tag, GitHub Release, Pages site, stable download or public runtime: complete the applicable notice, reachable-history, fixture, source-permission, non-official-disclaimer, artifact read-back and public-readiness gates.

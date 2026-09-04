@@ -1,6 +1,6 @@
 # Contributing
 
-This public source-visible repository uses [`docs/guides/contributing.md`](docs/guides/contributing.md) as the detailed collaboration contract. No open-source license is currently granted; see [`LICENSE.md`](LICENSE.md). Also read [`AGENTS.md`](AGENTS.md), [`docs/AGENTS.md`](docs/AGENTS.md) and the matching row in [`docs/coverage-matrix.md`](docs/coverage-matrix.md).
+This public repository uses [`docs/guides/contributing.md`](docs/guides/contributing.md) as the detailed collaboration contract and is licensed under the [`MIT License`](LICENSE.md). Unless explicitly stated otherwise, contributions submitted to this repository are licensed under the same MIT License. Also read [`AGENTS.md`](AGENTS.md), [`docs/AGENTS.md`](docs/AGENTS.md) and the matching row in [`docs/coverage-matrix.md`](docs/coverage-matrix.md).
 
 ## Quick workflow
 
