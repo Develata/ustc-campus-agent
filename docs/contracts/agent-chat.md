@@ -4,7 +4,7 @@
 
 - `Status`: Implemented bounded MVP contract
 - `Version`: `agent-chat/v1`
-- `Last Review`: `2026-09-04`
+- `Last Review`: `2026-09-05`
 - `Owning Plan`: [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md)
 - `Feature Projection`: [`../features/04-bounded-agent-harness.md`](../features/04-bounded-agent-harness.md)
 - `Acceptance`: active `CHAT-001`, `CHAT-002`, `CHAT-003`
@@ -12,21 +12,21 @@
 
 ## 1. Scope and authority
 
-`agent-chat/v1` is one loopback-only competition profile. It is not the complete durable [`agent-harness/v0`](agent-harness.md), a generic Plugin runtime, a provider-managed conversation, or production campus-source activation.
+`agent-chat/v1` is one loopback-only competition profile over a fixed reviewed demo catalogue. It is not the complete durable [`agent-harness/v0`](agent-harness.md), a generalized package lifecycle/execution runtime, a provider-managed conversation, or production campus-source activation.
 
 ```text
 Composition-owned static Web Chat shell (not M80 module evidence)
 → M10 POST /api/v1/agent/chat
 → M30 bounded in-memory coordinator
 → M50 deterministic mock or operator-configured OpenAI-compatible adapter
-→ exact sequential tool bridge
+→ exact sequential fixed-catalogue tool bridge
 → existing Affairs / ChangeRadar fixed read path
-   or optional owner-local Simple Calendar path
+   or owner-local Simple Calendar in-process companion
    or existing consent-bound static M72 planner path
 → natural-language answer + redacted tool trace
 ```
 
-The server owns request validation, provider selection, budgets, tool registration and product composition. The browser and provider mint no route, tenant, user, grant, profile, source, publication or administrator authority. The three campus-data tools use only reviewed repository fixtures; the planner fixture includes bounded public iCourse aggregate-rating link-outs as orientation-level soft evidence but no copied review text. The Calendar tool uses only owner-local state. This contract grants no USTC network or real-source activation permission.
+The server owns request validation, provider selection, budgets, the fixed tool catalogue and product composition. The browser and provider mint no route, tenant, user, grant, profile, source, publication, mutation confirmation or administrator authority. The three campus-data tools use only reviewed repository fixtures; the planner fixture includes bounded public iCourse aggregate-rating link-outs as orientation-level soft evidence but no copied review text. The Calendar companion uses only owner-local state. This contract grants no dynamic install/disable/revoke-driven provider projection, isolated third-party execution, USTC network access or real-source activation permission.
 
 ## 2. HTTP request
 
@@ -136,6 +136,8 @@ Each provider turn yields either a nonblank final answer with no tool calls, or 
 
 Tool output is bounded typed M10 data wrapped as untrusted provider input. It cannot add tools, messages or policy. Failure to produce a valid final answer within the turn budget is explicit failure, not partial success.
 
+Calendar mutation authority is captured once from the final admitted user message before the first provider call. Every validated Calendar `record` or `delete` proposal is compared with that immutable intent before `executor.execute`. Absent or mismatched intent produces a bounded typed denied tool result and `denied` trace entry, performs zero executor/store operation, and may be returned to the provider within the existing turn budget. Provider prose, a provider argument, or a model-authored confirmation cannot create or widen this authority. Complete-batch validation still finishes before any tool in the batch executes.
+
 ## 6. Exact tool map
 
 ### `affairs_navigator_get`
@@ -148,7 +150,14 @@ Input is exactly `{"board_id":"board:ustc:academic-calendar"}`. The bridge invok
 
 ### `simple_calendar_items`
 
-Input is a closed object with exact `action = record | list | delete`. `record` additionally requires a nonblank title of at most 256 UTF-8 bytes and optionally accepts one RFC 3339 `scheduled_for`; `list` accepts no other field; `delete` requires one stable `calendar:item:N` ID. Rust revalidates the action-specific shape before execution. The loopback profile persists at most 128 owner-local items in a sibling state file and returns success only after the mutation is durably written. It has no reminder, recurrence, sharing, synchronization or natural-language time semantics. Calendar writes must reflect an explicit user instruction.
+Input is a closed object with exact `action = record | list | delete`. `record` requires only a nonblank title of at most 256 UTF-8 bytes; `scheduled_for` is absent from this slice and any supplied field is rejected. `list` accepts no other field and remains read-only. `delete` requires one stable `calendar:item:N` ID. Rust revalidates the complete action-specific shape before execution.
+
+The only admitted mutation grammars in the final user message are:
+
+- record: exact prefix `记录事项：` or `记录事项:` followed by a nonblank title; the normalized title is the suffix after outer-whitespace trim and must equal the provider-call title byte-for-byte;
+- delete: exact prefix `删除事项 ` followed by one complete `calendar:item:N`, with no hidden or extra suffix; the ID must equal the provider-call ID byte-for-byte.
+
+A mere occurrence of `日历`, `待办`, `事项`, `calendar`, `reminder`, or similar help text creates no mutation intent. The deterministic mock uses the same grammar. The loopback profile persists at most 128 owner-local items and returns success only after a mutation is durably written. It has no reminder, recurrence, sharing, synchronization or natural-language time semantics.
 
 ### `opportunity_graph_plan_current_profile`
 
@@ -165,12 +174,14 @@ The Compose package:
 - publishes only `127.0.0.1:${UCA_MVP_PORT}:8787`;
 - defaults to deterministic mock with no provider network call;
 - mounts a provider key source read-only, copies it only in OpenAI-compatible mode into an ephemeral mode-0600 tmpfs file, uses only a non-secret placeholder in mock mode and rejects that placeholder in real-provider mode;
-- persists product and Simple Calendar state in a named volume across `stop`/restart;
+- treats `idempotency_path.with_extension("calendar-items.json")` as a member of the locked durable state set: fresh bootstrap writes a canonical empty mode-0600 store, non-fresh absence fails `durable_state_set_incomplete`, rollback removes it with every other newly created member, and restart retains committed Calendar items;
+- persists the complete product state set in a named volume across `stop`/restart;
 - deletes that volume only through explicit reset;
 - packages deterministic ZIP/tar archives with exact source commit, per-file checksums and a provider-secret scan;
+- installs repository-root `LICENSE.md` byte-for-byte as package-root `LICENSE.md` with mode 0644, includes it in `SHA256SUMS`, and verifies the same bytes/checksum in both archives;
 - keeps `.ps1`/`.cmd` launchers ASCII-only, BOM/NUL-free and LF-terminated for Windows PowerShell 5.1, with native-command `$LASTEXITCODE` checks;
 - runs smoke verification under a unique Compose project so cleanup cannot address a user's normal MVP volume.
 
 ## 8. Non-goals
 
-This version does not claim live campus-source ingestion, CAS/SSO, multi-tenancy, generic Plugin installation/execution, provider fallback, streaming, RAG, durable chat history, long-term memory, reminders, calendar synchronization, parallel tools, multi-agent graphs, Dioxus parity or production hosting. Real-provider smoke remains `not-run` unless an operator separately supplies runtime configuration and grants provider-network permission.
+This version does not claim live campus-source ingestion, CAS/SSO, multi-tenancy, generalized package installation/disable/revoke-driven tool projection or isolated execution, a Skill runtime, an MCP adapter/server, a command sandbox, provider fallback, streaming, RAG, durable chat history, long-term memory, reminders, calendar synchronization, parallel tools, multi-agent graphs, shared-client parity, production Android or production hosting. Real-provider smoke remains `not-run` unless an operator separately supplies runtime configuration and grants provider-network permission.
