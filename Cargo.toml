@@ -22,7 +22,7 @@ resolver = "3"
 edition = "2024"
 rust-version = "1.97.1"
 authors = ["USTC Campus Agent contributors"]
-license = "UNLICENSED"
+license = "MIT"
 repository = "https://github.com/Develata/ustc-campus-agent"
 homepage = "https://github.com/Develata/ustc-campus-agent"
 

@@ -32,7 +32,7 @@ Release requires all release-bound rows plus artifact/build/restore/read-back ev
 
 ## Public gate
 
-Repository visibility is already public by explicit owner decision. Any new tag, GitHub Release, Pages, stable-download or public-runtime surface additionally requires `public-readiness.md`, the applicable license/notice state, full reachable-history audit, fixture/source permission, disclaimer, browser and remote delivery-surface verification.
+Repository visibility is already public by explicit owner decision, and project-authored software and documentation are licensed under MIT. Any new tag, GitHub Release, Pages, stable-download or public-runtime surface additionally requires `public-readiness.md`, the applicable third-party notice state, full reachable-history audit, fixture/source permission, disclaimer, browser and remote delivery-surface verification.
 
 ## Evidence states
 

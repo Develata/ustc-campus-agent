@@ -2,6 +2,8 @@
 
 USTC Campus Agent uses a proportionate docs-as-code structure: detailed authority and execution planning without mixing blueprint, product behavior, proof and historical rationale.
 
+Project-authored software and documentation in this public repository are licensed under the [`MIT License`](../LICENSE.md). Third-party content and campus data retain their separate rights and source-permission requirements.
+
 ## Start here
 
 For the runnable competition slice, begin with [`features/06-mvp-core-capabilities.md`](features/06-mvp-core-capabilities.md) and [`contracts/agent-chat.md`](contracts/agent-chat.md). For the installable Android demo artifact, use [`features/07-android-demo-client.md`](features/07-android-demo-client.md) and [`guides/android-demo.md`](guides/android-demo.md).
