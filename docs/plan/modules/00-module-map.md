@@ -5,7 +5,7 @@
 - `Layer`: Large-module architecture
 - `Status`: Accepted current skeleton
 - `Version`: `module-map/v3.2`
-- `Last Review`: `2026-09-03`
+- `Last Review`: `2026-09-05`
 - `Owning Constitution`: [`../00-engineering-constitution.md`](../00-engineering-constitution.md)
 - `Counterpart Contracts`: [`../../contracts/module-boundaries.md`](../../contracts/module-boundaries.md), [`../../contracts/agent-chat.md`](../../contracts/agent-chat.md)
 - `Counterpart Tasks`: [`../../tasks/00-module-work-policy.md`](../../tasks/00-module-work-policy.md), [`../../tasks/01-execution-roadmap.md`](../../tasks/01-execution-roadmap.md)
