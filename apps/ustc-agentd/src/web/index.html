@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="USTC Campus Agent 三插件演示：办事流程、语义变更与 consent-bound 课程机会规划。">
-  <title>科大校园助手 · USTC Campus Agent</title>
+  <meta name="description" content="USTC Campus Agent 有界 Web Chat：查询办事流程、课程建议与校历变更，并记录本地日历事项。">
+  <title>USTC Campus Agent · Bounded campus demo</title>
   <link rel="stylesheet" href="/assets/styles.css">
   <script src="/assets/app.js" defer></script>
 </head>
 <body>
   <header class="site-header" aria-label="产品标识">
-    <a class="brand" href="/" aria-label="科大办事导航首页">
+    <a class="brand" href="/" aria-label="USTC Campus Agent 首页">
       <span class="brand-mark" aria-hidden="true">科</span>
       <span>USTC Campus Agent</span>
     </a>
@@ -19,9 +19,60 @@
   </header>
 
   <main>
-    <section class="hero" aria-labelledby="hero-title">
+    <section class="chat-hero" aria-labelledby="chat-title">
+      <header class="chat-heading">
+        <p class="eyebrow">BOUNDED CAMPUS AGENT · 本机演示</p>
+        <h1 id="chat-title">先说你要做什么。</h1>
+        <p class="lead">询问办事流程、校历变更、记录本地事项，或在你逐次允许后使用当前 synthetic profile 规划课程。回答只来自这个有界演示允许调用的工具。</p>
+      </header>
+
+      <section id="chat-surface" class="chat-surface" aria-label="与校园 Agent 对话" aria-busy="false">
+        <ol id="chat-messages" class="chat-messages" aria-label="对话记录" aria-live="polite" aria-relevant="additions text">
+          <li id="chat-empty" class="chat-empty">
+            <strong>从一个具体问题开始</strong>
+            <span>例如：“成绩单证明怎么办？”、“推荐课程”，或“记录事项：提交开题报告”。</span>
+          </li>
+        </ol>
+
+        <div id="chat-progress" class="chat-progress" role="status" aria-live="polite" hidden>
+          <span class="progress-mark" aria-hidden="true"></span>
+          <span>Agent 正在核对可用工具与来源…</span>
+        </div>
+
+        <div id="chat-error" class="chat-error" role="alert" hidden>
+          <strong>这次没有得到回答</strong>
+          <p id="chat-error-message">请检查连接后重试。</p>
+          <p class="chat-error-reference">参考代码：<code id="chat-error-code">network_error</code></p>
+        </div>
+
+        <form id="chat-form" class="chat-composer" aria-describedby="chat-hint chat-opportunity-state">
+          <label class="visually-hidden" for="chat-input">发送给校园 Agent 的消息</label>
+          <textarea id="chat-input" name="message" rows="3" maxlength="4096" enterkeyhint="send" autocomplete="off" aria-describedby="chat-hint chat-opportunity-state" placeholder="问一个校园事务问题…" required></textarea>
+          <div class="chat-composer-footer">
+            <label class="chat-opportunity-control" for="chat-opportunity-confirm">
+              <input id="chat-opportunity-confirm" type="checkbox" aria-describedby="chat-opportunity-state" disabled>
+              <span>仅这次请求使用当前 synthetic profile</span>
+            </label>
+            <div class="chat-actions">
+              <button id="chat-clear" type="button">清空对话</button>
+              <button id="chat-send" type="submit">发送</button>
+            </div>
+          </div>
+          <p id="chat-opportunity-state" class="chat-context-state">尚无可用的 synthetic profile；可在下方 Opportunity Graph 面板中明确同意并创建。</p>
+          <p id="chat-hint" class="chat-hint">Enter 发送 · Shift + Enter 换行 · 最近最多 12 条 user/assistant 消息参与请求</p>
+        </form>
+      </section>
+    </section>
+
+    <section class="diagnostics-intro" aria-labelledby="diagnostics-title">
+      <p class="eyebrow">DETAILS &amp; CONTROLS · 诊断与明确同意</p>
+      <h2 id="diagnostics-title">核对来源、发布状态与 consent。</h2>
+      <p>以下详细面板保留原有查询与管理员演示控件。Chat 不会替你创建、读取或删除 profile，也不会执行发布操作。</p>
+    </section>
+
+    <section class="hero diagnostics-hero" aria-labelledby="hero-title">
       <p class="eyebrow">AFFAIRS NAVIGATOR · 办事导航</p>
-      <h1 id="hero-title">把“怎么办”变成<br><span>可核对的下一步。</span></h1>
+      <h2 id="hero-title">把“怎么办”变成<br><span>可核对的下一步。</span></h2>
       <p class="lead">不猜流程，也不替你作决定。页面只呈现保留并校验过的公开来源快照、办理条件、官方入口与证据状态。</p>
 
       <form id="lookup-form" class="lookup" aria-describedby="lookup-hint">
@@ -300,8 +351,8 @@
 
     <section class="notice" aria-labelledby="boundary-title">
       <p class="eyebrow">BOUNDARY</p>
-      <h2 id="boundary-title">这是可验证的三插件演示纵切，不是自动审批或选课系统。</h2>
-      <p>页面仅绑定本机 loopback。Affairs 与 ChangeRadar 使用显著标识的 DemoReviewed source snapshots；Opportunity Graph 使用 synthetic private profile，并将 active payload 与不含原始 profile 的 deletion tombstone 写入本机 durable store。它们不代表正式 USTC SSO、实时官方 M60 导入、自动审批或自动选课；最终要求仍以中国科学技术大学官方页面和现场通知为准。</p>
+      <h2 id="boundary-title">这是可验证的三插件 + 本地 Calendar companion 演示纵切，不是自动审批或选课系统。</h2>
+      <p>页面仅绑定本机 loopback。Affairs 与 ChangeRadar 使用显著标识的 DemoReviewed source snapshots；Opportunity Graph 使用 synthetic private profile，并将 active payload 与不含原始 profile 的 deletion tombstone 写入本机 durable store；Simple Calendar 只保存 owner-local 事项。它们不代表正式 USTC SSO、实时官方 M60 导入、自动审批、自动选课或提醒服务；最终要求仍以中国科学技术大学官方页面和现场通知为准。</p>
     </section>
   </main>
 

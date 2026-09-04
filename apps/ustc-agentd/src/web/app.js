@@ -1,3 +1,30 @@
+const chatForm = document.querySelector("#chat-form");
+const chatInput = document.querySelector("#chat-input");
+const chatClear = document.querySelector("#chat-clear");
+const chatSend = document.querySelector("#chat-send");
+const chatSurface = document.querySelector("#chat-surface");
+const chatMessages = document.querySelector("#chat-messages");
+const chatEmpty = document.querySelector("#chat-empty");
+const chatProgress = document.querySelector("#chat-progress");
+const chatError = document.querySelector("#chat-error");
+const chatErrorMessage = document.querySelector("#chat-error-message");
+const chatErrorCode = document.querySelector("#chat-error-code");
+const chatOpportunityConfirm = document.querySelector("#chat-opportunity-confirm");
+const chatOpportunityState = document.querySelector("#chat-opportunity-state");
+const CHAT_REQUEST_SCHEMA = "ustc-agent-chat-request/v1";
+const CHAT_RESPONSE_SCHEMA = "ustc-agent-chat-response/v1";
+const CHAT_ERROR_SCHEMA = "ustc-agent-chat-error/v1";
+const CHAT_MAX_MESSAGES = 12;
+const CHAT_MAX_MESSAGE_BYTES = 4 * 1024;
+const CHAT_MAX_PROFILE_SNAPSHOT_ID_BYTES = 4 * 1024;
+const CHAT_MAX_HISTORY_BYTES = 12 * 1024;
+const CHAT_MAX_BODY_BYTES = 16 * 1024;
+const CHAT_MAX_ANSWER_BYTES = 16 * 1024;
+const CHAT_MAX_TOOL_CALLS = 4;
+const chatTextEncoder = new TextEncoder();
+const chatHistory = [];
+let chatPending = false;
+
 const form = document.querySelector("#lookup-form");
 const procedureInput = document.querySelector("#procedure-id");
 const procedurePreview = document.querySelector("#procedure-id-preview");
@@ -56,6 +83,426 @@ function clear(element) {
 
 function text(element, value) {
   element.textContent = value ?? "—";
+}
+
+const CHAT_TOOL_LABELS = Object.freeze({
+  affairs_navigator_get: "办事导航 · 查询公开流程",
+  change_radar_get: "变更雷达 · 查询校历变更",
+  simple_calendar_items: "简单日历 · 记录与查看事项",
+  opportunity_graph_plan_current_profile: "机会图谱 · 规划当前档案"
+});
+
+const CHAT_STATUS_LABELS = Object.freeze({
+  succeeded: "已完成",
+  denied: "已拒绝",
+  failed: "未完成"
+});
+
+const CHAT_ERROR_MESSAGES = Object.freeze({
+  invalid_chat_request: "消息未通过有界请求校验。请缩短内容并重试。",
+  provider_not_configured: "当前 Agent 服务尚未就绪。请联系本机演示的管理员。",
+  provider_unauthorized: "当前 Agent 服务无法完成认证。请联系本机演示的管理员。",
+  provider_rate_limited: "请求过于频繁。请稍后再试。",
+  provider_timeout: "等待回答超时；服务器没有返回完成结果。请稍后重试。",
+  provider_unavailable: "回答服务暂时不可用。请稍后重试。",
+  provider_protocol_error: "回答服务返回了无法安全读取的结果。请稍后重试。",
+  context_budget_exceeded: "这段对话超过当前模型的安全上下文预算。请清空对话或缩短问题后重试。",
+  tool_call_rejected: "校园工具拒绝了这次调用。请换一种更具体的问法。",
+  tool_result_too_large: "校园工具结果超过本次对话上限。请缩小问题范围。",
+  tool_budget_exhausted: "这次问题需要的工具调用超过上限。请拆成更小的问题。",
+  turn_budget_exhausted: "Agent 未能在有限轮次内形成最终回答。请缩小问题范围。",
+  opportunity_confirmation_required: "Opportunity 请求缺少本次明确允许。请确认已有档案并重新勾选。",
+  composition_unavailable: "校园工具组合暂时不可用。请稍后重试，或使用下方详细面板。",
+  internal_chat_error: "服务器未能完成这次请求。请稍后重试。",
+  message_too_large: "这条消息编码后超过 4 KiB。请缩短后重试。",
+  invalid_response: "服务器返回了无法安全呈现的回答。请稍后重试。",
+  request_failed: "服务器拒绝了这次请求，但没有返回可识别的恢复信息。",
+  network_error: "无法连接到本机 Agent 服务。请确认演示仍在运行后重试。"
+});
+
+function chatFailure(code) {
+  const error = new Error(code);
+  error.code = code;
+  return error;
+}
+
+function utf8Length(value) {
+  return chatTextEncoder.encode(value).byteLength;
+}
+
+function boundedChatMessages(userContent, opportunityProfileHint) {
+  const retainedHistory = chatHistory.filter(
+    (message) => message.opportunityProfileHint == null
+      || message.opportunityProfileHint === opportunityProfileHint
+  );
+  const current = { role: "user", content: userContent };
+  const selected = [current];
+  let totalBytes = utf8Length(current.content);
+  for (let index = retainedHistory.length - 2; index >= 0; index -= 2) {
+    const userMessage = retainedHistory[index];
+    const assistantMessage = retainedHistory[index + 1];
+    if (userMessage?.role !== "user" || assistantMessage?.role !== "assistant") {
+      throw chatFailure("invalid_chat_request");
+    }
+    const pairBytes = utf8Length(userMessage.content) + utf8Length(assistantMessage.content);
+    if (
+      selected.length + 2 > CHAT_MAX_MESSAGES ||
+      totalBytes + pairBytes > CHAT_MAX_HISTORY_BYTES
+    ) {
+      break;
+    }
+    selected.unshift(
+      { role: userMessage.role, content: userMessage.content },
+      { role: assistantMessage.role, content: assistantMessage.content }
+    );
+    totalBytes += pairBytes;
+  }
+  return selected;
+}
+
+function createChatRequest(userContent, opportunityProfileHint) {
+  const messages = boundedChatMessages(userContent, opportunityProfileHint);
+  const opportunityContext = opportunityProfileHint == null
+    ? null
+    : { profile_snapshot_id: opportunityProfileHint };
+  let request = {
+    schema: CHAT_REQUEST_SCHEMA,
+    messages,
+    opportunity_context: opportunityContext
+  };
+  let body = JSON.stringify(request);
+
+  while (utf8Length(body) > CHAT_MAX_BODY_BYTES && messages.length > 1) {
+    messages.splice(0, 2);
+    request = {
+      schema: CHAT_REQUEST_SCHEMA,
+      messages,
+      opportunity_context: opportunityContext
+    };
+    body = JSON.stringify(request);
+  }
+  if (utf8Length(body) > CHAT_MAX_BODY_BYTES) {
+    throw chatFailure("message_too_large");
+  }
+  return { request, body };
+}
+
+function assertChatRequestContract(request, headers, body) {
+  const requestKeys = Object.keys(request).sort().join(",");
+  if (requestKeys !== "messages,opportunity_context,schema") {
+    throw chatFailure("invalid_chat_request");
+  }
+  if (
+    request.schema !== CHAT_REQUEST_SCHEMA ||
+    !Array.isArray(request.messages) ||
+    request.messages.length < 1 ||
+    request.messages.length > CHAT_MAX_MESSAGES ||
+    request.messages.at(-1)?.role !== "user"
+  ) {
+    throw chatFailure("invalid_chat_request");
+  }
+
+  let totalBytes = 0;
+  for (const message of request.messages) {
+    if (
+      Object.keys(message).sort().join(",") !== "content,role" ||
+      (message.role !== "user" && message.role !== "assistant") ||
+      typeof message.content !== "string" ||
+      message.content.trim().length === 0 ||
+      message.content.includes("\u0000")
+    ) {
+      throw chatFailure("invalid_chat_request");
+    }
+    const contentBytes = utf8Length(message.content);
+    if (contentBytes > CHAT_MAX_MESSAGE_BYTES) {
+      throw chatFailure("invalid_chat_request");
+    }
+    totalBytes += contentBytes;
+  }
+  if (totalBytes > CHAT_MAX_HISTORY_BYTES || utf8Length(body) > CHAT_MAX_BODY_BYTES) {
+    throw chatFailure("invalid_chat_request");
+  }
+
+  const hasConfirmationHeader = Object.prototype.hasOwnProperty.call(
+    headers,
+    "X-USTC-Opportunity-Confirmation"
+  );
+  if (request.opportunity_context == null) {
+    if (hasConfirmationHeader) {
+      throw chatFailure("invalid_chat_request");
+    }
+    return;
+  }
+  if (
+    typeof request.opportunity_context !== "object" ||
+    Array.isArray(request.opportunity_context) ||
+    Object.keys(request.opportunity_context).sort().join(",") !== "profile_snapshot_id" ||
+    typeof request.opportunity_context.profile_snapshot_id !== "string" ||
+    request.opportunity_context.profile_snapshot_id.trim().length === 0 ||
+    headers["X-USTC-Opportunity-Confirmation"] !== "confirmed"
+  ) {
+    throw chatFailure("invalid_chat_request");
+  }
+}
+
+function assertChatDomContract() {
+  const failures = [];
+  if (chatForm?.tagName !== "FORM") failures.push("chat-form");
+  if (chatInput?.tagName !== "TEXTAREA" || chatInput.maxLength !== 4096) failures.push("chat-input");
+  if (chatClear?.tagName !== "BUTTON" || chatClear.type !== "button") failures.push("chat-clear");
+  if (chatSend?.tagName !== "BUTTON" || chatSend.type !== "submit") failures.push("chat-send");
+  if (chatOpportunityConfirm?.type !== "checkbox") failures.push("chat-opportunity-confirm");
+  if (chatMessages?.getAttribute("aria-live") !== "polite") failures.push("chat-messages-live");
+  if (chatError?.getAttribute("role") !== "alert") failures.push("chat-error-alert");
+  if (failures.length > 0) {
+    throw new Error(`Chat DOM invariant failed: ${failures.join(", ")}`);
+  }
+}
+
+function syncChatEmptyState() {
+  chatEmpty.hidden = chatMessages.querySelector(".chat-message") !== null;
+}
+
+function clearChatConversation() {
+  if (chatPending) {
+    return;
+  }
+  chatHistory.splice(0, chatHistory.length);
+  for (const item of chatMessages.querySelectorAll(".chat-message")) {
+    item.remove();
+  }
+  chatError.hidden = true;
+  chatInput.value = "";
+  chatInput.setCustomValidity("");
+  syncChatEmptyState();
+  chatInput.focus({ preventScroll: true });
+}
+
+function trimChatTranscript() {
+  const items = Array.from(chatMessages.querySelectorAll(".chat-message"));
+  for (const item of items.slice(0, Math.max(0, items.length - CHAT_MAX_MESSAGES))) {
+    item.remove();
+  }
+  syncChatEmptyState();
+}
+
+function renderChatToolTrace(messageItem, toolTrace) {
+  if (toolTrace.length === 0) {
+    return;
+  }
+  const details = document.createElement("details");
+  details.className = "chat-tool-trace";
+  const summary = document.createElement("summary");
+  summary.textContent = `工具记录 · ${toolTrace.length} 次`;
+  const list = document.createElement("ul");
+  for (const trace of toolTrace) {
+    const item = document.createElement("li");
+    const tool = document.createElement("span");
+    tool.textContent = CHAT_TOOL_LABELS[trace.tool];
+    const state = document.createElement("span");
+    state.className = "chat-tool-state";
+    state.dataset.status = trace.status;
+    state.textContent = CHAT_STATUS_LABELS[trace.status];
+    item.append(tool, state);
+    list.appendChild(item);
+  }
+  details.append(summary, list);
+  messageItem.appendChild(details);
+}
+
+function appendChatMessage(role, content, toolTrace = []) {
+  const item = document.createElement("li");
+  item.className = "chat-message";
+  item.dataset.role = role;
+  item.setAttribute("aria-label", role === "user" ? "你的消息" : "校园 Agent 的回答");
+  const speaker = document.createElement("span");
+  speaker.className = "chat-speaker";
+  speaker.textContent = role === "user" ? "你" : "校园 Agent";
+  const body = document.createElement("p");
+  body.className = "chat-message-body";
+  body.textContent = content;
+  item.append(speaker, body);
+  if (role === "assistant") {
+    renderChatToolTrace(item, toolTrace);
+  }
+  chatMessages.appendChild(item);
+  syncChatEmptyState();
+  return item;
+}
+
+function commitChatTurn(userContent, assistantContent, opportunityProfileHint) {
+  if (
+    utf8Length(userContent) > CHAT_MAX_MESSAGE_BYTES ||
+    utf8Length(assistantContent) > CHAT_MAX_MESSAGE_BYTES
+  ) {
+    return;
+  }
+  chatHistory.push(
+    {
+      role: "user",
+      content: userContent,
+      opportunityProfileHint
+    },
+    {
+      role: "assistant",
+      content: assistantContent,
+      opportunityProfileHint
+    }
+  );
+  while (chatHistory.length > CHAT_MAX_MESSAGES) {
+    chatHistory.splice(0, 2);
+  }
+}
+
+function validateChatResponse(payload) {
+  if (
+    payload?.schema !== CHAT_RESPONSE_SCHEMA ||
+    typeof payload.run_id !== "string" ||
+    payload.run_id.trim().length === 0 ||
+    typeof payload.answer !== "string" ||
+    payload.answer.trim().length === 0 ||
+    utf8Length(payload.answer) > CHAT_MAX_ANSWER_BYTES ||
+    !Array.isArray(payload.tool_trace) ||
+    payload.tool_trace.length > CHAT_MAX_TOOL_CALLS
+  ) {
+    throw chatFailure("invalid_response");
+  }
+  const callIds = new Set();
+  for (const trace of payload.tool_trace) {
+    if (
+      typeof trace?.call_id !== "string" ||
+      trace.call_id.trim().length === 0 ||
+      callIds.has(trace.call_id) ||
+      !Object.prototype.hasOwnProperty.call(CHAT_TOOL_LABELS, trace.tool) ||
+      !Object.prototype.hasOwnProperty.call(CHAT_STATUS_LABELS, trace.status)
+    ) {
+      throw chatFailure("invalid_response");
+    }
+    callIds.add(trace.call_id);
+  }
+  return {
+    answer: payload.answer.trim(),
+    toolTrace: payload.tool_trace.map((trace) => ({
+      tool: trace.tool,
+      status: trace.status
+    }))
+  };
+}
+
+function normalizeChatErrorCode(value, fallback) {
+  return typeof value === "string" && /^[a-z0-9_]{1,64}$/.test(value)
+    ? value
+    : fallback;
+}
+
+function showChatError(code) {
+  const safeCode = normalizeChatErrorCode(code, "request_failed");
+  chatErrorMessage.textContent = CHAT_ERROR_MESSAGES[safeCode] ?? CHAT_ERROR_MESSAGES.request_failed;
+  chatErrorCode.textContent = safeCode;
+  chatError.hidden = false;
+}
+
+function setChatBusy(busy) {
+  chatPending = busy;
+  chatSurface.setAttribute("aria-busy", String(busy));
+  chatProgress.hidden = !busy;
+  chatClear.disabled = busy;
+  chatClear.setAttribute("aria-disabled", String(busy));
+  chatSend.disabled = busy;
+  chatSend.setAttribute("aria-disabled", String(busy));
+  chatSend.textContent = busy ? "发送中…" : "发送";
+  chatOpportunityConfirm.disabled = busy || !opportunityProfileId;
+  chatOpportunityConfirm.setAttribute(
+    "aria-disabled",
+    String(busy || !opportunityProfileId)
+  );
+}
+
+async function requestChat(body, headers) {
+  let response;
+  try {
+    response = await fetch("/api/v1/agent/chat", {
+      method: "POST",
+      headers,
+      body,
+      cache: "no-store"
+    });
+  } catch (_error) {
+    throw chatFailure("network_error");
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (_error) {
+    throw chatFailure("invalid_response");
+  }
+  if (!response.ok) {
+    const code = payload?.schema === CHAT_ERROR_SCHEMA
+      ? normalizeChatErrorCode(payload.error, "request_failed")
+      : "request_failed";
+    throw chatFailure(code);
+  }
+  return validateChatResponse(payload);
+}
+
+async function submitChat() {
+  if (chatPending) {
+    return;
+  }
+  chatInput.setCustomValidity("");
+  const userContent = chatInput.value.trim();
+  if (!userContent) {
+    chatInput.setCustomValidity("请输入一条消息。");
+    chatInput.reportValidity();
+    return;
+  }
+  if (utf8Length(userContent) > CHAT_MAX_MESSAGE_BYTES) {
+    chatInput.setCustomValidity(CHAT_ERROR_MESSAGES.message_too_large);
+    chatInput.reportValidity();
+    return;
+  }
+
+  const useOpportunity = Boolean(opportunityProfileId && chatOpportunityConfirm.checked);
+  const opportunityProfileHint = useOpportunity ? opportunityProfileId : null;
+  const headers = {
+    "Accept": "application/json",
+    "Content-Type": "application/json"
+  };
+  if (useOpportunity) {
+    headers["X-USTC-Opportunity-Confirmation"] = "confirmed";
+  }
+
+  let prepared;
+  try {
+    prepared = createChatRequest(userContent, opportunityProfileHint);
+    assertChatRequestContract(prepared.request, headers, prepared.body);
+  } catch (error) {
+    showChatError(error?.code ?? "invalid_chat_request");
+    return;
+  }
+
+  chatError.hidden = true;
+  const pendingItem = appendChatMessage("user", userContent);
+  chatInput.value = "";
+  chatOpportunityConfirm.checked = false;
+  setChatBusy(true);
+  try {
+    const response = await requestChat(prepared.body, headers);
+    commitChatTurn(userContent, response.answer, opportunityProfileHint);
+    appendChatMessage("assistant", response.answer, response.toolTrace);
+    trimChatTranscript();
+  } catch (error) {
+    pendingItem.remove();
+    syncChatEmptyState();
+    if (!chatInput.value) {
+      chatInput.value = userContent;
+    }
+    showChatError(error?.code ?? "network_error");
+  } finally {
+    setChatBusy(false);
+    chatInput.focus({ preventScroll: true });
+  }
 }
 
 function syncProcedurePreview() {
@@ -560,21 +1007,37 @@ async function loadChangeFeed() {
   }
 }
 
+function validOpportunityProfileHint(value) {
+  return typeof value === "string"
+    && value.trim().length > 0
+    && !value.includes("\0")
+    && utf8Length(value) <= CHAT_MAX_PROFILE_SNAPSHOT_ID_BYTES;
+}
+
 function setOpportunityHint(value) {
-  opportunityProfileId = value;
+  const normalizedValue = validOpportunityProfileHint(value) ? value : null;
+  opportunityProfileId = normalizedValue;
   try {
-    if (value) {
-      window.localStorage.setItem(OPPORTUNITY_PROFILE_HINT, value);
+    if (normalizedValue) {
+      window.localStorage.setItem(OPPORTUNITY_PROFILE_HINT, normalizedValue);
     } else {
       window.localStorage.removeItem(OPPORTUNITY_PROFILE_HINT);
     }
   } catch (_error) {
     // The server remains authoritative; storage is only a best-effort UI hint.
   }
-  const enabled = Boolean(value);
+  const enabled = Boolean(normalizedValue);
   opportunityView.disabled = !enabled;
   opportunityPlan.disabled = !enabled;
   opportunityDelete.disabled = !enabled;
+  if (!enabled) {
+    chatOpportunityConfirm.checked = false;
+  }
+  chatOpportunityConfirm.disabled = chatPending || !enabled;
+  chatOpportunityConfirm.setAttribute("aria-disabled", String(chatPending || !enabled));
+  chatOpportunityState.textContent = enabled
+    ? "已有 synthetic profile hint。勾选后只允许下一次 Chat 请求使用；发送后会自动取消勾选。"
+    : "尚无可用的 synthetic profile；可在下方 Opportunity Graph 面板中明确同意并创建。";
 }
 
 function readOpportunityHint() {
@@ -996,6 +1459,24 @@ async function deleteOpportunityProfile() {
   );
   opportunityStatus.textContent = "删除收据已持久化；tombstone 不含 completed courses 或 preference weights。下方 Synthetic profile 只是可再次 consent 的公开 demo 模板，不是已删除档案。";
 }
+
+assertChatDomContract();
+chatForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void submitChat();
+});
+chatClear.addEventListener("click", clearChatConversation);
+chatInput.addEventListener("input", () => {
+  chatInput.setCustomValidity("");
+});
+chatInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+    event.preventDefault();
+    if (!chatPending) {
+      chatForm.requestSubmit();
+    }
+  }
+});
 
 publicationConfirm.addEventListener("change", () => {
   publicationPublish.disabled = !publicationConfirm.checked;

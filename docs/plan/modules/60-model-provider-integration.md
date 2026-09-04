@@ -3,15 +3,17 @@
 ## Metadata
 
 - `Module ID`: `M50`
-- `Status`: Accepted blueprint; implementation planned
-- `Implementation State`: `planned`
+- `Status`: Accepted blueprint; bounded Chat MVP adapter exists, complete provider platform planned
+- `Implementation State`: `partial-evidence`
 - `Version`: `m50-model-provider/v0`
-- `Last Review`: `2026-07-25`
-- `Primary code area`: replaceable provider modules under `crates/adapters/` or a dedicated crate after two real consumers
+- `Last Review`: `2026-09-03`
+- `Primary code area`: current bounded adapter in `apps/ustc-agentd/src/chat_provider.rs`; future extraction into replaceable provider modules under `crates/adapters/` or a dedicated crate after two real consumers
 
 ## 1. Purpose
 
 `M50` turns one platform-owned, fully assembled model request into normalized provider events and usage. It owns typed provider profiles, profile validation, protocol adaptation, streaming/final parity, token/context estimation and provider-specific error mapping.
+
+Current evidence is deliberately narrower than module completion: the app-private Chat MVP owns a deterministic no-network mock plus one bounded non-streaming operator-configured OpenAI-compatible adapter, complete-request context preflight, typed errors and redacted file-backed secret handling. Generic provider profiles, streaming/final parity, normalized real usage and the full M30↔M50 port/conformance suite remain planned.
 
 It transports a request. It does not own why the request exists or what the run should do next.
 

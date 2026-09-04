@@ -10,6 +10,7 @@ homepage.workspace = true
 
 [dependencies]
 axum.workspace = true
+reqwest.workspace = true
 ustc-campus-agent-runtime = { path = "../../crates/agent-runtime" }
 ustc-agent-tool-protocol.workspace = true
 ustc-campus-agent-core = { path = "../../crates/platform-core" }
@@ -20,6 +21,7 @@ libc.workspace = true
 ustc-campus-agent-change-radar = { path = "../../crates/change-radar" }
 ustc-campus-agent-course-planning = { path = "../../crates/course-planning" }
 ustc-campus-agent-opportunity-graph = { path = "../../crates/opportunity-graph" }
+ustc-campus-agent-simple-calendar = { path = "../../crates/simple-calendar" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

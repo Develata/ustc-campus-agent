@@ -7,9 +7,9 @@ use ustc_campus_agent_core::market::capability::{
 
 const REGISTRY: &[u8] = include_bytes!("../../../market/capabilities/registry.json");
 
-const SINGLE: &str = r#"{"schemaVersion":"capability-registry/v1","registryRevision":"capability-registry:2026-08-28-01","capabilities":[{"id":"campus.public_rules.read","effectClass":"Read","dataClass":"PublicCampusFact","scopeKind":"CampusPublic","autoGrant":"FirstPartyDefaultOnly","confirmationDefault":"Allow","status":"Active"}]}"#;
+const SINGLE: &str = r#"{"schemaVersion":"capability-registry/v1","registryRevision":"capability-registry:2026-09-04-01","capabilities":[{"id":"campus.public_rules.read","effectClass":"Read","dataClass":"PublicCampusFact","scopeKind":"CampusPublic","autoGrant":"FirstPartyDefaultOnly","confirmationDefault":"Allow","status":"Active"}]}"#;
 
-const REVISION: &str = "capability-registry:2026-08-28-01";
+const REVISION: &str = "capability-registry:2026-09-04-01";
 
 fn load(source: &[u8]) -> ustc_campus_agent_core::market::capability::CapabilityRegistry {
     match load_capability_registry(source) {
@@ -141,13 +141,13 @@ fn data_name(data: DataClass) -> &'static str {
 }
 
 #[test]
-fn current_registry_loads_with_exact_nine_definitions() {
+fn current_registry_loads_with_exact_eleven_definitions() {
     let registry = load(REGISTRY);
     assert_eq!(
         registry.registry_revision().as_str(),
-        "capability-registry:2026-08-28-01"
+        "capability-registry:2026-09-04-01"
     );
-    assert_eq!(registry.definitions().len(), 9);
+    assert_eq!(registry.definitions().len(), 11);
 
     let sorted_ids: Vec<&str> = registry
         .definitions()
@@ -164,6 +164,8 @@ fn current_registry_loads_with_exact_nine_definitions() {
             "campus.public_rules.read",
             "user.own_academic_snapshot.read",
             "user.own_academic_snapshot.write",
+            "user.own_calendar_items.read",
+            "user.own_calendar_items.write",
             "user.own_course_preferences.read",
             "user.own_plan_draft.write",
         ]
@@ -208,7 +210,9 @@ fn current_registry_loads_with_exact_nine_definitions() {
                 );
                 assert_eq!(definition.risk_class(), RiskClass::Low);
             }
-            "user.own_academic_snapshot.read" | "user.own_course_preferences.read" => {
+            "user.own_academic_snapshot.read"
+            | "user.own_calendar_items.read"
+            | "user.own_course_preferences.read" => {
                 assert_eq!(definition.effect_class(), EffectClass::Read);
                 assert_eq!(definition.data_class(), DataClass::UserProfile);
                 assert_eq!(definition.scope_kind(), ScopeKind::TenantPrivateUser);
@@ -222,7 +226,9 @@ fn current_registry_loads_with_exact_nine_definitions() {
                 );
                 assert_eq!(definition.risk_class(), RiskClass::High);
             }
-            "user.own_academic_snapshot.write" | "user.own_plan_draft.write" => {
+            "user.own_academic_snapshot.write"
+            | "user.own_calendar_items.write"
+            | "user.own_plan_draft.write" => {
                 assert_eq!(definition.effect_class(), EffectClass::Write);
                 assert_eq!(definition.data_class(), DataClass::UserProfile);
                 assert_eq!(definition.scope_kind(), ScopeKind::TenantPrivateUser);
@@ -579,7 +585,7 @@ fn deterministic_ordering_and_permutation_independent_digest() {
         registry.registry_digest().as_str(),
         permuted_registry.registry_digest().as_str()
     );
-    assert_eq!(registry.definitions().len(), 9);
+    assert_eq!(registry.definitions().len(), 11);
 }
 
 #[test]
@@ -587,7 +593,7 @@ fn fixed_definition_and_registry_digest_vectors() {
     let registry = load(REGISTRY);
     assert_eq!(
         registry.registry_digest().as_str(),
-        "sha256:350791bc19bf390b6faa94aeec96b494c3fe6281d2e0dbaf4df6b079913b3eb6"
+        "sha256:fdda8091002407e6adee2ebe7751604d08f8526bf1fb3f93fb58684e7a1599e0"
     );
     let linkout_def = match registry.find(&parsed_capability_id("campus.community_review.linkout"))
     {

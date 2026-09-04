@@ -1,0 +1,49 @@
+name: ustc-campus-agent-mvp
+
+services:
+  mvp:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        UCA_SOURCE_COMMIT: ${UCA_SOURCE_COMMIT:-unknown}
+    image: ustc-campus-agent-mvp:0.1.0
+    init: true
+    ports:
+      - "127.0.0.1:${UCA_MVP_PORT:-8787}:8787"
+    environment:
+      UCA_AGENT_PROVIDER: ${UCA_AGENT_PROVIDER:-mock}
+      UCA_AGENT_BASE_URL: ${UCA_AGENT_BASE_URL:-}
+      UCA_AGENT_MODEL: ${UCA_AGENT_MODEL:-}
+      UCA_AGENT_API_KEY_FILE: /run/uca-agent-private/uca_agent_api_key
+      UCA_AGENT_TIMEOUT_MS: ${UCA_AGENT_TIMEOUT_MS:-15000}
+      UCA_AGENT_CONTEXT_TOKENS: ${UCA_AGENT_CONTEXT_TOKENS:-131072}
+    secrets:
+      - uca_agent_api_key
+    volumes:
+      - mvp-state:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /run/uca-agent-private:rw,noexec,nosuid,size=1m,mode=0700
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETPCAP
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 10s
+
+volumes:
+  mvp-state:
+
+secrets:
+  uca_agent_api_key:
+    file: ${UCA_AGENT_API_KEY_SOURCE:-./mock-provider-key.txt}

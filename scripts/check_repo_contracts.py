@@ -279,6 +279,7 @@ KEY_FILES = [
     "docs/contracts/cli.md",
     "docs/contracts/agent-runtime.md",
     "docs/contracts/agent-harness.md",
+    "docs/contracts/agent-chat.md",
     "docs/contracts/agent-plugin-boundary.md",
     "docs/contracts/client-shell.md",
     "docs/contracts/data-models.md",
@@ -1378,10 +1379,17 @@ def check_market(issues: list[str]) -> None:
     ):
         return
 
-    expected_first_party_statuses = {
+    expected_default_first_party_statuses = {
         "ustc.affairs-navigator": "planned",
         "ustc.change-radar": "development",
         "ustc.opportunity-graph": "development",
+    }
+    expected_optional_first_party_statuses = {
+        "ustc.simple-calendar": "implemented",
+    }
+    expected_first_party_statuses = {
+        **expected_default_first_party_statuses,
+        **expected_optional_first_party_statuses,
     }
     expected_first_party_versions = {
         package_id: "0.1.0" for package_id in expected_first_party_statuses
@@ -1399,6 +1407,10 @@ def check_market(issues: list[str]) -> None:
             "user.own_academic_snapshot.read",
             "user.own_academic_snapshot.write",
             "user.own_plan_draft.write",
+        ],
+        "ustc.simple-calendar": [
+            "user.own_calendar_items.read",
+            "user.own_calendar_items.write",
         ],
     }
     expected_capability_axes = {
@@ -1474,9 +1486,26 @@ def check_market(issues: list[str]) -> None:
             "Ask",
             "Active",
         ),
+        "user.own_calendar_items.read": (
+            "Read",
+            "UserProfile",
+            "TenantPrivateUser",
+            "Never",
+            "Ask",
+            "Active",
+        ),
+        "user.own_calendar_items.write": (
+            "Write",
+            "UserProfile",
+            "TenantPrivateUser",
+            "Never",
+            "Ask",
+            "Active",
+        ),
     }
     expected_capability_ids = set(expected_capability_axes)
     expected_first_party_ids = set(expected_first_party_statuses)
+    expected_default_first_party_ids = set(expected_default_first_party_statuses)
     required = set(schema.get("required", []))
     allowed = set(schema.get("properties", {}))
     expected_required = {
@@ -1620,8 +1649,9 @@ def check_market(issues: list[str]) -> None:
         }:
             fail(f"{rel_path}: invalid package tier", issues)
 
-        is_default_first_party = package_id in expected_first_party_ids
-        if is_default_first_party:
+        is_default_first_party = package_id in expected_default_first_party_ids
+        is_registered_first_party = package_id in expected_first_party_ids
+        if is_registered_first_party:
             if manifest.get("publisher") != publishers.get("id"):
                 fail(f"{rel_path}: publisher does not match first-party registry", issues)
             if manifest.get("tier") != "FirstParty":
@@ -1634,8 +1664,9 @@ def check_market(issues: list[str]) -> None:
         status = manifest.get("implementationStatus")
         if status not in {"planned", "development", "implemented"}:
             fail(f"{rel_path}: invalid implementationStatus", issues)
-        elif is_default_first_party and status != expected_first_party_statuses[package_id]:
-            fail(f"{rel_path}: default package implementationStatus drift", issues)
+        elif is_registered_first_party and status != expected_first_party_statuses[package_id]:
+            package_class = "default" if is_default_first_party else "optional first-party"
+            fail(f"{rel_path}: {package_class} package implementationStatus drift", issues)
 
         install_policy = manifest.get("installPolicy")
         if not isinstance(install_policy, dict) or set(install_policy) != {
@@ -1706,10 +1737,11 @@ def check_market(issues: list[str]) -> None:
         if len(set(manifest_capabilities)) != len(manifest_capabilities):
             fail(f"{rel_path}: duplicate capabilities", issues)
         if (
-            is_default_first_party
+            is_registered_first_party
             and manifest_capabilities != expected_first_party_capabilities[package_id]
         ):
-            fail(f"{rel_path}: default package capability set drift", issues)
+            package_class = "default" if is_default_first_party else "optional first-party"
+            fail(f"{rel_path}: {package_class} package capability set drift", issues)
         for capability in manifest_capabilities:
             if capability not in registered:
                 fail(f"{rel_path}: capability not registered: {capability}", issues)
@@ -1722,8 +1754,8 @@ def check_market(issues: list[str]) -> None:
             isinstance(key, str) and isinstance(value, str) for key, value in source_policy.items()
         ):
             fail(f"{rel_path}: sourcePolicy must be a non-empty string map", issues)
-        elif is_default_first_party and not source_policy.get("personalData"):
-            fail(f"{rel_path}: default package sourcePolicy must state personalData scope", issues)
+        elif is_registered_first_party and not source_policy.get("personalData"):
+            fail(f"{rel_path}: first-party package sourcePolicy must state personalData scope", issues)
 
     first_party_ids = {
         manifest.get("id")
@@ -1732,7 +1764,7 @@ def check_market(issues: list[str]) -> None:
     }
     if first_party_ids != expected_first_party_ids:
         fail(
-            "default first-party package identity drift: "
+            "default first-party package identity drift; registered first-party inventory drift: "
             f"expected={sorted(expected_first_party_ids)} actual={sorted(str(item) for item in first_party_ids)}",
             issues,
         )
@@ -3675,7 +3707,7 @@ PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'control_evidence.rs': ('impl PlatformCo
 # `type`, so the item allowlist above cannot see it.
 # Kept as a second, independent carrier alongside the `extern` item accounting above.
 PLATFORM_CORE_FORBIDDEN_SOURCE_PATTERNS = (("extern crate", r"\bextern\s+crate\b"),)
-PLATFORM_CAPABILITY_TEST_FUNCTIONS = ('current_registry_loads_with_exact_nine_definitions', 'enum_risk_and_compatibility_mappings_are_exact', 'source_size_and_malformed_json_fail_closed', 'duplicate_json_keys_fail_closed', 'duplicate_capability_ids_fail_closed', 'invalid_capability_id_grammar_fail_closed', 'missing_extra_and_unknown_fields_fail_closed', 'invalid_schema_version_and_registry_revision_fail_closed', 'forbidden_and_incoherent_combinations_fail_closed', 'auto_grant_candidacy_and_deprecated_revoked_exclusions', 'deterministic_ordering_and_permutation_independent_digest', 'fixed_definition_and_registry_digest_vectors', 'one_field_change_alters_definition_digest', 'registry_revision_does_not_change_definition_digests', 'policy_change_comparator_branches_and_precedence', 'errors_do_not_leak_rejected_source_fragments', 'empty_registry_loads_with_zero_definitions', 'definition_classifier_preserves_existing_policy_matrix', 'definition_classifier_handles_none_added_removed_revoked_and_all_axes', 'definition_classifier_uses_complete_definition_not_digest_or_caller_hint')
+PLATFORM_CAPABILITY_TEST_FUNCTIONS = ('current_registry_loads_with_exact_eleven_definitions', 'enum_risk_and_compatibility_mappings_are_exact', 'source_size_and_malformed_json_fail_closed', 'duplicate_json_keys_fail_closed', 'duplicate_capability_ids_fail_closed', 'invalid_capability_id_grammar_fail_closed', 'missing_extra_and_unknown_fields_fail_closed', 'invalid_schema_version_and_registry_revision_fail_closed', 'forbidden_and_incoherent_combinations_fail_closed', 'auto_grant_candidacy_and_deprecated_revoked_exclusions', 'deterministic_ordering_and_permutation_independent_digest', 'fixed_definition_and_registry_digest_vectors', 'one_field_change_alters_definition_digest', 'registry_revision_does_not_change_definition_digests', 'policy_change_comparator_branches_and_precedence', 'errors_do_not_leak_rejected_source_fragments', 'empty_registry_loads_with_zero_definitions', 'definition_classifier_preserves_existing_policy_matrix', 'definition_classifier_handles_none_added_removed_revoked_and_all_axes', 'definition_classifier_uses_complete_definition_not_digest_or_caller_hint')
 PLATFORM_GRANT_TEST_FUNCTIONS = ('checked_grant_ids_versions_and_sequences_are_canonical',
  'closed_scope_algebra_projects_exact_public_and_tenant_private_scopes',
  'non_issue_commands_validate_snapshot_and_expected_version',
@@ -4724,12 +4756,20 @@ WORKSPACE_ADMITTED_DEPENDENCIES = {
     "base64": "0.22.1",
     "hmac": "0.12.1",
     "libc": "0.2.183",
+    "reqwest": {
+        "version": "0.12.23",
+        "default-features": False,
+        "features": ["json", "rustls-tls", "stream"],
+    },
     "serde": {"version": "1.0.229", "features": ["derive"]},
     "serde_json": "1.0.151",
     "semver": "1.0.27",
     "sha2": "0.10.9",
     "time": {"version": "0.3.54", "features": ["parsing"]},
-    "tokio": {"version": "1.53.1", "features": ["net", "rt-multi-thread"]},
+    "tokio": {
+        "version": "1.53.1",
+        "features": ["net", "rt-multi-thread", "time"],
+    },
     # The single admitted local path dependency, pinned to its exact in-repo location.
     "ustc-agent-tool-protocol": {"path": "crates/agent-tool-protocol"},
 }
@@ -9673,18 +9713,18 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
         M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "e6e4e7ecacc70d446eab6947f8a28e55b2d78a74a72523908a1bb8a46dd9e88c",
         "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
-        "docs/acceptance/matrix.tsv": "d2c0238eaa9cd0daddc8f2698d0dfc3f3f873d8f9122f017b1be5d79eeb562a1",
+        "docs/acceptance/matrix.tsv": "005fb600b7215c4351f7547fe2f14ca726d112ca43c287eac1c19491c706c22d",
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
         "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
-        "docs/contracts/module-boundaries.md": "d064bfcf0832962780678bddd848d0516e53d678b0389883144adec724e460a8",
-        "docs/overview/architecture.md": "99de3f5d93cf8d8cd7e516e0d00d4303d8cb2f0807c2a23ad2ad01b63bbf21a5",
+        "docs/contracts/module-boundaries.md": "8c663d411613713ca41502c894590976aa77009da181a4a07da333f7a1b11538",
+        "docs/overview/architecture.md": "a7f9b5780d9563b27edf959895bcf64c976b6e1b16202086f31305ce91585070",
         "docs/features/02-ustc-change-radar.md": "27be5c7f4bebdd6bb2dc6938ecffa185b4d0cd53aeb050b031b46bf698478153",
         "docs/plan/05-campus-trust-kernel.md": "26ebed21efb3cfcf09a08864ec890fd75dea7322d296433d120557b1614e26db",
-        "docs/plan/modules/00-module-map.md": "79d7b38d0dab663dad49da13a1d307e0738a6b6f85c9624d74444a159a576f04",
+        "docs/plan/modules/00-module-map.md": "5f6c9355c05b063d6c47289b2effd30dbb2e5a0984b4481957868879cb3d15bb",
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
-        "docs/tasks/01-execution-roadmap.md": "05136dbe30d9e3db1d6af08bc3d46b4d6c318d5bb72de5bdec264afdce317f9e",
+        "docs/tasks/01-execution-roadmap.md": "7087384fda22ed4dff1c3c1c315bed78edfbeb4bf3340731364f5858666eb03f",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
-        "docs/coverage-matrix.md": "2daa74003b0ba6bd1c9434c6396cda2a3237352de9ee4caae9ed7789e9f12df1",
+        "docs/coverage-matrix.md": "79c2b00716eb259dda9ec983558fb8151a8b51264828a18bca1d610d86c6b12f",
     }
     if tuple(frozen_projection_sha256) != declared_projection_paths:
         fail(
@@ -11588,7 +11628,7 @@ CI_V2_ACTIVE_CANCEL_POLICY = (
     "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"
 )
 CI_V2_ACTIVE_USES_COUNTS = {
-    "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803": 2,
+    "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803": 3,
     "dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5": 1,
     "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1": 1,
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": 1,
@@ -12379,8 +12419,22 @@ CI_GOVERNANCE_BASELINE_CI_STRUCTURE: tuple[
     (False, ("jobs", "rust", "steps", "run"), "cargo clippy --locked --all-targets --all-features -- -D warnings"),
     (True, ("jobs", "rust", "steps", "name"), "Test"),
     (False, ("jobs", "rust", "steps", "run"), "cargo test --locked --all-targets --all-features"),
+    (True, ("jobs", "rust", "steps", "name"), "Browser Chat behavior"),
+    (False, ("jobs", "rust", "steps", "run"), "UCA_SOURCE_COMMIT=$GITHUB_SHA cargo build --locked -p ustc-agentd --bin ustc-agentd && node scripts/test_agent_chat_browser.mjs target/debug/ustc-agentd"),
     (True, ("jobs", "rust", "steps", "name"), "Doc tests"),
     (False, ("jobs", "rust", "steps", "run"), "cargo test --locked --all-features --doc"),
+    (True, ("jobs", "rust", "steps", "name"), "Compose MVP delivery"),
+    (False, ("jobs", "rust", "steps", "run"), "bash scripts/check_mvp_compose_delivery.sh"),
+    (False, ("jobs", "windows-launchers"), ""),
+    (False, ("jobs", "windows-launchers", "name"), "windows-powershell-51"),
+    (False, ("jobs", "windows-launchers", "runs-on"), "windows-latest"),
+    (False, ("jobs", "windows-launchers", "timeout-minutes"), "10"),
+    (False, ("jobs", "windows-launchers", "steps"), ""),
+    (True, ("jobs", "windows-launchers", "steps", "name"), "Checkout"),
+    (False, ("jobs", "windows-launchers", "steps", "uses"), "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"),
+    (True, ("jobs", "windows-launchers", "steps", "name"), "Verify Windows PowerShell 5.1 launchers"),
+    (False, ("jobs", "windows-launchers", "steps", "shell"), "cmd"),
+    (False, ("jobs", "windows-launchers", "steps", "run"), "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/check_windows_launchers.ps1"),
     (False, ("jobs", "contracts"), ""),
     (False, ("jobs", "contracts", "name"), "docs-and-contracts"),
     (False, ("jobs", "contracts", "runs-on"), "ubuntu-latest"),
@@ -13719,7 +13773,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "2b5a2ba3c5120b84f9cd3fe4c89513729b65389e1bbad529cf9182563aa1f60c", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "ab148df68f11ca45979c0b390f414efba8cbb41fff9e7b720d634eef189da38d", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},

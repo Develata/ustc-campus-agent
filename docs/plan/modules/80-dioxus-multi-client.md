@@ -3,13 +3,13 @@
 ## Metadata
 
 - `Module ID`: `M80`
-- `Status`: Accepted blueprint with an approved Affairs-first M10 compatibility/operation-registry prerequisite plus bounded client-core, ordinary-user CLI evidence and one operation-specific loopback Web presentation proof; inbound MCP, Dioxus targets and full client conformance remain planned
+- `Status`: Accepted blueprint with an approved Affairs-first M10 compatibility/operation-registry prerequisite plus bounded client-core, ordinary-user CLI, operation-specific loopback Web and Android debug-bridge evidence; inbound MCP, Dioxus targets and full client conformance remain planned
 - `Implementation State`: `partial-evidence`
-- `Version`: `m80-client-shells/v2.2`
-- `Last Review`: `2026-09-01`
+- `Version`: `m80-client-shells/v2.3`
+- `Last Review`: `2026-09-04`
 - `Decisions`: [`ADR-0009`](../../adr/0009-dioxus-multi-client-shell.md), [`ADR-0010`](../../adr/0010-typed-client-peer-adapters.md)
-- `Owning Contract`: [`client-shell/v2.1`](../../contracts/client-shell.md)
-- `Primary code areas`: `crates/client-core/`, `apps/ustc-agent/`, future `apps/ustc-client/`, and one future inbound MCP adapter surface finalized by its first accepted slice
+- `Owning Contract`: [`client-shell/v2.3`](../../contracts/client-shell.md)
+- `Primary code areas`: `crates/client-core/`, `apps/ustc-agent/`, bounded `apps/ustc-android-demo/`, future `apps/ustc-client/`, and one future inbound MCP adapter surface finalized by its first accepted slice
 
 ## 1. Purpose
 
@@ -31,7 +31,9 @@ The retained framework-neutral `client-core` constructs and reduces the M10-owne
 
 `ustc-agentd serve-web` separately provides one operation-specific loopback presentation proof over the same M10-owned typed DTO: conditions, steps, explicit unknown time bounds, entries, contacts, safe lineage, freshness, conflict and uncertainty. It consumes the public capability internally and exposes no raw revision identity. Because this proof is colocated in the composition root and does not use the shared client core or Dioxus, it does not establish the peer Web/PWA target.
 
-The first retained prerequisite consumes M10 protocol major `1`, header-free `server.info`, the closed Web/CLI `server.info`/`capability.list`/`affairs.get` projection and typed `upgrade_required`/`incompatible_protocol` outcomes. M80 now reduces those server-owned values into client state and retains `ustc-client-result/v1`; it does not derive compatibility from HTTP status or recalculate Affairs authority. This is still not the complete `CLIENT-007` or `CLIENT-009` claim. It has no production HTTP/TLS profile/auth adapter, NDJSON/SSE stream, cursor/reconnect/cancellation or version-skew host matrix, and it does not implement inbound MCP, Dioxus Web/PWA, Android, Windows or shared graphical presentation state. The loopback fixture paths are bounded composition evidence and must not be projected as production remote-client support.
+The first retained prerequisite consumes M10 protocol major `1`, header-free `server.info`, the closed Web/CLI `server.info`/`capability.list`/`affairs.get` projection and typed `upgrade_required`/`incompatible_protocol` outcomes. M80 now reduces those server-owned values into client state and retains `ustc-client-result/v1`; it does not derive compatibility from HTTP status or recalculate Affairs authority. This is still not the complete `CLIENT-007` or `CLIENT-009` claim. It has no production HTTP/TLS profile/auth adapter, NDJSON/SSE stream, cursor/reconnect/cancellation or version-skew host matrix, and it does not implement inbound MCP, Dioxus Web/PWA, final Dioxus Android, Windows or shared graphical presentation state. The loopback fixture paths are bounded composition evidence and must not be projected as production remote-client support.
+
+`apps/ustc-android-demo` is a deliberately bounded pre-Dioxus Android bridge. Its native Activity validates one server origin, presents loading/offline/retry/lifecycle state and hosts the existing server-owned Web MVP in a confined `WebView`; ADB reverse preserves the server's loopback-only boundary. The app exposes no JavaScript bridge, tool implementation, domain calculation, operator surface or local truth. A source-bound artifact gate may prove a debug APK, emulator install/launch and one real Affairs chat, but this is only partial evidence toward planned `CLIENT-002`; it cannot promote the final Dioxus/HTTPS/session/real-device claim.
 
 ## 2. Non-goals
 
@@ -283,7 +285,7 @@ Dioxus separately budgets initial Web payload, SSR/hydration, Android startup/me
 8. `routes` and `design-system` — accessible navigation, display and forms.
 9. `market-ui`, `agent-ui` and product UI modules — typed projection and intent only.
 10. `platform-web` — SSR/CSR/PWA/session behavior.
-11. `platform-android` — endpoint/session/lifecycle/Custom Tab/package behavior.
+11. `platform-android` — endpoint/session/lifecycle/Custom Tab/package behavior; the bounded debug WebView bridge precedes but does not replace the final Dioxus/`CLIENT-002` slice.
 12. later `platform-windows` admitted peer and later-candidate `platform-ios`/other desktop peers; Windows promotion to required scope is a separate acceptance amendment.
 
 ## 16. Exit gate

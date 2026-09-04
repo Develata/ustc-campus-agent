@@ -1,6 +1,6 @@
 {
   "schemaVersion": "capability-registry/v1",
-  "registryRevision": "capability-registry:2026-08-28-01",
+  "registryRevision": "capability-registry:2026-09-04-01",
   "capabilities": [
     {
       "id": "campus.public_rules.read",
@@ -76,6 +76,24 @@
     },
     {
       "id": "user.own_plan_draft.write",
+      "effectClass": "Write",
+      "dataClass": "UserProfile",
+      "scopeKind": "TenantPrivateUser",
+      "autoGrant": "Never",
+      "confirmationDefault": "Ask",
+      "status": "Active"
+    },
+    {
+      "id": "user.own_calendar_items.read",
+      "effectClass": "Read",
+      "dataClass": "UserProfile",
+      "scopeKind": "TenantPrivateUser",
+      "autoGrant": "Never",
+      "confirmationDefault": "Ask",
+      "status": "Active"
+    },
+    {
+      "id": "user.own_calendar_items.write",
       "effectClass": "Write",
       "dataClass": "UserProfile",
       "scopeKind": "TenantPrivateUser",

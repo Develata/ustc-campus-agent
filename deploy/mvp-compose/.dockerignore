@@ -1,0 +1,9 @@
+*
+!Dockerfile
+!bin/
+!bin/ustc-agentd
+!container-entrypoint.sh
+!fixtures/
+!fixtures/**
+!market/
+!market/**

@@ -27,6 +27,12 @@ __pycache__/
 .ruff_cache/
 node_modules/
 
+# Android demo client build state
+apps/ustc-android-demo/.gradle/
+apps/ustc-android-demo/**/build/
+apps/ustc-android-demo/local.properties
+apps/ustc-android-demo/*.iml
+
 # OS/editor
 .DS_Store
 Thumbs.db

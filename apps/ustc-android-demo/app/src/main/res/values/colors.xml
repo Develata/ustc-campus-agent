@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="uca_background">#F7F6F2</color>
+    <color name="uca_surface">#FFFDF8</color>
+    <color name="uca_text">#18221C</color>
+    <color name="uca_muted">#5D685F</color>
+    <color name="uca_accent">#006B54</color>
+</resources>

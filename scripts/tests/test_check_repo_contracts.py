@@ -32,6 +32,9 @@ class MarketContractTests(unittest.TestCase):
         self.root = Path(self.temporary_directory.name)
         shutil.copytree(REPO_ROOT / "market", self.root / "market")
         shutil.copytree(REPO_ROOT / "plugins", self.root / "plugins")
+        shutil.copytree(
+            REPO_ROOT / "crates/simple-calendar", self.root / "crates/simple-calendar"
+        )
         shutil.copytree(REPO_ROOT / "docs/contracts", self.root / "docs/contracts")
         shutil.copytree(
             REPO_ROOT / "fixtures/opportunity-graph",
@@ -4674,8 +4677,8 @@ class PlatformIdentityImplementationContractTests(unittest.TestCase):
     def test_market_capability_registry_missing_bound_test_fails_closed(self) -> None:
         self.rewrite(
             self.capability_test_path(),
-            "#[test]\nfn current_registry_loads_with_exact_nine_definitions()",
-            "fn current_registry_loads_with_exact_nine_definitions()",
+            "#[test]\nfn current_registry_loads_with_exact_eleven_definitions()",
+            "fn current_registry_loads_with_exact_eleven_definitions()",
         )
         self.assert_rejected(
             self.check_identity(),
@@ -9575,7 +9578,7 @@ class CiV2ActiveWorkflowMutationTests(_M90MutationTestBase):
         path = self.path(checker.CAMPAIGN_CI_WORKFLOW_PATH)
         text = path.read_text(encoding="utf-8")
         action = "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"
-        self.assertEqual(text.count(action), 2)
+        self.assertEqual(text.count(action), 3)
         path.write_text(text.replace(action, "actions/checkout@v6", 1), encoding="utf-8")
         self.assert_rejected(self.check(), "action inventory drift")
 

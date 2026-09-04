@@ -4,6 +4,8 @@ USTC Campus Agent uses a proportionate docs-as-code structure: detailed authorit
 
 ## Start here
 
+For the runnable competition slice, begin with [`features/06-mvp-core-capabilities.md`](features/06-mvp-core-capabilities.md) and [`contracts/agent-chat.md`](contracts/agent-chat.md). For the installable Android demo artifact, use [`features/07-android-demo-client.md`](features/07-android-demo-client.md) and [`guides/android-demo.md`](guides/android-demo.md).
+
 1. [`plan/00-engineering-constitution.md`](plan/00-engineering-constitution.md)
 2. [`plan/01-terminology.md`](plan/01-terminology.md)
 3. [`plan/modules/00-module-map.md`](plan/modules/00-module-map.md)
