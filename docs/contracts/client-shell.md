@@ -2,9 +2,9 @@
 
 ## Metadata
 
-- `Status`: Accepted target architecture with an approved Affairs-first compatibility/operation-registry prerequisite plus bounded client-core, ordinary-user Affairs CLI and one operation-specific loopback thin-Web proof; production auth/remote HTTP/stream, inbound MCP and Dioxus clients remain planned
-- `Version`: `client-shell/v2.2`
-- `Last Review`: `2026-09-01`
+- `Status`: Accepted target architecture with an approved Affairs-first compatibility/operation-registry prerequisite plus bounded client-core, ordinary-user Affairs CLI, operation-specific loopback thin-Web and Android debug-bridge proof; production auth/remote HTTP/stream, inbound MCP and Dioxus clients remain planned
+- `Version`: `client-shell/v2.3`
+- `Last Review`: `2026-09-04`
 - `Owning Plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
 - `Counterpart Plans`: [`M10 Application Ingress Host`](../plan/modules/20-application-api-host.md), [`platform authority`](../plan/03-platform-authority.md)
 - `Decisions`: [`ADR-0009`](../adr/0009-dioxus-multi-client-shell.md), [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
@@ -37,6 +37,10 @@ Peer adapters reuse code through the typed core. They do not invoke one another 
 `crates/client-core` and the real `apps/ustc-agent` binary retain one typed `affairs get/lookup` path over numeric loopback framing. `ustc-agentd serve-web` additionally retains one loopback-only, operation-specific Axum/HTTP presentation proof whose static page renders a public-redacted server-owned `ClientResponseDto::Available` without making domain decisions. The CLI core validates endpoint/protocol/value bounds, propagates correlation/idempotency/provenance, reduces typed M10 responses/errors, emits one canonical JSON result and maps stable exit classes without importing backend or operator implementations. The colocated Web proof is not a replacement for that core and does not count as the future peer Dioxus shell. This is partial evidence only: no production profile/auth, remote HTTP/TLS, NDJSON/SSE, reconnect/cancellation/version-skew matrix, inbound MCP or Dioxus target exists.
 
 The bounded Web page is deliberately not a second client authority. It accepts only a stable procedure ID, calls the colocated same-origin endpoint and presents prerequisites, ordered steps, explicit unknown effective/deadline time, entry points, contacts, safe public lineage (`source_id`, `evidence_set_digest`, `materialization_receipt_id`, `revision_count`), freshness, conflict and uncertainty already present in the typed response. The server consumes the response-only public capability internally and returns only the public-redacted lookup result; JavaScript never receives a capability or raw revision identity. It never computes procedure truth, freshness, conflict resolution, authorization or eligibility. Its loopback bind, embedded assets and retained source-grounded noncanonical fixture make it demo evidence, not the final Dioxus peer adapter or a remotely deployable public service.
+
+The bounded `apps/ustc-android-demo` package hosts that same-origin Web MVP in a native Android `WebView` after validating one path-free origin. HTTP is admitted only for `127.0.0.1`/`localhost`; remote origins require HTTPS. The Activity owns loading/offline/retry, endpoint preference, back navigation and WebView lifecycle only. It exposes no JavaScript bridge, local product/tool execution or operator path; SSL errors, mixed content, file/content access, remote cleartext, malformed origins and non-Web navigation fail closed. ADB reverse is the explicit local-demo transport and does not create a LAN/public server claim.
+
+This bounded debug artifact is supporting partial evidence only for long-horizon `CLIENT-002`, which still requires the Dioxus/shared-client contract, authenticated HTTPS, secure session storage, real-device lifecycle/reconnect, version compatibility and Custom Tab evidence. It is not projected as an active acceptance row.
 
 ## 2. Required client surfaces
 
@@ -311,6 +315,7 @@ crates/client-protocol/          # M10-owned versioned wire DTO/error carrier; b
 crates/client-core/              # M80-owned client behavior; bounded Affairs evidence
 apps/ustc-agent/                 # bounded ordinary-user Affairs CLI evidence; production adapters planned
 future apps/ustc-client/         # Dioxus Web/Android source; later admitted Windows target
+apps/ustc-android-demo/          # bounded debug WebView bridge; not final Dioxus/CLIENT-002
 future inbound MCP adapter       # exact package/process placement chosen by first slice
 apps/ustc-agentctl/              # existing separate operator/developer CLI
 apps/ustc-agentd/                # M10 server composition and ingress
@@ -391,7 +396,7 @@ The framework-neutral conformance suite runs every peer adapter against equivale
 
 `CLIENT-007` proves shared typed-core and peer equivalence. `CLIENT-008` proves no shell-out path and operator privilege isolation. `CLIENT-009` proves the user CLI machine contract. `CLIENT-010` proves the least-privilege inbound MCP boundary.
 
-These rows remain `planned` until every assertion in their executable bindings passes. The bounded Affairs client/CLI path is supporting partial evidence, not a substitute for `CLIENT-007`/`CLIENT-008`/`CLIENT-009` completion. Existing long-horizon Dioxus `CLIENT-001` through `CLIENT-006`, `WEB-*` and deployment cases remain non-active until projected into the active matrix.
+These rows remain `planned` until every assertion in their executable bindings passes. The bounded Affairs client/CLI path and debug Android bridge are supporting partial evidence, not substitutes for completion of the planned rows. Existing long-horizon Dioxus `CLIENT-001` through `CLIENT-010`, `WEB-*` and deployment cases remain non-active until projected into the active matrix.
 
 ## 18. Current status
 
@@ -403,8 +408,9 @@ Accepted now:
 - M10 remains the admitted application boundary and backend authority remains unchanged;
 - inbound MCP and M51 outbound MCP are directionally separate;
 - required Web/PWA, Docker Compose server and Android targets remain unchanged.
+- one bounded debug Android bridge may provide competition/demo access without being relabelled as final Dioxus or `CLIENT-002` acceptance.
 - Windows is admitted as a later desktop peer target but is not a current required release gate.
 
-Implemented now as bounded non-production evidence: one framework-neutral client-core and real `ustc-agent` public Affairs get/capability-lookup JSON path against the fixture-only loopback composition, including dependency confinement and real subprocess tests.
+Implemented now as bounded non-production evidence: one framework-neutral client-core and real `ustc-agent` public Affairs get/capability-lookup JSON path against the fixture-only loopback composition, including dependency confinement and real subprocess tests; plus one source-bound debug Android WebView bridge as partial evidence toward planned `CLIENT-002`.
 
-Not implemented: production profile/auth, HTTP/TLS ingress, typed event stream, full peer conformance, inbound MCP adapter, Dioxus application, Web journey, Android/Windows package or deployment. This partial evidence does not promote any planned acceptance row to pass.
+Not implemented: production profile/auth, HTTP/TLS ingress, typed event stream, full peer conformance, inbound MCP adapter, Dioxus application, peer Web/PWA journey, production Android/Windows package or deployment, or complete long-horizon `CLIENT-002`. This partial evidence does not promote those planned rows to pass.

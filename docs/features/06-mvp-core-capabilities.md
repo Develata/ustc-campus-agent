@@ -14,7 +14,7 @@ The MVP follows four rules:
 ## 2. User-visible flow
 
 ```text
-Browser (loopback only)
+Browser or Android demo WebView (loopback only)
   → POST /api/v1/agent/chat
   → bounded ChatRun
   → deterministic mock or OpenAI-compatible provider
@@ -28,6 +28,8 @@ Browser (loopback only)
 ```
 
 The default mock mode needs no API key and is intended for deterministic judging and offline acceptance. For every known successful tool shape it emits a server-owned bounded Chinese summary—procedure steps and official entry points, changed fields, course candidates and iCourse link-outs, or Calendar mutations—rather than transport JSON. Shape drift becomes an explicit summary-contract notice. The real-provider mode uses the same tool definitions and Rust executor; the key remains file-backed and server-side.
+
+The debug Android APK is a thin presentation bridge over this exact route. It reaches the host loopback service through explicit `adb reverse`, contains no local tool or product implementation, and exposes native loading/offline/retry/server-origin controls. See [`07-android-demo-client.md`](07-android-demo-client.md).
 
 ## 3. Capability matrix
 
@@ -128,6 +130,7 @@ Every admitted tool-backed request should show a readable summary and successful
 
 - A command sandbox is not part of this MVP. If added, it must use an allowlist, fixed working directory, execution timeout, output cap and no shell interpolation; arbitrary shell execution is explicitly rejected.
 - Multi-agent graphs, remote hosting and Dioxus client parity.
+- Production-signed Android, secure authenticated HTTPS sessions and complete real-device `CLIENT-002` evidence; the bounded debug APK does not imply these.
 
 Architecture and lifecycle details:
 

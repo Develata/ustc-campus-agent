@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">USTC Campus Agent</string>
+    <string name="offline_heading">还没有连接到校园 Agent</string>
+    <string name="server_settings">服务器</string>
+    <string name="reload">刷新</string>
+    <string name="retry">重试连接</string>
+</resources>

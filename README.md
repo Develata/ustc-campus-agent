@@ -6,6 +6,8 @@ USTC Campus Agent 的目标不是包装一个通用聊天框，而是建立有�
 
 平台保留三个 default first-party Plugins：**USTC Affairs Navigator**、**USTC ChangeRadar** 与 **Campus Opportunity Graph**；另提供一个非默认安装的 Rust **Simple Calendar** companion plugin。当前 `ustc-agentd` 已把普通问答、bounded tool loop、三条校园数据路径与本地事项记录组合成可运行的 loopback MVP。详细能力、架构、数据边界与 TODO 见 [`docs/features/06-mvp-core-capabilities.md`](docs/features/06-mvp-core-capabilities.md)。
 
+Android 8.0+ 现有一个可安装、debug-signed 的薄客户端 APK：它通过 `adb reverse` 复用同一 loopback Rust 服务与完整 Web MVP，不在手机上复制 Agent 或校园数据 authority。安装命令、endpoint 约束与尚未完成的 production/Dioxus 边界见 [`docs/guides/android-demo.md`](docs/guides/android-demo.md)。
+
 ## 一条命令运行 MVP
 
 准备好 Rust stable toolchain 后，在仓库根目录执行：
@@ -23,6 +25,8 @@ USTC Campus Agent 的目标不是包装一个通用聊天框，而是建立有�
 - **Simple Calendar**：通过 Agent 记录、列出或删除最多 128 条 owner-local 事项。
 
 命令只接受 loopback bind。运行状态默认写入 `$XDG_STATE_HOME/ustc-campus-agent/three-plugin-mvp`（未设置时为 `~/.local/state/ustc-campus-agent/three-plugin-mvp`）；可用 `USTC_AGENTD_BIND` 与 `USTC_AGENTD_STATE_DIR` 覆盖。state directory 必须是当前用户拥有、模式 `0700` 的真实目录。以同一目录重启会恢复 product state、session/read authority、publication/control evidence、Opportunity profile/tombstone 与 Simple Calendar items。所有校园来源均为显著标记的 reviewed/synthetic fixtures；服务没有生产认证、TLS、正式多用户 SSO 或自动来源更新，禁止直接暴露到公网。
+
+Android 本机演示保持这一边界：先启动上述服务，再执行 `adb reverse tcp:8787 tcp:8787` 并安装 CI 产出的 APK。该 artifact 是 competition/demo bridge，不是 Play Store release，也不宣称完成 authenticated remote deployment。
 
 `m00-sessions.json` 仍是 `event-history-only` 的 current-session read authority；`B4b stable redacted control-event/error` journal 仍为 `data-only` evidence carrier，不是正式 SSO 或通用管理员 API。
 
@@ -57,6 +61,7 @@ cargo run -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --con
 | Agent harness | finite HarnessRun over typed TaskGraph；model proposes, Rust validates；every model call passes context-budget preflight |
 | Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
 | Required delivery targets | Web/PWA + Docker Compose Fullstack server + Android；Windows 为已接纳的 later peer、当前不进入 required gate；iOS/其他 desktop 后续候选 |
+| Current Android evidence | `apps/ustc-android-demo` debug APK：API 35 emulator 安装/启动、ADB reverse、真实 Affairs Chat journey；最终 Dioxus/HTTPS/session/真机 `CLIENT-002` 仍未完成 |
 | Multi-client shell | `M10` owns framework-neutral versioned operation/client-protocol registry；`M80` owns client core over it；Dioxus Web/Android、`ustc-agent` 与 public-read-first inbound MCP 为 peer adapters；later Windows 复用同一 core；M10 不依赖 client-core，GUI 不 spawn CLI；client/server adapter 不拥有平台 authority |
 | CLI privilege split | `ustc-agentctl` 为 operator/developer；`ustc-agent` 已有 bounded ordinary-user/headless Affairs path；`ustc-agentd serve-web` 提供 loopback-only、三插件 source/profile-grounded MVP，生产 auth/remote HTTP/streaming 仍未实现；MCP 仅暴露 selected least-privilege tools/resources |
 
@@ -65,6 +70,7 @@ cargo run -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --con
 ```text
 apps/                     # runnable binaries and future interaction-shell source
   ustc-agentd/            # daemon plus bounded three-plugin loopback Web composition
+  ustc-android-demo/       # debug APK thin shell over the loopback Web MVP; not final Dioxus Android
   ustc-agentctl/          # operator/developer CLI skeleton
   ustc-agent/             # bounded ordinary-user/headless Affairs CLI evidence; production transport/auth planned
   ustc-client/            # future shared Dioxus Web/Android Fullstack source
@@ -130,6 +136,7 @@ cargo run --locked -p ustc-agent -- --version
 - Large-module map: [`docs/plan/modules/00-module-map.md`](docs/plan/modules/00-module-map.md)
 - User-visible journeys: [`docs/features/`](docs/features/)
 - MVP capabilities, architecture and TODO: [`docs/features/06-mvp-core-capabilities.md`](docs/features/06-mvp-core-capabilities.md)
+- Android demo artifact and boundary: [`docs/features/07-android-demo-client.md`](docs/features/07-android-demo-client.md), [`docs/guides/android-demo.md`](docs/guides/android-demo.md)
 - Typed public/package/data contracts: [`docs/contracts/`](docs/contracts/)
 - Cross-module boundary registry: [`docs/contracts/module-boundaries.md`](docs/contracts/module-boundaries.md)
 - Acceptance matrix and gates: [`docs/acceptance/`](docs/acceptance/)
