@@ -60,7 +60,7 @@ Canonical history remains recoverable. If a safe request still cannot be built, 
 
 ## Bounded Web Chat competition slice
 
-[`agent-chat/v1`](../contracts/agent-chat.md) governs a narrower retained integration profile before the full durable `HarnessRun`; [`02-agent-chat-mvp.md`](../tasks/02-agent-chat-mvp.md) only schedules its delivery. One in-memory finite Chat request uses either a no-network deterministic fake or one explicitly configured OpenAI-compatible adapter, permits at most three provider turns and three sequential tool calls, and returns a natural-language answer plus a safe tool trace.
+[`agent-chat/v1`](../contracts/agent-chat.md) governs a narrower retained integration profile before the full durable `HarnessRun`; [`02-agent-chat-mvp.md`](../tasks/02-agent-chat-mvp.md) only schedules its delivery. One in-memory finite Chat request uses either a no-network deterministic fake or one explicitly configured OpenAI-compatible adapter, permits at most three provider turns and four sequential tool calls, and returns a natural-language answer plus a safe tool trace.
 
 Affairs and ChangeRadar calls enter their existing M10 and fixed M30/M40 product paths. Opportunity is offered only for an existing consent-bound profile with explicit request confirmation and remains the static M10/M20/M72 deterministic plan path; the model cannot create, view, revoke or delete the profile or add courses outside the planner result. This slice proves a useful product journey but does not claim durable conversation history, the complete task graph/review harness, generic portable Plugin execution, streaming parity or Dioxus.
 

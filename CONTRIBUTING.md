@@ -1,6 +1,6 @@
 # Contributing
 
-This private repository uses [`docs/guides/contributing.md`](docs/guides/contributing.md) as the detailed collaboration contract. Also read [`AGENTS.md`](AGENTS.md), [`docs/AGENTS.md`](docs/AGENTS.md) and the matching row in [`docs/coverage-matrix.md`](docs/coverage-matrix.md).
+This public MIT-licensed repository uses [`docs/guides/contributing.md`](docs/guides/contributing.md) as the detailed collaboration contract. Also read [`AGENTS.md`](AGENTS.md), [`docs/AGENTS.md`](docs/AGENTS.md) and the matching row in [`docs/coverage-matrix.md`](docs/coverage-matrix.md).
 
 ## Quick workflow
 

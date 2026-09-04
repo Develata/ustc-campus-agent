@@ -198,6 +198,21 @@ test -n "$app_pid"
 printf 'app_pid=%s\n' "$app_pid" > "$evidence_dir/runtime.txt"
 printf 'serial=%s\n' "$serial" >> "$evidence_dir/runtime.txt"
 
+notice_visible=0
+for _ in $(seq 1 30); do
+  if "$adb" -s "$serial" shell uiautomator dump /sdcard/uca-window.xml >/dev/null 2>&1 \
+    && "$adb" -s "$serial" exec-out cat /sdcard/uca-window.xml \
+      > "$evidence_dir/android-ui.xml" \
+    && grep -Eq 'resource-id="[^"]*:id/prototype_disclaimer"' "$evidence_dir/android-ui.xml" \
+    && grep -Fq '学生竞赛原型 · 非官方 USTC 服务' "$evidence_dir/android-ui.xml"; then
+    notice_visible=1
+    break
+  fi
+  sleep 1
+done
+"$adb" -s "$serial" shell rm -f /sdcard/uca-window.xml >/dev/null 2>&1 || true
+test "$notice_visible" = 1
+
 socket_name=""
 for _ in $(seq 1 30); do
   socket_name="$("$adb" -s "$serial" shell cat /proc/net/unix \
@@ -219,5 +234,31 @@ python3 "$repo_root/scripts/test_android_webview_cdp.py" \
   | tee "$evidence_dir/android-webview-smoke.txt"
 "$adb" -s "$serial" exec-out screencap -p > "$evidence_dir/android-emulator.png"
 test -s "$evidence_dir/android-emulator.png"
+
+# Prove that the disclaimer belongs to the native shell and remains visible
+# when the loopback Rust service is unavailable, rather than matching only the
+# Web page copy in an online hierarchy dump.
+kill "$server_pid"
+wait "$server_pid" || true
+server_pid=""
+"$adb" -s "$serial" shell am force-stop "$package"
+"$adb" -s "$serial" shell am start -W -n "$component" \
+  | tee "$evidence_dir/activity-start-offline.txt"
+grep -Fq 'Status: ok' "$evidence_dir/activity-start-offline.txt"
+
+offline_notice_visible=0
+for _ in $(seq 1 30); do
+  if "$adb" -s "$serial" shell uiautomator dump /sdcard/uca-window-offline.xml >/dev/null 2>&1 \
+    && "$adb" -s "$serial" exec-out cat /sdcard/uca-window-offline.xml \
+      > "$evidence_dir/android-ui-offline.xml" \
+    && grep -Eq 'resource-id="[^"]*:id/prototype_disclaimer"' "$evidence_dir/android-ui-offline.xml" \
+    && grep -Fq '学生竞赛原型 · 非官方 USTC 服务' "$evidence_dir/android-ui-offline.xml"; then
+    offline_notice_visible=1
+    break
+  fi
+  sleep 1
+done
+"$adb" -s "$serial" shell rm -f /sdcard/uca-window-offline.xml >/dev/null 2>&1 || true
+test "$offline_notice_visible" = 1
 
 printf 'android-emulator-smoke: PASS\n'

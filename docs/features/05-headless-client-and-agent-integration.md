@@ -1,6 +1,6 @@
 # Headless client and external Agent integration
 
-- `Status`: Planned phased user journey; architecture, public-read-first scope and acceptance bindings accepted; no user CLI, inbound MCP adapter or M10 client API implemented
+- `Status`: Planned broader user journey; bounded client-protocol/client-core and ordinary-user Affairs CLI evidence implemented, while inbound MCP and full production peer conformance remain planned
 - `Owning plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
 - `Contracts`: [`client-shell/v2.1`](../contracts/client-shell.md), [`cli/v2.1`](../contracts/cli.md), [`application-interface-registry/v2`](../contracts/interfaces.md), [`permissions/v2`](../contracts/permissions.md)
 - `Decision`: [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
@@ -123,4 +123,4 @@ This is the M10/M80 client-access lane order. It does not replace the product im
 - `CLIENT-009`: real `ustc-agent` read path proves JSON/NDJSON framing, typed exit/error, auth isolation, compatibility and reconnect/cancellation distinction.
 - `CLIENT-010`: external MCP conformance proves bounded discovery/invocation, tenant/grant isolation, instruction-isolated results and no M51/domain/operator reach-through.
 
-All four rows are currently `planned`. This feature document does not claim a runnable binary, MCP endpoint, campus data source or Dioxus client.
+All four rows remain `planned`, although `CLIENT-007` and `CLIENT-009` now have bounded supporting evidence through the real `ustc-agent` fixture-loopback path. This document claims no inbound MCP endpoint, live campus data source, Dioxus client or production-ready CLI.

@@ -32,7 +32,7 @@ Release requires all release-bound rows plus artifact/build/restore/read-back ev
 
 ## Public gate
 
-Public visibility and Pages/download publication additionally require `public-readiness.md`, license/notice, full reachable-history audit, fixture/source permission, disclaimer, browser and remote delivery-surface verification.
+Maintaining the public repository truthfully, and publishing any new Pages/download/tag/Release surface, additionally require the applicable items in `public-readiness.md`: license/notice, reachable-history audit, fixture/source permission, disclaimer, browser evidence and remote delivery-surface verification.
 
 ## Evidence states
 

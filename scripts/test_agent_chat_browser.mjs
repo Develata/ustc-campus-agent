@@ -243,6 +243,11 @@ try {
   assert.equal(await evaluate("document.querySelector('#chat-form')?.tagName"), "FORM");
   assert.equal(await evaluate("document.querySelector('#chat-messages')?.getAttribute('aria-live')"), "polite");
   assert.equal(await evaluate("document.querySelector('#chat-error')?.getAttribute('role')"), "alert");
+  assert.match(
+    await evaluate("document.querySelector('#prototype-notice')?.textContent"),
+    /学生竞赛原型.*不是中国科学技术大学官方服务/,
+    "the public demo must visibly disclaim official USTC status"
+  );
   for (const invalidHint of ["profile:\0private", "x".repeat(4097)]) {
     await evaluate(`localStorage.setItem('ustc-campus-agent/opportunity-profile-id/v1', ${JSON.stringify(invalidHint)})`);
     await reloadAndWait("invalid Opportunity hint cleanup");

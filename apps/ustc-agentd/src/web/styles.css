@@ -122,6 +122,17 @@ footer {
   text-transform: uppercase;
 }
 
+.prototype-notice {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  color: var(--muted);
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  font-size: .9rem;
+  line-height: 1.6;
+}
+
 main {
   padding-block: 86px 64px;
 }

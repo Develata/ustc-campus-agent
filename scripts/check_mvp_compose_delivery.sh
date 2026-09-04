@@ -42,6 +42,12 @@ tar -xzf "$work/package-a/ustc-campus-agent-mvp-compose-${short_commit}.tar.gz" 
   cd "$work/readback/ustc-campus-agent-mvp-compose"
   sha256sum -c SHA256SUMS
   test "$(bin/ustc-agentd source-commit)" = "$source_commit"
+  cmp "$repo_root/LICENSE.md" LICENSE.md
+  grep -Fxq 'source_repository=https://github.com/Develata/ustc-campus-agent' BUILD-INFO.txt
+  grep -Fxq 'license=MIT' BUILD-INFO.txt
+  grep -Fq 'https://github.com/Develata/ustc-campus-agent' README.md
+  grep -Fq 'MIT License' README.md
+  grep -Eq '^[0-9a-f]{64}  LICENSE\.md$' SHA256SUMS
   mkdir -p "$work/fake-bin" "$work/launcher-secrets"
   printf '%s\n' '#!/usr/bin/env sh' ': > "${DOCKER_MARKER:?}"' 'exit 23' \
     > "$work/fake-bin/docker"

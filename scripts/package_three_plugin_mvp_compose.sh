@@ -90,6 +90,11 @@ if interpreters != [b'/lib64/ld-linux-x86-64.so.2']:
 PY
 
 template_files=(.dockerignore Dockerfile compose.yaml container-entrypoint.sh .env.example README.md mock-provider-key.txt smoke.sh start.ps1 start.cmd start.sh stop.ps1 stop.cmd reset.ps1 reset.cmd reset.sh)
+license_path="$repo_root/LICENSE.md"
+[ -f "$license_path" ] && [ ! -L "$license_path" ] || {
+  printf 'missing repository license: %s\n' "$license_path" >&2
+  exit 66
+}
 for file in "${template_files[@]}"; do
   source_path="$repo_root/deploy/mvp-compose/$file"
   [ -f "$source_path" ] && [ ! -L "$source_path" ] || {
@@ -160,6 +165,7 @@ for file in "${template_files[@]}"; do
   source_path="$repo_root/deploy/mvp-compose/$file"
   install -m 0644 "$source_path" "$package_dir/$file"
 done
+install -m 0644 "$license_path" "$package_dir/LICENSE.md"
 
 install -m 0755 "$binary" "$package_dir/bin/ustc-agentd"
 install -m 0755 "$repo_root/deploy/mvp-compose/container-entrypoint.sh" "$package_dir/container-entrypoint.sh"
@@ -179,6 +185,8 @@ printf '%s\n' \
   'schema=ustc-campus-agent-mvp-compose-build/v1' \
   'package_version=0.2.0' \
   "source_commit=$source_commit" \
+  'source_repository=https://github.com/Develata/ustc-campus-agent' \
+  'license=MIT' \
   'binary_target=x86_64-unknown-linux-gnu' \
   "binary_version=$binary_version" \
   > "$package_dir/BUILD-INFO.txt"

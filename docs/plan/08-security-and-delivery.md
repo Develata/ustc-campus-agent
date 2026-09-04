@@ -4,8 +4,8 @@
 
 - `Layer`: Cross-cutting governance
 - `Status`: Current security/publication rules; production deployment planned
-- `Version`: `0.2.0`
-- `Last Review`: `2026-07-25`
+- `Version`: `0.3.0`
+- `Last Review`: `2026-09-04`
 - `Authority Owns`: credential/data boundaries, release/publication gates, deployment-profile invariants
 - `Authority Defers To`: owning product/source/runtime plans and explicit Develata publication approval
 - `Counterpart Feature`: `docs/features/00-market-browse-install.md`
@@ -72,11 +72,11 @@ A release requires, at minimum:
 
 Local build success is not remote release success.
 
-## 6. Public transition
+## 6. Public repository and publication
 
-Repository visibility and GitHub Pages/download publication are explicit security/release decisions. Before public visibility:
+The source repository is public under the MIT License as of 2026-09-04. Public visibility does not establish release, deployment, data-use or official-affiliation readiness. Maintaining that public surface, and adding GitHub Pages/download/tag/Release surfaces, require the applicable current gates:
 
-- select the license and complete third-party notices;
+- keep the source license current and complete third-party notices;
 - scan the full reachable Git history for secrets/private data;
 - scrub or approve every fixture and screenshot;
 - verify USTC/iCourse data-use boundaries;

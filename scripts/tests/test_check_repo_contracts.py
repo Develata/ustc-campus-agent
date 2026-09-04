@@ -7553,11 +7553,155 @@ class PlatformSessionImplementationTests(unittest.TestCase):
         )
 
 
+class PublicRepositoryTruthTests(unittest.TestCase):
+    FILES = (
+        "LICENSE.md",
+        "README.md",
+        "docs/README.md",
+        "apps/ustc-agentd/src/web/index.html",
+        "apps/ustc-agentd/src/agent_chat.rs",
+        "apps/ustc-android-demo/app/src/main/res/values/strings.xml",
+        "apps/ustc-android-demo/app/src/main/res/values/ids.xml",
+        "apps/ustc-android-demo/app/src/main/java/com/develata/ustccampusagent/MainActivity.java",
+        "scripts/smoke_android_demo_emulator.sh",
+        "docs/contracts/agent-chat.md",
+        "docs/features/04-bounded-agent-harness.md",
+        "docs/features/06-mvp-core-capabilities.md",
+        "docs/plan/02-product-positioning.md",
+        "docs/acceptance/public-readiness.md",
+    )
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary_directory.name)
+        for rel in self.FILES:
+            source = REPO_ROOT / rel
+            target = self.root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        self.original_root = cast(Path, getattr(checker, "ROOT"))
+        setattr(checker, "ROOT", self.root)
+
+    def tearDown(self) -> None:
+        setattr(checker, "ROOT", self.original_root)
+        self.temporary_directory.cleanup()
+
+    def check_truth(self) -> list[str]:
+        issues: list[str] = []
+        checker.check_public_repository_truth(issues)
+        return issues
+
+    def replace_once(self, rel: str, old: str, new: str) -> None:
+        path = self.root / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, f"stale or ambiguous mutation target in {rel}")
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def test_current_public_repository_truth_passes(self) -> None:
+        self.assertEqual(self.check_truth(), [])
+
+    def test_license_or_repository_status_rollback_fails_closed(self) -> None:
+        cases = (
+            ("LICENSE.md", "MIT License\n", "Custom License\n"),
+            ("LICENSE.md", "SOFTWARE.\n", "SOFTWARE.\n\nAdditional restrictions apply.\n"),
+            ("README.md", "GitHub public，MIT License", "Repository status pending"),
+            (
+                "README.md",
+                "## Repository layout",
+                "repository remains private\n\n## Repository layout",
+            ),
+        )
+        for rel, old, new in cases:
+            with self.subTest(rel=rel):
+                original = (self.root / rel).read_text(encoding="utf-8")
+                self.replace_once(rel, old, new)
+                self.assertTrue(self.check_truth())
+                (self.root / rel).write_text(original, encoding="utf-8")
+
+    def test_web_or_android_disclaimer_rollback_fails_closed(self) -> None:
+        cases = (
+            (
+                "apps/ustc-agentd/src/web/index.html",
+                '<p id="prototype-notice" class="prototype-notice">',
+                '<p hidden id="prototype-notice" class="prototype-notice">',
+            ),
+            (
+                "apps/ustc-android-demo/app/src/main/res/values/strings.xml",
+                "学生竞赛原型 · 非官方 USTC 服务",
+                "校园 Agent",
+            ),
+            (
+                "apps/ustc-android-demo/app/src/main/res/values/ids.xml",
+                '<item name="prototype_disclaimer" type="id" />',
+                '<item name="other" type="id" />',
+            ),
+            (
+                "apps/ustc-android-demo/app/src/main/java/com/develata/ustccampusagent/MainActivity.java",
+                "prototypeNotice.setId(R.id.prototype_disclaimer);",
+                "prototypeNotice.setId(View.NO_ID);",
+            ),
+            (
+                "scripts/smoke_android_demo_emulator.sh",
+                'test "$offline_notice_visible" = 1',
+                "test 1 = 1",
+            ),
+        )
+        for rel, old, new in cases:
+            with self.subTest(rel=rel):
+                original = (self.root / rel).read_text(encoding="utf-8")
+                self.replace_once(rel, old, new)
+                self.assertTrue(self.check_truth())
+                (self.root / rel).write_text(original, encoding="utf-8")
+
+    def test_chat_tool_call_budget_projection_rollback_fails_closed(self) -> None:
+        cases = (
+            (
+                "docs/features/04-bounded-agent-harness.md",
+                "at most three provider turns and four sequential tool calls",
+                "at most three provider turns and three sequential tool calls",
+            ),
+            (
+                "docs/contracts/agent-chat.md",
+                "- at most four total tool calls;",
+                "- at most three total tool calls;",
+            ),
+            (
+                "apps/ustc-agentd/src/agent_chat.rs",
+                "const MAX_TOOL_CALLS: u8 = 4;",
+                "const MAX_TOOL_CALLS: u8 = 3;",
+            ),
+        )
+        for rel, old, new in cases:
+            with self.subTest(rel=rel):
+                original = (self.root / rel).read_text(encoding="utf-8")
+                self.replace_once(rel, old, new)
+                self.assertTrue(self.check_truth())
+                (self.root / rel).write_text(original, encoding="utf-8")
+
+    def test_live_status_precedence_rollback_fails_closed(self) -> None:
+        cases = (
+            ("README.md", "**Live status precedence:**", "**Status:**"),
+            (
+                "docs/plan/02-product-positioning.md",
+                "existing GitHub repository visibility and the MIT source license are not runtime/release evidence",
+                "no public repository/download claim before the public-readiness and release gates pass",
+            ),
+            ("docs/README.md", "whole-file-digest-bound M60 packet", "historical packet"),
+        )
+        for rel, old, new in cases:
+            with self.subTest(rel=rel):
+                original = (self.root / rel).read_text(encoding="utf-8")
+                self.replace_once(rel, old, new)
+                self.assertTrue(self.check_truth())
+                (self.root / rel).write_text(original, encoding="utf-8")
+
+
 class RepositoryCheckerRegistrationTests(unittest.TestCase):
     """All check_* functions invoked from main() must match EXPECTED_MAIN_CALLS."""
 
     EXPECTED_MAIN_CALLS = (
         "check_key_files_present_and_nonempty(issues)",
+        "check_public_repository_truth(issues)",
         "check_campaign_authorization(issues)",
         "check_docs_topology(issues)",
         "check_design_packets(issues)",

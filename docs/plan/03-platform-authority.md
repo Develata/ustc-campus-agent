@@ -3,15 +3,15 @@
 ## Metadata
 
 - `Layer`: Authority architecture
-- `Status`: Accepted architecture; R0 Agent transition kernel implemented, finite harness and authority plane largely planned
-- `Version`: `0.8.1`
-- `Last Review`: `2026-08-12`
+- `Status`: Accepted architecture; bounded Agent/client/Web/Android evidence implemented, production authority plane largely planned
+- `Version`: `0.8.2`
+- `Last Review`: `2026-09-04`
 - `Authority Owns`: authority partition, canonical state ownership, client/execution-plane boundary
 - `Authority Defers To`: product positioning for scope and contracts for exact external shapes
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/04-bounded-agent-harness.md`, `docs/features/05-headless-client-and-agent-integration.md`
 - `Counterpart Contracts`: `docs/contracts/platform-identity.md`, `docs/contracts/agent-harness.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/client-shell.md`, `docs/contracts/invocation-resolution.md`, `docs/contracts/agent-runtime.md`, `docs/contracts/interfaces.md`, `docs/contracts/permissions.md`
 - `Counterpart Acceptance`: `AUTH-*`, `HARNESS-*`, `AGENT-*`, `MARKET-*`, `CLIENT-*`, `WEB-*`, `DEP-*`, `RUNTIME-*`, `PUBLIC-*`
-- `Primary Code Areas`: `crates/platform-core/`, `crates/agent-runtime/`, `apps/ustc-agentd/`, `apps/ustc-agentctl/`, future M10-owned `crates/client-protocol/`, M80-owned `crates/client-core/`, `apps/ustc-agent/`, `apps/ustc-client/` and inbound MCP adapter
+- `Primary Code Areas`: `crates/platform-core/`, `crates/agent-runtime/`, `crates/client-protocol/`, `crates/client-core/`, `apps/ustc-agentd/`, `apps/ustc-agentctl/`, `apps/ustc-agent/`, `apps/ustc-android-demo/`, future Dioxus client and inbound MCP adapter
 - `Large-module Map`: [`modules/00-module-map.md`](modules/00-module-map.md); this chapter owns cross-module authority, while module blueprints own implementation detail
 
 ## 1. Scope
@@ -152,7 +152,10 @@ Implemented now:
 - operator CLI/daemon skeleton;
 - framework-neutral Agent run-spec, transition, replay, effect-ordering and budget kernel;
 - mechanically enforced absence of Market/Plugin/adapter dependencies in `agent-runtime`, with cross-boundary proof at the composition root;
-- bounded offline Course Planning core and smoke command.
+- bounded offline Course Planning core and smoke command;
+- framework-neutral client-protocol/client-core plus a bounded real `ustc-agent affairs get/lookup` fixture-loopback path;
+- loopback HTTP/Web Agent Chat with deterministic offline provider mode, fixed bounded tool composition and redacted trace;
+- deterministic Docker Compose delivery evidence and a Java WebView Android demo shell that remains a thin client of the Rust service.
 
 Not yet implemented:
 
@@ -160,10 +163,11 @@ Not yet implemented:
 - durable installations and grants;
 - durable Agent orchestration/journal and production ToolGateway; the framework-neutral tool-protocol value subset is implemented;
 - finite HarnessRun/TaskGraph, clarification/review supervisor and context compaction;
-- source ingestion and publication state;
+- production live-source ingestion, durable M60 baseline and canonical publication pipeline; bounded demo review/publication state exists;
 - production database/evidence store;
-- framework-neutral client-core, `ustc-agent` user/automation CLI and inbound MCP adapter;
-- Dioxus Fullstack Web journey, Docker Compose server profile and mandatory Android target; later admitted Windows peer, with iOS/other desktop candidates later.
+- full client peer conformance, authenticated HTTP/TLS/streaming CLI support and inbound MCP adapter;
+- Dioxus Fullstack/PWA journey and production Android target; the current Web and Java WebView Android surfaces are bounded loopback demos, not those production peers;
+- production Compose/server profile, later admitted Windows peer, and iOS/other desktop candidates.
 
 These planned systems MUST NOT be described as operational merely because their contracts exist.
 

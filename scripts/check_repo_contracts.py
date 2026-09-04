@@ -927,6 +927,157 @@ def check_key_files_present_and_nonempty(issues: list[str]) -> None:
                 fail(f"current contract not registered as key file: {rel}", issues)
 
 
+def check_public_repository_truth(issues: list[str]) -> None:
+    paths = (
+        "LICENSE.md",
+        "README.md",
+        "docs/README.md",
+        "apps/ustc-agentd/src/web/index.html",
+        "apps/ustc-agentd/src/agent_chat.rs",
+        "apps/ustc-android-demo/app/src/main/res/values/strings.xml",
+        "apps/ustc-android-demo/app/src/main/res/values/ids.xml",
+        "apps/ustc-android-demo/app/src/main/java/com/develata/ustccampusagent/MainActivity.java",
+        "scripts/smoke_android_demo_emulator.sh",
+        "docs/contracts/agent-chat.md",
+        "docs/features/04-bounded-agent-harness.md",
+        "docs/features/06-mvp-core-capabilities.md",
+        "docs/plan/02-product-positioning.md",
+        "docs/acceptance/public-readiness.md",
+    )
+    texts: dict[str, str] = {}
+    for rel in paths:
+        path = ROOT / rel
+        if not path.is_file():
+            fail(f"public repository truth carrier missing: {rel}", issues)
+            continue
+        texts[rel] = path.read_text(encoding="utf-8")
+    if len(texts) != len(paths):
+        return
+
+    license_sha256 = hashlib.sha256(texts["LICENSE.md"].encode("utf-8")).hexdigest()
+    expected_license_sha256 = "9eb10ee9a4e130a2b9dfcfbb69bdbd621dc205d96ccb4a6073dd042864a29910"
+    if license_sha256 != expected_license_sha256:
+        fail(
+            "canonical MIT license drifted: "
+            f"expected={expected_license_sha256} actual={license_sha256}",
+            issues,
+        )
+
+    required_counts: tuple[tuple[str, str, int], ...] = (
+        (
+            "README.md",
+            "| Repository | [`Develata/ustc-campus-agent`](https://github.com/Develata/ustc-campus-agent)，GitHub public，MIT License |",
+            1,
+        ),
+        (
+            "README.md",
+            "项目源于学生竞赛，**不是中国科学技术大学官方服务**。",
+            1,
+        ),
+        ("README.md", "**Live status precedence:**", 1),
+        ("docs/README.md", "whole-file-digest-bound M60 packet", 1),
+        (
+            "apps/ustc-agentd/src/web/index.html",
+            '<p id="prototype-notice" class="prototype-notice"><strong>学生竞赛原型：</strong>这不是中国科学技术大学官方服务，也不连接生产账号或自动执行正式审批、选课。</p>',
+            1,
+        ),
+        ("apps/ustc-agentd/src/web/index.html", 'id="prototype-notice"', 1),
+        (
+            "apps/ustc-android-demo/app/src/main/res/values/strings.xml",
+            '<string name="prototype_disclaimer">学生竞赛原型 · 非官方 USTC 服务</string>',
+            1,
+        ),
+        (
+            "apps/ustc-android-demo/app/src/main/res/values/ids.xml",
+            '<item name="prototype_disclaimer" type="id" />',
+            1,
+        ),
+        (
+            "apps/ustc-android-demo/app/src/main/java/com/develata/ustccampusagent/MainActivity.java",
+            "prototypeNotice.setId(R.id.prototype_disclaimer);",
+            1,
+        ),
+        (
+            "apps/ustc-android-demo/app/src/main/java/com/develata/ustccampusagent/MainActivity.java",
+            "prototypeNotice.setContentDescription(getString(R.string.prototype_disclaimer));",
+            1,
+        ),
+        (
+            "apps/ustc-android-demo/app/src/main/java/com/develata/ustccampusagent/MainActivity.java",
+            "root.addView(\n                prototypeNotice,",
+            1,
+        ),
+        ("scripts/smoke_android_demo_emulator.sh", "android-ui.xml", 3),
+        ("scripts/smoke_android_demo_emulator.sh", "android-ui-offline.xml", 3),
+        ("scripts/smoke_android_demo_emulator.sh", 'test "$notice_visible" = 1', 1),
+        ("scripts/smoke_android_demo_emulator.sh", 'test "$offline_notice_visible" = 1', 1),
+        (
+            "docs/contracts/agent-chat.md",
+            "- at most three provider turns;\n- at most four total tool calls;",
+            1,
+        ),
+        ("apps/ustc-agentd/src/agent_chat.rs", "const MAX_PROVIDER_TURNS: u8 = 3;", 1),
+        ("apps/ustc-agentd/src/agent_chat.rs", "const MAX_TOOL_CALLS: u8 = 4;", 1),
+        (
+            "docs/features/04-bounded-agent-harness.md",
+            "at most three provider turns and four sequential tool calls",
+            1,
+        ),
+        (
+            "docs/features/06-mvp-core-capabilities.md",
+            "Maximum 3 provider turns, 4 tool calls",
+            1,
+        ),
+        (
+            "docs/plan/02-product-positioning.md",
+            "existing GitHub repository visibility and the MIT source license are not runtime/release evidence",
+            1,
+        ),
+        (
+            "docs/acceptance/public-readiness.md",
+            "repository is already public and its source is MIT-licensed",
+            1,
+        ),
+        (
+            "docs/acceptance/public-readiness.md",
+            "explicitly non-authoritative for live visibility, licensing, MVP status and Chat budget",
+            1,
+        ),
+    )
+    for rel, fragment, expected_count in required_counts:
+        actual_count = texts[rel].count(fragment)
+        if actual_count != expected_count:
+            fail(
+                f"public repository truth carrier count drifted in {rel}: "
+                f"marker={fragment!r} expected={expected_count} actual={actual_count}",
+                issues,
+            )
+
+    forbidden_current_claims = (
+        "private competition repository",
+        "repository remains private",
+        "no public repository/download claim before",
+        "three provider turns and three sequential tool calls",
+    )
+    current_authorities = (
+        "README.md",
+        "docs/README.md",
+        "docs/plan/02-product-positioning.md",
+        "docs/features/04-bounded-agent-harness.md",
+        "docs/features/06-mvp-core-capabilities.md",
+        "docs/contracts/agent-chat.md",
+        "docs/acceptance/public-readiness.md",
+    )
+    for rel in current_authorities:
+        folded = texts[rel].casefold()
+        for forbidden in forbidden_current_claims:
+            if forbidden.casefold() in folded:
+                fail(
+                    f"contradictory public/current-state claim remains in {rel}: {forbidden!r}",
+                    issues,
+                )
+
+
 def exact_marked_block(
     rel: str,
     begin: str,
@@ -13674,6 +13825,7 @@ def check_platform_control_evidence(issues: list[str]) -> None:
 
 EXPECTED_MAIN_CALLS = (
     "check_key_files_present_and_nonempty(issues)",
+    "check_public_repository_truth(issues)",
     "check_campaign_authorization(issues)",
     "check_docs_topology(issues)",
     "check_design_packets(issues)",
@@ -13789,6 +13941,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_platform_session_port": {"digest": "cd83696316ed74a4aa15dfdf861a4c5b3b9b397056d06c44e1a13e3def4667a6", "status": "active"},
     "check_platform_session_contract": {"digest": "e3a2e5ef5ca953bdf2739ac3072df8bcfed0ebece4a893f52980fb7ca3b15c1b", "status": "active"},
     "check_platform_session_implementation": {"digest": "f1a25036ae6940b332c258af80f2e23815071ca19cb1d5db79d7a4f8b844be8f", "status": "active"},
+    "check_public_repository_truth": {"digest": "af8d436c4ec23c7a51d79bc538cd952c9a14cb07397de301a2f47995a7052051", "status": "active"},
     "check_rust_doctest_gate": {"digest": "372200f9ce289b3af148b7e7001408498b3d817098d7013692f016b766d2ec58", "status": "active"},
     "check_rust_lexical_corpus": {"digest": "ac8c09ce53ca4949c8e5c61eca0a958301735d7cdb2dc0ecd00eb3472a0e2aef", "status": "active"},
     "check_run_checker_shards_runner": {"digest": "c6abd4f4d049cb1836f333badf20d0d08bec3ea319a0549812f076b8b419de39", "status": "active"},
@@ -13900,6 +14053,7 @@ def check_source_sensitive_guard_registry(issues: list[str]) -> None:
 def main() -> int:
     issues: list[str] = []
     check_key_files_present_and_nonempty(issues)
+    check_public_repository_truth(issues)
     check_campaign_authorization(issues)
     check_docs_topology(issues)
     check_design_packets(issues)

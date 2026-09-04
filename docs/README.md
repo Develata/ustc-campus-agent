@@ -8,12 +8,13 @@ For the runnable competition slice, begin with [`features/06-mvp-core-capabiliti
 
 1. [`plan/00-engineering-constitution.md`](plan/00-engineering-constitution.md)
 2. [`plan/01-terminology.md`](plan/01-terminology.md)
-3. [`plan/modules/00-module-map.md`](plan/modules/00-module-map.md)
-4. [`contracts/module-boundaries.md`](contracts/module-boundaries.md)
-5. [`tasks/00-module-work-policy.md`](tasks/00-module-work-policy.md)
-6. [`overview/architecture.md`](overview/architecture.md)
-7. [`coverage-matrix.md`](coverage-matrix.md)
-8. the matching module plan/feature/contract/acceptance documents
+3. [`contracts/agent-chat.md`](contracts/agent-chat.md) for the current bounded Chat budget
+4. [`plan/modules/00-module-map.md`](plan/modules/00-module-map.md)
+5. [`contracts/module-boundaries.md`](contracts/module-boundaries.md)
+6. [`tasks/00-module-work-policy.md`](tasks/00-module-work-policy.md)
+7. [`overview/architecture.md`](overview/architecture.md)
+8. [`coverage-matrix.md`](coverage-matrix.md)
+9. the matching module plan/feature/contract/acceptance documents
 
 ## Structure
 
@@ -29,7 +30,7 @@ For the runnable competition slice, begin with [`features/06-mvp-core-capabiliti
 | [`adr/`](adr/) | Why were major architecture decisions made? |
 | [`design/`](design/) | How are UI/presentation candidates proposed and reviewed? (subordinate layer; proposals only, never behavior authority) |
 
-[`coverage-matrix.md`](coverage-matrix.md) maps the live layers. [`AGENTS.md`](AGENTS.md) defines documentation authority and editing discipline.
+[`coverage-matrix.md`](coverage-matrix.md) maps the documentation layers and accepted projections. The whole-file-digest-bound M60 packet—including the coverage matrix, large-module map, architecture overview and execution roadmap—can retain historical three-call/current-state wording; it is not live authority for repository visibility, licensing, runnable MVP capability or the Chat budget. Use the root README/`LICENSE.md`, `features/06-mvp-core-capabilities.md` and `contracts/agent-chat.md` for those current facts. [`AGENTS.md`](AGENTS.md) defines documentation authority and editing discipline.
 
 ## Deliberate exclusions
 

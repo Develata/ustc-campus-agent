@@ -1,6 +1,6 @@
 {
   "schema_version": "checker-test-inventory/v1",
-  "expected_count": 737,
+  "expected_count": 742,
   "test_ids": [
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_count_mismatch",
     "test_check_repo_contracts.CheckerTestInventoryMutationTests.test_inventory_duplicates",
@@ -635,6 +635,11 @@
     "test_check_repo_contracts.PlatformSessionPortContractTests.test_session_port_public_function_widening_fails_closed",
     "test_check_repo_contracts.PlatformSessionPortContractTests.test_session_port_public_item_widening_fails_closed",
     "test_check_repo_contracts.PlatformSessionPortContractTests.test_session_port_status_projection_drift_fails_closed",
+    "test_check_repo_contracts.PublicRepositoryTruthTests.test_chat_tool_call_budget_projection_rollback_fails_closed",
+    "test_check_repo_contracts.PublicRepositoryTruthTests.test_current_public_repository_truth_passes",
+    "test_check_repo_contracts.PublicRepositoryTruthTests.test_license_or_repository_status_rollback_fails_closed",
+    "test_check_repo_contracts.PublicRepositoryTruthTests.test_live_status_precedence_rollback_fails_closed",
+    "test_check_repo_contracts.PublicRepositoryTruthTests.test_web_or_android_disclaimer_rollback_fails_closed",
     "test_check_repo_contracts.RepositoryCheckerRegistrationTests.test_main_invokes_exactly_the_registered_checks",
     "test_check_repo_contracts.RunCheckerShardsRunnerMutationTests.test_runner_empty",
     "test_check_repo_contracts.RunCheckerShardsRunnerMutationTests.test_runner_missing",

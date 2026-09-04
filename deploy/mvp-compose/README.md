@@ -110,3 +110,10 @@ $env:UCA_MVP_PORT = "8877"
 - 若是 UI 问题，附截图和浏览器窗口大小。
 
 `BUILD-INFO.txt` 与 `SHA256SUMS` 记录本包的源码和文件身份。
+
+## 源码与许可证
+
+- exact source repository: <https://github.com/Develata/ustc-campus-agent>
+- repository source license: [MIT License](https://github.com/Develata/ustc-campus-agent/blob/main/LICENSE.md)
+
+包内 `LICENSE.md` 是随包分发的仓库源码许可证副本。第三方依赖、外部网页与 fixture 所引用的数据仍分别受其原有条款约束；本许可证不表示中国科学技术大学认可，也不把本 competition/demo package 提升为生产服务。

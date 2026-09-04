@@ -97,6 +97,23 @@ public final class MainActivity extends Activity {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT));
 
+        TextView prototypeNotice = new TextView(this);
+        prototypeNotice.setId(R.id.prototype_disclaimer);
+        prototypeNotice.setText(R.string.prototype_disclaimer);
+        prototypeNotice.setContentDescription(getString(R.string.prototype_disclaimer));
+        prototypeNotice.setGravity(Gravity.CENTER);
+        prototypeNotice.setPadding(dp(16), dp(6), dp(16), dp(6));
+        prototypeNotice.setTextColor(getColor(R.color.uca_accent));
+        prototypeNotice.setTextSize(12);
+        prototypeNotice.setTypeface(
+                prototypeNotice.getTypeface(), android.graphics.Typeface.BOLD);
+        prototypeNotice.setBackgroundColor(getColor(R.color.uca_surface));
+        root.addView(
+                prototypeNotice,
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
+
         connectionState = new TextView(this);
         connectionState.setPadding(dp(16), dp(4), dp(16), dp(6));
         connectionState.setTextColor(getColor(R.color.uca_muted));

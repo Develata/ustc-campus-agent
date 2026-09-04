@@ -47,7 +47,7 @@ cargo run -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --con
 
 | Item | Decision |
 |---|---|
-| Repository | `ustc-campus-agent`，GitHub private，Develata personal account |
+| Repository | [`Develata/ustc-campus-agent`](https://github.com/Develata/ustc-campus-agent)，GitHub public，MIT License |
 | Product name | USTC Campus Agent |
 | Default first-party Plugins | `ustc.affairs-navigator`, `ustc.change-radar`, `ustc.opportunity-graph` |
 | Optional bundled Plugin | `ustc.simple-calendar`；Rust owner-local item store，非默认安装 |
@@ -56,7 +56,7 @@ cargo run -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --con
 | Chinese name | TBD；首版使用中文描述“面向科大学生的插件化校园智能体” |
 | GitHub organization | Deferred |
 | Market repository | Deferred；当前为 monorepo 内 `market/` logical authority boundary |
-| Future public release | Possible；public-readiness gate required before changing visibility |
+| Public delivery | 源码仓库已公开；当前没有 tag、GitHub Release 或 Pages，任何下载面仍须通过 artifact read-back 与 public/release readiness gate |
 | Runtime strategy | Rust authority core；ADR-0004 reference systems remain references or bounded adapters, not platform authority |
 | Agent harness | finite HarnessRun over typed TaskGraph；model proposes, Rust validates；every model call passes context-budget preflight |
 | Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
@@ -64,6 +64,8 @@ cargo run -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --con
 | Current Android evidence | `apps/ustc-android-demo` debug APK：API 35 emulator 安装/启动、ADB reverse、真实 Affairs Chat journey；最终 Dioxus/HTTPS/session/真机 `CLIENT-002` 仍未完成 |
 | Multi-client shell | `M10` owns framework-neutral versioned operation/client-protocol registry；`M80` owns client core over it；Dioxus Web/Android、`ustc-agent` 与 public-read-first inbound MCP 为 peer adapters；later Windows 复用同一 core；M10 不依赖 client-core，GUI 不 spawn CLI；client/server adapter 不拥有平台 authority |
 | CLI privilege split | `ustc-agentctl` 为 operator/developer；`ustc-agent` 已有 bounded ordinary-user/headless Affairs path；`ustc-agentd serve-web` 提供 loopback-only、三插件 source/profile-grounded MVP，生产 auth/remote HTTP/streaming 仍未实现；MCP 仅暴露 selected least-privilege tools/resources |
+
+> **Live status precedence:** repository visibility and licensing are stated by this README and [`LICENSE.md`](LICENSE.md); the runnable MVP boundary and Chat budget are stated by [`docs/features/06-mvp-core-capabilities.md`](docs/features/06-mvp-core-capabilities.md) and [`docs/contracts/agent-chat.md`](docs/contracts/agent-chat.md). The whole-file-digest-bound M60 acceptance packet—including the architecture overview, execution roadmap, coverage matrix and large-module map—preserves some historical pre-public/current-state/three-call wording and is not live visibility, licensing, MVP or Chat-budget authority.
 
 ## Repository layout
 
@@ -140,9 +142,9 @@ cargo run --locked -p ustc-agent -- --version
 - Typed public/package/data contracts: [`docs/contracts/`](docs/contracts/)
 - Cross-module boundary registry: [`docs/contracts/module-boundaries.md`](docs/contracts/module-boundaries.md)
 - Acceptance matrix and gates: [`docs/acceptance/`](docs/acceptance/)
-- Cross-layer architecture map: [`docs/overview/architecture.md`](docs/overview/architecture.md)
+- Cross-layer long-horizon architecture map: [`docs/overview/architecture.md`](docs/overview/architecture.md)；其 implementation-status section 仍受历史 M60 acceptance packet 的 whole-file digest 约束，当前可运行 MVP 状态以 [`docs/features/06-mvp-core-capabilities.md`](docs/features/06-mvp-core-capabilities.md) 为准
 - Module work/commit/assembly policy: [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md)
-- Module assembly roadmap: [`docs/tasks/01-execution-roadmap.md`](docs/tasks/01-execution-roadmap.md)
+- Module assembly roadmap, coverage matrix and large-module map: [`docs/tasks/01-execution-roadmap.md`](docs/tasks/01-execution-roadmap.md), [`docs/coverage-matrix.md`](docs/coverage-matrix.md), [`docs/plan/modules/00-module-map.md`](docs/plan/modules/00-module-map.md)；其中 M60 acceptance packet 的 historical public/current-state/three-call wording 不覆盖本 README、canonical MVP feature 或 `agent-chat/v1` contract
 - Collaboration, development and publication handoffs: [`docs/guides/`](docs/guides/)
 - Architecture decision history: [`docs/adr/`](docs/adr/)
 
@@ -152,4 +154,4 @@ Do not commit USTC credentials, CAS cookies, API keys, real student data, genera
 
 ## License
 
-This private competition repository currently grants no public open-source license. See [`LICENSE.md`](LICENSE.md) and [`docs/acceptance/public-readiness.md`](docs/acceptance/public-readiness.md) before any public visibility change.
+本仓库源码采用 [MIT License](LICENSE.md)。公开源码与 MIT 授权不表示中国科学技术大学官方认可，也不等于生产就绪；第三方依赖、外部页面与数据仍分别受其原有条款约束。新增 GitHub Pages、下载、tag 或 Release 前仍须通过 [`docs/acceptance/public-readiness.md`](docs/acceptance/public-readiness.md) 与对应 release gate。
