@@ -99,7 +99,7 @@ The assembled package, tar archive, and ZIP archive must each contain package-ro
 
 The fixed reviewed demo catalogue contains Affairs Navigator, ChangeRadar, and Opportunity Graph, plus Simple Calendar as an owner-local in-process companion. It is not a generalized install/disable/revoke-driven provider catalogue or isolated execution platform.
 
-- **Agent Chat** returns bounded Chinese summaries and a redacted trace instead of raw transport JSON.
+- **Agent Chat** returns bounded Chinese summaries and a redacted trace instead of raw transport JSON. An optional request-v2 response preference is closed, at most 2048 UTF-8 bytes, explicitly untrusted and non-persistent; it follows rather than replaces immutable server policy and adds no tool or authority.
 - **Affairs Navigator** reads one fixed `DemoReviewed` transcript-certificate procedure.
 - **ChangeRadar** reads one fixed reviewed academic-calendar board; administrator publication is a separate explicit control and is not model-visible.
 - **Opportunity Graph** plans from a synthetic private profile only after profile consent and separate confirmation on that request; community aggregate signals affect soft ranking only.
@@ -115,7 +115,7 @@ All campus facts in this demo are explicitly labelled reviewed or synthetic fixt
 
 The Android artifact is a debug-signed competition bridge over the same Web UI through `adb reverse`; it is not a production Android release. Installation and endpoint details are in the [Android demo guide](docs/guides/android-demo.md).
 
-The current MVP has no command sandbox and rejects arbitrary shell execution. It delivers no generalized dynamic package lifecycle, Skill runtime, usable MCP adapter/server, authenticated public deployment, client-side provider credentials, live campus ingestion, or production Android acceptance.
+The current MVP has no command sandbox and rejects arbitrary shell execution. It delivers no generalized dynamic package lifecycle, Skill runtime, usable MCP adapter/server, editable system policy or persisted prompt profile, authenticated public deployment, client-side provider credentials, live campus ingestion, or production Android acceptance.
 
 The Affairs-only compatibility entrypoint remains `./scripts/run_affairs_web_demo.sh`. `ustc-agentctl` is a separate loopback operator/developer surface:
 

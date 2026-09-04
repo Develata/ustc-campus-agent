@@ -37,6 +37,7 @@ The debug Android APK is a thin presentation bridge over this exact route. It re
 
 - Multi-turn page-local conversation with bounded history.
 - Deterministic offline response or explicitly configured OpenAI-compatible Chat Completions provider; both cross the complete loopback HTTP route in retained tests.
+- Optional request v2 carries one closed, non-persistent `prompt_customization.text` user preference: at most 2048 UTF-8 bytes, nonblank after trim, and free of disallowed control, bidi, zero-width and BOM scalars. The immutable system policy remains first; the separately labelled untrusted preference changes no tool or authority. Empty Web input preserves request v1, while nonempty request-scope input uses v2 and is never added to history or `localStorage`.
 - Maximum 3 provider turns, 4 tool calls, 4 KiB arguments per call, 64 KiB result per call and 16 KiB final answer.
 - The deterministic provider uses tool-aware human summaries with fair per-result budgets, so a large course plan neither exposes protocol plumbing nor erases a later Calendar result.
 - Redacted trace exposes only call order, tool name and `succeeded | denied | failed`.
@@ -113,7 +114,7 @@ After starting the loopback MVP, try:
 - `删除事项 calendar:item:1`
 - Create an Opportunity profile in the page, enable the per-request consent checkbox, then ask `请根据我的偏好和评课社区信号推荐课程。`
 
-Every admitted tool-backed request should show a readable summary and successful trace in deterministic mock mode. Answers should expose user facts such as procedure steps, changed fields, course codes/link-outs and Calendar item IDs, but not raw field names such as `ordered_steps`, `changed_fields`, `course_codes` or `command_id`. `日历怎么用`, `提醒我日历怎么用`, `calendar help`, provider-proposed mutation for a read-only prompt, mismatched title/ID, and hidden/extra suffixes must show denied/non-mutation behavior with zero Calendar state change. Course planning must be denied or omitted without the explicit profile context and per-request confirmation.
+Every admitted tool-backed request should show a readable summary and successful trace in deterministic mock mode. Answers should expose user facts such as procedure steps, changed fields, course codes/link-outs and Calendar item IDs, but not raw field names such as `ordered_steps`, `changed_fields`, `course_codes` or `command_id`. `日历怎么用`, `提醒我日历怎么用`, `calendar help`, provider-proposed mutation for a read-only prompt, mismatched title/ID, and hidden/extra suffixes must show denied/non-mutation behavior with zero Calendar state change. Course planning must be denied or omitted without the explicit profile context and per-request confirmation. A nonempty request preference may change response presentation only; it must not change the first system policy, tool count or authorization, and it must not appear in the next request.
 
 ## 6. Current boundaries and TODO
 
@@ -128,6 +129,7 @@ Every admitted tool-backed request should show a readable summary and successful
 
 - Calendar structured editor, completion state, reminders, recurrence and timezone UX.
 - Durable chat sessions, streaming responses and provider fallback.
+- Persisted prompt profiles or editable system/developer policy.
 - Broader Affairs/ChangeRadar coverage with source-by-source freshness indicators.
 - Real-provider browser smoke in an authorized environment.
 
