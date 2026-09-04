@@ -1116,7 +1116,7 @@ mod tests {
             assert_eq!(result["data"]["code"], "calendar_mutation_intent_mismatch");
         }
 
-        let request = ChatRequestDto {
+        let historical_request = ChatRequestDto {
             schema: CHAT_REQUEST_SCHEMA.to_owned(),
             messages: vec![
                 message(ChatInputRole::User, "记录事项：历史事项"),
@@ -1125,7 +1125,7 @@ mod tests {
             ],
             opportunity_context: None,
         };
-        let mut run = new_run(request, false);
+        let mut run = new_run(historical_request, false);
         run.next_provider_request().expect("turn");
         let mut operation_count = 0;
         run.accept_provider_turn(
