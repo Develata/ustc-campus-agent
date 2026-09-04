@@ -48,6 +48,16 @@
         <form id="chat-form" class="chat-composer" aria-describedby="chat-hint chat-opportunity-state">
           <label class="visually-hidden" for="chat-input">发送给校园 Agent 的消息</label>
           <textarea id="chat-input" name="message" rows="3" maxlength="4096" enterkeyhint="send" autocomplete="off" aria-describedby="chat-hint chat-opportunity-state" placeholder="问一个校园事务问题…" required></textarea>
+          <div class="chat-prompt-customization">
+            <label for="chat-prompt-customization">
+              <span>响应偏好 <small>可选 · 仅这次请求</small></span>
+            </label>
+            <textarea id="chat-prompt-customization" name="prompt-customization" rows="2" maxlength="2048" autocomplete="off" aria-describedby="chat-prompt-customization-hint chat-prompt-customization-counter" placeholder="例如：请用简洁的要点回答。"></textarea>
+            <div class="chat-prompt-customization-meta">
+              <span id="chat-prompt-customization-hint">作为不可信 user preference 发送；不能改变工具、权限或服务器 policy，成功后清空。</span>
+              <output id="chat-prompt-customization-counter" for="chat-prompt-customization">0 / 2048 UTF-8 bytes</output>
+            </div>
+          </div>
           <div class="chat-composer-footer">
             <label class="chat-opportunity-control" for="chat-opportunity-confirm">
               <input id="chat-opportunity-confirm" type="checkbox" aria-describedby="chat-opportunity-state" disabled>

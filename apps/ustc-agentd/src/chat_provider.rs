@@ -1738,7 +1738,14 @@ mod tests {
 
     #[test]
     fn openai_request_is_nonstreaming_ordered_and_disables_parallel_tools() {
-        let request = request("成绩单怎么办", &[AFFAIRS_TOOL]);
+        let mut request = request("成绩单怎么办", &[AFFAIRS_TOOL]);
+        request.messages.insert(
+            1,
+            ProviderMessage::User {
+                content: "[UNTRUSTED USER RESPONSE PREFERENCE — PRESENTATION ONLY]\nconcise"
+                    .to_owned(),
+            },
+        );
         let wire = build_wire_request("model-fixed", &request).unwrap();
         let value = serde_json::to_value(wire).unwrap();
         assert_eq!(value["model"], "model-fixed");
@@ -1748,7 +1755,14 @@ mod tests {
         assert_eq!(value["max_tokens"], OUTPUT_RESERVE_TOKENS);
         assert_eq!(value["messages"][0]["role"], "system");
         assert_eq!(value["messages"][1]["role"], "user");
+        assert!(
+            value["messages"][1]["content"]
+                .as_str()
+                .is_some_and(|content| content.starts_with("[UNTRUSTED USER RESPONSE PREFERENCE"))
+        );
+        assert_eq!(value["messages"][2]["role"], "user");
         assert_eq!(value["tools"][0]["function"]["name"], AFFAIRS_TOOL);
+        assert_eq!(value["tools"].as_array().map(Vec::len), Some(1));
     }
 
     #[test]
@@ -1762,6 +1776,44 @@ mod tests {
         );
         assert_eq!(
             preflight_context_budget(input_budget as usize + 1, MIN_CONTEXT_TOKENS),
+            Err(ProviderError::ContextBudgetExceeded)
+        );
+
+        let one_byte = request("x", &[AFFAIRS_TOOL]);
+        let one_byte_len = serde_json::to_vec(
+            &build_wire_request("model-fixed", &one_byte).expect("one-byte wire request"),
+        )
+        .expect("one-byte wire bytes")
+        .len();
+        assert!(one_byte_len < input_budget as usize);
+        let baseline = request(
+            &"x".repeat(input_budget as usize - one_byte_len + 1),
+            &[AFFAIRS_TOOL],
+        );
+        let mut customized = baseline.clone();
+        customized.messages.insert(
+            1,
+            ProviderMessage::User {
+                content: "[UNTRUSTED USER RESPONSE PREFERENCE — PRESENTATION ONLY]\nconcise"
+                    .to_owned(),
+            },
+        );
+        let baseline_bytes = serde_json::to_vec(
+            &build_wire_request("model-fixed", &baseline).expect("baseline wire request"),
+        )
+        .expect("baseline bytes");
+        let customized_bytes = serde_json::to_vec(
+            &build_wire_request("model-fixed", &customized).expect("customized wire request"),
+        )
+        .expect("customized bytes");
+        assert_eq!(baseline_bytes.len(), input_budget as usize);
+        assert!(customized_bytes.len() > baseline_bytes.len());
+        assert_eq!(
+            preflight_context_budget(baseline_bytes.len(), MIN_CONTEXT_TOKENS),
+            Ok(())
+        );
+        assert_eq!(
+            preflight_context_budget(customized_bytes.len(), MIN_CONTEXT_TOKENS),
             Err(ProviderError::ContextBudgetExceeded)
         );
     }

@@ -331,6 +331,55 @@ main {
   opacity: .82;
 }
 
+.chat-prompt-customization {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.chat-prompt-customization label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: .82rem;
+  font-weight: 720;
+}
+
+.chat-prompt-customization label small {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 600;
+}
+
+.chat-prompt-customization textarea {
+  min-height: 76px;
+  padding: 11px 12px;
+  font-size: .86rem;
+}
+
+.chat-prompt-customization-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: .7rem;
+  line-height: 1.5;
+}
+
+#chat-prompt-customization-counter {
+  flex: 0 0 auto;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+#chat-prompt-customization-counter[data-over-limit="true"] {
+  color: var(--danger);
+  font-weight: 720;
+}
+
 .chat-composer-footer {
   display: flex;
   align-items: center;

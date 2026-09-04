@@ -761,6 +761,69 @@ fn agent_chat_http_route_maps_success_and_closed_request_failures() {
 }
 
 #[test]
+fn agent_chat_v2_preference_is_closed_request_only_and_v1_cannot_smuggle_it() {
+    let server = WebServer::start();
+    let path = "/api/v1/agent/chat";
+    let marker = "unique-request-preference-marker";
+
+    let customized = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v2",
+            "messages": [{"role": "user", "content": "成绩单证明怎么办"}],
+            "opportunity_context": null,
+            "prompt_customization": {"text": format!("  {marker}  ")}
+        }),
+    );
+    assert!(
+        customized.status.contains(" 200 "),
+        "{}: {}",
+        customized.status,
+        customized.body
+    );
+    let response: Value =
+        serde_json::from_str(&customized.body).expect("customized chat response JSON");
+    assert_eq!(response["schema"], "ustc-agent-chat-response/v1");
+    assert_eq!(response["tool_trace"][0]["tool"], "affairs_navigator_get");
+    assert!(!customized.body.contains(marker));
+
+    for smuggled in [
+        json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "普通问题"}],
+            "prompt_customization": null
+        }),
+        json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "普通问题"}],
+            "prompt_customization": {"text": "concise"}
+        }),
+        json!({
+            "schema": "ustc-agent-chat-request/v2",
+            "messages": [{"role": "user", "content": "普通问题"}],
+            "prompt_customization": {"text": "concise", "role": "system"}
+        }),
+    ] {
+        let rejected = server.post_json_without_opportunity_confirmation(path, &smuggled);
+        assert!(rejected.status.contains(" 400 "), "{}", rejected.status);
+        let error: Value = serde_json::from_str(&rejected.body).expect("chat error JSON");
+        assert_eq!(error["error"], "invalid_chat_request");
+        assert!(!rejected.body.contains(marker));
+    }
+
+    let later = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "普通问题"}],
+            "opportunity_context": null
+        }),
+    );
+    assert!(later.status.contains(" 200 "), "{}", later.status);
+    assert!(!later.body.contains(marker));
+}
+
+#[test]
 fn client_protocol_bootstrap_and_capability_registry_are_retained() {
     let server = WebServer::start_affairs_only();
 
