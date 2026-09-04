@@ -382,7 +382,7 @@ try {
   assert.doesNotMatch(courseAnswer, /course_codes|command_id/);
 
   await submitWithEnter(
-    "请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，同时记录事项：复习计划",
+    "请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，并列出日历事项",
     true
   );
   assert.equal(await evaluate("document.querySelector('#chat-opportunity-confirm').checked"), false);
@@ -402,7 +402,7 @@ try {
   const fourToolAnswer = await evaluate(
     "document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"
   );
-  for (const signal of ["transcript-certificate", "academic-calendar", "MATH2001", "复习计划"]) {
+  for (const signal of ["transcript-certificate", "academic-calendar", "MATH2001", "当前没有事项"]) {
     assert.match(fourToolAnswer, new RegExp(signal));
   }
 
