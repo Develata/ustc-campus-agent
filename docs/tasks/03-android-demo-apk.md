@@ -2,7 +2,7 @@
 
 ## Task authority
 
-- `Status`: implementation candidate; exact-head CI evidence pending
+- `Status`: bounded artifact delivered; exact-source CI and source-bound emulator evidence complete
 - `Module`: `M80 Client Core and Interaction Shells`
 - `Small module`: bounded pre-Dioxus sub-slice of `platform-android`
 - `Base commit`: `a4b08c92697866e9f1e44f37ebedbfd95940a04b`
@@ -62,6 +62,19 @@ The bounded artifact is deliverable only when one exact source snapshot proves a
 
 Failure is explicit: invalid endpoint, SSL failure, unavailable server or unsupported navigation produces no hidden local fallback and no success claim.
 
-## Local constraint
+## Completion receipt
 
-The Hermes host has no JDK/Android SDK and less than the repository's 10 GiB Rust-build safety threshold. Local work is limited to source/static contract checks; APK build, install and real-path evidence run on a source-bound remote builder. The normal USTC 107 channel was attempted first and timed out before authentication, so the bounded fallback is an isolated GitHub-hosted builder without changing the repository's governed workflows.
+- Source commit: `ee8cbc2138184651e32f955efbfec7462a3270e2`.
+- APK: `ustc-campus-agent-android-debug-ee8cbc2138184651e32f955efbfec7462a3270e2.apk`.
+- APK SHA-256: `83df5784e05bfefd9e16d8b41b05c9ba0f1ba29b589111869fa16475557baf31`; size: 886296 bytes.
+- Source-bound build/emulator gate: [Actions run 33850505578](https://github.com/Develata/ustc-campus-agent/actions/runs/33850505578), success. The isolated builder workflow commit is not the source identity; `build-info.json`, the artifact filename and embedded `BuildConfig` bind the output to the source commit above.
+- Product-branch exact-source CI: [Actions run 33851287216](https://github.com/Develata/ustc-campus-agent/actions/runs/33851287216), success for the source commit above.
+- Governance controller: [Actions run 33853176792](https://github.com/Develata/ustc-campus-agent/actions/runs/33853176792), success for the SHA-bound approval event.
+- Retained emulator evidence: endpoint unit tests, `No issues found.` Android lint, signature/manifest verification, `adb install` success, Activity launch, process presence, screenshot and `android-webview-smoke: PASS` for the Affairs Chat journey.
+- Independent exact-candidate review: `PASS`; no unresolved blocker. This receipt does not authorize merge, tag, Release or deployment.
+
+The long-horizon `CLIENT-002` acceptance remains planned. Physical-device evidence, production signing, authenticated remote HTTPS deployment, Dioxus parity, lifecycle/reconnect conformance and store publication are not implied by this receipt.
+
+## Build-environment boundary
+
+The delivery host did not provide the complete Android SDK/emulator path required for authoritative APK evidence. Build, install and real-path verification therefore ran on a source-bound GitHub-hosted builder without adding its one-shot workflow to the product candidate. This is remote emulator evidence, not a claim of local or physical-device validation.

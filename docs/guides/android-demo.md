@@ -2,6 +2,21 @@
 
 The current Android artifact is a debug-signed thin client for the loopback MVP. It is intended for a controlled competition demonstration, not Play Store or public-server deployment.
 
+Verified candidate:
+
+```text
+Source: ee8cbc2138184651e32f955efbfec7462a3270e2
+APK:    ustc-campus-agent-android-debug-ee8cbc2138184651e32f955efbfec7462a3270e2.apk
+SHA-256: 83df5784e05bfefd9e16d8b41b05c9ba0f1ba29b589111869fa16475557baf31
+Size:   886296 bytes
+```
+
+Before installing, keep the APK and its generated `.sha256` file in the same directory and verify the exact bytes:
+
+```bash
+sha256sum -c ustc-campus-agent-android-debug-ee8cbc2138184651e32f955efbfec7462a3270e2.apk.sha256
+```
+
 ## 1. Start the backend
 
 From the repository root:
@@ -36,7 +51,7 @@ This preserves the Rust server's loopback-only boundary; the service is not open
 ## 3. Install and launch
 
 ```bash
-adb install -r ustc-campus-agent-android-debug-<SOURCE_SHA>.apk
+adb install -r ustc-campus-agent-android-debug-ee8cbc2138184651e32f955efbfec7462a3270e2.apk
 adb shell am start -n \
   com.develata.ustccampusagent.debug/com.develata.ustccampusagent.MainActivity
 ```
@@ -90,3 +105,5 @@ UCA_SOURCE_COMMIT="$(git rev-parse HEAD)" \
   ./scripts/build_android_demo.sh --output-dir ./dist/android
 (cd dist/android && sha256sum -c ustc-campus-agent-android-debug-<SOURCE_SHA>.apk.sha256)
 ```
+
+The delivered candidate's source-bound build and API 35 emulator smoke are retained in [Actions run 33850505578](https://github.com/Develata/ustc-campus-agent/actions/runs/33850505578). Exact-source repository CI is [run 33851287216](https://github.com/Develata/ustc-campus-agent/actions/runs/33851287216). These receipts prove the bounded debug artifact only; they do not establish production signing, authenticated remote deployment or physical-device acceptance.

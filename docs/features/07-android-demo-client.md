@@ -2,7 +2,7 @@
 
 ## Metadata
 
-- `Status`: bounded implementation candidate; source-bound remote build and emulator evidence required
+- `Status`: bounded debug artifact delivered; source-bound remote build, emulator journey and exact-source CI complete
 - `Owning module`: `M80 Client Core and Interaction Shells`
 - `Contract`: [`client-shell/v2.3`](../contracts/client-shell.md)
 - `A...[truncated]
@@ -47,6 +47,8 @@ Cleartext traffic is admitted only for `127.0.0.1` and `localhost`, enabling the
 6. uses `adb reverse` and launches `MainActivity`;
 7. connects to the WebView CDP socket and completes an Affairs Chat tool journey;
 8. uploads the APK, checksum, build metadata, logs and emulator screenshot as a source-bound Actions artifact.
+
+The delivered candidate is bound to source commit `ee8cbc2138184651e32f955efbfec7462a3270e2`. Its APK SHA-256 is `83df5784e05bfefd9e16d8b41b05c9ba0f1ba29b589111869fa16475557baf31` and its size is 886296 bytes. Source-bound Android build/emulator [run 33850505578](https://github.com/Develata/ustc-campus-agent/actions/runs/33850505578) and product-branch exact-source CI [run 33851287216](https://github.com/Develata/ustc-campus-agent/actions/runs/33851287216) both completed successfully. The emulator evidence records successful installation, Activity launch and `android-webview-smoke: PASS` for an Affairs Chat journey at `http://127.0.0.1:8787`.
 
 ## Deferred
 
