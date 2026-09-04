@@ -8939,15 +8939,15 @@ class CiGovernanceWorkflowTests(unittest.TestCase):
             ),
             (
                 "      - name: Checkout\n"
-                "        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803\n"
+                "        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n"
                 "        with:\n          fetch-depth: 0\n"
                 "      - name: Install Python 3.13.5\n"
-                "        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1\n"
+                "        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97\n"
                 "        with:\n          python-version: 3.13.5\n",
                 "      - name: Checkout\n"
-                "        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803\n"
+                "        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n"
                 "      - name: Install Python 3.13.5\n"
-                "        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1\n"
+                "        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97\n"
                 "        with:\n          fetch-depth: 0\n          python-version: 3.13.5\n",
             ),
         )
@@ -9577,7 +9577,7 @@ class CiV2ActiveWorkflowMutationTests(_M90MutationTestBase):
     def test_active_workflow_unpinned_action_fails_closed(self) -> None:
         path = self.path(checker.CAMPAIGN_CI_WORKFLOW_PATH)
         text = path.read_text(encoding="utf-8")
-        action = "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"
+        action = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
         self.assertEqual(text.count(action), 3)
         path.write_text(text.replace(action, "actions/checkout@v6", 1), encoding="utf-8")
         self.assert_rejected(self.check(), "action inventory drift")
