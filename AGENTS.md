@@ -127,6 +127,6 @@ Small modules MAY be committed incrementally on the large-module branch, and tha
 
 Merging such a PR records bounded partial evidence only. It normally moves a `planned` large module no further than an honest `partial-evidence`, and it never establishes `StandaloneReady`, `IntegrationReady`, `Integrated` or `Accepted` — those remain controlled by the large module's own standalone and assembly gates. Every remote operation still requires protected-`main` review and Develata authorization under the operation-specific or source-controlled campaign mechanism in the work policy. Cross-module integration code belongs in `ustc-agentd` or another declared composition surface, never as a hidden dependency inside one module.
 
-## Public transition guard
+## Public repository guard
 
-This repo may become public later, but public visibility is a release/security decision. Before that: choose license, scrub secrets, replace private fixtures, verify iCourse/USTC source permissions, add non-official disclaimers, and pass the public-readiness checklist.
+This repository is intentionally public and source-visible. Public visibility does not grant an open-source license or establish release, deployment, data-use or official-affiliation readiness. Before adding a tag, GitHub Release, Pages site, stable download or public runtime: complete the applicable license/notice, reachable-history, fixture, source-permission, non-official-disclaimer, artifact read-back and public-readiness gates.

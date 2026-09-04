@@ -4,8 +4,8 @@
 
 - `Layer`: Product foundation
 - `Status`: Accepted
-- `Version`: `0.4.0`
-- `Last Review`: `2026-08-15`
+- `Version`: `0.4.1`
+- `Last Review`: `2026-09-04`
 - `Authority Owns`: product scope, formal first-party identities, non-goals and naming
 - `Authority Defers To`: chapters 03–08 for engineering mechanisms and typed contracts for exact fields
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/01-ustc-affairs-navigator.md`, `docs/features/02-ustc-change-radar.md`, `docs/features/03-campus-opportunity-graph.md`, `docs/features/05-headless-client-and-agent-integration.md`
@@ -57,7 +57,7 @@ Course Planning is a vertical slice inside `ustc.opportunity-graph`. Its determi
 - no generic graph database or universal workflow engine merely for symmetry;
 - no full-corpus RAG as the first Affairs truth path;
 - no cross-user profile data or silent permission expansion;
-- no public repository/download claim before the public-readiness and release gates pass;
+- no tag, GitHub Release, Pages, stable-download or public-runtime claim before its exact artifact/read-back and release gates pass; the intentionally public source repository is not runtime or release evidence;
 - no invented Chinese product brand or slice display name.
 
 ## 6. Current naming
@@ -91,7 +91,7 @@ administrator-reviewed immutable snapshot or exact approved public source
 → one thin Web result with evidence / freshness / conflict / uncertainty
 ```
 
-The first graphical product result does not wait for full M10/M80/Android/CLI/MCP/SSE/version-skew/Compose closure. A narrow first-party Web adapter over one public application query is admitted: the Web shell renders typed server-owned state and captures intent only. It performs no canonical product calculation or mutation.
+The first graphical product result did not wait for full M10/M80/Android/CLI/MCP/SSE/version-skew/Compose closure. The current bounded loopback Web adapter renders typed server-owned state and captures intent only; it performs no canonical product calculation or mutation.
 
 First-party product packs may be statically linked or declarative during the competition slice.
 
@@ -113,4 +113,4 @@ Rule-of-two applies only to generic/reusable abstractions: a second independentl
 
 ### 8.4 Course Planning status
 
-Course Planning remains a synthetic UI/interaction prototype. It is labelled synthetic and cannot substitute for the first real Affairs product slice.
+Course Planning now has a bounded deterministic Rust planner plus consent-bound profile and loopback-Web composition over reviewed synthetic fixtures. It remains non-production and must not be presented as live SIS data, automatic registration or a substitute for a future live-source Affairs slice.
