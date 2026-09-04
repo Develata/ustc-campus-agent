@@ -126,6 +126,7 @@ fn durable_state_paths(
     let mut paths = vec![
         idempotency_path.with_extension("affairs-publication.json"),
         idempotency_path.with_extension("control-evidence.json"),
+        idempotency_path.with_extension("calendar-items.json"),
         store_path.to_path_buf(),
         idempotency_path.to_path_buf(),
         session_store_path.to_path_buf(),
@@ -253,8 +254,9 @@ impl AffairsComposition {
         }
         let current_tenant_id = current.snapshot().tenant_id().clone();
         let current_user_id = current.snapshot().user_id().clone();
-        let calendar = CalendarStore::open(&calendar_path)
-            .map_err(|error| format!("simple calendar open failed: {error}"))?;
+        let calendar =
+            CalendarStore::open_for_state_set(&calendar_path, publication_bootstrap_is_fresh)
+                .map_err(|error| format!("simple calendar open failed: {error}"))?;
         Ok(Self {
             fixture,
             change: None,

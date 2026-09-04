@@ -411,6 +411,7 @@ fn production_three_plugin_state_set_persists_every_member_and_missing_members_f
         "idempotency.affairs-publication.json",
         "idempotency.control-evidence.json",
         "idempotency.change-publication.json",
+        "idempotency.calendar-items.json",
         "opportunity-profiles.json",
     ] {
         let path = env.dir.join(member);
@@ -429,6 +430,7 @@ fn production_three_plugin_state_set_persists_every_member_and_missing_members_f
         "idempotency.affairs-publication.json",
         "idempotency.control-evidence.json",
         "idempotency.change-publication.json",
+        "idempotency.calendar-items.json",
         "opportunity-profiles.json",
     ] {
         let env = TestEnv::new(member);
@@ -438,6 +440,38 @@ fn production_three_plugin_state_set_persists_every_member_and_missing_members_f
             env.open_all().err().as_deref(),
             Some("durable_state_set_incomplete"),
             "missing member did not fail closed: {member}"
+        );
+    }
+}
+
+#[test]
+fn failed_fresh_opportunity_open_rolls_back_the_calendar_state_member() {
+    let env = TestEnv::new("calendar-state-rollback");
+    fs::write(&env.opportunity_fixture, b"{").expect("write malformed opportunity fixture");
+    assert!(
+        AffairsComposition::open_with_opportunity(
+            &env.affairs_fixture,
+            &env.opportunity_fixture,
+            &env.catalog,
+            &env.profiles,
+            &env.store,
+            &env.idempotency,
+            &env.sessions,
+        )
+        .is_err()
+    );
+    for member in [
+        "records.json",
+        "idempotency.json",
+        "sessions.json",
+        "idempotency.affairs-publication.json",
+        "idempotency.control-evidence.json",
+        "idempotency.calendar-items.json",
+        "opportunity-profiles.json",
+    ] {
+        assert!(
+            !env.dir.join(member).exists(),
+            "failed fresh bootstrap retained {member}"
         );
     }
 }
