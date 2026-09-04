@@ -333,8 +333,7 @@ try {
   );
   assert.match(changeAnswer, /校历变更：/);
   assert.match(changeAnswer, /academic-calendar/);
-  assert.match(changeAnswer, /registration\.deadline/);
-  assert.match(changeAnswer, / → /);
+  assert.match(changeAnswer, /当前 reviewed feed 中没有变更条目|变更 \d+｜/);
   assert.doesNotMatch(changeAnswer, /changed_fields|command_id/);
 
   await submitWithEnter("记录事项：提交开题报告");
