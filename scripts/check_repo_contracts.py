@@ -11590,8 +11590,8 @@ CI_TRANSITION_LEDGER_ROW_CELLS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
 )
 CI_V2_REQUIRED_ACTION_SHAS = (
-    "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
-    "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+    "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
     "dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5",
     "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
 )
@@ -11628,9 +11628,9 @@ CI_V2_ACTIVE_CANCEL_POLICY = (
     "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"
 )
 CI_V2_ACTIVE_USES_COUNTS = {
-    "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803": 3,
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 3,
     "dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5": 1,
-    "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1": 1,
+    "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": 1,
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": 1,
 }
 RUN_CHECKER_SHARDS_REQUIRED_SUBSTRINGS = (
@@ -12407,7 +12407,7 @@ CI_GOVERNANCE_BASELINE_CI_STRUCTURE: tuple[
     (False, ("jobs", "rust", "timeout-minutes"), "20"),
     (False, ("jobs", "rust", "steps"), ""),
     (True, ("jobs", "rust", "steps", "name"), "Checkout"),
-    (False, ("jobs", "rust", "steps", "uses"), "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"),
+    (False, ("jobs", "rust", "steps", "uses"), "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"),
     (True, ("jobs", "rust", "steps", "name"), "Install Rust 1.97.1"),
     (False, ("jobs", "rust", "steps", "uses"), "dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5"),
     (False, ("jobs", "rust", "steps", "with"), ""),
@@ -12431,7 +12431,7 @@ CI_GOVERNANCE_BASELINE_CI_STRUCTURE: tuple[
     (False, ("jobs", "windows-launchers", "timeout-minutes"), "10"),
     (False, ("jobs", "windows-launchers", "steps"), ""),
     (True, ("jobs", "windows-launchers", "steps", "name"), "Checkout"),
-    (False, ("jobs", "windows-launchers", "steps", "uses"), "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"),
+    (False, ("jobs", "windows-launchers", "steps", "uses"), "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"),
     (True, ("jobs", "windows-launchers", "steps", "name"), "Verify Windows PowerShell 5.1 launchers"),
     (False, ("jobs", "windows-launchers", "steps", "shell"), "cmd"),
     (False, ("jobs", "windows-launchers", "steps", "run"), "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/check_windows_launchers.ps1"),
@@ -12443,11 +12443,11 @@ CI_GOVERNANCE_BASELINE_CI_STRUCTURE: tuple[
     (False, ("jobs", "contracts", "env", "PYTHONPYCACHEPREFIX"), "/tmp/uca-python-cache-${{ github.run_id }}-${{ github.run_attempt }}"),
     (False, ("jobs", "contracts", "steps"), ""),
     (True, ("jobs", "contracts", "steps", "name"), "Checkout"),
-    (False, ("jobs", "contracts", "steps", "uses"), "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"),
+    (False, ("jobs", "contracts", "steps", "uses"), "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"),
     (False, ("jobs", "contracts", "steps", "with"), ""),
     (False, ("jobs", "contracts", "steps", "with", "fetch-depth"), "0"),
     (True, ("jobs", "contracts", "steps", "name"), "Install Python 3.13.5"),
-    (False, ("jobs", "contracts", "steps", "uses"), "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"),
+    (False, ("jobs", "contracts", "steps", "uses"), "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97"),
     (False, ("jobs", "contracts", "steps", "with"), ""),
     (False, ("jobs", "contracts", "steps", "with", "python-version"), "3.13.5"),
     (True, ("jobs", "contracts", "steps", "name"), "Run exact-inventory checker shards"),
