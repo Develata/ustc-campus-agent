@@ -2,7 +2,7 @@
 
 ## Current status
 
-USTC Campus Agent is a student competition project under private development. Do not use it for production access to USTC services.
+USTC Campus Agent is a public source-visible student competition prototype. It is not an official USTC service and must not be used for production access to USTC systems.
 
 ## Sensitive data rules
 
@@ -15,4 +15,6 @@ Never commit:
 
 ## Reporting
 
-For now, report security issues privately to repository maintainers. If the repository becomes public, this file must be updated with a real contact and disclosure policy.
+Do not put credentials, private student data, exploit details, or proof-of-concept payloads in a public issue.
+
+Open a public issue containing only the title `[security contact request]` and a request for a private maintainer channel; do not include vulnerability details. Maintainers will coordinate a private report and publish an advisory when disclosure is appropriate. No response-time SLA is claimed for this competition prototype.

@@ -47,7 +47,7 @@ cargo run -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --con
 
 | Item | Decision |
 |---|---|
-| Repository | `ustc-campus-agent`，GitHub private，Develata personal account |
+| Repository | [`Develata/ustc-campus-agent`](https://github.com/Develata/ustc-campus-agent)，GitHub public，Develata personal account |
 | Product name | USTC Campus Agent |
 | Default first-party Plugins | `ustc.affairs-navigator`, `ustc.change-radar`, `ustc.opportunity-graph` |
 | Optional bundled Plugin | `ustc.simple-calendar`；Rust owner-local item store，非默认安装 |
@@ -56,7 +56,7 @@ cargo run -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --con
 | Chinese name | TBD；首版使用中文描述“面向科大学生的插件化校园智能体” |
 | GitHub organization | Deferred |
 | Market repository | Deferred；当前为 monorepo 内 `market/` logical authority boundary |
-| Future public release | Possible；public-readiness gate required before changing visibility |
+| Public delivery | 源码仓库已公开；当前没有 tag、GitHub Release 或 Pages，任何稳定下载面仍须通过 artifact read-back 与 release gate |
 | Runtime strategy | Rust authority core；ADR-0004 reference systems remain references or bounded adapters, not platform authority |
 | Agent harness | finite HarnessRun over typed TaskGraph；model proposes, Rust validates；every model call passes context-budget preflight |
 | Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
@@ -152,4 +152,4 @@ Do not commit USTC credentials, CAS cookies, API keys, real student data, genera
 
 ## License
 
-This private competition repository currently grants no public open-source license. See [`LICENSE.md`](LICENSE.md) and [`docs/acceptance/public-readiness.md`](docs/acceptance/public-readiness.md) before any public visibility change.
+This public source-visible competition repository does not currently grant an open-source license; all rights remain reserved as recorded in [`LICENSE.md`](LICENSE.md). Public visibility does not imply USTC endorsement, production readiness, or permission to republish third-party data. Any tag, GitHub Release, Pages site, or stable download remains subject to [`docs/acceptance/public-readiness.md`](docs/acceptance/public-readiness.md) and the applicable release gate.
