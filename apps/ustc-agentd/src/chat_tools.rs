@@ -204,6 +204,24 @@ struct CalendarArguments {
 fn validate_calendar_arguments(
     raw_arguments: &str,
 ) -> Result<ChatToolRequest, ChatToolValidationError> {
+    let value: Value = parse_exact_arguments(raw_arguments)?;
+    let object = value
+        .as_object()
+        .ok_or(ChatToolValidationError::InvalidArguments)?;
+    let expected_keys: &[&str] = match object.get("action").and_then(Value::as_str) {
+        Some("record") => &["action", "title"],
+        Some("list") => &["action"],
+        Some("delete") => &["action", "item_id"],
+        _ => return Err(ChatToolValidationError::InvalidArguments),
+    };
+    if object.len() != expected_keys.len()
+        || object
+            .keys()
+            .any(|key| !expected_keys.contains(&key.as_str()))
+    {
+        return Err(ChatToolValidationError::InvalidArguments);
+    }
+
     let arguments: CalendarArguments = parse_exact_arguments(raw_arguments)?;
     match arguments.action {
         CalendarAction::Record => {
@@ -522,8 +540,11 @@ mod tests {
             r#"{"action":"record","title":"事项\u200b"}"#,
             r#"{"action":"record","title":"事项\ufeff"}"#,
             r#"{"action":"list","title":"smuggled"}"#,
+            r#"{"action":"list","title":null}"#,
             r#"{"action":"delete","item_id":"calendar:item:0"}"#,
             r#"{"action":"delete","item_id":"calendar:item:1","title":"smuggled"}"#,
+            r#"{"action":"delete","item_id":"calendar:item:1","title":null}"#,
+            r#"{"action":"record","title":"事项","item_id":null}"#,
             r#"{"action":"publish"}"#,
         ] {
             assert_eq!(

@@ -91,6 +91,8 @@ pub struct CalendarStore {
     durability_uncertain: bool,
     #[cfg(test)]
     fail_next_parent_sync_after_rename: bool,
+    #[cfg(test)]
+    fail_next_post_rename_readback: bool,
 }
 
 impl CalendarStore {
@@ -111,6 +113,8 @@ impl CalendarStore {
             durability_uncertain: false,
             #[cfg(test)]
             fail_next_parent_sync_after_rename: false,
+            #[cfg(test)]
+            fail_next_post_rename_readback: false,
         })
     }
 
@@ -136,6 +140,8 @@ impl CalendarStore {
                     durability_uncertain: false,
                     #[cfg(test)]
                     fail_next_parent_sync_after_rename: false,
+                    #[cfg(test)]
+                    fail_next_post_rename_readback: false,
                 };
                 match store.persist()? {
                     PersistOutcome::Durable => Ok(store),
@@ -149,9 +155,9 @@ impl CalendarStore {
         }
     }
 
-    #[must_use]
-    pub fn items(&self) -> &[CalendarItem] {
-        &self.state.items
+    pub fn items(&mut self) -> Result<&[CalendarItem], CalendarError> {
+        self.resolve_uncertain_durability()?;
+        Ok(&self.state.items)
     }
 
     /// Records one bounded item and durably commits it before returning.
@@ -269,11 +275,10 @@ impl CalendarStore {
             if self.sync_parent(&parent).is_ok() {
                 return Ok(PersistOutcome::Durable);
             }
-            Ok(match read_existing(&self.path) {
-                Ok(Some(actual)) if actual == bytes => {
-                    PersistOutcome::RenamedParentSyncUncertainExact
-                }
-                _ => PersistOutcome::RenamedParentSyncUncertainUnknown,
+            Ok(if self.post_rename_readback_is_exact(&bytes) {
+                PersistOutcome::RenamedParentSyncUncertainExact
+            } else {
+                PersistOutcome::RenamedParentSyncUncertainUnknown
             })
         })();
         if result.is_err() {
@@ -313,9 +318,23 @@ impl CalendarStore {
         fs::File::open(parent).and_then(|directory| directory.sync_all())
     }
 
+    fn post_rename_readback_is_exact(&mut self, expected: &[u8]) -> bool {
+        #[cfg(test)]
+        if self.fail_next_post_rename_readback {
+            self.fail_next_post_rename_readback = false;
+            return false;
+        }
+        matches!(read_existing(&self.path), Ok(Some(actual)) if actual == expected)
+    }
+
     #[cfg(test)]
     fn fail_next_parent_sync_after_rename(&mut self) {
         self.fail_next_parent_sync_after_rename = true;
+    }
+
+    #[cfg(test)]
+    fn fail_next_post_rename_readback(&mut self) {
+        self.fail_next_post_rename_readback = true;
     }
 }
 
@@ -504,7 +523,7 @@ mod tests {
     fn record_list_reopen_and_delete_are_durable() {
         let (path, root) = temp_store();
         let mut store = CalendarStore::open(&path).unwrap();
-        assert!(store.items().is_empty());
+        assert!(store.items().unwrap().is_empty());
         let item = store
             .record("  提交开题报告  ", Some("2026-09-10T09:00:00+08:00"))
             .unwrap();
@@ -513,10 +532,16 @@ mod tests {
         drop(store);
 
         let mut reopened = CalendarStore::open(&path).unwrap();
-        assert_eq!(reopened.items(), std::slice::from_ref(&item));
+        assert_eq!(reopened.items().unwrap(), std::slice::from_ref(&item));
         assert_eq!(reopened.delete(&item.id).unwrap(), item);
         drop(reopened);
-        assert!(CalendarStore::open(&path).unwrap().items().is_empty());
+        assert!(
+            CalendarStore::open(&path)
+                .unwrap()
+                .items()
+                .unwrap()
+                .is_empty()
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -544,6 +569,12 @@ mod tests {
             br#"{"schema":"ustc-simple-calendar-store/v1","next_id":2,"items":[],"extra":true}"#,
         )
         .unwrap();
+        #[cfg(unix)]
+        fs::set_permissions(
+            &path,
+            <fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o600),
+        )
+        .unwrap();
         assert!(matches!(
             CalendarStore::open(&path),
             Err(CalendarError::InvalidStore)
@@ -555,7 +586,7 @@ mod tests {
     fn state_set_open_persists_canonical_empty_mode_and_fails_on_nonfresh_absence() {
         let (path, root) = temp_store();
         let mut store = CalendarStore::open_for_state_set(&path, true).unwrap();
-        assert!(store.items().is_empty());
+        assert!(store.items().unwrap().is_empty());
         assert_eq!(
             fs::read(&path).unwrap(),
             br#"{"schema":"ustc-simple-calendar-store/v1","next_id":1,"items":[]}"#
@@ -571,8 +602,8 @@ mod tests {
 
         let item = store.record("提交开题报告", None).unwrap();
         drop(store);
-        let reopened = CalendarStore::open_for_state_set(&path, false).unwrap();
-        assert_eq!(reopened.items(), std::slice::from_ref(&item));
+        let mut reopened = CalendarStore::open_for_state_set(&path, false).unwrap();
+        assert_eq!(reopened.items().unwrap(), std::slice::from_ref(&item));
         drop(reopened);
 
         fs::remove_file(&path).unwrap();
@@ -629,15 +660,33 @@ mod tests {
             store.record("第二项", None),
             Err(CalendarError::PersistenceUnavailable)
         );
-        assert_eq!(store.items().len(), 2);
+        assert_eq!(store.items().unwrap().len(), 2);
 
         let third = store.record("第三项", None).unwrap();
         assert_eq!(third.id, "calendar:item:3");
         drop(store);
 
-        let reopened = CalendarStore::open(&path).unwrap();
-        assert_eq!(reopened.items().len(), 3);
-        assert_eq!(reopened.items()[1].title, "第二项");
+        let mut reopened = CalendarStore::open(&path).unwrap();
+        assert_eq!(reopened.items().unwrap().len(), 3);
+        assert_eq!(reopened.items().unwrap()[1].title, "第二项");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn unknown_parent_sync_uncertainty_blocks_list_until_reconciled() {
+        let (path, root) = temp_store();
+        let mut store = CalendarStore::open(&path).unwrap();
+        store.record("第一项", None).unwrap();
+        store.fail_next_parent_sync_after_rename();
+        store.fail_next_post_rename_readback();
+        assert_eq!(
+            store.record("第二项", None),
+            Err(CalendarError::PersistenceUnavailable)
+        );
+
+        store.fail_next_parent_sync_after_rename();
+        assert_eq!(store.items(), Err(CalendarError::PersistenceUnavailable));
+        assert_eq!(store.items().unwrap().len(), 2);
         fs::remove_dir_all(root).unwrap();
     }
 }

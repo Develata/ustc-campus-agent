@@ -909,12 +909,15 @@ fn execute_calendar_chat_tool(
         }
     };
     match action {
-        CalendarAction::List => ChatToolExecution::succeeded(json!({
-            "schema": "ustc-simple-calendar-result/v1",
-            "package_id": "ustc.simple-calendar",
-            "action": "list",
-            "items": composition.calendar_items(),
-        })),
+        CalendarAction::List => match composition.calendar_items() {
+            Ok(items) => ChatToolExecution::succeeded(json!({
+                "schema": "ustc-simple-calendar-result/v1",
+                "package_id": "ustc.simple-calendar",
+                "action": "list",
+                "items": items,
+            })),
+            Err(error) => calendar_error_execution(error),
+        },
         CalendarAction::Record => {
             let Some(title) = title else {
                 return ChatToolExecution::denied(json!({"code": "invalid_calendar_item"}));

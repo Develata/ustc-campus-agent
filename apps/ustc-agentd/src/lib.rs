@@ -493,8 +493,8 @@ impl AffairsComposition {
         m10.submit(request, &mut ports, now_ms)
     }
 
-    pub(crate) fn calendar_items(&self) -> Vec<CalendarItem> {
-        self.calendar.items().to_vec()
+    pub(crate) fn calendar_items(&mut self) -> Result<Vec<CalendarItem>, CalendarError> {
+        Ok(self.calendar.items()?.to_vec())
     }
 
     pub(crate) fn record_calendar_item(
