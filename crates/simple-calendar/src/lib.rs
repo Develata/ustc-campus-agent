@@ -120,6 +120,33 @@ impl CalendarStore {
         })
     }
 
+    /// Opens one required member of a caller-owned durable state set.
+    ///
+    /// A fresh state set durably materializes the canonical empty store. Once
+    /// any state set exists, absence is corruption and fails closed.
+    pub fn open_for_state_set(
+        path: impl AsRef<Path>,
+        bootstrap_is_fresh: bool,
+    ) -> Result<Self, CalendarError> {
+        let path = path.as_ref();
+        validate_store_path(path)?;
+        match fs::symlink_metadata(path) {
+            Ok(_) => Self::open(path),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if !bootstrap_is_fresh {
+                    return Err(CalendarError::InvalidStore);
+                }
+                let store = Self {
+                    path: path.to_path_buf(),
+                    state: PersistedCalendar::default(),
+                };
+                store.persist()?;
+                Ok(store)
+            }
+            Err(_) => Err(CalendarError::InvalidPath),
+        }
+    }
+
     #[must_use]
     pub fn items(&self) -> &[CalendarItem] {
         &self.state.items
@@ -350,6 +377,38 @@ mod tests {
         .unwrap();
         assert!(matches!(
             CalendarStore::open(&path),
+            Err(CalendarError::InvalidStore)
+        ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn state_set_open_persists_canonical_empty_mode_and_fails_on_nonfresh_absence() {
+        let (path, root) = temp_store();
+        let mut store = CalendarStore::open_for_state_set(&path, true).unwrap();
+        assert!(store.items().is_empty());
+        assert_eq!(
+            fs::read(&path).unwrap(),
+            br#"{"schema":"ustc-simple-calendar-store/v1","next_id":1,"items":[]}"#
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+
+        let item = store.record("提交开题报告", None).unwrap();
+        drop(store);
+        let reopened = CalendarStore::open_for_state_set(&path, false).unwrap();
+        assert_eq!(reopened.items(), std::slice::from_ref(&item));
+        drop(reopened);
+
+        fs::remove_file(&path).unwrap();
+        assert!(matches!(
+            CalendarStore::open_for_state_set(&path, false),
             Err(CalendarError::InvalidStore)
         ));
         fs::remove_dir_all(root).unwrap();

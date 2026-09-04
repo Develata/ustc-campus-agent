@@ -477,6 +477,7 @@ fn every_missing_base_state_member_fails_closed() {
         "sessions.json",
         "idempotency.affairs-publication.json",
         "idempotency.control-evidence.json",
+        "idempotency.calendar-items.json",
     ] {
         let env = TestEnv::new();
         drop(env.open());
