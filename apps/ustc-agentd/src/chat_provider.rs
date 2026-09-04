@@ -15,6 +15,8 @@ use reqwest::{Client, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::agent_chat::CalendarMutationIntent;
+
 const DEFAULT_TIMEOUT_MS: u64 = 15_000;
 const MIN_TIMEOUT_MS: u64 = 1_000;
 const MAX_TIMEOUT_MS: u64 = 60_000;
@@ -1144,9 +1146,20 @@ fn contains_ascii_term(text: &str, term: &str) -> bool {
 }
 
 fn deterministic_calendar_arguments(user: &str) -> Option<String> {
+    match CalendarMutationIntent::capture(user) {
+        CalendarMutationIntent::Record { title } => {
+            return Some(serde_json::json!({"action": "record", "title": title}).to_string());
+        }
+        CalendarMutationIntent::Delete { item_id } => {
+            return Some(serde_json::json!({"action": "delete", "item_id": item_id}).to_string());
+        }
+        CalendarMutationIntent::None => {}
+    }
+
     if user.contains("校历") || contains_ascii_term(user, "academic calendar") {
         return None;
     }
+
     let wants_calendar = user.contains("日历")
         || user.contains("待办")
         || user.contains("事项")
@@ -1163,34 +1176,7 @@ fn deterministic_calendar_arguments(user: &str) -> Option<String> {
     {
         return Some(serde_json::json!({"action": "list"}).to_string());
     }
-    if user.contains("删除") || contains_ascii_term(user, "delete") {
-        let start = user.find("calendar:item:")?;
-        let suffix = &user[start..];
-        let end = suffix
-            .char_indices()
-            .find_map(|(index, character)| {
-                (index > "calendar:item:".len() && !character.is_ascii_digit()).then_some(index)
-            })
-            .unwrap_or(suffix.len());
-        let item_id = &suffix[..end];
-        let sequence = item_id.strip_prefix("calendar:item:")?;
-        if sequence.is_empty()
-            || sequence.starts_with('0')
-            || !sequence.bytes().all(|byte| byte.is_ascii_digit())
-        {
-            return None;
-        }
-        return Some(serde_json::json!({"action": "delete", "item_id": item_id}).to_string());
-    }
-    let title = user
-        .split_once('：')
-        .or_else(|| user.split_once(':'))
-        .map_or(user, |(_, title)| title)
-        .trim();
-    if title.is_empty() || title.len() > 256 || title.chars().any(char::is_control) {
-        return None;
-    }
-    Some(serde_json::json!({"action": "record", "title": title}).to_string())
+    None
 }
 
 fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, ProviderError> {
@@ -1202,24 +1188,33 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
             ProviderMessage::User { content } => Some(content.as_str()),
             _ => None,
         });
-    let wants_affairs = user.is_some_and(|user| {
-        user.contains("成绩单")
-            || user.contains("成绩证明")
-            || contains_ascii_term(user, "transcript")
-            || contains_ascii_term(user, "affairs navigator")
+    let has_calendar_mutation = user.is_some_and(|user| {
+        !matches!(
+            CalendarMutationIntent::capture(user),
+            CalendarMutationIntent::None
+        )
     });
-    let wants_change = user.is_some_and(|user| {
-        user.contains("校历")
-            || contains_ascii_term(user, "academic calendar")
-            || contains_ascii_term(user, "change radar")
-    });
-    let wants_opportunity = user.is_some_and(|user| {
-        user.contains("选课")
-            || user.contains("课程规划")
-            || user.contains("规划课程")
-            || contains_ascii_term(user, "course plan")
-            || contains_ascii_term(user, "opportunity graph")
-    });
+    let wants_affairs = !has_calendar_mutation
+        && user.is_some_and(|user| {
+            user.contains("成绩单")
+                || user.contains("成绩证明")
+                || contains_ascii_term(user, "transcript")
+                || contains_ascii_term(user, "affairs navigator")
+        });
+    let wants_change = !has_calendar_mutation
+        && user.is_some_and(|user| {
+            user.contains("校历")
+                || contains_ascii_term(user, "academic calendar")
+                || contains_ascii_term(user, "change radar")
+        });
+    let wants_opportunity = !has_calendar_mutation
+        && user.is_some_and(|user| {
+            user.contains("选课")
+                || user.contains("课程规划")
+                || user.contains("规划课程")
+                || contains_ascii_term(user, "course plan")
+                || contains_ascii_term(user, "opportunity graph")
+        });
     let calendar_arguments = user.and_then(deterministic_calendar_arguments);
     let has_tool = |name: &str| request.tools.iter().any(|tool| tool.name == name);
     let opportunity_unavailable = wants_opportunity && !has_tool(OPPORTUNITY_TOOL);
@@ -1511,6 +1506,72 @@ mod tests {
             assert_eq!(turn.tool_calls.len(), 1, "prompt={prompt}");
             assert_eq!(turn.tool_calls[0].name, expected, "prompt={prompt}");
         }
+    }
+
+    #[test]
+    fn deterministic_calendar_parser_mutates_only_for_exact_final_message_grammar() {
+        let provider = ChatProvider::deterministic_mock();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        for (prompt, expected_arguments) in [
+            (
+                "记录事项：  提交开题报告  ",
+                json!({"action": "record", "title": "提交开题报告"}),
+            ),
+            (
+                "记录事项:提交开题报告",
+                json!({"action": "record", "title": "提交开题报告"}),
+            ),
+            (
+                "记录事项：校历与成绩单",
+                json!({"action": "record", "title": "校历与成绩单"}),
+            ),
+            (
+                "删除事项 calendar:item:1",
+                json!({"action": "delete", "item_id": "calendar:item:1"}),
+            ),
+        ] {
+            let turn = runtime
+                .block_on(provider.complete(&request(
+                    prompt,
+                    &[AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL, CALENDAR_TOOL],
+                )))
+                .unwrap();
+            assert_eq!(turn.tool_calls.len(), 1, "prompt={prompt}");
+            assert_eq!(turn.tool_calls[0].name, CALENDAR_TOOL);
+            assert_eq!(
+                serde_json::from_str::<Value>(&turn.tool_calls[0].arguments).unwrap(),
+                expected_arguments,
+                "prompt={prompt}"
+            );
+        }
+
+        for prompt in [
+            "日历怎么用",
+            "提醒我日历怎么用",
+            "calendar help",
+            "事项",
+            "请记录事项：提交开题报告",
+            " 记录事项：提交开题报告",
+            "删除事项 calendar:item:1 hidden",
+            "删除事项 calendar:item:01",
+        ] {
+            let turn = runtime
+                .block_on(provider.complete(&request(prompt, &[CALENDAR_TOOL])))
+                .unwrap();
+            assert!(turn.tool_calls.is_empty(), "prompt={prompt}");
+        }
+
+        let list = runtime
+            .block_on(provider.complete(&request("列出我的待办事项", &[CALENDAR_TOOL])))
+            .unwrap();
+        assert_eq!(list.tool_calls.len(), 1);
+        assert_eq!(
+            serde_json::from_str::<Value>(&list.tool_calls[0].arguments).unwrap(),
+            json!({"action": "list"})
+        );
     }
 
     #[test]

@@ -593,6 +593,56 @@ fn agent_chat_http_route_maps_success_and_closed_request_failures() {
             .is_some_and(|answer| answer.contains("academic-calendar"))
     );
 
+    let record = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "记录事项：提交开题报告"}],
+            "opportunity_context": null
+        }),
+    );
+    assert!(record.status.contains(" 200 "), "{}", record.status);
+    let record: Value = serde_json::from_str(&record.body).expect("calendar record JSON");
+    assert_eq!(record["tool_trace"][0]["tool"], "simple_calendar_items");
+    assert_eq!(record["tool_trace"][0]["status"], "succeeded");
+    assert!(record["answer"].as_str().is_some_and(|answer| {
+        answer.contains("calendar:item:1") && answer.contains("提交开题报告")
+    }));
+
+    let list = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "列出我的待办事项"}],
+            "opportunity_context": null
+        }),
+    );
+    assert!(list.status.contains(" 200 "), "{}", list.status);
+    let list: Value = serde_json::from_str(&list.body).expect("calendar list JSON");
+    assert_eq!(list["tool_trace"][0]["status"], "succeeded");
+    assert!(
+        list["answer"]
+            .as_str()
+            .is_some_and(|answer| answer.contains("calendar:item:1"))
+    );
+
+    let delete = server.post_json_without_opportunity_confirmation(
+        path,
+        &json!({
+            "schema": "ustc-agent-chat-request/v1",
+            "messages": [{"role": "user", "content": "删除事项 calendar:item:1"}],
+            "opportunity_context": null
+        }),
+    );
+    assert!(delete.status.contains(" 200 "), "{}", delete.status);
+    let delete: Value = serde_json::from_str(&delete.body).expect("calendar delete JSON");
+    assert_eq!(delete["tool_trace"][0]["status"], "succeeded");
+    assert!(
+        delete["answer"]
+            .as_str()
+            .is_some_and(|answer| answer.contains("calendar:item:1"))
+    );
+
     let created = server.post_json(
         "/api/v1/opportunity/profiles",
         &valid_opportunity_profile_body(),

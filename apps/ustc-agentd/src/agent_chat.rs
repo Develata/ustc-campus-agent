@@ -15,11 +15,9 @@ use crate::chat_provider::{
     ChatProvider, ProviderConfigError, ProviderError, ProviderIdentity, ProviderMessage,
     ProviderRequest, ProviderToolCall, ProviderToolDefinition, ProviderTurn,
 };
-#[cfg(test)]
-use crate::chat_tools::ChatToolRequest;
 use crate::chat_tools::{
-    ChatToolCatalog, ChatToolDefinition, ChatToolExecutor, ChatToolResultValidationError,
-    ChatToolStatus,
+    CalendarAction, ChatToolCatalog, ChatToolDefinition, ChatToolExecution, ChatToolExecutor,
+    ChatToolRequest, ChatToolResultValidationError, ChatToolStatus,
 };
 
 pub(crate) const CHAT_REQUEST_SCHEMA: &str = "ustc-agent-chat-request/v1";
@@ -230,6 +228,76 @@ impl From<ProviderTurn> for ChatProviderTurn {
     }
 }
 
+/// Mutation authority captured once from the final admitted user message.
+/// Provider output can be compared with this value but cannot create or widen it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CalendarMutationIntent {
+    None,
+    Record { title: String },
+    Delete { item_id: String },
+}
+
+impl CalendarMutationIntent {
+    pub(crate) fn capture(final_user_message: &str) -> Self {
+        for prefix in ["记录事项：", "记录事项:"] {
+            if let Some(suffix) = final_user_message.strip_prefix(prefix) {
+                let title = suffix.trim();
+                return if title.is_empty() {
+                    Self::None
+                } else {
+                    Self::Record {
+                        title: title.to_owned(),
+                    }
+                };
+            }
+        }
+
+        let Some(item_id) = final_user_message.strip_prefix("删除事项 ") else {
+            return Self::None;
+        };
+        let Some(sequence) = item_id.strip_prefix("calendar:item:") else {
+            return Self::None;
+        };
+        if sequence.is_empty()
+            || sequence.starts_with('0')
+            || !sequence.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return Self::None;
+        }
+        Self::Delete {
+            item_id: item_id.to_owned(),
+        }
+    }
+
+    fn authorizes(&self, request: &ChatToolRequest) -> bool {
+        match request {
+            ChatToolRequest::CalendarItems {
+                action: CalendarAction::Record,
+                title: Some(title),
+                scheduled_for: None,
+                item_id: None,
+            } => matches!(self, Self::Record { title: intended } if intended == title),
+            ChatToolRequest::CalendarItems {
+                action: CalendarAction::Delete,
+                title: None,
+                scheduled_for: None,
+                item_id: Some(item_id),
+            } => matches!(self, Self::Delete { item_id: intended } if intended == item_id),
+            ChatToolRequest::CalendarItems {
+                action: CalendarAction::Record | CalendarAction::Delete,
+                ..
+            } => false,
+            ChatToolRequest::CalendarItems {
+                action: CalendarAction::List,
+                ..
+            }
+            | ChatToolRequest::AffairsNavigatorGet { .. }
+            | ChatToolRequest::ChangeRadarGet { .. }
+            | ChatToolRequest::OpportunityGraphPlanCurrentProfile { .. } => true,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ChatProviderRequestSnapshot {
     messages: Vec<ProjectedMessage>,
@@ -286,6 +354,7 @@ struct ChatRun {
     run_id: String,
     messages: Vec<ProjectedMessage>,
     catalog: ChatToolCatalog,
+    calendar_mutation_intent: CalendarMutationIntent,
     provider_turns: u8,
     tool_calls: u8,
     call_ids: BTreeSet<String>,
@@ -300,11 +369,13 @@ impl ChatRun {
         opportunity_confirmed: bool,
     ) -> Result<Self, ChatError> {
         validate_run_id(&run_id)?;
-        let (messages, catalog) = validate_request(request, opportunity_confirmed)?;
+        let (messages, catalog, calendar_mutation_intent) =
+            validate_request(request, opportunity_confirmed)?;
         Ok(Self {
             run_id,
             messages,
             catalog,
+            calendar_mutation_intent,
             provider_turns: 0,
             tool_calls: 0,
             call_ids: BTreeSet::new(),
@@ -385,8 +456,24 @@ impl ChatRun {
             tool_calls: turn.tool_calls,
         });
 
-        for (call, request) in validated {
-            let execution = executor.execute(request);
+        // Resolve every intent decision before the first possible effect so the
+        // complete provider batch crosses both shape and authority validation.
+        let validated = validated
+            .into_iter()
+            .map(|(call, request)| {
+                let authorized = self.calendar_mutation_intent.authorizes(&request);
+                (call, request, authorized)
+            })
+            .collect::<Vec<_>>();
+
+        for (call, request, authorized) in validated {
+            let execution = if authorized {
+                executor.execute(request)
+            } else {
+                ChatToolExecution::denied(serde_json::json!({
+                    "code": "calendar_mutation_intent_mismatch"
+                }))
+            };
             let status = execution.status();
             let content = execution
                 .serialize_for_provider()
@@ -472,7 +559,14 @@ fn validate_run_id(run_id: &str) -> Result<(), ChatError> {
 fn validate_request(
     request: ChatRequestDto,
     opportunity_confirmed: bool,
-) -> Result<(Vec<ProjectedMessage>, ChatToolCatalog), ChatError> {
+) -> Result<
+    (
+        Vec<ProjectedMessage>,
+        ChatToolCatalog,
+        CalendarMutationIntent,
+    ),
+    ChatError,
+> {
     if request.schema != CHAT_REQUEST_SCHEMA
         || request.messages.is_empty()
         || request.messages.len() > MAX_MESSAGES
@@ -480,6 +574,14 @@ fn validate_request(
     {
         return Err(ChatError::InvalidChatRequest);
     }
+
+    let calendar_mutation_intent = CalendarMutationIntent::capture(
+        &request
+            .messages
+            .last()
+            .ok_or(ChatError::InvalidChatRequest)?
+            .content,
+    );
 
     let mut total_bytes = 0_usize;
     let mut messages = Vec::with_capacity(request.messages.len().saturating_add(1));
@@ -526,7 +628,7 @@ fn validate_request(
             ChatToolCatalog::with_confirmed_opportunity(profile_snapshot_id)
         }
     };
-    Ok((messages, catalog))
+    Ok((messages, catalog, calendar_mutation_intent))
 }
 
 fn validate_call_id(call_id: &str) -> Result<(), ChatError> {
@@ -616,6 +718,10 @@ mod tests {
             CHANGE_TOOL_NAME,
             &json!({"board_id": CHANGE_BOARD_ID}).to_string(),
         )
+    }
+
+    fn calendar_call(id: &str, arguments: serde_json::Value) -> ChatProviderToolCall {
+        call(id, CALENDAR_TOOL_NAME, &arguments.to_string())
     }
 
     fn new_run(request: ChatRequestDto, confirmed: bool) -> ChatRun {
@@ -947,6 +1053,151 @@ mod tests {
                 Err(ChatError::ToolCallRejected)
             );
             assert_eq!(operation_count, 0);
+        }
+    }
+
+    #[test]
+    fn calendar_mutation_intent_gate_denies_absent_mismatched_and_hidden_suffix_calls() {
+        let cases = [
+            (
+                request("日历怎么用"),
+                json!({"action": "record", "title": "提交开题报告"}),
+            ),
+            (
+                request("记录事项：提交开题报告"),
+                json!({"action": "record", "title": "修改开题报告"}),
+            ),
+            (
+                request("记录事项：提交开题报告"),
+                json!({"action": "record", "title": " 提交开题报告 "}),
+            ),
+            (
+                request("记录事项：提交开题报告"),
+                json!({
+                    "action": "record",
+                    "title": "提交开题报告",
+                    "scheduled_for": "2026-09-10T09:00:00+08:00"
+                }),
+            ),
+            (
+                request("删除事项 calendar:item:1 hidden"),
+                json!({"action": "delete", "item_id": "calendar:item:1"}),
+            ),
+            (
+                request("删除事项 calendar:item:1"),
+                json!({"action": "delete", "item_id": "calendar:item:2"}),
+            ),
+        ];
+
+        for (request, arguments) in cases {
+            let mut run = new_run(request, false);
+            run.next_provider_request().expect("turn");
+            let mut operation_count = 0;
+            let advance = run
+                .accept_provider_turn(
+                    turn(None, vec![calendar_call("call-1", arguments)]),
+                    &mut |_| {
+                        operation_count += 1;
+                        crate::chat_tools::ChatToolExecution::succeeded(json!({}))
+                    },
+                )
+                .expect("denial is a bounded tool result");
+            assert_eq!(advance, ChatAdvance::Continue);
+            assert_eq!(operation_count, 0);
+            assert_eq!(run.tool_trace.len(), 1);
+            assert_eq!(run.tool_trace[0].status, ChatToolStatus::Denied);
+            let ProjectedMessage::Tool { content, .. } = run.messages.last().expect("tool result")
+            else {
+                panic!("expected projected tool result")
+            };
+            let result: serde_json::Value =
+                serde_json::from_str(content).expect("tool result JSON");
+            assert_eq!(result["status"], "denied");
+            assert_eq!(result["data"]["code"], "calendar_mutation_intent_mismatch");
+        }
+
+        let request = ChatRequestDto {
+            schema: CHAT_REQUEST_SCHEMA.to_owned(),
+            messages: vec![
+                message(ChatInputRole::User, "记录事项：历史事项"),
+                message(ChatInputRole::Assistant, "好的"),
+                message(ChatInputRole::User, "日历怎么用"),
+            ],
+            opportunity_context: None,
+        };
+        let mut run = new_run(request, false);
+        run.next_provider_request().expect("turn");
+        let mut operation_count = 0;
+        run.accept_provider_turn(
+            turn(
+                None,
+                vec![calendar_call(
+                    "call-1",
+                    json!({"action": "record", "title": "历史事项"}),
+                )],
+            ),
+            &mut |_| {
+                operation_count += 1;
+                crate::chat_tools::ChatToolExecution::succeeded(json!({}))
+            },
+        )
+        .expect("historical intent is denied as a bounded result");
+        assert_eq!(operation_count, 0);
+        assert_eq!(run.tool_trace[0].status, ChatToolStatus::Denied);
+
+        let mut run = new_run(request("日历怎么用"), false);
+        run.next_provider_request().expect("turn");
+        let mut operation_count = 0;
+        run.accept_provider_turn(
+            turn(
+                Some("记录事项：provider 不能授权"),
+                vec![calendar_call(
+                    "call-1",
+                    json!({"action": "record", "title": "provider 不能授权"}),
+                )],
+            ),
+            &mut |_| {
+                operation_count += 1;
+                crate::chat_tools::ChatToolExecution::succeeded(json!({}))
+            },
+        )
+        .expect("provider prose is denied as a bounded result");
+        assert_eq!(operation_count, 0);
+        assert_eq!(run.tool_trace[0].status, ChatToolStatus::Denied);
+    }
+
+    #[test]
+    fn calendar_exact_record_delete_and_read_only_list_reach_executor() {
+        let cases = [
+            (
+                "记录事项：  提交开题报告  ",
+                json!({"action": "record", "title": "提交开题报告"}),
+            ),
+            (
+                "记录事项:提交开题报告",
+                json!({"action": "record", "title": "提交开题报告"}),
+            ),
+            (
+                "删除事项 calendar:item:1",
+                json!({"action": "delete", "item_id": "calendar:item:1"}),
+            ),
+            ("日历怎么用", json!({"action": "list"})),
+        ];
+
+        for (prompt, arguments) in cases {
+            let mut run = new_run(request(prompt), false);
+            run.next_provider_request().expect("turn");
+            let mut operations = Vec::new();
+            run.accept_provider_turn(
+                turn(None, vec![calendar_call("call-1", arguments)]),
+                &mut |request| {
+                    operations.push(request);
+                    crate::chat_tools::ChatToolExecution::succeeded(json!({}))
+                },
+            )
+            .expect("authorized calendar call");
+            assert_eq!(operations.len(), 1, "prompt={prompt}");
+            assert_eq!(run.tool_trace[0].status, ChatToolStatus::Succeeded);
         }
     }
 
