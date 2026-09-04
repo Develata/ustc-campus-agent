@@ -21,6 +21,11 @@ done
 [ -n "$binary" ] && [ -n "$output_dir" ] && [ -n "$source_commit" ] || usage
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+license_path="$repo_root/LICENSE.md"
+[ -f "$license_path" ] && [ ! -L "$license_path" ] || {
+  printf 'license must be a regular non-symlink file: %s\n' "$license_path" >&2
+  exit 66
+}
 case "$source_commit" in
   *[!0-9a-f]*|'') printf 'source commit must be lowercase hexadecimal\n' >&2; exit 65 ;;
 esac
@@ -160,6 +165,7 @@ for file in "${template_files[@]}"; do
   source_path="$repo_root/deploy/mvp-compose/$file"
   install -m 0644 "$source_path" "$package_dir/$file"
 done
+install -m 0644 "$license_path" "$package_dir/LICENSE.md"
 
 install -m 0755 "$binary" "$package_dir/bin/ustc-agentd"
 install -m 0755 "$repo_root/deploy/mvp-compose/container-entrypoint.sh" "$package_dir/container-entrypoint.sh"

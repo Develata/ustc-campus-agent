@@ -1,40 +1,123 @@
 # USTC Campus Agent
 
-> 面向科大学生、比赛后仍长期维护使用的插件化校园智能体。项目源于学生竞赛，**不是中国科学技术大学官方服务**。
+> Competition-built, independently maintained, and **not an official University of Science and Technology of China service**.
 
-USTC Campus Agent 的目标不是包装一个通用聊天框，而是建立有清晰 authority boundary 的校园 Agent 平台：模型负责理解与提议，Rust 负责验证工具、权限、来源、状态和副作用。
+A loopback-only campus Agent MVP in which the model proposes intent, while Rust validates tools, permissions, sources, state, and side effects before returning a human-checkable result.
 
-平台保留三个 default first-party Plugins：**USTC Affairs Navigator**、**USTC ChangeRadar** 与 **Campus Opportunity Graph**；另提供一个非默认安装的 Rust **Simple Calendar** companion plugin。当前 `ustc-agentd` 已把普通问答、bounded tool loop、三条校园数据路径与本地事项记录组合成可运行的 loopback MVP。详细能力、架构、数据边界与 TODO 见 [`docs/features/06-mvp-core-capabilities.md`](docs/features/06-mvp-core-capabilities.md)。
+模型负责理解与提议，Rust 负责边界与执行；结果附带可核对的来源或受限工具记录。
 
-Android 8.0+ 现有一个可安装、debug-signed 的薄客户端 APK：它通过 `adb reverse` 复用同一 loopback Rust 服务与完整 Web MVP，不在手机上复制 Agent 或校园数据 authority。安装命令、endpoint 约束与尚未完成的 production/Dioxus 边界见 [`docs/guides/android-demo.md`](docs/guides/android-demo.md)。
+`“成绩单证明怎么办？”` → bounded ChatRun selects `affairs_navigator_get` → Rust validates the fixed reviewed path → the UI presents a concise Chinese answer plus a redacted tool trace.
 
-## 一条命令运行 MVP
+The historical `addf6c7f` Android screenshot proves only connection and rendering of that user turn. A completed answer and successful trace must be rerun on the final merged source before they are marked exact-current runtime evidence.
 
-准备好 Rust stable toolchain 后，在仓库根目录执行：
+Evidence: [historical planning baseline `addf6c7f`](https://github.com/Develata/ustc-campus-agent/commit/addf6c7f6e58f96cf01bda12c1a812b669015134) · [MVP capability contract](docs/features/06-mvp-core-capabilities.md) · [Docker runbook](deploy/mvp-compose/README.md) · [Android demo boundary](docs/guides/android-demo.md)
+
+## Architecture at a glance
+
+```text
+Web browser ───────────────┐
+                           ├─ same loopback HTTP ─→ ustc-agentd
+Android thin WebView ──────┘                         │
+                                                     ├─ bounded ChatRun
+mock provider / server-side provider ────────────────┤  model proposes only
+                                                     └─ Rust validates a fixed reviewed tool catalogue
+                                                        ├─ Affairs Navigator
+                                                        ├─ ChangeRadar
+                                                        ├─ Opportunity Graph (per-request consent)
+                                                        └─ Simple Calendar (owner-local in-process companion)
+                                                             ↓
+                                           reviewed/synthetic fixtures + local durable state
+```
+
+Browser, Android shell, and model own no campus-data or side-effect authority. The current demo is loopback-only; optional provider credentials remain file-backed and server-side.
+
+## Run the bounded MVP
+
+Source-native path, from the repository root:
 
 ```bash
 ./scripts/run_three_plugin_mvp.sh
+# open http://127.0.0.1:8787
 ```
 
-然后访问 <http://127.0.0.1:8787>。同一页面提供五类最小闭环：
+Packaged Docker path, only after assembling the Compose package described by the [runbook](deploy/mvp-compose/README.md):
 
-- **Agent Chat**：正常问答；按需调用流程、变更、课程规划与 Calendar tools；默认离线模式把 typed results 整理为有界中文摘要，而不是向用户倾倒 transport JSON，并返回 redacted tool trace；
-- **Affairs Navigator**：查询固定的 `DemoReviewed` 成绩单证明流程；
-- **ChangeRadar**：读取固定的校历变更 board，并保留显式管理员发布演示；
-- **Opportunity Graph**：在逐次 consent 后使用 synthetic private profile 生成课程计划；community signal 只参与 soft ranking，并返回 iCourse aggregate-rating link-outs；
-- **Simple Calendar**：通过 Agent 记录、列出或删除最多 128 条 owner-local 事项。
+```bash
+# inside the assembled ustc-campus-agent-mvp-compose package
+./start.sh          # macOS / Linux
+# or start.cmd      # Windows + Docker Desktop
+```
 
-命令只接受 loopback bind。运行状态默认写入 `$XDG_STATE_HOME/ustc-campus-agent/three-plugin-mvp`（未设置时为 `~/.local/state/ustc-campus-agent/three-plugin-mvp`）；可用 `USTC_AGENTD_BIND` 与 `USTC_AGENTD_STATE_DIR` 覆盖。state directory 必须是当前用户拥有、模式 `0700` 的真实目录。以同一目录重启会恢复 product state、session/read authority、publication/control evidence、Opportunity profile/tombstone 与 Simple Calendar items。所有校园来源均为显著标记的 reviewed/synthetic fixtures；服务没有生产认证、TLS、正式多用户 SSO 或自动来源更新，禁止直接暴露到公网。
+The assembled package, tar archive, and ZIP archive must each contain package-root `LICENSE.md` byte-identical to the repository root, mode `0644`, and covered by `SHA256SUMS`. A raw checkout does not contain the package-only binary and copied fixture payload.
 
-Android 本机演示保持这一边界：先启动上述服务，再执行 `adb reverse tcp:8787 tcp:8787` 并安装 CI 产出的 APK。该 artifact 是 competition/demo bridge，不是 Play Store release，也不宣称完成 authenticated remote deployment。
+## Exact-current evidence checklist
 
-`m00-sessions.json` 仍是 `event-history-only` 的 current-session read authority；`B4b stable redacted control-event/error` journal 仍为 `data-only` evidence carrier，不是正式 SSO 或通用管理员 API。
+`[x]` is reserved for evidence that binds the same final source identity, an executed action, and a successful outcome. Source presence, README prose, an unexecuted test, prior CI, or historical run `33905840607` is not exact-current runtime proof. Because this documentation changes the source identity, every final-source row remains unchecked until the post-merge acceptance run succeeds.
 
-当前 Affairs fixture 保留了 2026-08-26 获取的[中国科大教务处公开页面](https://www.teach.ustc.edu.cn/service/svc-student/13824.html)及 normalized bytes，并校验 SHA-256。课程规划 fixture 仅保存 iCourse 公开 aggregate-rating metadata 与 link-out，不缓存点评正文；它不能替代官方课程目录或用户对具体教师与学期的复核。
+### Final-source runtime evidence pending
 
-只需 Affairs Navigator 的兼容性 demo 入口仍是 `./scripts/run_affairs_web_demo.sh`。
+- [ ] Packaged Docker start, `/healthz`, loopback bind, and browser load report the final commit/tree.
+- [ ] Web Affairs returns a readable answer, successful redacted `affairs_navigator_get` trace, and reviewed-source evidence.
+- [ ] Calendar exact record/list/delete succeeds, denied ambiguous or mismatched mutations perform zero operation, and restart preserves the same stable item.
+- [ ] Opportunity profile consent and the separate per-request Chat confirmation produce one source-grounded plan; ChangeRadar returns one semantic change.
+- [ ] Android reaches the same loopback service and completes the Affairs answer/trace on the final source.
+- [ ] Both deterministic archives pass source, checksum, secret, and package-root `LICENSE.md` byte/mode checks.
 
-`ustc-agentctl` 可从另一个本机进程读取或触发同一固定 demo 命令；非 loopback 地址、发布时缺少 `--confirm` 或 HTTP 侧缺少自定义确认请求头都会 fail closed：
+### Historical evidence — not exact-current
+
+- The screenshot labelled `addf6c7f` proves only Android connection, source-label rendering, and display of the user turn at that historical source.
+- CI run `33905840607` is prior-source package/Android evidence. It neither proves the final source nor repairs its observed missing archive license.
+
+### Planned product scope — not a completed claim
+
+- [ ] Production authentication, USTC SSO, tenant administration, TLS, and an authenticated public runtime.
+- [ ] Shared cross-target client parity, production-signed/store-ready Android, and physical-device lifecycle acceptance.
+- [ ] Approved automatic campus-source ingestion and broad current campus coverage.
+- [ ] Generalized third-party package lifecycle/isolation or a usable inbound MCP adapter/server.
+- [ ] A command sandbox, durable chat sessions, streaming, reminders, recurrence, and calendar synchronization.
+
+## Four-dimension evidence map
+
+| Judging dimension | Implemented source evidence | Exact demo proof required | Claim boundary |
+|---|---|---|---|
+| Innovation | Bounded ChatRun, fixed Rust-owned catalogue, typed results, per-request Opportunity confirmation, and redacted `succeeded / denied / failed` trace. | Ask `成绩单证明怎么办？`, expand the trace, then show Opportunity unavailable without confirmation. | Bounded executable vertical slice; not an unrestricted agent or generalized extension runtime. |
+| Usefulness | Fixed paths cover one reviewed Affairs procedure, one semantic ChangeRadar board, synthetic consent-bound planning, and owner-local Calendar record/list/delete. | Show the Affairs answer and evidence, then exact Calendar record/list with its stable ID. | No broad/live/official campus coverage, reminders, enrollment, or approval claim. |
+| Technical difficulty | Thin clients submit intent while `ustc-agentd` owns admission, effects, durable state, and file-backed provider configuration; Compose is loopback/read-only with a named state volume. | Show source identity, one denied mutation with zero state change, one consent-gated plan, and restart/read-back if rehearsed. | No public-network hardening, production auth, arbitrary-code isolation, or client-held credential claim. |
+| Completeness | Source run path, deterministic Compose package, browser surface, and debug Android thin shell surround one loopback MVP. | Run Docker → Web Affairs → Calendar record/list → Android same-service Affairs, then return to this checklist. | “Competition/demo vertical slice” only after those exact-source actions pass; long-horizon platform and production Android remain incomplete. |
+
+## Five-minute demo order
+
+1. Show Docker ready, loopback URL, and final source identity; state “model proposes, Rust owns validation and effects.”
+2. In Web Chat, show the Affairs answer, successful redacted trace, and reviewed-source evidence.
+3. Record `记录事项：提交开题报告`, then list it and point to the stable owner-local ID.
+4. Create the synthetic Opportunity profile with explicit consent, separately confirm its use for this Chat request, and show the plan.
+5. Show one ChangeRadar semantic before → after field; do not use administrator publication in the timed path.
+6. Only with exact-current Android evidence, show the same loopback service and Affairs journey in the debug thin shell.
+7. End on this exact-source checklist and the explicit non-claims below. A failed or not-run step is omitted or labelled; recorded fallback media is never presented as live.
+
+## Current bounded capability
+
+The fixed reviewed demo catalogue contains Affairs Navigator, ChangeRadar, and Opportunity Graph, plus Simple Calendar as an owner-local in-process companion. It is not a generalized install/disable/revoke-driven provider catalogue or isolated execution platform.
+
+- **Agent Chat** returns bounded Chinese summaries and a redacted trace instead of raw transport JSON. An optional request-v2 response preference is closed, at most 2048 UTF-8 bytes, explicitly untrusted and non-persistent; it follows rather than replaces immutable server policy and adds no tool or authority.
+- **Affairs Navigator** reads one fixed `DemoReviewed` transcript-certificate procedure.
+- **ChangeRadar** reads one fixed reviewed academic-calendar board; administrator publication is a separate explicit control and is not model-visible.
+- **Opportunity Graph** plans from a synthetic private profile only after profile consent and separate confirmation on that request; community aggregate signals affect soft ranking only.
+- **Simple Calendar** accepts exact record intent `记录事项：<nonblank title>` or `记录事项:<nonblank title>`, read-only list, and exact delete intent `删除事项 calendar:item:N`. `scheduled_for` is absent from this slice.
+
+Calendar `record`/`delete` executes only when the final admitted user message has the matching exact grammar and the normalized title or item ID equals the provider call. Absent or mismatched intent yields a bounded denied result/trace and zero executor/store operation; provider prose cannot mint confirmation.
+
+The command accepts loopback bind only. State defaults to `$XDG_STATE_HOME/ustc-campus-agent/three-plugin-mvp` (or `~/.local/state/ustc-campus-agent/three-plugin-mvp`) and may be moved with `USTC_AGENTD_STATE_DIR`; the real directory must be current-user-owned mode `0700`. `calendar-items.json` is a required member of the locked durable state set: fresh bootstrap writes canonical empty mode-`0600` state, non-fresh absence fails `durable_state_set_incomplete`, and rollback treats it with the other members.
+
+`m00-sessions.json` remains the `event-history-only` current-session read authority; the `B4b stable redacted control-event/error` journal remains a `data-only` evidence carrier. Neither is formal SSO or a general administrator API.
+
+All campus facts in this demo are explicitly labelled reviewed or synthetic fixtures. The Affairs fixture retains normalized bytes from the [USTC teaching-affairs public page captured on 2026-08-26](https://www.teach.ustc.edu.cn/service/svc-student/13824.html). Course-planning fixtures retain bounded public iCourse aggregate metadata and link-outs, not review text. They do not establish comprehensive or current official campus data.
+
+The Android artifact is a debug-signed competition bridge over the same Web UI through `adb reverse`; it is not a production Android release. Installation and endpoint details are in the [Android demo guide](docs/guides/android-demo.md).
+
+The current MVP has no command sandbox and rejects arbitrary shell execution. It delivers no generalized dynamic package lifecycle, Skill runtime, usable MCP adapter/server, editable system policy or persisted prompt profile, authenticated public deployment, client-side provider credentials, live campus ingestion, or production Android acceptance.
+
+The Affairs-only compatibility entrypoint remains `./scripts/run_affairs_web_demo.sh`. `ustc-agentctl` is a separate loopback operator/developer surface:
 
 ```bash
 cargo run -p ustc-agentctl -- affairs publication-status --server 127.0.0.1:8787
@@ -47,24 +130,16 @@ cargo run -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --con
 
 | Item | Decision |
 |---|---|
-| Repository | [`Develata/ustc-campus-agent`](https://github.com/Develata/ustc-campus-agent)，GitHub public，Develata personal account |
+| Repository | [`Develata/ustc-campus-agent`](https://github.com/Develata/ustc-campus-agent), public source under the Develata personal account |
 | Product name | USTC Campus Agent |
-| Default first-party Plugins | `ustc.affairs-navigator`, `ustc.change-radar`, `ustc.opportunity-graph` |
-| Optional bundled Plugin | `ustc.simple-calendar`；Rust owner-local item store，非默认安装 |
-| Implementation order | ChangeRadar foundation → Affairs Navigator → ChangeRadar feed → Opportunity Graph composition → three-plugin reproducible E2E |
-| Course Planning | Retained deterministic pack inside the active consent/profile/Market/Web Opportunity Graph composition; production SSO/live-source completion is not claimed |
-| Chinese name | TBD；首版使用中文描述“面向科大学生的插件化校园智能体” |
-| GitHub organization | Deferred |
-| Market repository | Deferred；当前为 monorepo 内 `market/` logical authority boundary |
-| License | [`MIT`](LICENSE.md)；第三方内容与校园数据的权利、来源许可仍分别适用 |
-| Public delivery | 源码仓库已公开；当前没有 tag、GitHub Release 或 Pages，任何稳定下载面仍须通过 artifact read-back 与 release gate |
-| Runtime strategy | Rust authority core；ADR-0004 reference systems remain references or bounded adapters, not platform authority |
-| Agent harness | finite HarnessRun over typed TaskGraph；model proposes, Rust validates；every model call passes context-budget preflight |
-| Agent–Plugin boundary | PluginPackage 经 resolver/gateway 编译为 versioned tool protocol；Agent 与 Plugin 不互相依赖实现或状态机 |
-| Required delivery targets | Web/PWA + Docker Compose Fullstack server + Android；Windows 为已接纳的 later peer、当前不进入 required gate；iOS/其他 desktop 后续候选 |
-| Current Android evidence | `apps/ustc-android-demo` debug APK：API 35 emulator 安装/启动、ADB reverse、真实 Affairs Chat journey；最终 Dioxus/HTTPS/session/真机 `CLIENT-002` 仍未完成 |
-| Multi-client shell | `M10` owns framework-neutral versioned operation/client-protocol registry；`M80` owns client core over it；Dioxus Web/Android、`ustc-agent` 与 public-read-first inbound MCP 为 peer adapters；later Windows 复用同一 core；M10 不依赖 client-core，GUI 不 spawn CLI；client/server adapter 不拥有平台 authority |
-| CLI privilege split | `ustc-agentctl` 为 operator/developer；`ustc-agent` 已有 bounded ordinary-user/headless Affairs path；`ustc-agentd serve-web` 提供 loopback-only、三插件 source/profile-grounded MVP，生产 auth/remote HTTP/streaming 仍未实现；MCP 仅暴露 selected least-privilege tools/resources |
+| Demo catalogue | Three fixed reviewed first-party paths: `ustc.affairs-navigator`, `ustc.change-radar`, `ustc.opportunity-graph` |
+| Calendar companion | `ustc.simple-calendar`; optional package declaration, owner-local Rust store, fixed in-process demo composition |
+| Course Planning | Deterministic synthetic fixture plus consent/profile composition; no production SSO or live-source completion claim |
+| Chinese name | TBD; do not infer a Chinese brand from the descriptive copy |
+| Catalog repository | Deferred; `market/` is the current logical declaration boundary inside this monorepo |
+| License | Project-authored software/docs use [`MIT`](LICENSE.md); third-party and campus-data rights remain separate |
+| Delivery | Public source repository only; no tag, GitHub Release, Pages app, stable download, or authenticated public runtime is claimed |
+| Runtime | Rust owns admission/state/effects; reference systems remain references or bounded adapters |
 
 ## Repository layout
 

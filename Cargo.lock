@@ -1402,6 +1402,7 @@ dependencies = [
 name = "ustc-campus-agent-simple-calendar"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "serde",
  "serde_json",
  "time",

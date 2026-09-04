@@ -103,7 +103,7 @@ backend module application interfaces
 
 Dioxus, `ustc-agent` and inbound MCP are outer peers over one M80 client semantic core. M10 owns the framework-neutral versioned operation and wire schema registry; M80 core consumes it, and M10 never depends on client-core. Adapter registries are allowlisted projections, so shared operations preserve permission/result/error/provenance/audit semantics without requiring identical command sets. The peers do not invoke or parse one another as subprocesses. Dioxus server functions and explicit HTTP/SSE routes are M10 peer ingress adapters. After compatibility, identity, authorization, bounds, idempotency/precondition and audit admission, each may call one public application command/query port. No client or ingress adapter calls concrete repositories/databases, executors, provider SDKs or journals directly.
 
-The Docker Compose profile runs the native server and dependencies, serves Web assets/SSR and exposes admitted HTTPS endpoints. Android, `ustc-agent` and the inbound MCP adapter are independently deployable and may lag server deployments, so compatibility/upgrade behavior is explicit. `ustc-agentctl` remains operator/developer-only. M51 remains the opposite platform-to-external-MCP execution path.
+The current Docker Compose package runs the native server, serves the bounded Web assets, and publishes one loopback HTTP endpoint only; production Fullstack/SSR, TLS and public ingress remain planned. Android, `ustc-agent` and the inbound MCP adapter are independently deployable and may lag server deployments, so compatibility/upgrade behavior is explicit. `ustc-agentctl` remains operator/developer-only. M51 remains the opposite platform-to-external-MCP execution path.
 
 ## 5. Agent/tool path
 

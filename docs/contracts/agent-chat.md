@@ -3,8 +3,8 @@
 ## Metadata
 
 - `Status`: Implemented bounded MVP contract
-- `Version`: `agent-chat/v1`
-- `Last Review`: `2026-09-04`
+- `Version`: `agent-chat/v1` response/error with `ustc-agent-chat-request/v1` and `ustc-agent-chat-request/v2`
+- `Last Review`: `2026-09-05`
 - `Owning Plan`: [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md)
 - `Feature Projection`: [`../features/04-bounded-agent-harness.md`](../features/04-bounded-agent-harness.md)
 - `Acceptance`: active `CHAT-001`, `CHAT-002`, `CHAT-003`
@@ -12,21 +12,21 @@
 
 ## 1. Scope and authority
 
-`agent-chat/v1` is one loopback-only competition profile. It is not the complete durable [`agent-harness/v0`](agent-harness.md), a generic Plugin runtime, a provider-managed conversation, or production campus-source activation.
+`agent-chat/v1` is one loopback-only competition profile over a fixed reviewed demo catalogue. It is not the complete durable [`agent-harness/v0`](agent-harness.md), a generalized package lifecycle/execution runtime, a provider-managed conversation, or production campus-source activation.
 
 ```text
 Composition-owned static Web Chat shell (not M80 module evidence)
 → M10 POST /api/v1/agent/chat
 → M30 bounded in-memory coordinator
 → M50 deterministic mock or operator-configured OpenAI-compatible adapter
-→ exact sequential tool bridge
+→ exact sequential fixed-catalogue tool bridge
 → existing Affairs / ChangeRadar fixed read path
-   or optional owner-local Simple Calendar path
+   or owner-local Simple Calendar in-process companion
    or existing consent-bound static M72 planner path
 → natural-language answer + redacted tool trace
 ```
 
-The server owns request validation, provider selection, budgets, tool registration and product composition. The browser and provider mint no route, tenant, user, grant, profile, source, publication or administrator authority. The three campus-data tools use only reviewed repository fixtures; the planner fixture includes bounded public iCourse aggregate-rating link-outs as orientation-level soft evidence but no copied review text. The Calendar tool uses only owner-local state. This contract grants no USTC network or real-source activation permission.
+The server owns request validation, provider selection, budgets, the fixed tool catalogue and product composition. The browser and provider mint no route, tenant, user, grant, profile, source, publication, mutation confirmation or administrator authority. The three campus-data tools use only reviewed repository fixtures; the planner fixture includes bounded public iCourse aggregate-rating link-outs as orientation-level soft evidence but no copied review text. The Calendar companion uses only owner-local state. This contract grants no dynamic install/disable/revoke-driven provider projection, isolated third-party execution, USTC network access or real-source activation permission.
 
 ## 2. HTTP request
 
@@ -42,7 +42,7 @@ The server owns request validation, provider selection, budgets, tool registrati
 }
 ```
 
-The request is closed:
+The v1 request is closed:
 
 - `schema` is exactly `ustc-agent-chat-request/v1`;
 - `messages` contains 1–12 entries;
@@ -54,6 +54,25 @@ The request is closed:
 - a non-null context additionally requires `X-USTC-Opportunity-Confirmation: confirmed` on the same request.
 
 The profile snapshot ID and header are non-authoritative hints. The browser applies the same nonblank/NUL/4 KiB bound before enabling a restored `localStorage` hint and removes an invalid persisted value. The server still checks current session, tenant/user ownership, consent, Market state and source currentness through the existing Opportunity composition.
+
+### 2.1 Request v2 prompt customization
+
+`ustc-agent-chat-request/v2` keeps every v1 field, bound and admission rule and may additionally carry:
+
+```json
+{
+  "schema": "ustc-agent-chat-request/v2",
+  "messages": [
+    {"role": "user", "content": "成绩单证明怎么办？"}
+  ],
+  "opportunity_context": null,
+  "prompt_customization": {"text": "请用简洁的要点回答。"}
+}
+```
+
+The v2 request and `prompt_customization` object are closed. The field may be absent or null; when non-null it contains exactly one string field, `text`. The original UTF-8 string is at most 2048 bytes and must remain nonblank after outer-whitespace trim. U+0009, U+000A and U+000D are the only admitted control whitespace; every other Unicode control (`Cc`), every Unicode format scalar (`Cf`, including bidi controls, zero-width controls and U+FEFF/BOM), and U+0000/NUL are rejected. Validation projects only the trimmed text. Supplying `prompt_customization` under request schema v1, using request v2 with another unknown field, or using a scalar/array/open customization object fails as `invalid_chat_request` before provider or tool I/O.
+
+The validated text is a user-scoped, untrusted, request-only preference—not an editable system or developer policy. The server places the immutable system policy first, then projects the preference as a separately and explicitly labelled user message before ordinary conversation history. It cannot select or add a model, provider, endpoint, role, tool, route, grant, identity, credential or authority; the server-owned tool definitions and count are unchanged. The original field counts toward the 16 KiB HTTP body limit, and the complete labelled trimmed projection counts toward the existing provider context-budget preflight. It is not written to chat history, local or durable state, logs, traces, profile storage or a later request.
 
 ## 3. HTTP response and errors
 
@@ -115,7 +134,7 @@ The packaged launchers require `.env` itself to be a readable regular non-symlin
 
 The key file is UTF-8, nonblank after outer-whitespace trim and at most 4096 bytes. On Unix, the opened key file must have no group/world permission bits (`mode & 077 == 0`). Because local Compose file-backed secrets preserve host ownership, Compose first drops every capability and then grants the root-only initialization phase exactly `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETGID`, `SETPCAP` and `SETUID`: the entrypoint can read the explicitly mounted owner-only source, copy it into an ephemeral mode-0600 tmpfs file owned by UID/GID 65532, and then re-exec itself through `setpriv` as UID/GID 65532 with cleared groups, no-new-privileges and an empty effective/bounding capability set before the daemon or proxy starts. The packaged Unix launcher enforces the same permission rule on the host source before Docker runs, while direct Compose use remains operator-responsible because the projected container secret cannot prove the host file's original mode. Both launchers, the container entrypoint and the authoritative Rust key reader reject the bundled mock placeholder after the same outer-whitespace normalization in `openai-compatible` mode. The normal runtime accepts no raw key through argv, HTTP, browser storage, checked-in environment or logs. Invalid OpenAI-compatible configuration fails startup without fallback to mock, another origin or another model.
 
-The adapter sends non-streaming Chat Completions with the exact configured model, ordered complete messages, complete current tool definitions, `tool_choice: auto`, `parallel_tool_calls: false`, `stream: false` and an 8192-token output ceiling. A retained test exercises this adapter through the complete loopback `POST /api/v1/agent/chat` route against a bounded local provider peer, including provider identity, usage and hardened-response projection. The response path accepts only exactly one `assistant` choice, requires `finish_reason: stop` for final text or `finish_reason: tool_calls` for a complete tool batch, and rejects truncated, content-filtered or mismatched termination before any tool execution. It follows no redirects, uses one absolute timeout and accepts at most 256 KiB of response bytes. Production configuration requires HTTPS; plain HTTP exists only in the test-only loopback constructor. The deterministic mock is network-free and routes only product-qualified transcript, academic-calendar, course-planning and Calendar terms. For each known successful tool shape it projects only bounded user-facing fields into a server-owned Chinese summary: procedure steps and official entry points, semantic changed fields and source link, course candidates/rationale/iCourse link-outs, or Calendar mutation/list details. Known-tool shape drift yields an explicit summary-contract notice instead of a raw JSON dump. Fair per-result output budgets ensure one large result cannot erase later successful tools; denied and failed statuses remain explicit non-success answers, and a mixed request whose Opportunity tool is unavailable retains an explicit unexecuted-consent notice beside any successful public-tool summary.
+The adapter sends non-streaming Chat Completions with the exact configured model, ordered complete messages, complete current tool definitions, `tool_choice: auto`, `parallel_tool_calls: false`, `stream: false` and an 8192-token output ceiling. For request v2, the immutable server system policy remains the first message and the separately labelled untrusted preference follows it without changing the tool set. A retained test exercises this adapter through the complete loopback `POST /api/v1/agent/chat` route against a bounded local provider peer, including provider identity, usage and hardened-response projection. The response path accepts only exactly one `assistant` choice, requires `finish_reason: stop` for final text or `finish_reason: tool_calls` for a complete tool batch, and rejects truncated, content-filtered or mismatched termination before any tool execution. It follows no redirects, uses one absolute timeout and accepts at most 256 KiB of response bytes. Production configuration requires HTTPS; plain HTTP exists only in the test-only loopback constructor. The deterministic mock is network-free and routes only product-qualified transcript, academic-calendar, course-planning and Calendar terms. For each known successful tool shape it projects only bounded user-facing fields into a server-owned Chinese summary: procedure steps and official entry points, semantic changed fields and source link, course candidates/rationale/iCourse link-outs, or Calendar mutation/list details. Known-tool shape drift yields an explicit summary-contract notice instead of a raw JSON dump. Fair per-result output budgets ensure one large result cannot erase later successful tools; denied and failed statuses remain explicit non-success answers, and a mixed request whose Opportunity tool is unavailable retains an explicit unexecuted-consent notice beside any successful public-tool summary.
 
 Before network I/O the adapter serializes the complete wire request and applies `T(q) + O + S ≤ floor(L × 0.9)`, where `T(q)` is conservatively upper-bounded by serialized UTF-8 bytes, `O=8192`, `S=2048`, and `L=UCA_AGENT_CONTEXT_TOKENS`. Oversize input fails locally as `context_budget_exceeded`; no provider/profile context limit means no OpenAI-compatible call.
 
@@ -136,6 +155,8 @@ Each provider turn yields either a nonblank final answer with no tool calls, or 
 
 Tool output is bounded typed M10 data wrapped as untrusted provider input. It cannot add tools, messages or policy. Failure to produce a valid final answer within the turn budget is explicit failure, not partial success.
 
+Calendar mutation authority is captured once from the final admitted user message before the first provider call. Every validated Calendar `record` or `delete` proposal is compared with that immutable intent before `executor.execute`. Absent or mismatched intent produces a bounded typed denied tool result and `denied` trace entry, performs zero executor/store operation, and may be returned to the provider within the existing turn budget. Provider prose, a provider argument, or a model-authored confirmation cannot create or widen this authority. Complete-batch validation still finishes before any tool in the batch executes.
+
 ## 6. Exact tool map
 
 ### `affairs_navigator_get`
@@ -148,7 +169,14 @@ Input is exactly `{"board_id":"board:ustc:academic-calendar"}`. The bridge invok
 
 ### `simple_calendar_items`
 
-Input is a closed object with exact `action = record | list | delete`. `record` additionally requires a nonblank title of at most 256 UTF-8 bytes and optionally accepts one RFC 3339 `scheduled_for`; `list` accepts no other field; `delete` requires one stable `calendar:item:N` ID. Rust revalidates the action-specific shape before execution. The loopback profile persists at most 128 owner-local items in a sibling state file and returns success only after the mutation is durably written. It has no reminder, recurrence, sharing, synchronization or natural-language time semantics. Calendar writes must reflect an explicit user instruction.
+Input is a closed object with exact `action = record | list | delete`. `record` requires only a nonblank title of at most 256 UTF-8 bytes; `scheduled_for` is absent from this slice and any supplied field is rejected. `list` accepts no other field and remains read-only. `delete` requires one stable `calendar:item:N` ID. Rust revalidates the complete action-specific shape before execution.
+
+The only admitted mutation grammars in the final user message are:
+
+- record: exact prefix `记录事项：` or `记录事项:` followed by a nonblank title; the normalized title is the suffix after outer-whitespace trim and must equal the provider-call title byte-for-byte;
+- delete: exact prefix `删除事项 ` followed by one complete `calendar:item:N`, with no hidden or extra suffix; the ID must equal the provider-call ID byte-for-byte.
+
+A mere occurrence of `日历`, `待办`, `事项`, `calendar`, `reminder`, or similar help text creates no mutation intent. The deterministic mock uses the same grammar. The loopback profile persists at most 128 owner-local items and returns success only after a mutation is durably written. It has no reminder, recurrence, sharing, synchronization or natural-language time semantics.
 
 ### `opportunity_graph_plan_current_profile`
 
@@ -158,19 +186,21 @@ The model cannot create, view, edit, consent to, revoke or delete a profile; cho
 
 ## 7. Web, Compose and package projection
 
-The thin static browser owns only page-lifetime draft/history presentation. It sends bounded user/assistant history, renders loading/final/error/tool-trace states, provides an explicit local-conversation clear control, and includes Opportunity context only after profile creation plus explicit checkbox confirmation. It never receives or stores the provider key. Keyboard submit, visible focus, reduced motion and 390 px/mobile-to-desktop layout remain required.
+The thin static browser owns only page-lifetime draft/history presentation. It sends bounded user/assistant history, renders loading/final/error/tool-trace states, provides an explicit local-conversation clear control, and includes Opportunity context only after profile creation plus explicit checkbox confirmation. Its prompt-customization textarea is request-scoped: outer-trimmed empty input sends v1 with no customization, nonempty input sends v2 with the closed object, success clears the field, and a failed request may retain it for an explicit retry. The preference never enters `chatHistory` or `localStorage`. The browser never receives or stores the provider key. Keyboard submit, visible focus, reduced motion and 390 px/mobile-to-desktop layout remain required.
 
 The Compose package:
 
 - publishes only `127.0.0.1:${UCA_MVP_PORT}:8787`;
 - defaults to deterministic mock with no provider network call;
 - mounts a provider key source read-only, copies it only in OpenAI-compatible mode into an ephemeral mode-0600 tmpfs file, uses only a non-secret placeholder in mock mode and rejects that placeholder in real-provider mode;
-- persists product and Simple Calendar state in a named volume across `stop`/restart;
+- treats `idempotency_path.with_extension("calendar-items.json")` as a member of the locked durable state set: fresh bootstrap writes a canonical empty mode-0600 store, non-fresh absence fails `durable_state_set_incomplete`, rollback removes it with every other newly created member, and restart retains committed Calendar items;
+- persists the complete product state set in a named volume across `stop`/restart;
 - deletes that volume only through explicit reset;
 - packages deterministic ZIP/tar archives with exact source commit, per-file checksums and a provider-secret scan;
+- installs repository-root `LICENSE.md` byte-for-byte as package-root `LICENSE.md` with mode 0644, includes it in `SHA256SUMS`, and verifies the same bytes/checksum in both archives;
 - keeps `.ps1`/`.cmd` launchers ASCII-only, BOM/NUL-free and LF-terminated for Windows PowerShell 5.1, with native-command `$LASTEXITCODE` checks;
 - runs smoke verification under a unique Compose project so cleanup cannot address a user's normal MVP volume.
 
 ## 8. Non-goals
 
-This version does not claim live campus-source ingestion, CAS/SSO, multi-tenancy, generic Plugin installation/execution, provider fallback, streaming, RAG, durable chat history, long-term memory, reminders, calendar synchronization, parallel tools, multi-agent graphs, Dioxus parity or production hosting. Real-provider smoke remains `not-run` unless an operator separately supplies runtime configuration and grants provider-network permission.
+This version does not claim live campus-source ingestion, CAS/SSO, multi-tenancy, generalized package installation/disable/revoke-driven tool projection or isolated execution, a Skill runtime, an MCP adapter/server, a command sandbox, editable system policy, persisted prompt profiles, provider fallback, streaming, RAG, durable chat history, long-term memory, reminders, calendar synchronization, parallel tools, multi-agent graphs, shared-client parity, production Android or production hosting. Real-provider smoke remains `not-run` unless an operator separately supplies runtime configuration and grants provider-network permission.

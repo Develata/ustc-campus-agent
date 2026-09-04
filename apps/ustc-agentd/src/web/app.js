@@ -11,7 +11,10 @@ const chatErrorMessage = document.querySelector("#chat-error-message");
 const chatErrorCode = document.querySelector("#chat-error-code");
 const chatOpportunityConfirm = document.querySelector("#chat-opportunity-confirm");
 const chatOpportunityState = document.querySelector("#chat-opportunity-state");
-const CHAT_REQUEST_SCHEMA = "ustc-agent-chat-request/v1";
+const chatPromptCustomization = document.querySelector("#chat-prompt-customization");
+const chatPromptCustomizationCounter = document.querySelector("#chat-prompt-customization-counter");
+const CHAT_REQUEST_SCHEMA_V1 = "ustc-agent-chat-request/v1";
+const CHAT_REQUEST_SCHEMA_V2 = "ustc-agent-chat-request/v2";
 const CHAT_RESPONSE_SCHEMA = "ustc-agent-chat-response/v1";
 const CHAT_ERROR_SCHEMA = "ustc-agent-chat-error/v1";
 const CHAT_MAX_MESSAGES = 12;
@@ -21,6 +24,8 @@ const CHAT_MAX_HISTORY_BYTES = 12 * 1024;
 const CHAT_MAX_BODY_BYTES = 16 * 1024;
 const CHAT_MAX_ANSWER_BYTES = 16 * 1024;
 const CHAT_MAX_TOOL_CALLS = 4;
+const CHAT_MAX_PROMPT_CUSTOMIZATION_BYTES = 2048;
+const CHAT_PROMPT_DISALLOWED_SCALAR_PATTERN = /[\p{Cc}\p{Cf}]/u;
 const chatTextEncoder = new TextEncoder();
 const chatHistory = [];
 let chatPending = false;
@@ -100,6 +105,7 @@ const CHAT_STATUS_LABELS = Object.freeze({
 
 const CHAT_ERROR_MESSAGES = Object.freeze({
   invalid_chat_request: "消息未通过有界请求校验。请缩短内容并重试。",
+  invalid_prompt_customization: "响应偏好须为 1–2048 UTF-8 bytes，且不能包含控制、双向覆盖、零宽或 BOM 字符。",
   provider_not_configured: "当前 Agent 服务尚未就绪。请联系本机演示的管理员。",
   provider_unauthorized: "当前 Agent 服务无法完成认证。请联系本机演示的管理员。",
   provider_rate_limited: "请求过于频繁。请稍后再试。",
@@ -128,6 +134,30 @@ function chatFailure(code) {
 
 function utf8Length(value) {
   return chatTextEncoder.encode(value).byteLength;
+}
+
+function syncPromptCustomizationCounter() {
+  const byteLength = utf8Length(chatPromptCustomization.value);
+  chatPromptCustomizationCounter.textContent = `${byteLength} / ${CHAT_MAX_PROMPT_CUSTOMIZATION_BYTES} UTF-8 bytes`;
+  chatPromptCustomizationCounter.dataset.overLimit = String(
+    byteLength > CHAT_MAX_PROMPT_CUSTOMIZATION_BYTES
+  );
+}
+
+function promptCustomizationForRequest() {
+  const raw = chatPromptCustomization.value;
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const hasDisallowedScalar = [...raw].some((scalar) =>
+    !["\t", "\n", "\r"].includes(scalar)
+      && CHAT_PROMPT_DISALLOWED_SCALAR_PATTERN.test(scalar)
+  );
+  if (utf8Length(raw) > CHAT_MAX_PROMPT_CUSTOMIZATION_BYTES || hasDisallowedScalar) {
+    throw chatFailure("invalid_prompt_customization");
+  }
+  return trimmed;
 }
 
 function boundedChatMessages(userContent, opportunityProfileHint) {
@@ -160,25 +190,28 @@ function boundedChatMessages(userContent, opportunityProfileHint) {
   return selected;
 }
 
-function createChatRequest(userContent, opportunityProfileHint) {
+function createChatRequest(userContent, opportunityProfileHint, promptCustomization = null) {
   const messages = boundedChatMessages(userContent, opportunityProfileHint);
   const opportunityContext = opportunityProfileHint == null
     ? null
     : { profile_snapshot_id: opportunityProfileHint };
-  let request = {
-    schema: CHAT_REQUEST_SCHEMA,
-    messages,
-    opportunity_context: opportunityContext
+  const makeRequest = () => {
+    const request = {
+      schema: promptCustomization == null ? CHAT_REQUEST_SCHEMA_V1 : CHAT_REQUEST_SCHEMA_V2,
+      messages,
+      opportunity_context: opportunityContext
+    };
+    if (promptCustomization != null) {
+      request.prompt_customization = { text: promptCustomization };
+    }
+    return request;
   };
+  let request = makeRequest();
   let body = JSON.stringify(request);
 
   while (utf8Length(body) > CHAT_MAX_BODY_BYTES && messages.length > 1) {
     messages.splice(0, 2);
-    request = {
-      schema: CHAT_REQUEST_SCHEMA,
-      messages,
-      opportunity_context: opportunityContext
-    };
+    request = makeRequest();
     body = JSON.stringify(request);
   }
   if (utf8Length(body) > CHAT_MAX_BODY_BYTES) {
@@ -189,17 +222,46 @@ function createChatRequest(userContent, opportunityProfileHint) {
 
 function assertChatRequestContract(request, headers, body) {
   const requestKeys = Object.keys(request).sort().join(",");
-  if (requestKeys !== "messages,opportunity_context,schema") {
+  const hasPromptCustomization = Object.prototype.hasOwnProperty.call(
+    request,
+    "prompt_customization"
+  );
+  const expectedKeys = hasPromptCustomization
+    ? "messages,opportunity_context,prompt_customization,schema"
+    : "messages,opportunity_context,schema";
+  if (requestKeys !== expectedKeys) {
     throw chatFailure("invalid_chat_request");
   }
   if (
-    request.schema !== CHAT_REQUEST_SCHEMA ||
+    (hasPromptCustomization
+      ? request.schema !== CHAT_REQUEST_SCHEMA_V2
+      : request.schema !== CHAT_REQUEST_SCHEMA_V1) ||
     !Array.isArray(request.messages) ||
     request.messages.length < 1 ||
     request.messages.length > CHAT_MAX_MESSAGES ||
     request.messages.at(-1)?.role !== "user"
   ) {
     throw chatFailure("invalid_chat_request");
+  }
+
+  if (hasPromptCustomization) {
+    const customization = request.prompt_customization;
+    if (
+      typeof customization !== "object" ||
+      customization == null ||
+      Array.isArray(customization) ||
+      Object.keys(customization).join(",") !== "text" ||
+      typeof customization.text !== "string" ||
+      customization.text.trim() !== customization.text ||
+      customization.text.length === 0 ||
+      utf8Length(customization.text) > CHAT_MAX_PROMPT_CUSTOMIZATION_BYTES ||
+      [...customization.text].some((scalar) =>
+        !["\t", "\n", "\r"].includes(scalar)
+          && CHAT_PROMPT_DISALLOWED_SCALAR_PATTERN.test(scalar)
+      )
+    ) {
+      throw chatFailure("invalid_chat_request");
+    }
   }
 
   let totalBytes = 0;
@@ -249,6 +311,8 @@ function assertChatDomContract() {
   const failures = [];
   if (chatForm?.tagName !== "FORM") failures.push("chat-form");
   if (chatInput?.tagName !== "TEXTAREA" || chatInput.maxLength !== 4096) failures.push("chat-input");
+  if (chatPromptCustomization?.tagName !== "TEXTAREA") failures.push("chat-prompt-customization");
+  if (chatPromptCustomizationCounter?.tagName !== "OUTPUT") failures.push("chat-prompt-customization-counter");
   if (chatClear?.tagName !== "BUTTON" || chatClear.type !== "button") failures.push("chat-clear");
   if (chatSend?.tagName !== "BUTTON" || chatSend.type !== "submit") failures.push("chat-send");
   if (chatOpportunityConfirm?.type !== "checkbox") failures.push("chat-opportunity-confirm");
@@ -274,6 +338,9 @@ function clearChatConversation() {
   chatError.hidden = true;
   chatInput.value = "";
   chatInput.setCustomValidity("");
+  chatPromptCustomization.value = "";
+  chatPromptCustomization.setCustomValidity("");
+  syncPromptCustomizationCounter();
   syncChatEmptyState();
   chatInput.focus({ preventScroll: true });
 }
@@ -411,6 +478,8 @@ function setChatBusy(busy) {
   chatSend.disabled = busy;
   chatSend.setAttribute("aria-disabled", String(busy));
   chatSend.textContent = busy ? "发送中…" : "发送";
+  chatPromptCustomization.disabled = busy;
+  chatPromptCustomization.setAttribute("aria-disabled", String(busy));
   chatOpportunityConfirm.disabled = busy || !opportunityProfileId;
   chatOpportunityConfirm.setAttribute(
     "aria-disabled",
@@ -451,6 +520,7 @@ async function submitChat() {
     return;
   }
   chatInput.setCustomValidity("");
+  chatPromptCustomization.setCustomValidity("");
   const userContent = chatInput.value.trim();
   if (!userContent) {
     chatInput.setCustomValidity("请输入一条消息。");
@@ -460,6 +530,17 @@ async function submitChat() {
   if (utf8Length(userContent) > CHAT_MAX_MESSAGE_BYTES) {
     chatInput.setCustomValidity(CHAT_ERROR_MESSAGES.message_too_large);
     chatInput.reportValidity();
+    return;
+  }
+
+  let promptCustomization;
+  try {
+    promptCustomization = promptCustomizationForRequest();
+  } catch (_error) {
+    chatPromptCustomization.setCustomValidity(
+      CHAT_ERROR_MESSAGES.invalid_prompt_customization
+    );
+    chatPromptCustomization.reportValidity();
     return;
   }
 
@@ -475,7 +556,11 @@ async function submitChat() {
 
   let prepared;
   try {
-    prepared = createChatRequest(userContent, opportunityProfileHint);
+    prepared = createChatRequest(
+      userContent,
+      opportunityProfileHint,
+      promptCustomization
+    );
     assertChatRequestContract(prepared.request, headers, prepared.body);
   } catch (error) {
     showChatError(error?.code ?? "invalid_chat_request");
@@ -491,6 +576,8 @@ async function submitChat() {
     const response = await requestChat(prepared.body, headers);
     commitChatTurn(userContent, response.answer, opportunityProfileHint);
     appendChatMessage("assistant", response.answer, response.toolTrace);
+    chatPromptCustomization.value = "";
+    syncPromptCustomizationCounter();
     trimChatTranscript();
   } catch (error) {
     pendingItem.remove();
@@ -1469,6 +1556,10 @@ chatClear.addEventListener("click", clearChatConversation);
 chatInput.addEventListener("input", () => {
   chatInput.setCustomValidity("");
 });
+chatPromptCustomization.addEventListener("input", () => {
+  chatPromptCustomization.setCustomValidity("");
+  syncPromptCustomizationCounter();
+});
 chatInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
@@ -1527,6 +1618,7 @@ procedureInput.addEventListener("keydown", (event) => {
     form.requestSubmit();
   }
 });
+syncPromptCustomizationCounter();
 syncProcedurePreview();
 setOpportunityHint(readOpportunityHint());
 if (opportunityProfileId) {

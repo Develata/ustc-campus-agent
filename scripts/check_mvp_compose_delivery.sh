@@ -17,7 +17,7 @@ cleanup() {
   rm -rf -- "$work"
 }
 trap cleanup EXIT
-mkdir -p "$work/readback"
+mkdir -p "$work/readback/tar" "$work/readback/zip"
 
 UCA_SOURCE_COMMIT="$source_commit" \
   cargo build --locked --release -p ustc-agentd --bin ustc-agentd
@@ -37,10 +37,46 @@ cmp "$work/package-a/ustc-campus-agent-mvp-compose-${short_commit}.tar.gz" \
   sha256sum -c "ustc-campus-agent-mvp-compose-${short_commit}.sha256"
 )
 tar -xzf "$work/package-a/ustc-campus-agent-mvp-compose-${short_commit}.tar.gz" \
-  -C "$work/readback"
+  -C "$work/readback/tar"
+python3 - \
+  "$work/package-a/ustc-campus-agent-mvp-compose-${short_commit}.zip" \
+  "$work/readback/zip" <<'PY'
+from pathlib import Path, PurePosixPath
+from zipfile import ZipFile
+import sys
+
+archive = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+license_member = 'ustc-campus-agent-mvp-compose/LICENSE.md'
+with ZipFile(archive) as zf:
+    members = zf.infolist()
+    for member in members:
+        path = PurePosixPath(member.filename)
+        if path.is_absolute() or '..' in path.parts:
+            raise SystemExit(f'unsafe ZIP member: {member.filename}')
+    licenses = [member for member in members if member.filename == license_member]
+    if len(licenses) != 1:
+        raise SystemExit(f'ZIP must contain exactly one package-root LICENSE.md, got {len(licenses)}')
+    mode = (licenses[0].external_attr >> 16) & 0o777
+    if mode != 0o644:
+        raise SystemExit(f'ZIP package-root LICENSE.md mode must be 0644, got {mode:04o}')
+    zf.extractall(destination)
+PY
+repo_license_sha256=$(sha256sum "$repo_root/LICENSE.md" | cut -d ' ' -f 1)
+cmp "$repo_root/LICENSE.md" \
+    "$work/readback/tar/ustc-campus-agent-mvp-compose/LICENSE.md"
+cmp "$repo_root/LICENSE.md" \
+    "$work/readback/zip/ustc-campus-agent-mvp-compose/LICENSE.md"
+test "$(stat -c '%a' "$work/readback/tar/ustc-campus-agent-mvp-compose/LICENSE.md")" = 644
+for format in tar zip; do
+  (
+    cd "$work/readback/$format/ustc-campus-agent-mvp-compose"
+    grep -Fxq "$repo_license_sha256  LICENSE.md" SHA256SUMS
+    sha256sum -c SHA256SUMS
+  )
+done
 (
-  cd "$work/readback/ustc-campus-agent-mvp-compose"
-  sha256sum -c SHA256SUMS
+  cd "$work/readback/tar/ustc-campus-agent-mvp-compose"
   test "$(bin/ustc-agentd source-commit)" = "$source_commit"
   mkdir -p "$work/fake-bin" "$work/launcher-secrets"
   printf '%s\n' '#!/usr/bin/env sh' ': > "${DOCKER_MARKER:?}"' 'exit 23' \

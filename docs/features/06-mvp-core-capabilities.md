@@ -1,6 +1,6 @@
 # MVP core capabilities
 
-> Status: implemented loopback MVP · Last review: 2026-09-04
+> Status: implemented loopback MVP · Last review: 2026-09-05
 
 ## 1. Design
 
@@ -18,7 +18,7 @@ Browser or Android demo WebView (loopback only)
   → POST /api/v1/agent/chat
   → bounded ChatRun
   → deterministic mock or OpenAI-compatible provider
-  → exact Rust tool catalogue
+  → fixed reviewed Rust tool catalogue
        affairs_navigator_get
        change_radar_get
        simple_calendar_items
@@ -27,7 +27,7 @@ Browser or Android demo WebView (loopback only)
   → concise human summary + redacted tool trace
 ```
 
-The default mock mode needs no API key and is intended for deterministic judging and offline acceptance. For every known successful tool shape it emits a server-owned bounded Chinese summary—procedure steps and official entry points, changed fields, course candidates and iCourse link-outs, or Calendar mutations—rather than transport JSON. Shape drift becomes an explicit summary-contract notice. The real-provider mode uses the same tool definitions and Rust executor; the key remains file-backed and server-side.
+The default mock mode needs no API key and is intended for deterministic judging and offline acceptance. For every known successful tool shape it emits a server-owned bounded Chinese summary—procedure steps and official entry points, changed fields, course candidates and iCourse link-outs, or Calendar mutations—rather than transport JSON. Shape drift becomes an explicit summary-contract notice. The optional real-provider mode uses the same fixed definitions and Rust executor; its key remains file-backed and server-side. Neither mode derives a dynamic provider catalogue from package disable/revoke state.
 
 The debug Android APK is a thin presentation bridge over this exact route. It reaches the host loopback service through explicit `adb reverse`, contains no local tool or product implementation, and exposes native loading/offline/retry/server-origin controls. See [`07-android-demo-client.md`](07-android-demo-client.md).
 
@@ -37,6 +37,7 @@ The debug Android APK is a thin presentation bridge over this exact route. It re
 
 - Multi-turn page-local conversation with bounded history.
 - Deterministic offline response or explicitly configured OpenAI-compatible Chat Completions provider; both cross the complete loopback HTTP route in retained tests.
+- Optional request v2 carries one closed, non-persistent `prompt_customization.text` user preference: at most 2048 UTF-8 bytes, nonblank after trim, and free of disallowed control, bidi, zero-width and BOM scalars. The immutable system policy remains first; the separately labelled untrusted preference changes no tool or authority. Empty Web input preserves request v1, while nonempty request-scope input uses v2 and is never added to history or `localStorage`.
 - Maximum 3 provider turns, 4 tool calls, 4 KiB arguments per call, 64 KiB result per call and 16 KiB final answer.
 - The deterministic provider uses tool-aware human summaries with fair per-result budgets, so a large course plan neither exposes protocol plumbing nor erases a later Calendar result.
 - Redacted trace exposes only call order, tool name and `succeeded | denied | failed`.
@@ -77,22 +78,27 @@ Planner implementation: [`../../crates/course-planning/src/lib.rs`](../../crates
 - Queries the fixed reviewed academic-calendar change board.
 - Publication/admin operations stay outside the model-visible catalogue.
 
-### Simple Calendar — optional Rust plugin
+### Simple Calendar — owner-local in-process companion
 
 - Market package: [`../../market/packages/ustc.simple-calendar/package.json`](../../market/packages/ustc.simple-calendar/package.json)
 - Rust crate: [`../../crates/simple-calendar`](../../crates/simple-calendar)
 - Agent tool: `simple_calendar_items`
 - Operations: `record`, `list`, `delete`.
-- Bounds: 128 items, 256-byte title, optional RFC 3339 timestamp, stable `calendar:item:N` ID.
-- Persistence: owner-local JSON, regular non-symlink store, bounded load, atomic temp-file write and success only after durable commit.
+- Record intent: the final user message is exactly `记录事项：<nonblank title>` or `记录事项:<nonblank title>`; the outer-trimmed suffix equals the provider-call title byte-for-byte and `scheduled_for` is absent.
+- Delete intent: the final user message is exactly `删除事项 calendar:item:N`, with one complete stable ID equal to the provider-call ID and no hidden/extra suffix.
+- List is read-only. Bounds remain 128 items and a 256-byte title.
+- Absent or mismatched mutation intent yields a bounded denied result/trace and zero executor/store operation. Provider text cannot mint confirmation, and the deterministic mock uses the same exact grammar rather than keyword matching.
+- Persistence: owner-local `calendar-items.json`, regular non-symlink store, bounded load, atomic temp-file write and success only after durable commit.
 
-The package is optional (`defaultInstalled=false`) so the frozen three-plugin default topology remains intact. The loopback MVP bundles it as a companion demo. It does not implement reminders, recurrence, CalDAV, sharing, synchronization or natural-language date parsing.
+The package declaration is optional (`defaultInstalled=false`) so the frozen three-path default topology remains intact. The loopback MVP composes it directly as a fixed in-process companion; this is not evidence of generalized installation, disable/revoke projection or isolated execution. It does not implement reminders, recurrence, CalDAV, sharing, synchronization or natural-language date parsing.
 
 ## 4. Runtime and state
 
 `ustc-agentd` is the composition root. The same process owns HTTP admission, provider adaptation, tool validation, product services and local state. This avoids a second policy authority in the browser or model.
 
-The Compose profile persists state in one named volume. Calendar state is stored beside the existing idempotency store as `*.calendar-items.json`; chat history itself remains page-local and is not durable.
+The Compose profile persists one complete locked state set in a named volume. Calendar state is `idempotency_path.with_extension("calendar-items.json")`: a fresh bootstrap persists canonical empty mode-`0600` state, rollback removes it with every other newly created member, and a non-fresh missing member fails `durable_state_set_incomplete`. Restart preserves committed items. Chat history itself remains page-local and is not durable.
+
+The assembled Compose directory, tar archive and ZIP archive each carry package-root `LICENSE.md` byte-identical to repository-root `LICENSE.md`, mode `0644`, and listed in `SHA256SUMS`. Archive acceptance reads back both formats and preserves deterministic-byte and provider-secret checks.
 
 Runbook: [`../../deploy/mvp-compose/README.md`](../../deploy/mvp-compose/README.md)
 
@@ -105,10 +111,10 @@ After starting the loopback MVP, try:
 - `校历最近有什么变更？`
 - `记录事项：提交开题报告`
 - `列出我的待办事项。`
+- `删除事项 calendar:item:1`
 - Create an Opportunity profile in the page, enable the per-request consent checkbox, then ask `请根据我的偏好和评课社区信号推荐课程。`
-- To exercise the complete four-call budget, enable consent again and ask `请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，同时记录事项：复习计划`.
 
-Every admitted tool-backed request should show a readable summary and successful trace in deterministic mock mode. Answers should expose user facts such as procedure steps, changed fields, course codes/link-outs and Calendar item IDs, but not raw field names such as `ordered_steps`, `changed_fields`, `course_codes` or `command_id`. The mixed request must render four trace entries rather than being rejected by the browser. Course planning must be denied or omitted without the explicit profile context and per-request confirmation.
+Every admitted tool-backed request should show a readable summary and successful trace in deterministic mock mode. Answers should expose user facts such as procedure steps, changed fields, course codes/link-outs and Calendar item IDs, but not raw field names such as `ordered_steps`, `changed_fields`, `course_codes` or `command_id`. `日历怎么用`, `提醒我日历怎么用`, `calendar help`, provider-proposed mutation for a read-only prompt, mismatched title/ID, and hidden/extra suffixes must show denied/non-mutation behavior with zero Calendar state change. Course planning must be denied or omitted without the explicit profile context and per-request confirmation. A nonempty request preference may change response presentation only; it must not change the first system policy, tool count or authorization, and it must not appear in the next request.
 
 ## 6. Current boundaries and TODO
 
@@ -117,20 +123,22 @@ Every admitted tool-backed request should show a readable summary and successful
 - Replace synthetic course catalog/profile fixtures with versioned approved USTC sources.
 - Define and implement lawful, rate-limited community-signal ingestion with source freshness and deletion policy; retain derived metadata rather than review text where possible.
 - Add production authentication, tenant isolation, CSRF/session controls and durable consent/grant administration.
-- Complete generic Market installation, grant and isolated plugin execution rather than the loopback static catalogue.
+- Complete the generalized Market installation/grant lifecycle and isolated execution; the current fixed reviewed demo catalogue does not claim it.
 
 ### P1 — product completeness
 
 - Calendar structured editor, completion state, reminders, recurrence and timezone UX.
 - Durable chat sessions, streaming responses and provider fallback.
+- Persisted prompt profiles or editable system/developer policy.
 - Broader Affairs/ChangeRadar coverage with source-by-source freshness indicators.
 - Real-provider browser smoke in an authorized environment.
 
 ### Deferred
 
-- A command sandbox is not part of this MVP. If added, it must use an allowlist, fixed working directory, execution timeout, output cap and no shell interpolation; arbitrary shell execution is explicitly rejected.
-- Multi-agent graphs, remote hosting and Dioxus client parity.
+- A command sandbox is not part of this MVP. An allowlist wrapper must not be called a sandbox; arbitrary shell execution is explicitly rejected.
+- Multi-agent graphs, remote hosting and shared-client parity.
 - Production-signed Android, secure authenticated HTTPS sessions and complete real-device `CLIENT-002` evidence; the bounded debug APK does not imply these.
+- Skill loading/runtime and usable inbound or outbound MCP adapters remain unimplemented and unclaimed.
 
 Architecture and lifecycle details:
 

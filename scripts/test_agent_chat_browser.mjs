@@ -214,12 +214,15 @@ try {
     }
     throw new Error(`browser reload timeout: ${label}`);
   };
-  const submitWithEnter = async (prompt, useOpportunity = false) => {
+  const submitWithEnter = async (prompt, useOpportunity = false, preference = "") => {
     const before = await evaluate("window.__ucaAssistantAdds");
     const prepared = await evaluate(`(() => {
       const input = document.querySelector('#chat-input');
       input.value = ${JSON.stringify(prompt)};
       input.dispatchEvent(new Event('input', { bubbles: true }));
+      const preference = document.querySelector('#chat-prompt-customization');
+      preference.value = ${JSON.stringify(preference)};
+      preference.dispatchEvent(new Event('input', { bubbles: true }));
       const confirm = document.querySelector('#chat-opportunity-confirm');
       confirm.checked = ${useOpportunity};
       input.focus();
@@ -243,6 +246,8 @@ try {
   assert.equal(await evaluate("document.querySelector('#chat-form')?.tagName"), "FORM");
   assert.equal(await evaluate("document.querySelector('#chat-messages')?.getAttribute('aria-live')"), "polite");
   assert.equal(await evaluate("document.querySelector('#chat-error')?.getAttribute('role')"), "alert");
+  assert.equal(await evaluate("document.querySelector('#chat-prompt-customization')?.tagName"), "TEXTAREA");
+  assert.equal(await evaluate("document.querySelector('#chat-prompt-customization-counter')?.textContent"), "0 / 2048 UTF-8 bytes");
   for (const invalidHint of ["profile:\0private", "x".repeat(4097)]) {
     await evaluate(`localStorage.setItem('ustc-campus-agent/opportunity-profile-id/v1', ${JSON.stringify(invalidHint)})`);
     await reloadAndWait("invalid Opportunity hint cleanup");
@@ -270,9 +275,39 @@ try {
     let delayChatOnce = true;
     window.__ucaChatRequests = [];
     window.__ucaReleaseDelayedChat = null;
+    window.__ucaRejectChatOnce = false;
+    window.__ucaStorageCalls = [];
+    window.__ucaHistoryCalls = [];
+    const storageSet = Storage.prototype.setItem;
+    const storageRemove = Storage.prototype.removeItem;
+    Storage.prototype.setItem = function (...args) {
+      window.__ucaStorageCalls.push(['setItem', ...args]);
+      return storageSet.apply(this, args);
+    };
+    Storage.prototype.removeItem = function (...args) {
+      window.__ucaStorageCalls.push(['removeItem', ...args]);
+      return storageRemove.apply(this, args);
+    };
+    const pushState = window.history.pushState.bind(window.history);
+    const replaceState = window.history.replaceState.bind(window.history);
+    window.history.pushState = (...args) => {
+      window.__ucaHistoryCalls.push(['pushState', ...args]);
+      return pushState(...args);
+    };
+    window.history.replaceState = (...args) => {
+      window.__ucaHistoryCalls.push(['replaceState', ...args]);
+      return replaceState(...args);
+    };
     window.fetch = (...args) => {
       if (args[0] === '/api/v1/agent/chat') {
         window.__ucaChatRequests.push(JSON.parse(args[1].body));
+      }
+      if (window.__ucaRejectChatOnce && args[0] === '/api/v1/agent/chat') {
+        window.__ucaRejectChatOnce = false;
+        return Promise.resolve(new Response(
+          JSON.stringify({schema: 'ustc-agent-chat-error/v1', error: 'invalid_chat_request'}),
+          {status: 400, headers: {'Content-Type': 'application/json'}}
+        ));
       }
       if (delayChatOnce && args[0] === '/api/v1/agent/chat') {
         delayChatOnce = false;
@@ -322,8 +357,44 @@ try {
   assert.match(affairsAnswer, /transcript-certificate/);
   assert.doesNotMatch(affairsAnswer, /ordered_steps|command_id/);
   assert.equal(await evaluate("document.activeElement === document.querySelector('#chat-input')"), true);
+  const emptyPreferenceRequest = await evaluate("window.__ucaChatRequests.at(-1)");
+  assert.equal(emptyPreferenceRequest.schema, "ustc-agent-chat-request/v1");
+  assert.equal(Object.hasOwn(emptyPreferenceRequest, "prompt_customization"), false);
 
-  await submitWithEnter("校历最近有什么变更？");
+  await evaluate(`(() => {
+    window.__ucaRejectChatOnce = true;
+    const input = document.querySelector('#chat-input');
+    input.value = '普通问题：验证失败保留偏好';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const preference = document.querySelector('#chat-prompt-customization');
+    preference.value = '  failure-retained-preference  ';
+    preference.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#chat-form').requestSubmit();
+  })()`);
+  await waitFor("document.querySelector('#chat-surface').getAttribute('aria-busy') === 'false'", "rejected customized chat idle");
+  assert.equal(await evaluate("document.querySelector('#chat-error').hidden"), false);
+  assert.equal(
+    await evaluate("document.querySelector('#chat-prompt-customization').value"),
+    "  failure-retained-preference  "
+  );
+  const rejectedPreferenceRequest = await evaluate("window.__ucaChatRequests.at(-1)");
+  assert.equal(rejectedPreferenceRequest.schema, "ustc-agent-chat-request/v2");
+  assert.deepEqual(rejectedPreferenceRequest.prompt_customization, {text: "failure-retained-preference"});
+
+  await submitWithEnter("校历最近有什么变更？", false, "  请用简洁的要点回答。  ");
+  const customizedRequest = await evaluate("window.__ucaChatRequests.at(-1)");
+  assert.equal(customizedRequest.schema, "ustc-agent-chat-request/v2");
+  assert.deepEqual(customizedRequest.prompt_customization, {text: "请用简洁的要点回答。"});
+  assert.equal(await evaluate("document.querySelector('#chat-prompt-customization').value"), "");
+  assert.equal(await evaluate("document.querySelector('#chat-prompt-customization-counter').textContent"), "0 / 2048 UTF-8 bytes");
+  assert.deepEqual(await evaluate("window.__ucaStorageCalls"), []);
+  assert.deepEqual(await evaluate("window.__ucaHistoryCalls"), []);
+  assert.equal(
+    await evaluate(`Object.entries(localStorage).some(([key, value]) =>
+      key.includes('prompt') || key.includes('preference') || value.includes('请用简洁的要点回答'))`),
+    false,
+    "request preference must not enter browser storage"
+  );
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
     /变更雷达/
@@ -337,6 +408,9 @@ try {
   assert.doesNotMatch(changeAnswer, /changed_fields|command_id/);
 
   await submitWithEnter("记录事项：提交开题报告");
+  const laterRequest = await evaluate("window.__ucaChatRequests.at(-1)");
+  assert.equal(laterRequest.schema, "ustc-agent-chat-request/v1");
+  assert.equal(Object.hasOwn(laterRequest, "prompt_customization"), false);
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
     /简单日历/
@@ -382,7 +456,7 @@ try {
   assert.doesNotMatch(courseAnswer, /course_codes|command_id/);
 
   await submitWithEnter(
-    "请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，同时记录事项：复习计划",
+    "请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，并列出日历事项",
     true
   );
   assert.equal(await evaluate("document.querySelector('#chat-opportunity-confirm').checked"), false);
@@ -402,7 +476,7 @@ try {
   const fourToolAnswer = await evaluate(
     "document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"
   );
-  for (const signal of ["transcript-certificate", "academic-calendar", "MATH2001", "复习计划"]) {
+  for (const signal of ["transcript-certificate", "academic-calendar", "MATH2001", "当前没有事项"]) {
     assert.match(fourToolAnswer, new RegExp(signal));
   }
 
