@@ -49,17 +49,12 @@ pub(crate) struct ChatRequestDto {
     pub(crate) prompt_customization: PromptCustomizationFieldDto,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub(crate) enum PromptCustomizationFieldDto {
+    #[default]
     Absent,
     Null,
     Value(PromptCustomizationDto),
-}
-
-impl Default for PromptCustomizationFieldDto {
-    fn default() -> Self {
-        Self::Absent
-    }
 }
 
 impl<'de> Deserialize<'de> for PromptCustomizationFieldDto {
