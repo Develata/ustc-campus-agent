@@ -165,7 +165,7 @@ fn deterministic_tool_summaries_disclose_internal_omissions() {
     )
     .unwrap();
     assert!(affairs.contains("另有 1 个步骤未展开"));
-    assert!(affairs.contains("另有 1 个入口未展开"));
+    assert!(affairs.contains("另有 1 个官方入口未展开"));
 
     let fields = (0..7)
         .map(|index| {
