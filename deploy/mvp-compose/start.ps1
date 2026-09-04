@@ -54,12 +54,13 @@ function Assert-MvpDotEnvContract {
   $counts = @{
     UCA_AGENT_PROVIDER = 0
     UCA_AGENT_API_KEY_SOURCE = 0
+    UCA_ADMIN_PASSWORD_HASH_SOURCE = 0
   }
   foreach ($line in [System.IO.File]::ReadAllLines($dotenv)) {
     $trimmed = $line.TrimStart()
     $match = [regex]::Match(
       $trimmed,
-      '^(?:export\s+)?(UCA_AGENT_PROVIDER|UCA_AGENT_API_KEY_SOURCE)(?:\s*=|\s*$)'
+      '^(?:export\s+)?(UCA_AGENT_PROVIDER|UCA_AGENT_API_KEY_SOURCE|UCA_ADMIN_PASSWORD_HASH_SOURCE)(?:\s*=|\s*$)'
     )
     if (-not $match.Success) {
       continue
@@ -101,9 +102,17 @@ function Get-MvpSetting([string]$Name, [string]$DefaultValue) {
   return $DefaultValue
 }
 
+function Show-ComposeDiagnostics {
+  Write-Host "--- docker compose ps -a ---" -ForegroundColor Yellow
+  & docker compose ps -a
+  Write-Host "--- docker compose logs (last 120 lines) ---" -ForegroundColor Yellow
+  & docker compose logs --no-color --tail 120 mvp
+}
+
 Assert-MvpDotEnvContract
 
 $provider = Get-MvpSetting "UCA_AGENT_PROVIDER" "mock"
+$adminUsername = Get-MvpSetting "UCA_ADMIN_USERNAME" "admin"
 if ($provider -eq "openai-compatible") {
   $keySource = Get-MvpSetting "UCA_AGENT_API_KEY_SOURCE" ""
   if ([String]::IsNullOrEmpty($keySource)) {
@@ -134,29 +143,69 @@ if ($LASTEXITCODE -ne 0) {
   throw "Docker Desktop is not running, or the current user cannot connect to Docker Engine."
 }
 
+$adminHashSource = Get-MvpSetting "UCA_ADMIN_PASSWORD_HASH_SOURCE" ".\secrets\admin-password.phc"
+if ([IO.Path]::IsPathRooted($adminHashSource)) {
+  $adminHashPath = [IO.Path]::GetFullPath($adminHashSource)
+} else {
+  $adminHashPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot $adminHashSource))
+}
+$defaultAdminHashPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "secrets\admin-password.phc"))
+if (-not (Test-Path -LiteralPath $adminHashPath -PathType Leaf)) {
+  if (-not $adminHashPath.Equals($defaultAdminHashPath, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "The configured UCA_ADMIN_PASSWORD_HASH_SOURCE does not exist as a regular file."
+  }
+  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "set-admin-password.ps1") -Initial
+  if ($LASTEXITCODE -ne 0) {
+    throw "Local deployment access setup failed."
+  }
+}
+$adminHashItem = Get-Item -LiteralPath $adminHashPath -Force
+if (($adminHashItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+  throw "The local administrator password verifier must not be a symlink or reparse point."
+}
+$adminHash = [IO.File]::ReadAllText($adminHashPath)
+if ($adminHash -notmatch '^\$argon2id\$v=19\$m=19456,t=2,p=1\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}$') {
+  throw "The local administrator password verifier is invalid. Run set-admin-password.cmd."
+}
+$adminHash = $null
+
 & docker compose up --build -d
 if ($LASTEXITCODE -ne 0) {
   throw "docker compose up failed."
 }
 
-$published = (& docker compose port mvp 8787 | Select-Object -First 1)
-if ($LASTEXITCODE -ne 0) {
-  throw "docker compose port failed."
+$port = $null
+$portWatch = [Diagnostics.Stopwatch]::StartNew()
+while ($portWatch.Elapsed.TotalSeconds -lt 30) {
+  $publishedLines = @(& docker compose port mvp 8787 2>$null | Where-Object { -not [String]::IsNullOrWhiteSpace($_) })
+  $portExit = $LASTEXITCODE
+  if ($portExit -eq 0 -and $publishedLines.Count -gt 0) {
+    if ($publishedLines.Count -ne 1 -or $publishedLines[0] -notmatch '^127\.0\.0\.1:([0-9]{1,5})$') {
+      Show-ComposeDiagnostics
+      throw "Unexpected Compose published address; expected exactly one 127.0.0.1:<port> binding."
+    }
+    $candidatePort = [int]$Matches[1]
+    if ($candidatePort -lt 1 -or $candidatePort -gt 65535) {
+      Show-ComposeDiagnostics
+      throw "Invalid Compose published port."
+    }
+    $port = $candidatePort
+    break
+  }
+  Start-Sleep -Seconds 1
 }
-if ($published -notmatch '^127\.0\.0\.1:([0-9]{1,5})$') {
-  throw "Unexpected Compose published address."
-}
-$port = [int]$Matches[1]
-if ($port -lt 1 -or $port -gt 65535) {
-  throw "Invalid Compose published port."
+if ($null -eq $port) {
+  Show-ComposeDiagnostics
+  throw "Timed out waiting for docker compose port mvp 8787 after 30 seconds."
 }
 $url = "http://127.0.0.1:$port"
-$deadline = (Get-Date).AddMinutes(5)
-while ((Get-Date) -lt $deadline) {
+$healthWatch = [Diagnostics.Stopwatch]::StartNew()
+while ($healthWatch.Elapsed.TotalMinutes -lt 5) {
   try {
     $health = Invoke-RestMethod -Uri "$url/healthz" -TimeoutSec 3
     if (($health.schema -eq "ustc-agentd-health/v1") -and ($health.status -eq "ok")) {
       Write-Host "MVP is ready: $url" -ForegroundColor Green
+      Write-Host "Local deployment access username: $adminUsername" -ForegroundColor Green
       try {
         Start-Process -FilePath $url
       } catch {
@@ -164,11 +213,23 @@ while ((Get-Date) -lt $deadline) {
       }
       exit 0
     }
+    Show-ComposeDiagnostics
+    throw "The health endpoint returned an incompatible response."
   } catch {
+    if ($_.Exception.Message -eq "The health endpoint returned an incompatible response.") {
+      throw
+    }
+    $containerId = (& docker compose ps -q mvp 2>$null | Select-Object -First 1)
+    if (-not [String]::IsNullOrWhiteSpace($containerId)) {
+      $containerState = (& docker inspect --format '{{.State.Status}}' $containerId 2>$null | Select-Object -First 1)
+      if ($containerState -eq "exited" -or $containerState -eq "restarting" -or $containerState -eq "dead") {
+        Show-ComposeDiagnostics
+        throw "The MVP container stopped before becoming healthy."
+      }
+    }
     Start-Sleep -Seconds 2
   }
 }
 
-& docker compose ps
-& docker compose logs --no-color --tail 120
+Show-ComposeDiagnostics
 throw "MVP did not pass its health check within 5 minutes."

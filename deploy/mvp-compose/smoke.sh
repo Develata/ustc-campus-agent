@@ -14,14 +14,46 @@ curl_request() {
 curl_health() {
   curl --connect-timeout 1 --max-time 1 --fail --silent "$@"
 }
+auth_curl_request() {
+  curl_request -b "$work/session.cookies" "$@"
+}
+login_local_access() {
+  python3 - "$work/login-request.json" <<'PY'
+import json, pathlib, sys
+pathlib.Path(sys.argv[1]).write_text(json.dumps({
+    'schema': 'ustc-local-access-login/v1',
+    'username': 'admin',
+    'password': 'compose smoke password',
+}), encoding='utf-8')
+PY
+  curl_request -c "$work/session.cookies" \
+    -H 'content-type: application/json' \
+    --data-binary "@$work/login-request.json" \
+    "$base/api/v1/auth/login" > "$work/login.json"
+}
 cleanup() {
   compose down --volumes --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$work"
 }
 trap cleanup EXIT
 
-compose config --quiet
-compose build --pull
+UCA_ADMIN_PASSWORD_HASH_SOURCE=./mock-provider-key.txt compose config --quiet
+UCA_ADMIN_PASSWORD_HASH_SOURCE=./mock-provider-key.txt compose build --pull=false
+admin_hash=$(
+  printf '%s\n' 'Y29tcG9zZSBzbW9rZSBwYXNzd29yZA==' | \
+    docker run --rm -i --pull never --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --user 65532:65532 \
+      --entrypoint /app/ustc-agentctl ustc-campus-agent-mvp:0.1.0 \
+      admin hash-password
+)
+case "$admin_hash" in
+  '$argon2id$v=19$m=19456,t=2,p=1$'*) ;;
+  *) printf 'administrator password hashing returned an invalid verifier\n' >&2; exit 65 ;;
+esac
+printf '%s' "$admin_hash" > "$work/admin-password.phc"
+unset admin_hash
+chmod 0600 "$work/admin-password.phc"
+export UCA_ADMIN_PASSWORD_HASH_SOURCE="$work/admin-password.phc"
 printf '\302\240%s\302\240\r\n' 'unused-placeholder-for-deterministic-mock-mode' > "$work/normalized-mock-provider-key.txt"
 chmod 0600 "$work/normalized-mock-provider-key.txt"
 for key_source in ./mock-provider-key.txt "$work/normalized-mock-provider-key.txt"; do
@@ -91,6 +123,24 @@ import json, pathlib, sys
 value = json.loads(pathlib.Path(sys.argv[1]).read_text())
 assert value == {'schema': 'ustc-agentd-health/v1', 'status': 'ok'}, value
 PY
+unauthorized_status=$(curl --connect-timeout 2 --max-time 10 --silent \
+  --output "$work/unauthorized.json" --write-out '%{http_code}' \
+  -H 'content-type: application/json' \
+  --data-binary '{"schema":"ustc-agent-chat-request/v1","messages":[{"role":"user","content":"hello"}],"opportunity_context":null}' \
+  "$base/api/v1/agent/chat")
+[ "$unauthorized_status" = 401 ] || {
+  printf 'unauthenticated chat returned HTTP %s\n' "$unauthorized_status" >&2
+  exit 1
+}
+login_local_access
+python3 - "$work/login.json" <<'PY'
+import json, pathlib, sys
+value = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert value['schema'] == 'ustc-local-access/v1', value
+assert value['authenticated'] is True, value
+assert value['account']['username'] == 'admin', value
+assert value['provider']['mode'] == 'mock', value
+PY
 curl_request "$base/" > "$work/index.html"
 for marker in 'AFFAIRS NAVIGATOR' 'CHANGE RADAR' 'OPPORTUNITY GRAPH'; do
   grep -Fq "$marker" "$work/index.html"
@@ -121,7 +171,7 @@ pathlib.Path(sys.argv[2]).write_text(json.dumps({
     'opportunity_context': None,
 }), encoding='utf-8')
 PY
-  curl_request \
+  auth_curl_request \
     -H 'content-type: application/json' \
     --data-binary "@$work/chat-request.json" \
     "$base/api/v1/agent/chat" > "$work/chat-$label.json"
@@ -139,7 +189,7 @@ done
 cat > "$work/profile-request.json" <<'JSON'
 {"consent":true,"request_id":"req:compose:profile","correlation_id":"corr:compose:profile","idempotency_key":"idem:compose:profile","consented_at":1787792400000,"completed_courses":["MATH1001","MATH1002","CS1001","PHYS1001"],"min_credits":9,"max_credits":12,"preference_weights":[{"course_code":"MATH2001","weight":9},{"course_code":"MATH2003","weight":8},{"course_code":"CS2006","weight":7},{"course_code":"PHYS2003","weight":5},{"course_code":"HUM2001","weight":4},{"course_code":"GEN2001","weight":3},{"course_code":"LANG2001","weight":2}]}
 JSON
-curl_request \
+auth_curl_request \
   -H 'content-type: application/json' \
   -H 'x-ustc-opportunity-confirmation: confirmed' \
   --data-binary "@$work/profile-request.json" \
@@ -159,7 +209,7 @@ pathlib.Path(sys.argv[2]).write_text(json.dumps({
     'opportunity_context': {'profile_snapshot_id': sys.argv[1]},
 }), encoding='utf-8')
 PY
-curl_request \
+auth_curl_request \
   -H 'content-type: application/json' \
   -H 'x-ustc-opportunity-confirmation: confirmed' \
   --data-binary "@$work/chat-opportunity-request.json" \
@@ -172,7 +222,7 @@ assert value['tool_trace'][0]['status'] == 'succeeded', value
 assert 'MATH2001' in value['answer'], value
 PY
 
-curl_request \
+auth_curl_request \
   -H 'content-type: application/json' \
   -H 'x-ustc-agent-administrator-demo: confirm-v1' \
   -d '{"confirm_publish":true}' \
@@ -190,7 +240,7 @@ assert published['outcome']['kind'] == 'published', published
 assert status['publication_revision'] is not None, status
 assert status['control_evidence_event_count'] > 0, status
 PY
-curl_request \
+auth_curl_request \
   -H 'content-type: application/json' \
   -H 'x-ustc-agent-administrator-demo: confirm-v1' \
   -d '{"confirm_publish":true}' \
@@ -225,6 +275,7 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 [ "$healthy" -eq 1 ] || { printf 'restart health timeout\n' >&2; exit 1; }
+login_local_access
 curl_request \
   -H 'x-ustc-agent-administrator-demo: confirm-v1' \
   "$base/api/v1/demo/administrator/affairs/publication" \
@@ -235,7 +286,7 @@ curl_request \
   "$base/api/v1/demo/administrator/changes/publication" \
   > "$work/change-status-after.json"
 cmp "$work/change-status-before.json" "$work/change-status-after.json"
-curl_request \
+auth_curl_request \
   -H 'content-type: application/json' \
   -H 'x-ustc-opportunity-confirmation: confirmed' \
   --data-binary "@$work/chat-opportunity-request.json" \
@@ -259,6 +310,7 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 [ "$healthy" -eq 1 ] || { printf 'down-up health timeout\n' >&2; exit 1; }
+login_local_access
 curl_request \
   -H 'x-ustc-agent-administrator-demo: confirm-v1' \
   "$base/api/v1/demo/administrator/affairs/publication" \
@@ -269,7 +321,7 @@ curl_request \
   "$base/api/v1/demo/administrator/changes/publication" \
   > "$work/change-status-after-down-up.json"
 cmp "$work/change-status-before.json" "$work/change-status-after-down-up.json"
-curl_request \
+auth_curl_request \
   -H 'content-type: application/json' \
   -H 'x-ustc-opportunity-confirmation: confirmed' \
   --data-binary "@$work/chat-opportunity-request.json" \
@@ -293,6 +345,7 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 [ "$healthy" -eq 1 ] || { printf 'reset health timeout\n' >&2; exit 1; }
+login_local_access
 curl_request \
   -H 'x-ustc-agent-administrator-demo: confirm-v1' \
   "$base/api/v1/demo/administrator/affairs/publication" \
@@ -306,6 +359,7 @@ profile_status=$(curl \
   --max-time 10 \
   --silent \
   --show-error \
+  --cookie "$work/session.cookies" \
   --header 'x-ustc-opportunity-confirmation: confirmed' \
   --output "$work/profile-after-reset.json" \
   --write-out '%{http_code}' \

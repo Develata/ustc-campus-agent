@@ -4,9 +4,7 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 fn current_uid() -> Result<u32, String> {
-    fs::metadata("/proc/self")
-        .map(|metadata| metadata.uid())
-        .map_err(|error| format!("durable state current uid: {error}"))
+    crate::unix_identity::effective_uid()
 }
 
 fn traversal_exposure_after(

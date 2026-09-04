@@ -20,12 +20,14 @@ mod change_publication;
 mod chat_provider;
 mod chat_tools;
 mod durable_path;
+mod local_access;
 mod m00_control_evidence;
 mod m00_session;
 mod opportunity_authority;
 mod opportunity_fixture;
 mod opportunity_persistence;
 mod opportunity_use_case;
+mod unix_identity;
 mod web;
 
 pub use web::web_router;

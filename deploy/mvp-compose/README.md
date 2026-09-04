@@ -8,7 +8,7 @@
 - Simple Calendar：Rust owner-local 事项的记录、列出与删除；
 - Web Chat：默认 deterministic mock provider；自然语言问题可进入以上三个校园产品路径与 Calendar companion。
 
-它不是中国科学技术大学官方服务，不连接真实 USTC 账号，也不会抓取实时网页。
+它不是中国科学技术大学官方服务，不连接真实 USTC 账号，也不会抓取实时网页。首次启动会在本机建立一个 deployment-local `admin` 访问账号；该账号只保护外部模型调用和 tenant-private Opportunity 数据，不等同于 USTC SSO、M00 product identity 或多用户权限系统。
 
 默认 `UCA_AGENT_PROVIDER=mock`，不需要密钥，也不会发起 provider 网络请求。真实 OpenAI-compatible provider 与校园 source 权限相互独立：配置模型接口不会启用任何 USTC live retrieval。
 
@@ -26,13 +26,15 @@ Compose 仅在 `openai-compatible` 模式下处理 secret。由于本地 Compose
 
 本包内置 `linux/amd64` binary；主验收目标是 Windows x64 + Docker Desktop。Intel macOS/Linux 可原生运行，Apple Silicon 由 Docker Desktop 的 amd64 emulation 运行，后者当前属于 best-effort compatibility。
 
+Docker image 默认使用 Ubuntu 官方软件源。若中国网络只能访问 USTC mirror，可在启动前将 `.env` 中的 `UCA_USE_USTC_APT_MIRROR` 设为 `1`；该路径先用 APT 签名校验的 HTTP metadata 安装 CA bundle，随后立即切换到 USTC HTTPS 并重新更新索引。Dockerfile 只接受 `0` 或 `1`，该 build-only 开关不改变运行时 provider。
+
 首次 `docker compose up --build` 需要联网拉取 `ubuntu:24.04`，并在 image build 阶段安装 `ca-certificates`、`curl`、`socat`、`util-linux`；这与 MVP application 的 fixture-only runtime 不同。镜像层已缓存后，后续启动不需要 live source retrieval。
 
 ## Windows 一键启动
 
 1. 启动 Docker Desktop，并等待状态变为 *Engine running*。
-2. 解压本包，双击 `start.cmd`。
-3. 健康检查通过后，launcher 会报告 ready URL 并尝试打开 <http://127.0.0.1:8787>；若系统策略阻止自动打开浏览器，服务仍保持 ready 且脚本成功退出，请手动访问该 URL。
+2. 解压本包，双击 `start.cmd`。首次运行会要求输入并确认至少 12 UTF-8 bytes 的本机密码；launcher 只把该值通过 stdin 交给容器内 `ustc-agentctl admin hash-password`，落盘的是 owner-only Argon2id PHC verifier，明文密码不会写入文件、命令参数、日志或浏览器资源。
+3. 健康检查通过后，launcher 会报告 ready URL 并尝试打开 <http://127.0.0.1:8787>；使用用户名 `admin` 与刚设置的密码登录。若系统策略阻止自动打开浏览器，服务仍保持 ready 且脚本成功退出，请手动访问该 URL。
 
 包内 `.cmd` / `.ps1` 启动脚本刻意只使用 ASCII 字节，兼容仍按系统代码页读取无 BOM 脚本的 Windows PowerShell 5.1。请勿把这些脚本另存为无 BOM 的非 ASCII 文本；需要本地化提示时，应保留这一兼容约束或改用明确的 UTF-8 BOM。
 
@@ -48,13 +50,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
 ./start.sh
 ```
 
-也可直接执行：
+首次启动使用 `start.sh` 建立本机 Argon2id verifier；随后访问 <http://127.0.0.1:8787> 并以 `admin` 登录。直接执行 `docker compose up` 不会为缺失凭据猜测默认密码，而会 fail closed。
 
-```bash
-docker compose up --build -d
-```
+## 本机账号与 CLI 管理
 
-随后访问 <http://127.0.0.1:8787>。
+- 修改密码：Windows 双击 `set-admin-password.cmd`，macOS/Linux 执行 `./set-admin-password.sh`。轮换会重建服务进程，使旧密码与所有旧 session cookie 立即失效。
+- 账号只有 `admin`，不开放网页注册、找回密码或远端管理入口；session 仅驻留服务进程内，空闲 30 分钟或最长 12 小时后失效。
+- `ustc-agentctl` 随镜像交付，并由密码脚本在隔离容器内完成 Argon2id verifier 生成；它不提供绕过登录的 publication HTTP 通道。
+- Affairs / ChangeRadar publication 管理保留在登录后的「工具与证据」视图；发布 demo revision 仍需页面中的显式确认，登录本身不替代 authority contract。
 
 ## 建议测试顺序
 
@@ -78,7 +81,7 @@ docker compose down
 
 Windows 也可双击 `stop.cmd`。
 
-彻底删除本 MVP 的 Docker volume 并回到初始状态：
+彻底删除本 MVP 的 Docker volume、local admin verifier 并回到初始状态：
 
 ```bash
 ./reset.sh

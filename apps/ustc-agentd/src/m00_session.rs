@@ -145,10 +145,7 @@ fn validate_parent(path: &Path) -> Result<(), SessionRepositoryError> {
 
 #[cfg(unix)]
 fn current_uid() -> Result<u32, SessionRepositoryError> {
-    use std::os::unix::fs::MetadataExt;
-    std::fs::metadata("/proc/self")
-        .map(|metadata| metadata.uid())
-        .map_err(|_| SessionRepositoryError::Unavailable)
+    crate::unix_identity::effective_uid().map_err(|_| SessionRepositoryError::Unavailable)
 }
 
 #[cfg(unix)]

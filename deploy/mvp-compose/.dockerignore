@@ -2,6 +2,7 @@
 !Dockerfile
 !bin/
 !bin/ustc-agentd
+!bin/ustc-agentctl
 !container-entrypoint.sh
 !fixtures/
 !fixtures/**

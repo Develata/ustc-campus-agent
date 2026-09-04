@@ -14,4 +14,5 @@ if [ "$answer" != RESET ]; then
 fi
 
 docker compose down --volumes
-printf 'MVP reset complete. All local test state was deleted.\n'
+rm -f -- secrets/admin-password.phc
+printf 'MVP reset complete. Local test state and the local access password were deleted.\n'

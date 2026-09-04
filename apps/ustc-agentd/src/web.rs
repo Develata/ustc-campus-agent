@@ -35,8 +35,11 @@ use ustc_campus_agent_client_protocol::{
 use super::agent_chat::{ChatError, ChatRequestDto, run_bounded_chat};
 use super::chat_provider::ChatProvider;
 use super::chat_tools::{CalendarAction, ChatToolExecution, ChatToolRequest};
+use super::local_access::LocalAccessControl;
 use super::{AffairsComposition, parse_loopback_socket_addr};
 use ustc_campus_agent_simple_calendar::CalendarError;
+
+mod local_access_routes;
 
 const INDEX_HTML: &str = include_str!("web/index.html");
 const APP_JS: &str = include_str!("web/app.js");
@@ -52,14 +55,20 @@ struct WebState {
     composition: Arc<Mutex<AffairsComposition>>,
     next_request: Arc<AtomicU64>,
     chat_provider: ChatProvider,
+    local_access: LocalAccessControl,
 }
 
 impl WebState {
-    fn new(composition: Arc<Mutex<AffairsComposition>>, chat_provider: ChatProvider) -> Self {
+    fn new(
+        composition: Arc<Mutex<AffairsComposition>>,
+        chat_provider: ChatProvider,
+        local_access: LocalAccessControl,
+    ) -> Self {
         Self {
             composition,
             next_request: Arc::new(AtomicU64::new(1)),
             chat_provider,
+            local_access,
         }
     }
 
@@ -635,33 +644,32 @@ async fn admit_loopback_request(request: Request, next: Next) -> Response {
 }
 
 /// Builds the bounded same-origin Web router over one composition.
-pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Router {
-    web_router_with_provider(composition, ChatProvider::deterministic_mock())
+pub fn web_router(composition: Arc<Mutex<AffairsComposition>>) -> Result<Router, String> {
+    let local_access = LocalAccessControl::from_env()
+        .map_err(|_| "local access configuration invalid".to_owned())?;
+    Ok(web_router_with_provider(
+        composition,
+        ChatProvider::deterministic_mock(),
+        local_access,
+    ))
 }
 
 fn web_router_with_provider(
     composition: Arc<Mutex<AffairsComposition>>,
     chat_provider: ChatProvider,
+    local_access: LocalAccessControl,
 ) -> Router {
-    Router::new()
-        .route("/", get(index))
-        .route("/assets/app.js", get(app_js))
-        .route("/assets/styles.css", get(styles_css))
-        .route("/healthz", get(healthz))
-        .route("/api/v1/server/info", get(server_info))
-        .route("/api/v1/client/capabilities", get(capability_list))
+    let state = WebState::new(composition, chat_provider, local_access);
+    let protected = Router::new()
         .route("/api/v1/agent/chat", post(agent_chat))
-        .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
         .route(
             "/api/v1/demo/administrator/affairs/publication",
-            get(affairs_publication_status).post(affairs_publication_publish),
+            post(affairs_publication_publish),
         )
         .route(
             "/api/v1/demo/administrator/changes/publication",
-            get(change_publication_status).post(change_publication_publish),
+            post(change_publication_publish),
         )
-        .route("/api/v1/changes/{board_id}", get(change_feed_get))
-        .route("/api/v1/changes/{board_id}/atom", get(change_feed_atom))
         .route(
             "/api/v1/opportunity/profiles",
             post(opportunity_profile_create),
@@ -675,9 +683,35 @@ fn web_router_with_provider(
             "/api/v1/opportunity/profiles/{profile_id}/revoke-delete",
             post(opportunity_profile_delete),
         )
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            local_access_routes::require,
+        ));
+    Router::new()
+        .route("/", get(index))
+        .route("/assets/app.js", get(app_js))
+        .route("/assets/styles.css", get(styles_css))
+        .route("/healthz", get(healthz))
+        .route("/api/v1/server/info", get(server_info))
+        .route("/api/v1/client/capabilities", get(capability_list))
+        .route("/api/v1/auth/session", get(local_access_routes::session))
+        .route("/api/v1/auth/login", post(local_access_routes::login))
+        .route("/api/v1/auth/logout", post(local_access_routes::logout))
+        .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
+        .route(
+            "/api/v1/demo/administrator/affairs/publication",
+            get(affairs_publication_status),
+        )
+        .route(
+            "/api/v1/demo/administrator/changes/publication",
+            get(change_publication_status),
+        )
+        .route("/api/v1/changes/{board_id}", get(change_feed_get))
+        .route("/api/v1/changes/{board_id}/atom", get(change_feed_atom))
+        .merge(protected)
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(middleware::from_fn(admit_loopback_request))
-        .with_state(WebState::new(composition, chat_provider))
+        .with_state(state)
 }
 
 impl AffairsComposition {
@@ -689,6 +723,8 @@ impl AffairsComposition {
     pub async fn serve_web(self, bind_addr: &str) -> Result<(), String> {
         let chat_provider = ChatProvider::from_env()
             .map_err(|_| "agent provider configuration invalid".to_owned())?;
+        let local_access = LocalAccessControl::from_env()
+            .map_err(|_| "local access configuration invalid".to_owned())?;
         let socket_addr = parse_loopback_socket_addr(bind_addr)?;
         let listener = tokio::net::TcpListener::bind(socket_addr)
             .await
@@ -703,7 +739,7 @@ impl AffairsComposition {
             .map_err(|error| format!("stdout flush failed: {error}"))?;
         axum::serve(
             listener,
-            web_router_with_provider(Arc::new(Mutex::new(self)), chat_provider),
+            web_router_with_provider(Arc::new(Mutex::new(self)), chat_provider, local_access),
         )
         .await
         .map_err(|error| format!("web serve failed: {error}"))
@@ -1125,13 +1161,7 @@ fn affairs_response_status(response: &ClientResponseDto) -> StatusCode {
     }
 }
 
-async fn affairs_publication_status(State(state): State<WebState>, headers: HeaderMap) -> Response {
-    if !administrator_demo_header_authorized(&headers) {
-        return web_error(
-            StatusCode::FORBIDDEN,
-            "administrator_demo_confirmation_required",
-        );
-    }
+async fn affairs_publication_status(State(state): State<WebState>) -> Response {
     match state.publication_status() {
         Ok(status) => typed_json_response(StatusCode::OK, status),
         Err(_) => web_error(
@@ -1187,13 +1217,7 @@ fn opportunity_confirmation(headers: &HeaderMap) -> OpportunityConfirmationDto {
     }
 }
 
-async fn change_publication_status(State(state): State<WebState>, headers: HeaderMap) -> Response {
-    if !administrator_demo_header_authorized(&headers) {
-        return web_error(
-            StatusCode::FORBIDDEN,
-            "administrator_demo_confirmation_required",
-        );
-    }
+async fn change_publication_status(State(state): State<WebState>) -> Response {
     match state.change_publication_status() {
         Ok(status) => typed_json_response(StatusCode::OK, status),
         Err(_) => web_error(

@@ -832,8 +832,7 @@ fn validate_idempotency_state(state: &IdempotencyState) -> Result<(), String> {
 }
 
 fn idempotency_current_uid() -> Result<u32, String> {
-    fs::metadata("/proc/self")
-        .map(|metadata| metadata.uid())
+    crate::unix_identity::effective_uid()
         .map_err(|error| format!("idempotency current uid failed: {error}"))
 }
 

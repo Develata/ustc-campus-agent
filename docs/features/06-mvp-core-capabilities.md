@@ -15,6 +15,7 @@ The MVP follows four rules:
 
 ```text
 Browser or Android demo WebView (loopback only)
+  → local deployment-access login (no registration or USTC SSO)
   → POST /api/v1/agent/chat
   → bounded ChatRun
   → deterministic mock or OpenAI-compatible provider
@@ -29,13 +30,15 @@ Browser or Android demo WebView (loopback only)
 
 The default mock mode needs no API key and is intended for deterministic judging and offline acceptance. For every known successful tool shape it emits a server-owned bounded Chinese summary—procedure steps and official entry points, changed fields, course candidates and iCourse link-outs, or Calendar mutations—rather than transport JSON. Shape drift becomes an explicit summary-contract notice. The real-provider mode uses the same tool definitions and Rust executor; the key remains file-backed and server-side.
 
+The browser is a chat-first application shell rather than a landing dashboard: desktop uses a quiet left rail, central message stream and bottom composer; mobile collapses the rail into a drawer. Campus tools and fixture diagnostics remain a secondary view. The local account protects Chat/provider use and tenant-private Opportunity routes, stores only an Argon2id verifier, and loses its opaque browser sessions on restart or password rotation. It does not register users, connect USTC accounts, create M00 authority or provide production multi-tenant authentication.
+
 The debug Android APK is a thin presentation bridge over this exact route. It reaches the host loopback service through explicit `adb reverse`, contains no local tool or product implementation, and exposes native loading/offline/retry/server-origin controls. See [`07-android-demo-client.md`](07-android-demo-client.md).
 
 ## 3. Capability matrix
 
 ### Normal Agent Q&A
 
-- Multi-turn page-local conversation with bounded history.
+- Multi-turn page-local conversation with bounded history and explicit New chat clearing; no durable conversation list is shown.
 - Deterministic offline response or explicitly configured OpenAI-compatible Chat Completions provider; both cross the complete loopback HTTP route in retained tests.
 - Maximum 3 provider turns, 4 tool calls, 4 KiB arguments per call, 64 KiB result per call and 16 KiB final answer.
 - The deterministic provider uses tool-aware human summaries with fair per-result budgets, so a large course plan neither exposes protocol plumbing nor erases a later Calendar result.
@@ -117,6 +120,7 @@ Every admitted tool-backed request should show a readable summary and successful
 - Replace synthetic course catalog/profile fixtures with versioned approved USTC sources.
 - Define and implement lawful, rate-limited community-signal ingestion with source freshness and deletion policy; retain derived metadata rather than review text where possible.
 - Add production authentication, tenant isolation, CSRF/session controls and durable consent/grant administration.
+- Replace the bounded loopback local-access account with production HTTPS identity/session integration; the demo login is not that milestone.
 - Complete generic Market installation, grant and isolated plugin execution rather than the loopback static catalogue.
 
 ### P1 — product completeness

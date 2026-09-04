@@ -3,22 +3,24 @@ set -euo pipefail
 umask 022
 
 usage() {
-  printf 'usage: %s --binary PATH --output-dir DIR --source-commit SHA\n' "$0" >&2
+  printf 'usage: %s --binary PATH --operator-binary PATH --output-dir DIR --source-commit SHA\n' "$0" >&2
   exit 64
 }
 
 binary=
+operator_binary=
 output_dir=
 source_commit=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --binary) [ "$#" -ge 2 ] || usage; binary=$2; shift 2 ;;
+    --operator-binary) [ "$#" -ge 2 ] || usage; operator_binary=$2; shift 2 ;;
     --output-dir) [ "$#" -ge 2 ] || usage; output_dir=$2; shift 2 ;;
     --source-commit) [ "$#" -ge 2 ] || usage; source_commit=$2; shift 2 ;;
     *) usage ;;
   esac
 done
-[ -n "$binary" ] && [ -n "$output_dir" ] && [ -n "$source_commit" ] || usage
+[ -n "$binary" ] && [ -n "$operator_binary" ] && [ -n "$output_dir" ] && [ -n "$source_commit" ] || usage
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 case "$source_commit" in
@@ -43,6 +45,10 @@ fi
   printf 'binary must be an executable regular non-symlink file: %s\n' "$binary" >&2
   exit 66
 }
+[ -f "$operator_binary" ] && [ ! -L "$operator_binary" ] && [ -x "$operator_binary" ] || {
+  printf 'operator binary must be an executable regular non-symlink file: %s\n' "$operator_binary" >&2
+  exit 66
+}
 [ ! -e "$output_dir" ] && [ ! -L "$output_dir" ] || {
   printf 'output path already exists: %s\n' "$output_dir" >&2
   exit 73
@@ -56,6 +62,16 @@ binary_version=$("$binary" --version)
 binary_source_commit=$("$binary" source-commit)
 [ "$binary_source_commit" = "$source_commit" ] || {
   printf 'binary source commit mismatch: expected %s got %s\n' "$source_commit" "$binary_source_commit" >&2
+  exit 65
+}
+operator_binary_version=$("$operator_binary" --version)
+[ "$operator_binary_version" = 'ustc-agentctl 0.1.0' ] || {
+  printf 'unexpected operator binary version: %s\n' "$operator_binary_version" >&2
+  exit 65
+}
+operator_binary_source_commit=$("$operator_binary" source-commit)
+[ "$operator_binary_source_commit" = "$source_commit" ] || {
+  printf 'operator binary source commit mismatch: expected %s got %s\n' "$source_commit" "$operator_binary_source_commit" >&2
   exit 65
 }
 python3 - "$binary" <<'PY'
@@ -89,7 +105,7 @@ if interpreters != [b'/lib64/ld-linux-x86-64.so.2']:
     raise SystemExit(f'binary must use the x86-64 GNU/Linux loader, got {interpreters!r}')
 PY
 
-template_files=(.dockerignore Dockerfile compose.yaml container-entrypoint.sh .env.example README.md mock-provider-key.txt smoke.sh start.ps1 start.cmd start.sh stop.ps1 stop.cmd reset.ps1 reset.cmd reset.sh)
+template_files=(.dockerignore Dockerfile compose.yaml container-entrypoint.sh .env.example README.md mock-provider-key.txt smoke.sh start.ps1 start.cmd start.sh stop.ps1 stop.cmd reset.ps1 reset.cmd reset.sh set-admin-password.ps1 set-admin-password.cmd set-admin-password.sh)
 for file in "${template_files[@]}"; do
   source_path="$repo_root/deploy/mvp-compose/$file"
   [ -f "$source_path" ] && [ ! -L "$source_path" ] || {
@@ -102,7 +118,7 @@ from pathlib import Path
 import sys
 
 root = Path(sys.argv[1])
-for name in ('start.ps1', 'stop.ps1', 'reset.ps1', 'start.cmd', 'stop.cmd', 'reset.cmd'):
+for name in ('start.ps1', 'stop.ps1', 'reset.ps1', 'set-admin-password.ps1', 'start.cmd', 'stop.cmd', 'reset.cmd', 'set-admin-password.cmd'):
     path = root / name
     raw = path.read_bytes()
     if raw.startswith((b'\xef\xbb\xbf', b'\xff\xfe', b'\xfe\xff')):
@@ -162,10 +178,12 @@ for file in "${template_files[@]}"; do
 done
 
 install -m 0755 "$binary" "$package_dir/bin/ustc-agentd"
+install -m 0755 "$operator_binary" "$package_dir/bin/ustc-agentctl"
 install -m 0755 "$repo_root/deploy/mvp-compose/container-entrypoint.sh" "$package_dir/container-entrypoint.sh"
 install -m 0755 "$repo_root/deploy/mvp-compose/smoke.sh" "$package_dir/smoke.sh"
 install -m 0755 "$repo_root/deploy/mvp-compose/start.sh" "$package_dir/start.sh"
 install -m 0755 "$repo_root/deploy/mvp-compose/reset.sh" "$package_dir/reset.sh"
+install -m 0755 "$repo_root/deploy/mvp-compose/set-admin-password.sh" "$package_dir/set-admin-password.sh"
 install -m 0644 "$repo_root/fixtures/affairs/proc-011-reviewed.json" "$package_dir/fixtures/affairs/proc-011-reviewed.json"
 install -m 0644 "$repo_root/fixtures/change-radar/academic-calendar-demo-reviewed.json" "$package_dir/fixtures/change-radar/academic-calendar-demo-reviewed.json"
 install -m 0644 "$repo_root/fixtures/change-radar/evidence/academic-calendar-r1.reviewed.txt" "$package_dir/fixtures/change-radar/evidence/academic-calendar-r1.reviewed.txt"
@@ -174,7 +192,7 @@ install -m 0644 "$repo_root/fixtures/change-radar/evidence/academic-calendar-r2.
 install -m 0644 "$repo_root/fixtures/change-radar/evidence/academic-calendar-r2.normalized.json" "$package_dir/fixtures/change-radar/evidence/academic-calendar-r2.normalized.json"
 install -m 0644 "$repo_root/fixtures/opportunity-graph/course-planning-demo-reviewed.json" "$package_dir/fixtures/opportunity-graph/course-planning-demo-reviewed.json"
 install -m 0644 "$repo_root/market/fixtures/course-planning/minimal-v0.json" "$package_dir/market/fixtures/course-planning/minimal-v0.json"
-printf 'UCA_MVP_PORT=8787\nUCA_SOURCE_COMMIT=%s\nUCA_AGENT_PROVIDER=mock\nUCA_AGENT_BASE_URL=\nUCA_AGENT_MODEL=\nUCA_AGENT_TIMEOUT_MS=15000\nUCA_AGENT_CONTEXT_TOKENS=131072\nUCA_AGENT_API_KEY_SOURCE=./mock-provider-key.txt\n' "$source_commit" > "$package_dir/.env"
+printf 'UCA_MVP_PORT=8787\nUCA_USE_USTC_APT_MIRROR=0\nUCA_SOURCE_COMMIT=%s\nUCA_AGENT_PROVIDER=mock\nUCA_AGENT_BASE_URL=\nUCA_AGENT_MODEL=\nUCA_AGENT_TIMEOUT_MS=15000\nUCA_AGENT_CONTEXT_TOKENS=131072\nUCA_ADMIN_USERNAME=admin\nUCA_ADMIN_PASSWORD_HASH_SOURCE=./secrets/admin-password.phc\nUCA_AGENT_API_KEY_SOURCE=./mock-provider-key.txt\n' "$source_commit" > "$package_dir/.env"
 printf '%s\n' \
   'schema=ustc-campus-agent-mvp-compose-build/v1' \
   'package_version=0.2.0' \
@@ -205,7 +223,7 @@ import sys
 
 root = Path(sys.argv[1])
 for path in sorted(root.rglob('*')):
-    if not path.is_file() or path.name == 'ustc-agentd':
+    if not path.is_file() or path.name in {'ustc-agentd', 'ustc-agentctl'}:
         continue
     raw = path.read_bytes()
     if b'UCA_AGENT_API_KEY=' in raw or b'Authorization: Bearer ' in raw:

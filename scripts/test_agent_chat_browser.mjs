@@ -1,22 +1,41 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { spawn, spawnSync } from "node:child_process";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const repo = resolve(new URL("..", import.meta.url).pathname);
 const binary = resolve(process.argv[2] ?? "target/debug/ustc-agentd");
 const port = 18790;
 const base = `http://127.0.0.1:${port}`;
 const work = await mkdtemp(join(tmpdir(), "uca-agent-chat-browser-"));
+const operatorBinary = join(dirname(binary), "ustc-agentctl");
+const testPassword = "browser smoke password";
+const passwordHashPath = join(work, "admin-password.phc");
 
 await access(binary);
+await access(operatorBinary);
+const hashResult = spawnSync(operatorBinary, ["admin", "hash-password"], {
+  cwd: repo,
+  input: `${Buffer.from(testPassword, "utf8").toString("base64")}\n`,
+  encoding: "utf8",
+  timeout: 30_000
+});
+if (hashResult.status !== 0 || !/^\$argon2id\$v=19\$m=19456,t=2,p=1\$/.test(hashResult.stdout.trim())) {
+  throw new Error(`operator password hash failed (${hashResult.status}): ${hashResult.stderr}`);
+}
+await writeFile(passwordHashPath, hashResult.stdout.trim(), { encoding: "utf8", mode: 0o600 });
 
 const boundedOutput = (current, chunk) => `${current}${chunk}`.slice(-32768);
 let serverOutput = "";
 let chromeOutput = "";
-const serverEnv = { ...process.env, UCA_AGENT_PROVIDER: "mock" };
+const serverEnv = {
+  ...process.env,
+  UCA_AGENT_PROVIDER: "mock",
+  UCA_ADMIN_USERNAME: "admin",
+  UCA_ADMIN_PASSWORD_HASH_FILE: passwordHashPath
+};
 for (const name of [
   "UCA_AGENT_BASE_URL",
   "UCA_AGENT_MODEL",
@@ -69,6 +88,10 @@ async function waitForHealth() {
 }
 
 async function findChrome() {
+  if (process.env.CHROME_BIN) {
+    await access(process.env.CHROME_BIN);
+    return process.env.CHROME_BIN;
+  }
   const candidates = [
     process.env.CHROME_BIN,
     "/usr/bin/google-chrome",
@@ -204,7 +227,7 @@ try {
     await cdp.send("Page.reload", {}, sessionId);
     for (let attempt = 0; attempt < 200; attempt += 1) {
       try {
-        if (await evaluate(`document.readyState === 'complete' && performance.timeOrigin !== ${previousTimeOrigin}`)) {
+        if (await evaluate(`document.readyState === 'complete' && performance.timeOrigin !== ${previousTimeOrigin} && document.querySelector('#app-shell')?.hidden === false`)) {
           return;
         }
       } catch (_) {
@@ -240,6 +263,27 @@ try {
   };
 
   await waitFor("document.readyState === 'complete'", "document load");
+  await waitFor("document.querySelector('#login-screen')?.hidden === false", "logged-out screen");
+  assert.equal(await evaluate("document.querySelector('#app-shell')?.hidden"), true);
+  if (process.env.UCA_BROWSER_LOGIN_SCREENSHOT) {
+    const screenshot = await cdp.send(
+      "Page.captureScreenshot",
+      { format: "png", fromSurface: true },
+      sessionId
+    );
+    await writeFile(
+      process.env.UCA_BROWSER_LOGIN_SCREENSHOT,
+      Buffer.from(screenshot.data, "base64")
+    );
+  }
+  await evaluate(`(() => {
+    document.querySelector('#login-username').value = 'admin';
+    document.querySelector('#login-password').value = ${JSON.stringify(testPassword)};
+    document.querySelector('#login-form').requestSubmit();
+  })()`);
+  await waitFor("document.querySelector('#app-shell')?.hidden === false", "authenticated shell");
+  assert.equal(await evaluate("document.querySelector('#login-password').value"), "");
+  assert.match(await evaluate("document.querySelector('#provider-status').textContent"), /Mock/);
   assert.equal(await evaluate("document.querySelector('#chat-form')?.tagName"), "FORM");
   assert.equal(await evaluate("document.querySelector('#chat-messages')?.getAttribute('aria-live')"), "polite");
   assert.equal(await evaluate("document.querySelector('#chat-error')?.getAttribute('role')"), "alert");
@@ -442,10 +486,34 @@ try {
   );
   assert.equal(await evaluate("document.querySelectorAll('.chat-message').length"), 12, "DOM transcript must remain bounded");
 
+  if (process.env.UCA_BROWSER_DESKTOP_SCREENSHOT) {
+    const screenshot = await cdp.send(
+      "Page.captureScreenshot",
+      { format: "png", fromSurface: true },
+      sessionId
+    );
+    await writeFile(
+      process.env.UCA_BROWSER_DESKTOP_SCREENSHOT,
+      Buffer.from(screenshot.data, "base64")
+    );
+  }
+
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: 390, height: 844, deviceScaleFactor: 1, mobile: true
   }, sessionId);
+  await new Promise((resolve) => setTimeout(resolve, 250));
   assert.equal(await evaluate("document.documentElement.scrollWidth <= 390"), true, "390px layout must not overflow");
+  if (process.env.UCA_BROWSER_MOBILE_SCREENSHOT) {
+    const screenshot = await cdp.send(
+      "Page.captureScreenshot",
+      { format: "png", fromSurface: true },
+      sessionId
+    );
+    await writeFile(
+      process.env.UCA_BROWSER_MOBILE_SCREENSHOT,
+      Buffer.from(screenshot.data, "base64")
+    );
+  }
   await cdp.send("Emulation.setEmulatedMedia", {
     features: [{ name: "prefers-reduced-motion", value: "reduce" }]
   }, sessionId);

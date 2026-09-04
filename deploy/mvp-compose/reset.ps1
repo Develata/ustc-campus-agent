@@ -11,4 +11,8 @@ if ($answer -cne "RESET") {
 
 & docker compose down --volumes
 if ($LASTEXITCODE -ne 0) { throw "docker compose down --volumes failed." }
-Write-Host "MVP state has been reset."
+$adminHashPath = Join-Path $PSScriptRoot "secrets\admin-password.phc"
+if (Test-Path -LiteralPath $adminHashPath) {
+  Remove-Item -LiteralPath $adminHashPath -Force
+}
+Write-Host "MVP state and local deployment access password have been reset."

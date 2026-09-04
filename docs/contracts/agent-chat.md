@@ -16,6 +16,7 @@
 
 ```text
 Composition-owned static Web Chat shell (not M80 module evidence)
+→ M10 deployment-local login/session admission
 → M10 POST /api/v1/agent/chat
 → M30 bounded in-memory coordinator
 → M50 deterministic mock or operator-configured OpenAI-compatible adapter
@@ -26,11 +27,40 @@ Composition-owned static Web Chat shell (not M80 module evidence)
 → natural-language answer + redacted tool trace
 ```
 
-The server owns request validation, provider selection, budgets, tool registration and product composition. The browser and provider mint no route, tenant, user, grant, profile, source, publication or administrator authority. The three campus-data tools use only reviewed repository fixtures; the planner fixture includes bounded public iCourse aggregate-rating link-outs as orientation-level soft evidence but no copied review text. The Calendar tool uses only owner-local state. This contract grants no USTC network or real-source activation permission.
+The server owns local-access admission, request validation, provider selection, budgets, tool registration and product composition. The browser and provider mint no route, tenant, user, grant, profile, source, publication or administrator authority. The local-access username is only a deployment gate for this loopback product shell; it is not M00 identity or domain authorization. The three campus-data tools use only reviewed repository fixtures; the planner fixture includes bounded public iCourse aggregate-rating link-outs as orientation-level soft evidence but no copied review text. The Calendar tool uses only owner-local state. This contract grants no USTC network or real-source activation permission.
 
-## 2. HTTP request
+## 2. Deployment-local access session
 
-`POST /api/v1/agent/chat` accepts `application/json` only, under the router's 16 KiB complete-body limit. The loopback router requires a `Host` authority whose host is `localhost` or a numeric loopback IP (`127.0.0.0/8` or `::1`) and contains no userinfo; when `Origin` is present it must be the same HTTP authority. Invalid Host or cross-origin requests fail before provider or tool I/O.
+The Compose profile requires exactly one local username and one Argon2id PHC password verifier. It offers login and logout, but no registration, password recovery, role management, USTC SSO/CAS, multi-user tenancy or durable browser-session recovery.
+
+Server-only configuration is:
+
+| Key | Contract |
+|---|---|
+| `UCA_ADMIN_USERNAME` | required 1–64 byte printable ASCII username; default package value `admin` |
+| `UCA_ADMIN_PASSWORD_HASH_FILE` | required `serve-web` secret-file reference to a regular non-symlink owner-readable file containing exactly one bounded Argon2id PHC verifier |
+
+The verifier uses Argon2id v19, a random salt, a 32-byte output and server-admitted parameter bounds. Raw passwords are accepted only by the JSON login body and the operator's interactive hash-generation process; they never enter argv, files, browser storage, logs, response diagnostics, image layers, archives or tracked configuration. The operator CLI emits only the PHC verifier. Password comparison and session-token lookup use constant-time cryptographic verification.
+
+`GET /api/v1/auth/session` returns HTTP `200` with the closed `ustc-local-access/v1` envelope. It reports `authenticated`, and only when true includes the configured username plus safe provider mode/model identity. It never returns the password verifier, token, provider key or internal expiry timestamps.
+
+`POST /api/v1/auth/login` requires `application/json` and accepts only:
+
+```json
+{"schema":"ustc-local-access-login/v1","username":"admin","password":"..."}
+```
+
+Username and password are nonblank, contain no U+0000 and are bounded to 64 and 1024 UTF-8 bytes respectively. Invalid shape returns `400 invalid_login_request`. Invalid credentials return the same `401 invalid_credentials` response regardless of which field mismatched. Five consecutive failures enter one 60-second loopback-wide cooldown returning `429 rate_limited`; a successful login resets the counter. No diagnostic echoes submitted credentials.
+
+A successful login mints a 256-bit OS-random opaque token, retains only its SHA-256 lookup digest in process memory, and returns `Set-Cookie: uca_session=<base64url>; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200`. At most eight current sessions exist; each has a 30-minute idle and 12-hour absolute deadline. Access refreshes only the idle deadline within the absolute bound. Daemon restart, password rotation, expiry and `POST /api/v1/auth/logout` invalidate the session. Logout clears the cookie and is idempotent.
+
+The login/session/logout handlers, `POST /api/v1/agent/chat`, every `/api/v1/opportunity/*` route and both administrator-publication `POST` routes require the same loopback Host and same-authority Origin admission as the rest of the router. Chat, Opportunity and administrator-publication mutations additionally require the unexpired cookie and otherwise return HTTP `401` with `{"schema":"ustc-local-access/v1","error":"authentication_required"}` before provider, profile or product I/O. SameSite Strict, JSON-only mutation requests and Origin admission form the bounded CSRF control for this HTTP-only loopback profile; production HTTPS must additionally set `Secure`.
+
+Static assets, `/healthz`, protocol bootstrap/capability routes, public Affairs/ChangeRadar reads and administrator-publication `GET` status projections remain outside this local-access gate. Each publication `POST` requires both the local-access cookie and its existing explicit confirmation header; the cookie admits the loopback caller but does not itself infer M00 administrator authority. The operator CLI therefore retains public-read diagnostics but receives fail-closed `401` for an unauthenticated publication attempt.
+
+## 3. HTTP Chat request
+
+`POST /api/v1/agent/chat` accepts `application/json` only, under the router's 16 KiB complete-body limit, after the local-access session gate. The loopback router requires a `Host` authority whose host is `localhost` or a numeric loopback IP (`127.0.0.0/8` or `::1`) and contains no userinfo; when `Origin` is present it must be the same HTTP authority. Invalid Host, cross-origin or unauthenticated requests fail before provider or tool I/O.
 
 ```json
 {
@@ -55,7 +85,7 @@ The request is closed:
 
 The profile snapshot ID and header are non-authoritative hints. The browser applies the same nonblank/NUL/4 KiB bound before enabling a restored `localStorage` hint and removes an invalid persisted value. The server still checks current session, tenant/user ownership, consent, Market state and source currentness through the existing Opportunity composition.
 
-## 3. HTTP response and errors
+## 4. HTTP Chat response and errors
 
 Success is closed by this shape:
 
@@ -98,7 +128,7 @@ internal_chat_error
 
 Provider diagnostics and secret-bearing values never enter the response.
 
-## 4. Provider profile and transport
+## 5. Provider profile and transport
 
 Runtime configuration is server-only:
 
@@ -121,7 +151,7 @@ Before network I/O the adapter serializes the complete wire request and applies 
 
 A successful provider message must carry the exact `assistant` role and either nonblank final text or function calls. Missing/non-assistant roles, malformed JSON, empty/multiple choices, invalid call objects and oversized output map to `provider_protocol_error`. HTTP 401/403, 429, timeout and remaining non-success transport classes map to their stable errors without returning the raw body. The deterministic mock derives its wording from server-owned tool status/data. An operator-selected real provider remains an untrusted text generator: the server preserves the independently rendered tool-trace status but cannot prove that arbitrary provider prose describes a denied/failed result honestly; operators must treat the trace as authoritative.
 
-## 5. Bounded sequential loop
+## 6. Bounded sequential loop
 
 One accepted request creates one finite in-memory `ChatRun` and pins:
 
@@ -136,7 +166,7 @@ Each provider turn yields either a nonblank final answer with no tool calls, or 
 
 Tool output is bounded typed M10 data wrapped as untrusted provider input. It cannot add tools, messages or policy. Failure to produce a valid final answer within the turn budget is explicit failure, not partial success.
 
-## 6. Exact tool map
+## 7. Exact tool map
 
 ### `affairs_navigator_get`
 
@@ -156,21 +186,23 @@ Input is exactly `{}`. This definition is omitted unless the exact request has b
 
 The model cannot create, view, edit, consent to, revoke or delete a profile; choose a different profile ID; or add courses outside deterministic planner output. A stale, missing, disabled, revoked, cross-principal or otherwise denied current profile returns a bounded non-success tool result.
 
-## 7. Web, Compose and package projection
+## 8. Web, Compose and package projection
 
-The thin static browser owns only page-lifetime draft/history presentation. It sends bounded user/assistant history, renders loading/final/error/tool-trace states, provides an explicit local-conversation clear control, and includes Opportunity context only after profile creation plus explicit checkbox confirmation. It never receives or stores the provider key. Keyboard submit, visible focus, reduced motion and 390 px/mobile-to-desktop layout remain required.
+The thin static browser is a chat-first application shell and owns only local login presentation plus page-lifetime draft/history presentation. Desktop uses a restrained left rail, central message stream and bottom composer; mobile collapses the rail into a keyboard-accessible drawer. The rail exposes only real behavior: New chat, current Chat, a secondary campus-tools/diagnostics view, safe provider mode and local-account logout. It never fabricates saved conversations, projects or durable history. The shell sends bounded user/assistant history, renders loading/final/error/tool-trace states, visually labels tool trace as authoritative evidence, provides an explicit local-conversation clear control, and includes Opportunity context only after profile creation plus explicit checkbox confirmation. It never receives or stores the provider key, password, password verifier or session token outside the `HttpOnly` cookie. Keyboard submit, visible focus, reduced motion and 320/390 px/mobile-to-desktop layout remain required.
 
 The Compose package:
 
 - publishes only `127.0.0.1:${UCA_MVP_PORT}:8787`;
 - defaults to deterministic mock with no provider network call;
+- requires an operator-created Argon2id verifier secret, supports interactive setup/rotation without raw password argv/files/logs and copies only the verifier into ephemeral owner-only runtime storage;
 - mounts a provider key source read-only, copies it only in OpenAI-compatible mode into an ephemeral mode-0600 tmpfs file, uses only a non-secret placeholder in mock mode and rejects that placeholder in real-provider mode;
 - persists product and Simple Calendar state in a named volume across `stop`/restart;
+- invalidates in-memory browser sessions on restart or credential rotation while preserving product state;
 - deletes that volume only through explicit reset;
 - packages deterministic ZIP/tar archives with exact source commit, per-file checksums and a provider-secret scan;
-- keeps `.ps1`/`.cmd` launchers ASCII-only, BOM/NUL-free and LF-terminated for Windows PowerShell 5.1, with native-command `$LASTEXITCODE` checks;
+- keeps `.ps1`/`.cmd` launchers ASCII-only, BOM/NUL-free and LF-terminated for Windows PowerShell 5.1, with native-command `$LASTEXITCODE` checks, bounded port/health retry and controlled `compose ps -a`/log diagnostics when the container exits before readiness;
 - runs smoke verification under a unique Compose project so cleanup cannot address a user's normal MVP volume.
 
-## 8. Non-goals
+## 9. Non-goals
 
-This version does not claim live campus-source ingestion, CAS/SSO, multi-tenancy, generic Plugin installation/execution, provider fallback, streaming, RAG, durable chat history, long-term memory, reminders, calendar synchronization, parallel tools, multi-agent graphs, Dioxus parity or production hosting. Real-provider smoke remains `not-run` unless an operator separately supplies runtime configuration and grants provider-network permission.
+This version does not claim live campus-source ingestion, registration, password recovery, CAS/SSO, production authentication, multi-tenancy, generic Plugin installation/execution, provider fallback, streaming, RAG, durable chat history, long-term memory, reminders, calendar synchronization, parallel tools, multi-agent graphs, Dioxus parity or production hosting. Real-provider smoke remains `not-run` unless an operator separately supplies runtime configuration and grants provider-network permission.
