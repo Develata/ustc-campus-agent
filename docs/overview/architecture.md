@@ -65,7 +65,7 @@ The thin peer clients display/serialize server projections and submit intent thr
 | `M00` | Platform Control/Identity | tenant/user/session/request/policy identity and causation | identity/session/request-context kernels, bounded B4a durable DemoReviewed current-session read and B4b redacted evidence ports; fixed Affairs/ChangeRadar B5 compositions persist admitted-request evidence before owning M71/M70 effects, while production evidence service/SSO remain planned |
 | `M10` | Application Ingress Host | Dioxus/Axum server functions, versioned public HTTP/streams, compatibility admission and application mapping | framework-neutral query carriers plus typed internal `affairs.publish`/`change.publish` commands, loopback JSON/Web admin projections and operator CLI callers; production auth/Dioxus/stream host planned |
 | `M20` | Market/Package Lifecycle | catalog, exact install/config/grant/enable/update/revoke and invocation authority | typed catalog/capability + bounded installation/grant/update domains + bounded transaction-current authority assembly + pure resolver/fixtures |
-| `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel plus provider-free turns and one bounded app-private three-turn/three-call Chat coordinator; durable generic harness planned |
+| `M30` | Agent Harness/Runtime | finite task/run/graph/context/budget/evidence/review state | node-local runtime kernel plus provider-free turns and one bounded app-private three-turn/four-call Chat coordinator; durable generic harness planned |
 | `M40` | Tool Gateway/Execution | exact tool correlation, authorization order, intent/executor/receipt/result | protocol values + fake conformance |
 | `M50` | Model Provider | typed profiles, provider protocol, stream/final/usage/estimator | deterministic mock plus one bounded non-streaming OpenAI-compatible Chat adapter; complete profile/stream platform planned |
 | `M51` | MCP Binding/Executor | reviewed binding/discovery/schema drift and MCP execution | planned |
@@ -73,7 +73,7 @@ The thin peer clients display/serialize server projections and submit intent thr
 | `M70` | ChangeRadar | semantic change review/event/feed | fixed M00-admitted administrator publication, strict canonical review/publication state, exact retry, checked zero-M60 recovery and stable JSON/Atom restart now extend the existing source-pinned diff and ordinary current-Market/Harness/ToolGateway read path; approved live source, production administration and M80 peers remain planned |
 | `M71` | Affairs Navigator | reviewed procedure tree/artifacts/search | bounded `PROC-011`: checked DemoReviewed draft/review/publication, M00-authorized fixed administrator command, strict durable recovery records/process restart and exact stable-ID query read-back; production source/generic admin/supersession/search remain planned |
 | `M72` | Opportunity Graph | reviewed opportunities, private profiles, qualification/planning | offline Course Planning spike |
-| `M80` | Client Core and Interaction Shells | framework-neutral client behavior and peer Dioxus Web/Android, `ustc-agent` and public-read-first inbound MCP adapters; later admitted Windows | ordinary-user Affairs CLI plus bounded loopback HTTP/Web and separate `ustc-agentctl` fixed administrator demo caller; production auth/stream, inbound MCP and Dioxus peers planned |
+| `M80` | Client Core and Interaction Shells | framework-neutral client behavior and peer Dioxus Web/Android, `ustc-agent` and public-read-first inbound MCP adapters; later admitted Windows | ordinary-user Affairs CLI, bounded loopback HTTP/Web, a source-bound pre-Dioxus Java WebView debug bridge and separate `ustc-agentctl` fixed administrator demo caller; production auth/stream, inbound MCP and Dioxus peers planned |
 | `M90` | Infrastructure/Operations | ports for storage/journal/evidence/config/secrets/HTTP/telemetry and Docker Compose deployment | CI/checkers, app-private secure canonical-JSON stores and one bounded loopback Compose package with deterministic archives, persistent-volume restart/read-back and Windows launcher evidence; no production database/public deployment claim |
 
 “Current evidence” is not module completion. See the module blueprint exit gate and acceptance matrix.
@@ -194,13 +194,14 @@ Implemented evidence:
 - `crates/change-radar`: deterministic semantic diff, review/publication/query and Atom kernel;
 - `crates/affairs-navigator`: reviewed procedure publication/query kernel;
 - `crates/client-core` + `apps/ustc-agent`: bounded Affairs loopback CLI semantics;
+- `apps/ustc-android-demo`: source-bound pre-Dioxus Java WebView debug bridge over an explicitly configured Rust backend, with no provider credential or client-side authority;
 - `crates/course-planning` + CLI: deterministic offline Course Planning spike;
 - repository/CI contract checks.
 
 Not implemented:
 
 - inbound MCP adapter;
-- Dioxus Fullstack app or dependency, Compose Fullstack server profile, peer Web journey or Android artifact;
+- Dioxus Fullstack app or dependency, Compose Fullstack server profile, peer Dioxus Web journey or production Android artifact; the bounded Java WebView debug bridge is supporting evidence only;
 - Fullstack/public ingress, typed stream or auth/session service;
 - production durable Market installations/grants/updates/authority adapters, crash recovery, artifact switching and lifecycle/effect-intent/B7 composition;
 - finite HarnessRun/TaskGraph/context/review supervisor;

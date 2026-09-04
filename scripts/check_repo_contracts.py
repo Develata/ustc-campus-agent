@@ -943,6 +943,10 @@ def check_public_repository_truth(issues: list[str]) -> None:
         "docs/features/06-mvp-core-capabilities.md",
         "docs/plan/02-product-positioning.md",
         "docs/acceptance/public-readiness.md",
+        "docs/overview/architecture.md",
+        "docs/tasks/01-execution-roadmap.md",
+        "docs/coverage-matrix.md",
+        "docs/plan/modules/00-module-map.md",
     )
     texts: dict[str, str] = {}
     for rel in paths:
@@ -975,7 +979,31 @@ def check_public_repository_truth(issues: list[str]) -> None:
             1,
         ),
         ("README.md", "**Live status precedence:**", 1),
-        ("docs/README.md", "whole-file-digest-bound M60 packet", 1),
+        (
+            "docs/README.md",
+            "permits at most three provider turns and four sequential tool calls",
+            1,
+        ),
+        (
+            "docs/overview/architecture.md",
+            "three-turn/four-call Chat coordinator",
+            1,
+        ),
+        (
+            "docs/tasks/01-execution-roadmap.md",
+            "three-turn/four-call Chat coordinator",
+            1,
+        ),
+        (
+            "docs/coverage-matrix.md",
+            "three-turn/four-call Chat coordinator",
+            1,
+        ),
+        (
+            "docs/plan/modules/00-module-map.md",
+            "three-turn/four-call Chat coordinator",
+            1,
+        ),
         (
             "apps/ustc-agentd/src/web/index.html",
             '<p id="prototype-notice" class="prototype-notice"><strong>学生竞赛原型：</strong>这不是中国科学技术大学官方服务，也不连接生产账号或自动执行正式审批、选课。</p>',
@@ -1040,7 +1068,7 @@ def check_public_repository_truth(issues: list[str]) -> None:
         ),
         (
             "docs/acceptance/public-readiness.md",
-            "explicitly non-authoritative for live visibility, licensing, MVP status and Chat budget",
+            "existing expiring GitHub Actions debug APKs are source-bound CI evidence artifacts, not stable/production distributions",
             1,
         ),
     )
@@ -1058,6 +1086,8 @@ def check_public_repository_truth(issues: list[str]) -> None:
         "repository remains private",
         "no public repository/download claim before",
         "three provider turns and three sequential tool calls",
+        "three-turn/three-call",
+        "historical three-call",
     )
     current_authorities = (
         "README.md",
@@ -1067,6 +1097,10 @@ def check_public_repository_truth(issues: list[str]) -> None:
         "docs/features/06-mvp-core-capabilities.md",
         "docs/contracts/agent-chat.md",
         "docs/acceptance/public-readiness.md",
+        "docs/overview/architecture.md",
+        "docs/tasks/01-execution-roadmap.md",
+        "docs/coverage-matrix.md",
+        "docs/plan/modules/00-module-map.md",
     )
     for rel in current_authorities:
         folded = texts[rel].casefold()
@@ -9868,14 +9902,14 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
         "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
         "docs/contracts/module-boundaries.md": "8c663d411613713ca41502c894590976aa77009da181a4a07da333f7a1b11538",
-        "docs/overview/architecture.md": "a7f9b5780d9563b27edf959895bcf64c976b6e1b16202086f31305ce91585070",
+        "docs/overview/architecture.md": "da2453c35d04ec9678cc0a850dfc84419c3afec5e41edca43a9681e4559a9134",
         "docs/features/02-ustc-change-radar.md": "27be5c7f4bebdd6bb2dc6938ecffa185b4d0cd53aeb050b031b46bf698478153",
         "docs/plan/05-campus-trust-kernel.md": "26ebed21efb3cfcf09a08864ec890fd75dea7322d296433d120557b1614e26db",
-        "docs/plan/modules/00-module-map.md": "5f6c9355c05b063d6c47289b2effd30dbb2e5a0984b4481957868879cb3d15bb",
+        "docs/plan/modules/00-module-map.md": "590c79d18142a6ba42d9603b5e2525cef280beb43352e2b21f10d830f3c6cad7",
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
-        "docs/tasks/01-execution-roadmap.md": "7087384fda22ed4dff1c3c1c315bed78edfbeb4bf3340731364f5858666eb03f",
+        "docs/tasks/01-execution-roadmap.md": "82df89e0ecb3075940fb895bdfa9f05117a1d32330c6d95daf56a02649b8c964",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
-        "docs/coverage-matrix.md": "79c2b00716eb259dda9ec983558fb8151a8b51264828a18bca1d610d86c6b12f",
+        "docs/coverage-matrix.md": "5b3537f209a2f6b04606481b249bc575d3d9c67f20b76c238678add814552c86",
     }
     if tuple(frozen_projection_sha256) != declared_projection_paths:
         fail(
@@ -13925,7 +13959,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "ab148df68f11ca45979c0b390f414efba8cbb41fff9e7b720d634eef189da38d", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "8f890cc2dc44527d772dd1c4beb415a957e1858896a82868ce385153ea1707ae", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},
@@ -13941,7 +13975,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_platform_session_port": {"digest": "cd83696316ed74a4aa15dfdf861a4c5b3b9b397056d06c44e1a13e3def4667a6", "status": "active"},
     "check_platform_session_contract": {"digest": "e3a2e5ef5ca953bdf2739ac3072df8bcfed0ebece4a893f52980fb7ca3b15c1b", "status": "active"},
     "check_platform_session_implementation": {"digest": "f1a25036ae6940b332c258af80f2e23815071ca19cb1d5db79d7a4f8b844be8f", "status": "active"},
-    "check_public_repository_truth": {"digest": "af8d436c4ec23c7a51d79bc538cd952c9a14cb07397de301a2f47995a7052051", "status": "active"},
+    "check_public_repository_truth": {"digest": "738d6ab238de079f56f5c3e91cb22e4988c112734b6ff48c053a05c936e1368a", "status": "active"},
     "check_rust_doctest_gate": {"digest": "372200f9ce289b3af148b7e7001408498b3d817098d7013692f016b766d2ec58", "status": "active"},
     "check_rust_lexical_corpus": {"digest": "ac8c09ce53ca4949c8e5c61eca0a958301735d7cdb2dc0ecd00eb3472a0e2aef", "status": "active"},
     "check_run_checker_shards_runner": {"digest": "c6abd4f4d049cb1836f333badf20d0d08bec3ea319a0549812f076b8b419de39", "status": "active"},

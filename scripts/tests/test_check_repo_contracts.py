@@ -7569,6 +7569,10 @@ class PublicRepositoryTruthTests(unittest.TestCase):
         "docs/features/06-mvp-core-capabilities.md",
         "docs/plan/02-product-positioning.md",
         "docs/acceptance/public-readiness.md",
+        "docs/overview/architecture.md",
+        "docs/tasks/01-execution-roadmap.md",
+        "docs/coverage-matrix.md",
+        "docs/plan/modules/00-module-map.md",
     )
 
     def setUp(self) -> None:
@@ -7670,6 +7674,26 @@ class PublicRepositoryTruthTests(unittest.TestCase):
                 "const MAX_TOOL_CALLS: u8 = 4;",
                 "const MAX_TOOL_CALLS: u8 = 3;",
             ),
+            (
+                "docs/overview/architecture.md",
+                "three-turn/four-call Chat coordinator",
+                "three-turn/three-call Chat coordinator",
+            ),
+            (
+                "docs/tasks/01-execution-roadmap.md",
+                "three-turn/four-call Chat coordinator",
+                "three-turn/three-call Chat coordinator",
+            ),
+            (
+                "docs/coverage-matrix.md",
+                "three-turn/four-call Chat coordinator",
+                "three-turn/three-call Chat coordinator",
+            ),
+            (
+                "docs/plan/modules/00-module-map.md",
+                "three-turn/four-call Chat coordinator",
+                "three-turn/three-call Chat coordinator",
+            ),
         )
         for rel, old, new in cases:
             with self.subTest(rel=rel):
@@ -7686,7 +7710,16 @@ class PublicRepositoryTruthTests(unittest.TestCase):
                 "existing GitHub repository visibility and the MIT source license are not runtime/release evidence",
                 "no public repository/download claim before the public-readiness and release gates pass",
             ),
-            ("docs/README.md", "whole-file-digest-bound M60 packet", "historical packet"),
+            (
+                "docs/README.md",
+                "permits at most three provider turns and four sequential tool calls",
+                "permits at most three provider turns and three sequential tool calls",
+            ),
+            (
+                "docs/acceptance/public-readiness.md",
+                "existing expiring GitHub Actions debug APKs are source-bound CI evidence artifacts, not stable/production distributions",
+                "no project-maintained runtime distribution is published",
+            ),
         )
         for rel, old, new in cases:
             with self.subTest(rel=rel):

@@ -65,7 +65,7 @@ cargo run -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --con
 | Multi-client shell | `M10` owns framework-neutral versioned operation/client-protocol registry；`M80` owns client core over it；Dioxus Web/Android、`ustc-agent` 与 public-read-first inbound MCP 为 peer adapters；later Windows 复用同一 core；M10 不依赖 client-core，GUI 不 spawn CLI；client/server adapter 不拥有平台 authority |
 | CLI privilege split | `ustc-agentctl` 为 operator/developer；`ustc-agent` 已有 bounded ordinary-user/headless Affairs path；`ustc-agentd serve-web` 提供 loopback-only、三插件 source/profile-grounded MVP，生产 auth/remote HTTP/streaming 仍未实现；MCP 仅暴露 selected least-privilege tools/resources |
 
-> **Live status precedence:** repository visibility and licensing are stated by this README and [`LICENSE.md`](LICENSE.md); the runnable MVP boundary and Chat budget are stated by [`docs/features/06-mvp-core-capabilities.md`](docs/features/06-mvp-core-capabilities.md) and [`docs/contracts/agent-chat.md`](docs/contracts/agent-chat.md). The whole-file-digest-bound M60 acceptance packet—including the architecture overview, execution roadmap, coverage matrix and large-module map—preserves some historical pre-public/current-state/three-call wording and is not live visibility, licensing, MVP or Chat-budget authority.
+> **Live status precedence:** repository visibility and licensing are stated by this README and [`LICENSE.md`](LICENSE.md). The runnable MVP boundary and Chat budget are stated consistently by [`docs/features/06-mvp-core-capabilities.md`](docs/features/06-mvp-core-capabilities.md), [`docs/contracts/agent-chat.md`](docs/contracts/agent-chat.md), the architecture overview, execution roadmap, coverage matrix and large-module map: at most three provider turns and four sequential tool calls.
 
 ## Repository layout
 
@@ -142,9 +142,9 @@ cargo run --locked -p ustc-agent -- --version
 - Typed public/package/data contracts: [`docs/contracts/`](docs/contracts/)
 - Cross-module boundary registry: [`docs/contracts/module-boundaries.md`](docs/contracts/module-boundaries.md)
 - Acceptance matrix and gates: [`docs/acceptance/`](docs/acceptance/)
-- Cross-layer long-horizon architecture map: [`docs/overview/architecture.md`](docs/overview/architecture.md)；其 implementation-status section 仍受历史 M60 acceptance packet 的 whole-file digest 约束，当前可运行 MVP 状态以 [`docs/features/06-mvp-core-capabilities.md`](docs/features/06-mvp-core-capabilities.md) 为准
+- Cross-layer long-horizon architecture map: [`docs/overview/architecture.md`](docs/overview/architecture.md)；其 implementation-status section 与 canonical MVP feature / Chat contract 保持一致
 - Module work/commit/assembly policy: [`docs/tasks/00-module-work-policy.md`](docs/tasks/00-module-work-policy.md)
-- Module assembly roadmap, coverage matrix and large-module map: [`docs/tasks/01-execution-roadmap.md`](docs/tasks/01-execution-roadmap.md), [`docs/coverage-matrix.md`](docs/coverage-matrix.md), [`docs/plan/modules/00-module-map.md`](docs/plan/modules/00-module-map.md)；其中 M60 acceptance packet 的 historical public/current-state/three-call wording 不覆盖本 README、canonical MVP feature 或 `agent-chat/v1` contract
+- Module assembly roadmap, coverage matrix and large-module map: [`docs/tasks/01-execution-roadmap.md`](docs/tasks/01-execution-roadmap.md), [`docs/coverage-matrix.md`](docs/coverage-matrix.md), [`docs/plan/modules/00-module-map.md`](docs/plan/modules/00-module-map.md)；其 current-status / Chat-budget projections 与 canonical MVP feature 和 `agent-chat/v1` contract 一致
 - Collaboration, development and publication handoffs: [`docs/guides/`](docs/guides/)
 - Architecture decision history: [`docs/adr/`](docs/adr/)
 

@@ -30,7 +30,7 @@ For the runnable competition slice, begin with [`features/06-mvp-core-capabiliti
 | [`adr/`](adr/) | Why were major architecture decisions made? |
 | [`design/`](design/) | How are UI/presentation candidates proposed and reviewed? (subordinate layer; proposals only, never behavior authority) |
 
-[`coverage-matrix.md`](coverage-matrix.md) maps the documentation layers and accepted projections. The whole-file-digest-bound M60 packet—including the coverage matrix, large-module map, architecture overview and execution roadmap—can retain historical three-call/current-state wording; it is not live authority for repository visibility, licensing, runnable MVP capability or the Chat budget. Use the root README/`LICENSE.md`, `features/06-mvp-core-capabilities.md` and `contracts/agent-chat.md` for those current facts. [`AGENTS.md`](AGENTS.md) defines documentation authority and editing discipline.
+[`coverage-matrix.md`](coverage-matrix.md) maps the documentation layers and accepted projections. The M60 coverage matrix, large-module map, architecture overview and execution roadmap are current and agree with [`features/06-mvp-core-capabilities.md`](features/06-mvp-core-capabilities.md) and [`contracts/agent-chat.md`](contracts/agent-chat.md): the bounded Chat coordinator permits at most three provider turns and four sequential tool calls. [`AGENTS.md`](AGENTS.md) defines documentation authority and editing discipline.
 
 ## Deliberate exclusions
 
