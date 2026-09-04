@@ -24,10 +24,10 @@ Browser (loopback only)
        simple_calendar_items
        opportunity_graph_plan_current_profile (only with per-request consent)
   → typed tool results marked untrusted
-  → concise answer + redacted tool trace
+  → concise human summary + redacted tool trace
 ```
 
-The default mock mode needs no API key and is intended for deterministic judging and offline acceptance. The real-provider mode uses the same tool definitions and Rust executor; the key remains file-backed and server-side.
+The default mock mode needs no API key and is intended for deterministic judging and offline acceptance. For every known successful tool shape it emits a server-owned bounded Chinese summary—procedure steps and official entry points, changed fields, course candidates and iCourse link-outs, or Calendar mutations—rather than transport JSON. Shape drift becomes an explicit summary-contract notice. The real-provider mode uses the same tool definitions and Rust executor; the key remains file-backed and server-side.
 
 ## 3. Capability matrix
 
@@ -36,6 +36,7 @@ The default mock mode needs no API key and is intended for deterministic judging
 - Multi-turn page-local conversation with bounded history.
 - Deterministic offline response or explicitly configured OpenAI-compatible Chat Completions provider; both cross the complete loopback HTTP route in retained tests.
 - Maximum 3 provider turns, 4 tool calls, 4 KiB arguments per call, 64 KiB result per call and 16 KiB final answer.
+- The deterministic provider uses tool-aware human summaries with fair per-result budgets, so a large course plan neither exposes protocol plumbing nor erases a later Calendar result.
 - Redacted trace exposes only call order, tool name and `succeeded | denied | failed`.
 
 Contract: [`../contracts/agent-chat.md`](../contracts/agent-chat.md)
@@ -105,7 +106,7 @@ After starting the loopback MVP, try:
 - Create an Opportunity profile in the page, enable the per-request consent checkbox, then ask `请根据我的偏好和评课社区信号推荐课程。`
 - To exercise the complete four-call budget, enable consent again and ask `请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，同时记录事项：复习计划`.
 
-Every admitted tool-backed request should show a successful trace in deterministic mock mode. The mixed request must render four trace entries rather than being rejected by the browser. Course planning must be denied or omitted without the explicit profile context and per-request confirmation.
+Every admitted tool-backed request should show a readable summary and successful trace in deterministic mock mode. Answers should expose user facts such as procedure steps, changed fields, course codes/link-outs and Calendar item IDs, but not raw field names such as `ordered_steps`, `changed_fields`, `course_codes` or `command_id`. The mixed request must render four trace entries rather than being rejected by the browser. Course planning must be denied or omitted without the explicit profile context and per-request confirmation.
 
 ## 6. Current boundaries and TODO
 

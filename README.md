@@ -16,7 +16,7 @@ USTC Campus Agent 的目标不是包装一个通用聊天框，而是建立有�
 
 然后访问 <http://127.0.0.1:8787>。同一页面提供五类最小闭环：
 
-- **Agent Chat**：正常问答；按需调用流程、变更、课程规划与 Calendar tools；返回自然语言答案和 redacted tool trace；
+- **Agent Chat**：正常问答；按需调用流程、变更、课程规划与 Calendar tools；默认离线模式把 typed results 整理为有界中文摘要，而不是向用户倾倒 transport JSON，并返回 redacted tool trace；
 - **Affairs Navigator**：查询固定的 `DemoReviewed` 成绩单证明流程；
 - **ChangeRadar**：读取固定的校历变更 board，并保留显式管理员发布演示；
 - **Opportunity Graph**：在逐次 consent 后使用 synthetic private profile 生成课程计划；community signal 只参与 soft ranking，并返回 iCourse aggregate-rating link-outs；

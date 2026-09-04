@@ -767,68 +767,278 @@ fn parse_wire_response(mut response: OpenAiResponse) -> Result<ProviderTurn, Pro
 }
 
 fn bounded_mock_success_answer(
-    data: &[Value],
+    data: &[(Option<String>, Value)],
     status_notice: &str,
 ) -> Result<String, ProviderError> {
-    const PREFIX: &str = "已完成校园工具查询。结果摘要：";
-    const FRAGMENT_SUFFIX: &str = "…（片段已截断）";
+    const PREFIX: &str = "已完成校园工具查询。";
+    const FRAGMENT_SUFFIX: &str = "…（摘要已截断）";
 
-    let serialized = data
+    let rendered = data
         .iter()
-        .map(serde_json::to_string)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| ProviderError::Protocol)?;
-    let labels = (1..=serialized.len())
-        .map(|index| format!("\n[结果 {index}/{}] ", serialized.len()))
+        .map(|(tool_name, value)| render_mock_tool_result(tool_name.as_deref(), value))
+        .collect::<Result<Vec<_>, _>>()?;
+    let labels = data
+        .iter()
+        .enumerate()
+        .map(|(index, (tool_name, _))| {
+            format!(
+                "\n\n[结果 {}/{}] {}\n",
+                index + 1,
+                data.len(),
+                mock_tool_label(tool_name.as_deref())
+            )
+        })
         .collect::<Vec<_>>();
     let fixed_bytes =
         PREFIX.len() + status_notice.len() + labels.iter().map(String::len).sum::<usize>();
     let mut remaining_bytes = MAX_MOCK_ANSWER_BYTES.saturating_sub(fixed_bytes);
-    let include_all = serialized.iter().map(String::len).sum::<usize>() <= remaining_bytes;
+    let include_all = rendered.iter().map(String::len).sum::<usize>() <= remaining_bytes;
 
     let mut answer = String::with_capacity(MAX_MOCK_ANSWER_BYTES);
     answer.push_str(PREFIX);
-    for (index, (label, value)) in labels.iter().zip(&serialized).enumerate() {
+    for (index, (label, value)) in labels.iter().zip(&rendered).enumerate() {
         answer.push_str(label);
-        let remaining_results = serialized.len().saturating_sub(index).max(1);
+        let remaining_results = rendered.len().saturating_sub(index).max(1);
         let fragment_budget = if include_all {
             value.len()
         } else {
             remaining_bytes / remaining_results
         };
-        let used = if value.len() <= fragment_budget {
-            answer.push_str(value);
-            value.len()
-        } else if fragment_budget > FRAGMENT_SUFFIX.len() {
-            let content_budget = fragment_budget - FRAGMENT_SUFFIX.len();
-            let mut end = 0_usize;
-            for (offset, character) in value.char_indices() {
-                let next = offset + character.len_utf8();
-                if next > content_budget {
-                    break;
-                }
-                end = next;
-            }
-            answer.push_str(&value[..end]);
-            answer.push_str(FRAGMENT_SUFFIX);
-            end + FRAGMENT_SUFFIX.len()
-        } else {
-            let mut end = 0_usize;
-            for (offset, character) in value.char_indices() {
-                let next = offset + character.len_utf8();
-                if next > fragment_budget {
-                    break;
-                }
-                end = next;
-            }
-            answer.push_str(&value[..end]);
-            end
-        };
+        let used =
+            append_bounded_mock_fragment(&mut answer, value, fragment_budget, FRAGMENT_SUFFIX);
         remaining_bytes = remaining_bytes.saturating_sub(used);
     }
     answer.push_str(status_notice);
     debug_assert!(answer.len() <= MAX_MOCK_ANSWER_BYTES);
     Ok(answer)
+}
+
+fn append_bounded_mock_fragment(
+    answer: &mut String,
+    value: &str,
+    fragment_budget: usize,
+    suffix: &str,
+) -> usize {
+    if value.len() <= fragment_budget {
+        answer.push_str(value);
+        return value.len();
+    }
+    let (content_budget, suffix) = if fragment_budget > suffix.len() {
+        (fragment_budget - suffix.len(), suffix)
+    } else {
+        (fragment_budget, "")
+    };
+    let mut end = 0_usize;
+    for (offset, character) in value.char_indices() {
+        let next = offset + character.len_utf8();
+        if next > content_budget {
+            break;
+        }
+        end = next;
+    }
+    answer.push_str(&value[..end]);
+    answer.push_str(suffix);
+    end + suffix.len()
+}
+
+fn render_mock_tool_result(tool_name: Option<&str>, data: &Value) -> Result<String, ProviderError> {
+    let summary = match tool_name {
+        Some(AFFAIRS_TOOL) => summarize_affairs_result(data),
+        Some(CHANGE_TOOL) => summarize_change_result(data),
+        Some(OPPORTUNITY_TOOL) => summarize_opportunity_result(data),
+        Some(CALENDAR_TOOL) => summarize_calendar_result(data),
+        Some(_) => None,
+        None => return serde_json::to_string(data).map_err(|_| ProviderError::Protocol),
+    };
+    Ok(summary.unwrap_or_else(|| {
+        "工具执行成功，但结果结构与当前 deterministic mock 的摘要契约不一致；请使用对应功能面板核对。"
+            .to_owned()
+    }))
+}
+
+fn mock_tool_label(tool_name: Option<&str>) -> &'static str {
+    match tool_name {
+        Some(AFFAIRS_TOOL) => "办事导航",
+        Some(CHANGE_TOOL) => "变更雷达",
+        Some(OPPORTUNITY_TOOL) => "课程规划",
+        Some(CALENDAR_TOOL) => "简单日历",
+        _ => "工具结果",
+    }
+}
+
+fn json_text<'a>(value: &'a Value, pointer: &str) -> Option<&'a str> {
+    value
+        .pointer(pointer)
+        .and_then(Value::as_str)
+        .filter(|text| !text.trim().is_empty())
+}
+
+fn summarize_affairs_result(data: &Value) -> Option<String> {
+    let view = data.pointer("/terminal/outcome/view")?;
+    let title = json_text(view, "/title")?;
+    let procedure_id = json_text(view, "/procedure_id")?;
+    let mut summary = format!("办事流程：{title}\n流程编号：{procedure_id}");
+
+    if let Some(steps) = view.pointer("/ordered_steps").and_then(Value::as_array) {
+        if !steps.is_empty() {
+            summary.push_str("\n办理步骤：");
+            for (index, step) in steps.iter().take(6).enumerate() {
+                if let Some(instruction) = json_text(step, "/instruction") {
+                    let ordinal = step
+                        .get("ordinal")
+                        .and_then(Value::as_u64)
+                        .unwrap_or((index + 1) as u64);
+                    summary.push_str(&format!("\n{ordinal}. {instruction}"));
+                }
+            }
+        }
+    }
+
+    if let Some(entry_points) = view.pointer("/entry_points").and_then(Value::as_array) {
+        let mut wrote_heading = false;
+        for entry in entry_points.iter().take(3) {
+            let Some(label) = json_text(entry, "/label") else {
+                continue;
+            };
+            if !wrote_heading {
+                summary.push_str("\n官方入口：");
+                wrote_heading = true;
+            }
+            let url = json_text(entry, "/url").unwrap_or("未提供链接");
+            summary.push_str(&format!("\n- {label}：{url}"));
+        }
+    }
+    summary.push_str("\n提示：这是 reviewed public snapshot；实际办理前请以官方入口为准。");
+    Some(summary)
+}
+
+fn summarize_change_result(data: &Value) -> Option<String> {
+    let view = data.pointer("/terminal/outcome/view")?;
+    let title = json_text(view, "/title")?;
+    let board_id = json_text(view, "/board_id")?;
+    let entries = view.pointer("/entries").and_then(Value::as_array)?;
+    let mut summary = format!("校历变更：{title}\n看板：{board_id}");
+    if entries.is_empty() {
+        summary.push_str("\n当前 reviewed feed 中没有变更条目。");
+        return Some(summary);
+    }
+
+    for (entry_index, entry) in entries.iter().take(3).enumerate() {
+        let scope = json_text(entry, "/affected_scope").unwrap_or("未标注范围");
+        summary.push_str(&format!("\n变更 {}｜{scope}", entry_index + 1));
+        if let Some(fields) = entry.pointer("/changed_fields").and_then(Value::as_array) {
+            for field in fields.iter().take(6) {
+                let Some(name) = json_text(field, "/field") else {
+                    continue;
+                };
+                let before = json_text(field, "/before").unwrap_or("—");
+                let after = json_text(field, "/after").unwrap_or("—");
+                summary.push_str(&format!("\n- {name}：{before} → {after}"));
+            }
+        }
+        if let Some(source_url) = json_text(entry, "/source_url") {
+            summary.push_str(&format!("\n- 来源：{source_url}"));
+        }
+    }
+    if entries.len() > 3 {
+        summary.push_str(&format!("\n另有 {} 条变更未展开。", entries.len() - 3));
+    }
+    Some(summary)
+}
+
+fn summarize_opportunity_result(data: &Value) -> Option<String> {
+    let decision = data.pointer("/terminal/plan/decision")?;
+    match json_text(decision, "/kind")? {
+        "no_feasible_plan" => Some(
+            "课程规划：当前 synthetic profile 与 hard constraints 下没有可行方案；系统没有把推断冒充结果。"
+                .to_owned(),
+        ),
+        "planned" => {
+            let candidates = decision.pointer("/candidates").and_then(Value::as_array)?;
+            if candidates.is_empty() {
+                return None;
+            }
+            let mut summary = String::from(
+                "课程建议：当前演示使用 synthetic catalog；评课社区信号只参与 soft ranking，不能替代培养方案、教师与学期开课核验。",
+            );
+            for (index, candidate) in candidates.iter().take(3).enumerate() {
+                let course_codes = candidate
+                    .pointer("/course_codes")
+                    .and_then(Value::as_array)?
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>();
+                let total_credits = candidate.get("total_credits").and_then(Value::as_u64)?;
+                summary.push_str(&format!(
+                    "\n候选 {}：{}（{total_credits} 学分）",
+                    index + 1,
+                    course_codes.join("、")
+                ));
+                if candidate
+                    .pointer("/hard_constraint_violations")
+                    .and_then(Value::as_array)
+                    .is_some_and(Vec::is_empty)
+                {
+                    summary.push_str("；hard constraints 通过");
+                }
+                if let Some(rationale) = candidate.pointer("/rationale").and_then(Value::as_array) {
+                    for line in rationale.iter().filter_map(Value::as_str).take(6) {
+                        summary.push_str(&format!("\n- {line}"));
+                    }
+                }
+            }
+            if candidates.len() > 3 {
+                summary.push_str(&format!("\n另有 {} 个候选未展开。", candidates.len() - 3));
+            }
+            Some(summary)
+        }
+        _ => None,
+    }
+}
+
+fn summarize_calendar_result(data: &Value) -> Option<String> {
+    match json_text(data, "/action")? {
+        "record" => {
+            let item = data.pointer("/item")?;
+            let item_id = json_text(item, "/id")?;
+            let title = json_text(item, "/title")?;
+            let mut summary = format!("简单日历：已记录「{title}」。\n事项 ID：{item_id}");
+            if let Some(scheduled_for) = json_text(item, "/scheduled_for") {
+                summary.push_str(&format!("\n计划时间：{scheduled_for}"));
+            }
+            Some(summary)
+        }
+        "delete" => {
+            let item = data.pointer("/item")?;
+            let item_id = json_text(item, "/id")?;
+            let title = json_text(item, "/title")?;
+            Some(format!("简单日历：已删除「{title}」（{item_id}）。"))
+        }
+        "list" => {
+            let items = data.pointer("/items").and_then(Value::as_array)?;
+            if items.is_empty() {
+                return Some("简单日历：当前没有事项。".to_owned());
+            }
+            let mut summary = format!("简单日历：当前共 {} 项。", items.len());
+            for item in items.iter().take(10) {
+                let Some(item_id) = json_text(item, "/id") else {
+                    continue;
+                };
+                let Some(title) = json_text(item, "/title") else {
+                    continue;
+                };
+                summary.push_str(&format!("\n- {item_id}｜{title}"));
+                if let Some(scheduled_for) = json_text(item, "/scheduled_for") {
+                    summary.push_str(&format!("｜{scheduled_for}"));
+                }
+            }
+            if items.len() > 10 {
+                summary.push_str(&format!("\n另有 {} 项未展开。", items.len() - 10));
+            }
+            Some(summary)
+        }
+        _ => None,
+    }
 }
 
 fn contains_ascii_term(text: &str, term: &str) -> bool {
@@ -926,7 +1136,10 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
         .messages
         .iter()
         .filter_map(|message| match message {
-            ProviderMessage::Tool { content, .. } => Some(content.as_str()),
+            ProviderMessage::Tool {
+                tool_call_id,
+                content,
+            } => Some((tool_call_id.as_str(), content.as_str())),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -934,12 +1147,27 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
         let mut denied = 0_usize;
         let mut failed = 0_usize;
         let mut succeeded_data = Vec::new();
-        for message in &tool_messages {
+        for (tool_call_id, message) in &tool_messages {
             let value: Value =
                 serde_json::from_str(message).map_err(|_| ProviderError::Protocol)?;
             match value.get("status").and_then(Value::as_str) {
                 Some("succeeded") => {
-                    succeeded_data.push(value.get("data").cloned().ok_or(ProviderError::Protocol)?)
+                    let tool_name =
+                        request
+                            .messages
+                            .iter()
+                            .rev()
+                            .find_map(|message| match message {
+                                ProviderMessage::Assistant { tool_calls, .. } => tool_calls
+                                    .iter()
+                                    .find(|call| call.id == *tool_call_id)
+                                    .map(|call| call.name.clone()),
+                                _ => None,
+                            });
+                    succeeded_data.push((
+                        tool_name,
+                        value.get("data").cloned().ok_or(ProviderError::Protocol)?,
+                    ));
                 }
                 Some("denied") => denied = denied.saturating_add(1),
                 Some("failed") => failed = failed.saturating_add(1),
@@ -1243,15 +1471,120 @@ mod tests {
     }
 
     #[test]
+    fn deterministic_mock_summarizes_each_known_tool_shape_for_people() {
+        let affairs = render_mock_tool_result(
+            Some(AFFAIRS_TOOL),
+            &json!({
+                "terminal": {"outcome": {"view": {
+                    "title": "成绩单证明办理",
+                    "procedure_id": "proc:ustc:undergraduate:transcript-certificate",
+                    "ordered_steps": [
+                        {"ordinal": 1, "instruction": "登录综合教务系统"},
+                        {"ordinal": 2, "instruction": "选择材料并下载"}
+                    ],
+                    "entry_points": [{"label": "综合教务系统", "url": "https://jw.ustc.edu.cn/"}]
+                }}}
+            }),
+        )
+        .unwrap();
+        assert!(affairs.contains("办事流程：成绩单证明办理"));
+        assert!(affairs.contains("1. 登录综合教务系统"));
+        assert!(affairs.contains("https://jw.ustc.edu.cn/"));
+        assert!(!affairs.contains("ordered_steps"));
+
+        let change = render_mock_tool_result(
+            Some(CHANGE_TOOL),
+            &json!({
+                "terminal": {"outcome": {"view": {
+                    "title": "USTC Academic Calendar Changes",
+                    "board_id": "board:ustc:academic-calendar",
+                    "entries": [{
+                        "affected_scope": "2026 秋季本科生选课",
+                        "changed_fields": [{
+                            "field": "registration.deadline",
+                            "before": "2026-09-01T17:00:00+08:00",
+                            "after": "2026-09-03T17:00:00+08:00"
+                        }],
+                        "source_url": "https://www.teach.ustc.edu.cn/calendar/2026-fall"
+                    }]
+                }}}
+            }),
+        )
+        .unwrap();
+        assert!(change.contains("校历变更：USTC Academic Calendar Changes"));
+        assert!(change.contains("registration.deadline"));
+        assert!(change.contains("2026-09-01T17:00:00+08:00 → 2026-09-03T17:00:00+08:00"));
+        assert!(!change.contains("changed_fields"));
+
+        let opportunity = render_mock_tool_result(
+            Some(OPPORTUNITY_TOOL),
+            &json!({
+                "terminal": {"plan": {"decision": {
+                    "kind": "planned",
+                    "candidates": [{
+                        "course_codes": ["MATH2001", "MATH2003"],
+                        "total_credits": 10,
+                        "hard_constraint_violations": [],
+                        "rationale": [
+                            "MATH2001 community signal 97/100; verify the linked iCourse page before deciding: https://icourse.club/course/2059/"
+                        ]
+                    }]
+                }}}
+            }),
+        )
+        .unwrap();
+        assert!(opportunity.contains("课程建议"));
+        assert!(opportunity.contains("MATH2001、MATH2003（10 学分）"));
+        assert!(opportunity.contains("hard constraints 通过"));
+        assert!(opportunity.contains("https://icourse.club/course/2059/"));
+        assert!(!opportunity.contains("course_codes"));
+
+        let calendar = render_mock_tool_result(
+            Some(CALENDAR_TOOL),
+            &json!({
+                "action": "record",
+                "item": {
+                    "id": "calendar:item:1",
+                    "title": "提交开题报告",
+                    "scheduled_for": "2026-09-10T09:00:00+08:00"
+                }
+            }),
+        )
+        .unwrap();
+        assert!(calendar.contains("已记录「提交开题报告」"));
+        assert!(calendar.contains("calendar:item:1"));
+        assert!(calendar.contains("2026-09-10T09:00:00+08:00"));
+        assert!(!calendar.contains("scheduled_for"));
+    }
+
+    #[test]
+    fn known_tool_shape_drift_is_explicit_instead_of_dumping_transport_json() {
+        let answer = render_mock_tool_result(
+            Some(AFFAIRS_TOOL),
+            &json!({"unexpected": "transport-internal-marker"}),
+        )
+        .unwrap();
+        assert!(answer.contains("结果结构"));
+        assert!(answer.contains("功能面板"));
+        assert!(!answer.contains("transport-internal-marker"));
+    }
+
+    #[test]
     fn bounded_mock_answer_preserves_each_success_under_the_global_limit() {
         let data = vec![
-            json!({"a_marker": "first-affairs"}),
-            json!({
-                "a_marker": "second-change",
-                "z_large_payload": "x".repeat(MAX_MOCK_ANSWER_BYTES * 2)
-            }),
-            json!({"a_marker": "third-opportunity"}),
-            json!({"a_marker": "fourth-calendar", "item_id": "calendar:item:1"}),
+            (None, json!({"a_marker": "first-affairs"})),
+            (
+                None,
+                json!({
+                    "a_marker": "second-change",
+                    "z_large_payload": "x".repeat(MAX_MOCK_ANSWER_BYTES * 2)
+                }),
+            ),
+            (None, json!({"a_marker": "third-opportunity"})),
+            (
+                None,
+                json!({"a_marker": "fourth-calendar", "item_id": "calendar:item:1"}),
+            ),
         ];
         let answer = bounded_mock_success_answer(&data, "").expect("bounded mock answer");
 
@@ -1261,7 +1594,7 @@ mod tests {
         assert!(answer.contains("third-opportunity"));
         assert!(answer.contains("fourth-calendar"));
         assert!(answer.contains("calendar:item:1"));
-        assert!(answer.contains("片段已截断"));
+        assert!(answer.contains("摘要已截断"));
         assert!(answer.contains("[结果 4/4]"));
     }
 

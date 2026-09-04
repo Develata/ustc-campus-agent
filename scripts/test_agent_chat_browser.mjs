@@ -314,7 +314,13 @@ try {
   await waitFor("document.querySelector('#chat-surface').getAttribute('aria-busy') === 'false'", "Affairs chat idle");
   assert.equal(await evaluate("document.querySelector('.chat-tool-state')?.dataset.status"), "succeeded");
   assert.match(await evaluate("document.querySelector('.chat-tool-trace')?.textContent"), /办事导航/);
-  assert.match(await evaluate("document.querySelector('.chat-message[data-role=assistant] .chat-message-body')?.textContent"), /transcript-certificate/);
+  const affairsAnswer = await evaluate(
+    "document.querySelector('.chat-message[data-role=assistant] .chat-message-body')?.textContent"
+  );
+  assert.match(affairsAnswer, /办事流程：/);
+  assert.match(affairsAnswer, /办理步骤：/);
+  assert.match(affairsAnswer, /transcript-certificate/);
+  assert.doesNotMatch(affairsAnswer, /ordered_steps|command_id/);
   assert.equal(await evaluate("document.activeElement === document.querySelector('#chat-input')"), true);
 
   await submitWithEnter("校历最近有什么变更？");
@@ -322,20 +328,26 @@ try {
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
     /变更雷达/
   );
-  assert.match(
-    await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"),
-    /academic-calendar/
+  const changeAnswer = await evaluate(
+    "document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"
   );
+  assert.match(changeAnswer, /校历变更：/);
+  assert.match(changeAnswer, /academic-calendar/);
+  assert.match(changeAnswer, /registration\.deadline/);
+  assert.match(changeAnswer, / → /);
+  assert.doesNotMatch(changeAnswer, /changed_fields|command_id/);
 
   await submitWithEnter("记录事项：提交开题报告");
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
     /简单日历/
   );
-  assert.match(
-    await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"),
-    /calendar:item:1|提交开题报告/
+  const calendarRecordAnswer = await evaluate(
+    "document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"
   );
+  assert.match(calendarRecordAnswer, /简单日历：已记录/);
+  assert.match(calendarRecordAnswer, /calendar:item:1|提交开题报告/);
+  assert.doesNotMatch(calendarRecordAnswer, /created_at_unix_secs|package_id/);
   await submitWithEnter("列出我的待办事项");
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"),
@@ -361,8 +373,14 @@ try {
   await submitWithEnter("请按当前档案规划课程", true);
   assert.equal(await evaluate("document.querySelector('#chat-opportunity-confirm').checked"), false);
   assert.match(await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"), /机会图谱/);
-  assert.match(await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"), /MATH2001/);
-  assert.match(await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"), /icourse\.club/);
+  const courseAnswer = await evaluate(
+    "document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-message-body')?.textContent"
+  );
+  assert.match(courseAnswer, /课程建议：/);
+  assert.match(courseAnswer, /MATH2001/);
+  assert.match(courseAnswer, /icourse\.club/);
+  assert.match(courseAnswer, /hard constraints 通过/);
+  assert.doesNotMatch(courseAnswer, /course_codes|command_id/);
 
   await submitWithEnter(
     "请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，同时记录事项：复习计划",
@@ -464,7 +482,7 @@ try {
 
   const exceptions = cdp.events.filter((event) => event.method === "Runtime.exceptionThrown");
   assert.deepEqual(exceptions, [], `browser exceptions: ${JSON.stringify(exceptions)}`);
-  console.log("agent-chat-browser: PASS journeys=14 four-tool-trace=PASS turn-pairs=PASS oversized-turn=OMITTED viewport=390 reduced-motion=PASS clear=PASS");
+  console.log("agent-chat-browser: PASS journeys=14 human-summaries=PASS four-tool-trace=PASS turn-pairs=PASS oversized-turn=OMITTED viewport=390 reduced-motion=PASS clear=PASS");
 } catch (error) {
   console.error(error?.stack ?? error);
   if (serverOutput) console.error(`server output:\n${serverOutput}`);
