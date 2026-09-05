@@ -146,7 +146,7 @@ $portExitCode = $LASTEXITCODE
 if ($portExitCode -ne 0) {
   throw "docker compose port failed."
 }
-$published = $publishedLines | Select-Object -First 1
+[string]$published = $publishedLines | Select-Object -First 1
 if ($published -notmatch '^127\.0\.0\.1:([0-9]{1,5})$') {
   throw "Unexpected Compose published address."
 }
