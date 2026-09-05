@@ -198,7 +198,7 @@ The Compose package:
 - deletes that volume only through explicit reset;
 - packages deterministic ZIP/tar archives with exact source commit, per-file checksums and a provider-secret scan;
 - installs repository-root `LICENSE.md` byte-for-byte as package-root `LICENSE.md` with mode 0644, includes it in `SHA256SUMS`, and verifies the same bytes/checksum in both archives;
-- keeps `.ps1`/`.cmd` launchers ASCII-only, BOM/NUL-free and LF-terminated for Windows PowerShell 5.1, with native-command `$LASTEXITCODE` checks;
+- keeps `.ps1`/`.cmd` launchers ASCII-only, BOM/NUL-free and LF-terminated for Windows PowerShell 5.1, with native-command `$LASTEXITCODE` checks; the port query drains native stdout and snapshots its exit code before selecting the first buffered line, so early pipeline termination cannot masquerade as a Docker failure; real nonzero exit and empty/invalid port output remain failures;
 - runs smoke verification under a unique Compose project so cleanup cannot address a user's normal MVP volume.
 
 ## 8. Non-goals

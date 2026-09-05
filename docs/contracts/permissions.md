@@ -2,12 +2,12 @@
 
 ## Metadata
 
-- `Status`: Current permission-class contract; concrete client operations remain planned unless their acceptance row is implemented
+- `Status`: Current permission-class contract; concrete client-operation implementation and bounded evidence are recorded in interfaces.md and client-shell.md; planned acceptance rows remain non-pass
 - `Version`: `permissions/v2`
 - `Last Review`: `2026-08-12`
 - `Registry`: [`market/capabilities/registry.json`](../../market/capabilities/registry.json)
-- `Application operations`: [`application-interface-registry/v2`](interfaces.md)
-- `Client boundary`: [`client-shell/v2.1`](client-shell.md)
+- `Application operations`: [`application-interface-registry/v2.1`](interfaces.md)
+- `Client boundary`: [`client-shell/v2.3`](client-shell.md)
 
 ## 1. Permission classes
 

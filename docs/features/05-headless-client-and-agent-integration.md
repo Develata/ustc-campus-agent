@@ -1,8 +1,8 @@
 # Headless client and external Agent integration
 
-- `Status`: Planned phased user journey; architecture, public-read-first scope and acceptance bindings accepted; no user CLI, inbound MCP adapter or M10 client API implemented
+- `Status`: Accepted phased journey with retained bounded client-core, fixture-loopback ordinary-user Affairs CLI and Affairs-first M10 protocol/compatibility evidence; production transport/auth/streams, inbound MCP and Dioxus peer journeys remain planned
 - `Owning plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
-- `Contracts`: [`client-shell/v2.1`](../contracts/client-shell.md), [`cli/v2.1`](../contracts/cli.md), [`application-interface-registry/v2`](../contracts/interfaces.md), [`permissions/v2`](../contracts/permissions.md)
+- `Contracts`: [`client-shell/v2.3`](../contracts/client-shell.md), [`cli/v2.2`](../contracts/cli.md), [`application-interface-registry/v2.1`](../contracts/interfaces.md), [`permissions/v2`](../contracts/permissions.md)
 - `Decision`: [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
 - `Acceptance`: `CLIENT-007`, `CLIENT-008`, `CLIENT-009`, `CLIENT-010`
 
@@ -12,12 +12,18 @@ A student can use USTC Campus Agent without a graphical client, and an explicitl
 
 The headless surface is a first-class client, not a debug wrapper around backend crates. It uses the same typed client semantics as Dioxus while keeping CLI and MCP protocol concerns at their outer adapters.
 
-## User and automation journey
+### Current bounded evidence, not full client readiness
+
+The retained `crates/client-core` and `apps/ustc-agent` implement public `affairs get` and capability-stdin `affairs lookup` over numeric loopback, typed response reduction, canonical `ustc-client-result/v1` JSON and stable exit classes. They do not import backend/operator implementations or accept raw session/operator authority. The accepted Affairs-first prerequisite additionally retains the M10-owned major-1 `server.info`, `capability.list`, `affairs.get` protocol and Web/client-core compatibility rejection before application dispatch. See the current [client contract](../contracts/client-shell.md), [CLI contract](../contracts/cli.md) and [operation registry](../contracts/interfaces.md).
+
+These are supporting partial proofs, not a production user profile, remote HTTP/TLS transport, streaming/reconnect/cancellation matrix, complete Dioxus peer, inbound MCP server or full cross-platform CLI acceptance. The Android debug WebView and composition-owned Chat page are separate demo evidence; neither promotes the full client contract.
+
+## Planned production user and automation journey
 
 ```text
 user configures an admitted server and least-privilege profile
 → runs one ustc-agent read-only command
-→ client verifies server/protocol compatibility
+→ client performs compatibility preflight and preserves M10's typed compatibility decision
 → M10 admits identity, bounds and authorization
 → owning application module returns a typed projection
 → CLI emits deterministic human text or versioned JSON
@@ -35,7 +41,7 @@ client submits correlated intent
 
 Stopping the CLI does not claim server cancellation or success.
 
-## External Agent journey
+## Planned external Agent journey
 
 ```text
 external Agent connects to reviewed inbound MCP surface
@@ -57,6 +63,7 @@ Ready
 Authentication required
 Forbidden / capability unavailable
 Upgrade required
+Incompatible protocol
 Offline / transport unavailable
 Pending
 Conflict / stale precondition
@@ -81,7 +88,8 @@ The paired Skill is documentation only: it may explain operation choice, typed i
 
 ## Failure and recovery copy
 
-- Incompatible client: “The server requires a newer client protocol; no operation was submitted.”
+- Server-typed `upgrade_required`: “The server requires a newer client protocol; no operation was submitted.”
+- Server-typed `incompatible_protocol`: “The client protocol is unsupported, missing or malformed; no operation was submitted.”
 - Authentication required: “Choose or refresh a user profile; operator credentials are not used automatically.”
 - Policy denial: report the stable capability/policy class without suggesting a same-name fallback.
 - Timeout after possible acceptance: report the correlation identity and require reconciliation before retry.
@@ -103,6 +111,8 @@ The paired Skill is documentation only: it may explain operation choice, typed i
 
 ## Delivery sequence
 
+The retained Affairs-first protocol/compatibility prerequisite and fixture-loopback CLI above precede the following still-planned production access lane. Its Market-first public-read order remains the accepted target; listing it does not deny the already retained Affairs evidence or promote later routes:
+
 ```text
 M10 operation/schema/permission registry
 → M10 client-protocol + M80 client-core against fake M10
@@ -123,4 +133,4 @@ This is the M10/M80 client-access lane order. It does not replace the product im
 - `CLIENT-009`: real `ustc-agent` read path proves JSON/NDJSON framing, typed exit/error, auth isolation, compatibility and reconnect/cancellation distinction.
 - `CLIENT-010`: external MCP conformance proves bounded discovery/invocation, tenant/grant isolation, instruction-isolated results and no M51/domain/operator reach-through.
 
-All four rows are currently `planned`. This feature document does not claim a runnable binary, MCP endpoint, campus data source or Dioxus client.
+All four rows remain `planned` and non-pass in the [active matrix](../acceptance/matrix.tsv). CLIENT-007 and CLIENT-009 retain supporting Affairs-first protocol/client-core evidence, and the fixture-loopback CLI is executable, but the full peer/host/stream/authentication assertions are not satisfied. CLIENT-008's complete confinement manifest and CLIENT-010's external MCP conformance remain future bindings. No MCP endpoint, live campus-source activation, production client or Dioxus readiness is claimed.

@@ -6,7 +6,7 @@
 - `Version`: `cli/v2.2`
 - `Last Review`: `2026-08-30`
 - `Owning plans`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md), [`M90 Infrastructure and Operations`](../plan/modules/90-infrastructure-operations.md)
-- `Counterpart contract`: [`client-shell/v2.1`](client-shell.md)
+- `Counterpart contract`: [`client-shell/v2.3`](client-shell.md)
 - `Acceptance`: implemented command-specific evidence below, fixed bounded Affairs/ChangeRadar administrator callers and bounded non-production Affairs ordinary-user evidence; `CLIENT-008` and `CLIENT-009` remain planned/non-pass
 
 ## 1. Binary and privilege split
@@ -111,7 +111,7 @@ ustc-agent market packages list --format json
 
 These planned commands project `server.info`, `capability.list` and `market.package.list` from [`interfaces.md`](interfaces.md). Exact options, DTO schema versions and route bindings are fixed in the first accepted production command-registry slice before implementation. Product-specific query/command/event families are added only after their owning M10/application contracts and active acceptance rows exist. Command spelling never creates an operation absent from that registry.
 
-The initial CLI does not include generic install/grant/source-crawl/source-apply actions, an embedded model loop or a generic arbitrary HTTP/tool invocation command. Its only product mutations are the two fixed loopback demo publication callers above.
+The initial CLI does not include generic install/grant/source-crawl/source-apply actions, an embedded model loop or a generic arbitrary HTTP/tool invocation command. The ordinary-user CLI has no product mutation command; the two fixed loopback demo publication callers above belong only to the separate operator binary, `ustc-agentctl`.
 
 The fixture-backed ordinary-user `affairs get/lookup` evidence does not activate broad `affairs search`, production auth/HTTP, inbound MCP or another ordinary-user product family. The separate operator-only ChangeRadar demo caller does not add ChangeRadar to `ustc-agent` or M80 client-core. Later read-only projections retain the product order; cultivation programs use `program`, tenant-local planning drafts use `planner draft`, and an ambiguous `plan` namespace is not admitted.
 
