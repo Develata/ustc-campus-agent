@@ -126,6 +126,16 @@ cargo run -p ustc-agentctl -- changes publication-status --server 127.0.0.1:8787
 cargo run -p ustc-agentctl -- changes publish-demo --server 127.0.0.1:8787 --confirm
 ```
 
+## 统一身份认证接入边界
+
+正式接入学校统一身份认证，需要校方接入授权、应用登记及回调地址等配置。当前未配置 USTC SSO，使用本机演示用户会话，不收集学校账号密码；这不是完整的普通账号注册或密码登录系统，也不表示校方已批准或拒绝接入。
+
+源码附带[独立 SSO 接口样例](examples/sso-interface/README.zh-CN.md)：状态查询明确返回未配置，登录发起与回调均拒绝，不签发会话。取得相关授权后，可按获批协议实现服务端认证适配器，经 M00 验证身份并建立应用会话；学校 SSO 身份本身不授予管理员或校园数据访问权限。样例不在当前 `ustc-agentd` 路由内。
+
+```bash
+python3 -B -m unittest discover -s examples/sso-interface -p 'test_*.py' -v
+```
+
 ## Current decisions
 
 | Item | Decision |

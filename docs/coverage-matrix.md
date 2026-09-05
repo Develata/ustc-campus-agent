@@ -49,6 +49,10 @@ The machine-checked acceptance projection uses only these code-formatted tokens:
 
 Tokens are checked independently; one `long-horizon:` token cannot mask an invalid `active:` claim for another reference. A module may write contract/fixture scaffolding while it has `gap`, but cannot claim `StandaloneReady` until the required active rows and bindings exist.
 
+## Usable demo and standalone SSO example
+
+The bounded [usable-demo contract](contracts/usable-demo-enhancements.md) and [MVP feature projection](features/06-mvp-core-capabilities.md) bind active `UE-001`, `UE-002`, `UE-003` and `SSO-001` rows in `acceptance/matrix.tsv`. The `demo-enhancements` workflow executes their real Python HTTP, JavaScript unit and compiled-binary browser commands on every pull request and main push. These cases cover the existing demo composition and the separately executable [SSO sample](../examples/sso-interface/README.zh-CN.md); they do not promote M00 production authentication, M80 client parity or M60 source readiness. All pre-existing matrix rows and module projections retain their prior meanings.
+
 ## Non-matrix documents
 
 | Path | Role | Authority rule |

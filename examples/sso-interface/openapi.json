@@ -1,0 +1,249 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UCA SSO disabled interface prototype",
+    "version": "1.0.0",
+    "description": "非官方、非生产服务；尚未配置真实 USTC SSO。不收集学校账号密码。"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8891",
+      "description": "仅本机样例，端口可配置"
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/sso/ustc/status": {
+      "get": {
+        "operationId": "ssoUstcStatus",
+        "description": "独立样例；不处理认证凭据。查询参数被忽略，不记录、不回显。请求体不支持。",
+        "responses": {
+          "200": {
+            "description": "固定的未配置状态，不签发任何会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                },
+                "example": {
+                  "schema_version": "uca-sso-reservation/v1",
+                  "provider": "ustc",
+                  "enabled": false,
+                  "state": "not_configured",
+                  "protocol": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Host/请求体/HTTP格式错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "方法不允许；Allow列出唯一允许方法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "请求路径过长",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/sso/ustc/start": {
+      "post": {
+        "operationId": "ssoUstcStart",
+        "description": "独立样例；不处理认证凭据。查询参数被忽略，不记录、不回显。请求体不支持。",
+        "responses": {
+          "503": {
+            "description": "固定的未配置状态，不签发任何会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "schema_version": "uca-sso-reservation/v1",
+                  "provider": "ustc",
+                  "error": "sso_not_configured",
+                  "message": "尚未配置学校统一身份认证；正式接入需相关授权及服务端配置。"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Host/请求体/HTTP格式错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "方法不允许；Allow列出唯一允许方法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "请求路径过长",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/sso/ustc/callback": {
+      "get": {
+        "operationId": "ssoUstcCallback",
+        "description": "独立样例；不处理认证凭据。查询参数被忽略，不记录、不回显。请求体不支持。",
+        "responses": {
+          "503": {
+            "description": "固定的未配置状态，不签发任何会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "schema_version": "uca-sso-reservation/v1",
+                  "provider": "ustc",
+                  "error": "sso_not_configured",
+                  "message": "尚未配置学校统一身份认证；正式接入需相关授权及服务端配置。"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Host/请求体/HTTP格式错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "方法不允许；Allow列出唯一允许方法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "414": {
+            "description": "请求路径过长",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Status": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "provider",
+          "enabled",
+          "state",
+          "protocol"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "uca-sso-reservation/v1"
+          },
+          "provider": {
+            "type": "string",
+            "const": "ustc"
+          },
+          "enabled": {
+            "type": "boolean",
+            "const": false
+          },
+          "state": {
+            "type": "string",
+            "const": "not_configured"
+          },
+          "protocol": {
+            "type": "null"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "provider",
+          "error"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "uca-sso-reservation/v1"
+          },
+          "provider": {
+            "type": "string",
+            "const": "ustc"
+          },
+          "error": {
+            "type": "string",
+            "enum": [
+              "sso_not_configured",
+              "invalid_http_request",
+              "invalid_host",
+              "request_target_too_long",
+              "request_body_not_supported",
+              "route_not_found",
+              "method_not_allowed"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

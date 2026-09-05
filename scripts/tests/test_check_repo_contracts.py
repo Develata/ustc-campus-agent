@@ -8923,6 +8923,18 @@ class CiGovernanceWorkflowTests(unittest.TestCase):
                 "",
             ),
             (
+                "      - name: Usability unit tests\n        run: node --test scripts/tests/test_course_editor.mjs scripts/tests/test_affairs_checklist.mjs\n",
+                "",
+            ),
+            (
+                "      - name: SSO interface HTTP contract\n        run: python3 -B -W error::ResourceWarning -m unittest discover -s examples/sso-interface -p 'test_*.py' -v\n",
+                "",
+            ),
+            (
+                "      - name: Usability browser behavior\n        run: node scripts/test_usable_enhancements_browser.mjs target/debug/ustc-agentd\n",
+                "",
+            ),
+            (
                 "      - name: Clippy\n        run: cargo clippy --locked --all-targets --all-features -- -D warnings\n",
                 "",
             ),

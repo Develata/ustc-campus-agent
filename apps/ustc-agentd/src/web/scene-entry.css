@@ -1,0 +1,21 @@
+.scene-entry, .answer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .65rem;
+  margin: 1rem 0;
+  min-width: 0;
+}
+.scene-entry button, .answer-actions button, .answer-actions a {
+  min-height: 44px;
+  padding: .65rem .85rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.answer-actions { font-size: .85rem; }
+.answer-actions span { flex-basis: 100%; overflow-wrap: anywhere; }
+#scene-hint { overflow-wrap: anywhere; }
+@media (max-width: 420px) {
+  .scene-entry button { flex: 1 1 42%; }
+}
