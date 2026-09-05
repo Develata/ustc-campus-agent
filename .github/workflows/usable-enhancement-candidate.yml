@@ -1,0 +1,112 @@
+name: usable-enhancement-candidate
+
+'on':
+  push:
+    branches: [artifact/sep5-usable-enhancements]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: usable-enhancement-candidate-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      TARGET_SHA: e69858b324874885b976b20fb52bb5ce601f20d2
+      UCA_SOURCE_COMMIT: e69858b324874885b976b20fb52bb5ce601f20d2
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-enhancement-pycache
+      CHROME_BIN: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify exact product source
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain=v1)"
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          toolchain: 1.97.1
+          components: rustfmt, clippy
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: 3.13.5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Governance and unit tests
+        run: |
+          set -euo pipefail
+          python3 scripts/run_checker_shards.py --jobs 4 --timeout-seconds 1800 --inventory scripts/checker_test_inventory.json --evidence-dir "$RUNNER_TEMP/checker-evidence" --require-clean --require-runner-image-identity
+          python3 scripts/check_repo_contracts.py
+          node --test scripts/tests/test_course_editor.mjs scripts/tests/test_affairs_checklist.mjs
+      - name: Rust complete gates
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo test --locked --all-targets --all-features
+          cargo test --locked --all-features --doc
+          cargo build --release --locked -p ustc-agentd --bin ustc-agentd
+      - name: Exact compiled browser journeys
+        env:
+          UCA_TEST_SCREENSHOT: ${{ runner.temp }}/usable-course-editor.png
+        run: |
+          set -euo pipefail
+          test -x "$CHROME_BIN"
+          node --version
+          node scripts/test_agent_chat_browser.mjs target/release/ustc-agentd
+          node scripts/test_usable_enhancements_browser.mjs target/release/ustc-agentd
+      - name: Deterministic Compose gate and archive readback
+        run: |
+          set -euo pipefail
+          bash scripts/check_mvp_compose_delivery.sh
+          out="$RUNNER_TEMP/usable-candidate"
+          bash scripts/package_three_plugin_mvp_compose.sh --binary target/release/ustc-agentd --output-dir "$out" --source-commit "$TARGET_SHA"
+          short=${TARGET_SHA:0:12}
+          (cd "$out" && sha256sum -c "ustc-campus-agent-mvp-compose-${short}.sha256")
+          mkdir -p "$RUNNER_TEMP/readback-tar" "$RUNNER_TEMP/readback-zip"
+          tar -xzf "$out/ustc-campus-agent-mvp-compose-${short}.tar.gz" -C "$RUNNER_TEMP/readback-tar"
+          unzip -q "$out/ustc-campus-agent-mvp-compose-${short}.zip" -d "$RUNNER_TEMP/readback-zip"
+          diff -qr "$RUNNER_TEMP/readback-tar/ustc-campus-agent-mvp-compose" "$RUNNER_TEMP/readback-zip/ustc-campus-agent-mvp-compose"
+          for root in "$RUNNER_TEMP/readback-tar" "$RUNNER_TEMP/readback-zip"; do
+            package="$root/ustc-campus-agent-mvp-compose"
+            (cd "$package" && sha256sum -c SHA256SUMS)
+            chmod u+x "$package/bin/ustc-agentd"
+            test "$("$package/bin/ustc-agentd" source-commit)" = "$TARGET_SHA"
+          done
+          cp "$RUNNER_TEMP/usable-course-editor.png" "$out/"
+          cp docs/contracts/usable-demo-enhancements.md "$out/ENHANCEMENT-CONTRACT.md"
+          printf 'builder_commit=%s\nsource_commit=%s\narchive_pair_readback=PASS\n' "$GITHUB_SHA" "$TARGET_SHA" > "$out/source-identity.txt"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: usable-enhancement-candidate-${{ env.TARGET_SHA }}
+          path: ${{ runner.temp }}/usable-candidate/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: checker-evidence-${{ env.TARGET_SHA }}
+          path: ${{ runner.temp }}/checker-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows-launchers:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: e69858b324874885b976b20fb52bb5ce601f20d2
+          persist-credentials: false
+      - name: Verify Windows PowerShell 5.1 launchers
+        shell: cmd
+        run: powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/check_windows_launchers.ps1
