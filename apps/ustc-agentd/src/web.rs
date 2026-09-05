@@ -39,8 +39,24 @@ use super::{AffairsComposition, parse_loopback_socket_addr};
 use ustc_campus_agent_simple_calendar::CalendarError;
 
 const INDEX_HTML: &str = include_str!("web/index.html");
-const APP_JS: &str = include_str!("web/app.js");
-const STYLES_CSS: &str = include_str!("web/styles.css");
+const APP_JS: &str = concat!(
+    include_str!("web/app.js"),
+    "\n;\n",
+    include_str!("web/course-editor.js"),
+    "\n;\n",
+    include_str!("web/affairs-checklist.js"),
+    "\n;\n",
+    include_str!("web/scene-entry.js"),
+);
+const STYLES_CSS: &str = concat!(
+    include_str!("web/styles.css"),
+    "\n",
+    include_str!("web/course-editor.css"),
+    "\n",
+    include_str!("web/affairs-checklist.css"),
+    "\n",
+    include_str!("web/scene-entry.css"),
+);
 const OPPORTUNITY_CONFIRMATION_HEADER: &str = "x-ustc-opportunity-confirmation";
 
 const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";

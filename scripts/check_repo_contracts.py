@@ -217,6 +217,7 @@ SECRET_PATTERNS = [
     re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
 ]
 KEY_FILES = [
+    "docs/contracts/usable-demo-enhancements.md",
     "README.md",
     "AGENTS.md",
     "docs/README.md",

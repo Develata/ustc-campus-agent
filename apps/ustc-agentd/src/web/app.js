@@ -79,6 +79,15 @@ const OPPORTUNITY_DEMO_TEMPLATE = {
   ]
 };
 let opportunityProfileId = null;
+let opportunityBusy = false;
+
+function setOpportunityBusy(busy) {
+  opportunityBusy = busy;
+  opportunityCreate.disabled = busy;
+  opportunityView.disabled = busy || !opportunityProfileId;
+  opportunityPlan.disabled = busy || !opportunityProfileId;
+  opportunityDelete.disabled = busy || !opportunityProfileId;
+}
 
 function clear(element) {
   while (element.firstChild) {
@@ -806,7 +815,7 @@ function renderFound(terminal) {
   status.textContent = "已载入当前 source-grounded published fixture 结果。";
 }
 
-function renderResponse(payload) {
+function renderResponse(payload, checklistToken) {
   if (payload?.kind !== "available" || payload?.redaction !== "public") {
     showError("服务器没有返回可公开呈现的查询结果。请核对流程 ID 或稍后重试。");
     return;
@@ -818,9 +827,14 @@ function renderResponse(payload) {
     return;
   }
   renderFound(terminal);
+  window.UcaAffairsChecklist?.render(payload, checklistToken);
 }
 
+let affairsLookupSequence = 0;
 async function lookup() {
+  const sequence = ++affairsLookupSequence;
+  const checklistToken = window.UcaAffairsChecklist?.invalidate();
+  result.hidden = true;
   const procedureId = procedureInput.value.trim();
   if (!procedureId) {
     showError("请输入流程 ID。");
@@ -842,16 +856,21 @@ async function lookup() {
       cache: "no-store"
     });
     const payload = await response.json();
+    if (sequence !== affairsLookupSequence) return;
     if (!response.ok) {
       throw new Error(payload?.error ?? `HTTP ${response.status}`);
     }
-    renderResponse(payload);
+    renderResponse(payload, checklistToken);
   } catch (error) {
+    if (sequence !== affairsLookupSequence) return;
+    window.UcaAffairsChecklist?.invalidate();
     showError(`读取失败：${error instanceof Error ? error.message : "未知错误"}`);
     status.textContent = "读取未完成。";
   } finally {
-    submitButton.disabled = false;
-    submitButton.textContent = "查看流程";
+    if (sequence === affairsLookupSequence) {
+      submitButton.disabled = false;
+      submitButton.textContent = "查看流程";
+    }
   }
 }
 
@@ -1103,6 +1122,10 @@ function validOpportunityProfileHint(value) {
 
 function setOpportunityHint(value) {
   const normalizedValue = validOpportunityProfileHint(value) ? value : null;
+  if (opportunityProfileId !== normalizedValue) {
+    chatOpportunityConfirm.checked = false;
+    opportunityPlanResult.hidden = true;
+  }
   opportunityProfileId = normalizedValue;
   try {
     if (normalizedValue) {
@@ -1264,16 +1287,19 @@ async function requestOpportunity(url, options) {
 }
 
 function createOpportunityRequestBody(envelope) {
+  // Values are snapshotted with the idempotency envelope, not read again on retry.
+  // Older persisted requests used the fixed public synthetic template.
+  const profile = envelope.profile_data ?? OPPORTUNITY_DEMO_TEMPLATE;
   return {
     consent: true,
     request_id: envelope.request_id,
     correlation_id: envelope.correlation_id,
     idempotency_key: envelope.idempotency_key,
     consented_at: envelope.timestamp,
-    completed_courses: OPPORTUNITY_DEMO_TEMPLATE.completed_courses,
-    min_credits: OPPORTUNITY_DEMO_TEMPLATE.min_credits,
-    max_credits: OPPORTUNITY_DEMO_TEMPLATE.max_credits,
-    preference_weights: OPPORTUNITY_DEMO_TEMPLATE.preference_weights
+    completed_courses: profile.completed_courses,
+    min_credits: profile.min_credits,
+    max_credits: profile.max_credits,
+    preference_weights: profile.preference_weights
   };
 }
 
@@ -1416,13 +1442,28 @@ function renderOpportunityPlan(terminal) {
 }
 
 async function createOpportunityProfile() {
+  if (opportunityBusy || chatPending) return;
+  if (opportunityProfileId && !reusableOperationEnvelope("create", null)) {
+    opportunityStatus.textContent = "当前已有已保存档案。若要采用新草稿，请先明确撤回/删除当前档案，再重新同意并创建；不会自动删除。";
+    return;
+  }
   if (!opportunityConsent.checked) {
     opportunityStatus.textContent = "必须先明确勾选 consent；未同意时不会发出 private write。";
     return;
   }
-  const envelope = reusableOperationEnvelope("create", null) ?? mintOperationEnvelope("create", null);
+  let envelope = reusableOperationEnvelope("create", null);
+  if (!envelope) {
+    try {
+      envelope = mintOperationEnvelope("create", null);
+      envelope.profile_data = window.UcaCourseEditor.readDraft();
+    } catch (error) {
+      opportunityStatus.textContent = `档案草稿未提交：${error.message}`;
+      return;
+    }
+  }
   storePendingOperation(envelope);
-  opportunityCreate.disabled = true;
+  window.UcaCourseEditor.setLocked(true);
+  setOpportunityBusy(true);
   opportunityStatus.textContent = "正在创建 tenant-private synthetic profile…";
   let outcome = null;
   try {
@@ -1433,13 +1474,15 @@ async function createOpportunityProfile() {
   } catch (_error) {
     outcome = { outcome: "unknown", payload: null };
   } finally {
-    opportunityCreate.disabled = false;
+    setOpportunityBusy(false);
   }
   if (outcome.outcome !== "terminal") {
     opportunityStatus.textContent = "档案创建结果尚未确认；已保留同一请求 envelope，请再次点击以按同一请求重试。";
     return;
   }
   clearPendingOperation("create", envelope);
+  window.UcaCourseEditor.setLocked(false);
+  opportunityConsent.checked = false;
   const payload = outcome.payload;
   if (payload?.kind !== "opportunity_accepted") {
     opportunityStatus.textContent = `档案创建失败：${payload?.rejection?.kind ?? "未知错误"}`;
@@ -1449,11 +1492,12 @@ async function createOpportunityProfile() {
 }
 
 async function viewOpportunityProfile() {
+  if (opportunityBusy) return;
   if (!opportunityProfileId) {
     opportunityStatus.textContent = "没有可读取的 profile ID hint。";
     return;
   }
-  opportunityView.disabled = true;
+  setOpportunityBusy(true);
   opportunityStatus.textContent = "正在以 authenticated owner 读取 private profile metadata…";
   try {
     const terminal = await requestOpportunity(
@@ -1468,16 +1512,18 @@ async function viewOpportunityProfile() {
       setOpportunityHint(null);
     }
   } finally {
-    opportunityView.disabled = !opportunityProfileId;
+    setOpportunityBusy(false);
   }
 }
 
 async function generateOpportunityPlan() {
+  if (opportunityBusy) return;
   if (!opportunityProfileId) {
     opportunityStatus.textContent = "请先创建或恢复 private profile。";
     return;
   }
-  opportunityPlan.disabled = true;
+  setOpportunityBusy(true);
+  opportunityPlanResult.hidden = true;
   opportunityStatus.textContent = "正在校验 current source、资格条件、依赖与 hard constraints…";
   try {
     const terminal = await requestOpportunity("/api/v1/opportunity/plans", {
@@ -1493,11 +1539,12 @@ async function generateOpportunityPlan() {
     opportunityPlanResult.hidden = true;
     opportunityStatus.textContent = `计划生成失败：${error instanceof Error ? error.message : "未知错误"}`;
   } finally {
-    opportunityPlan.disabled = !opportunityProfileId;
+    setOpportunityBusy(false);
   }
 }
 
 async function deleteOpportunityProfile() {
+  if (opportunityBusy || chatPending) return;
   if (!opportunityProfileId) {
     opportunityStatus.textContent = "没有可删除的 private profile。";
     return;
@@ -1505,7 +1552,7 @@ async function deleteOpportunityProfile() {
   const envelope = reusableOperationEnvelope("delete", opportunityProfileId)
     ?? mintOperationEnvelope("delete", opportunityProfileId);
   storePendingOperation(envelope);
-  opportunityDelete.disabled = true;
+  setOpportunityBusy(true);
   opportunityStatus.textContent = "正在撤回 consent 并原子删除 private payload…";
   const target = envelope.profile_id ?? opportunityProfileId;
   let outcome = null;
@@ -1517,7 +1564,7 @@ async function deleteOpportunityProfile() {
   } catch (_error) {
     outcome = { outcome: "unknown", payload: null };
   } finally {
-    opportunityDelete.disabled = !opportunityProfileId;
+    setOpportunityBusy(false);
   }
   if (outcome.outcome !== "terminal") {
     opportunityStatus.textContent = "撤回/删除结果尚未确认；已保留同一请求 envelope，请再次点击以按同一请求重试。";
@@ -1544,7 +1591,7 @@ async function deleteOpportunityProfile() {
     document.querySelector("#opportunity-delete-receipt"),
     `${deletion.deletion_receipt_id} · profile ${deletion.profile_snapshot_id} · deleted ${formatTime(deletion.deleted_at)}`
   );
-  opportunityStatus.textContent = "删除收据已持久化；tombstone 不含 completed courses 或 preference weights。下方 Synthetic profile 只是可再次 consent 的公开 demo 模板，不是已删除档案。";
+  opportunityStatus.textContent = "删除收据已持久化；旧档案不可恢复。本页 synthetic 草稿不是已保存档案，可重新明确同意后创建；不会自动创建。";
 }
 
 assertChatDomContract();

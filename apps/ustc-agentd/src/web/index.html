@@ -301,7 +301,7 @@
         <div>
           <p class="eyebrow">OPPORTUNITY GRAPH · CONSENT-BOUND 课程规划</p>
           <h2 id="opportunity-title">先同意，再规划；撤回后即不再读取。</h2>
-          <p>使用不含真实个人数据的 synthetic academic profile 和 DemoReviewed catalog。服务端从 authenticated demo session 推导 tenant/user；浏览器只保存不具 authority 的 profile ID hint。</p>
+          <p>使用不含真实个人数据的 synthetic academic profile 和 DemoReviewed catalog。服务端从 authenticated demo session 推导 tenant/user；浏览器保存不具 authority 的 profile ID hint；待确认的创建请求还会暂存公开 synthetic 输入以便原样重试，不支持真实学生资料导入。</p>
         </div>
       </div>
 

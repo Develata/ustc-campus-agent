@@ -1,0 +1,58 @@
+/* Personal progress controls reuse the existing Affairs surfaces and tokens. */
+.affairs-checklist {
+  margin-block: 24px;
+  padding-block: 20px;
+  border-block: 1px solid var(--line);
+  min-width: 0;
+}
+.affairs-checklist h3 { margin: 0 0 8px; }
+.affairs-checklist p {
+  color: var(--muted);
+  font-size: .875rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.affairs-checklist-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.affairs-checklist-actions button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.affairs-checklist-actions button:hover:not(:disabled) { background: var(--accent-soft); }
+.affairs-checklist-actions button:active:not(:disabled) { border-color: var(--accent); }
+.affairs-checklist-actions button:disabled { opacity: .55; cursor: not-allowed; }
+.affairs-checklist textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: .8125rem/1.6 ui-monospace, monospace;
+  resize: vertical;
+}
+.affairs-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  min-width: 0;
+  padding-block: 10px;
+  line-height: 1.65;
+  cursor: pointer;
+}
+.affairs-check-item input {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+}
+.affairs-check-item span { min-width: 0; overflow-wrap: anywhere; }
+.affairs-check-item:has(input:disabled) { cursor: default; }
