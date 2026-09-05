@@ -68,6 +68,9 @@ R3.1 内层仅变更 `start.ps1`、`README.md`、`BUILD-INFO.txt`、`SHA256SUMS`
 
 ```bash
 set -euo pipefail
+printf '%s  %s\n' \
+  'de2bf78992b82a6eb8be63e12dcf6a2ace942074b6baac1f9c0817dcf4396cfe' \
+  'ustc-campus-agent-submission-v1-staging-r3.1-a26c55b1.zip' | sha256sum -c -
 sha256sum -c ustc-campus-agent-submission-v1-staging-r3.1-a26c55b1.zip.sha256
 fresh="$(mktemp -d ./uca-r31-fresh.XXXXXX)"
 unzip -q ustc-campus-agent-submission-v1-staging-r3.1-a26c55b1.zip -d "$fresh"
