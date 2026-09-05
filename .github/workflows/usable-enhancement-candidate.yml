@@ -19,7 +19,7 @@ jobs:
       TARGET_SHA: e69858b324874885b976b20fb52bb5ce601f20d2
       UCA_SOURCE_COMMIT: e69858b324874885b976b20fb52bb5ce601f20d2
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
-      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/uca-enhancement-pycache
+      PYTHONPYCACHEPREFIX: /tmp/uca-enhancement-pycache-${{ github.run_id }}-${{ github.run_attempt }}
       CHROME_BIN: /usr/bin/google-chrome
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
