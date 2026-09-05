@@ -396,7 +396,7 @@ The framework-neutral conformance suite runs every peer adapter against equivale
 
 `CLIENT-007` proves shared typed-core and peer equivalence. `CLIENT-008` proves no shell-out path and operator privilege isolation. `CLIENT-009` proves the user CLI machine contract. `CLIENT-010` proves the least-privilege inbound MCP boundary.
 
-These rows remain `planned` until every assertion in their executable bindings passes. The bounded Affairs client/CLI path and debug Android bridge are supporting partial evidence, not substitutes for completion of the planned rows. Existing long-horizon Dioxus `CLIENT-001` through `CLIENT-010`, `WEB-*` and deployment cases remain non-active until projected into the active matrix.
+These rows remain `planned` until every assertion in their executable bindings passes. The bounded Affairs client/CLI path and debug Android bridge are supporting partial evidence, not substitutes for completion of the planned rows. Existing long-horizon Dioxus `CLIENT-001` through `CLIENT-006`, `WEB-*` and deployment cases remain non-active until projected into the active matrix.
 
 ## 18. Current status
 
@@ -413,4 +413,4 @@ Accepted now:
 
 Implemented now as bounded non-production evidence: one framework-neutral client-core and real `ustc-agent` public Affairs get/capability-lookup JSON path against the fixture-only loopback composition, including dependency confinement and real subprocess tests; plus one source-bound debug Android WebView bridge as partial evidence toward planned `CLIENT-002`.
 
-Not implemented: production profile/auth, HTTP/TLS ingress, typed event stream, full peer conformance, inbound MCP adapter, Dioxus application, peer Web/PWA journey, production Android/Windows package or deployment, or complete long-horizon `CLIENT-002`. This partial evidence does not promote those planned rows to pass.
+Not implemented: production profile/auth and remote HTTP/TLS ingress, typed event stream, full peer conformance, inbound MCP adapter, Dioxus application, peer Web/PWA journey, production Android/Windows package or deployment, or complete long-horizon `CLIENT-002`. This partial evidence does not promote those planned rows to pass.

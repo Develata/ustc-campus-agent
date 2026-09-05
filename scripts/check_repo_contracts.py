@@ -9725,7 +9725,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
         "docs/tasks/01-execution-roadmap.md": "5b93155d140267dfe9aeff3e77a0a72f8e6134e79547838d9eecad66ba45b262",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
-        "docs/coverage-matrix.md": "05e643b3ef4f291318961447782b32cdb05425fcb4f7d8cfbe0890dc20f63e30",
+        "docs/coverage-matrix.md": "603f19b17cae09da2e997a4d9203446fae379f8a184a45ec9d48e31d7fc03e17",
     }
     if tuple(frozen_projection_sha256) != declared_projection_paths:
         fail(
@@ -13780,7 +13780,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "dcfbbd3b30fd178239a2d7579bc4626e656802633f31d08e19b5684323c7d1bf", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "b20b1d412773754aef15ba8c4a91c751021f28a14af4e9a74683c9ce9bc374a9", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},

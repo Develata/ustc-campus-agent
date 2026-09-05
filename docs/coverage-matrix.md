@@ -51,7 +51,7 @@ Tokens are checked independently; one `long-horizon:` token cannot mask an inval
 
 ## Usable demo and standalone SSO example
 
-The bounded [usable-demo contract](contracts/usable-demo-enhancements.md) and [MVP feature projection](features/06-mvp-core-capabilities.md) bind active `UE-001`, `UE-002`, `UE-003` and `SSO-001` rows in `acceptance/matrix.tsv`. The `demo-enhancements` workflow executes their real Python HTTP, JavaScript unit and compiled-binary browser commands on every pull request and main push. These cases cover the existing demo composition and the separately executable [SSO sample](../examples/sso-interface/README.zh-CN.md); they do not promote M00 production authentication, M80 client parity or M60 source readiness. All pre-existing matrix rows and module projections retain their prior meanings.
+The bounded [usable-demo contract](contracts/usable-demo-enhancements.md) and [MVP feature projection](features/06-mvp-core-capabilities.md) bind active `UE-001`, `UE-002`, `UE-003` and `SSO-001` rows in `acceptance/matrix.tsv`. The existing [ci.yml](../.github/workflows/ci.yml) workflow executes their real Python HTTP, JavaScript unit and compiled-binary browser commands on every pull request and main push. These cases cover the existing demo composition and the separately executable [SSO sample](../examples/sso-interface/README.zh-CN.md); they do not promote M00 production authentication, M80 client parity or M60 source readiness. All pre-existing matrix rows and module projections retain their prior meanings.
 
 ## Non-matrix documents
 
