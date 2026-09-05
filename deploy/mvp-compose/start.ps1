@@ -139,10 +139,14 @@ if ($LASTEXITCODE -ne 0) {
   throw "docker compose up failed."
 }
 
-$published = (& docker compose port mvp 8787 | Select-Object -First 1)
-if ($LASTEXITCODE -ne 0) {
+# Drain native stdout before selecting a line. In Windows PowerShell 5.1,
+# Select-Object -First can stop the native pipeline and leave exit code -1.
+$publishedLines = @(& docker compose port mvp 8787)
+$portExitCode = $LASTEXITCODE
+if ($portExitCode -ne 0) {
   throw "docker compose port failed."
 }
+[string]$published = $publishedLines | Select-Object -First 1
 if ($published -notmatch '^127\.0\.0\.1:([0-9]{1,5})$') {
   throw "Unexpected Compose published address."
 }

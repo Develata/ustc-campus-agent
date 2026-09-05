@@ -240,4 +240,5 @@ try {
   }
 }
 
+& (Join-Path $PSScriptRoot "check_windows_native_port.ps1")
 Write-Output "WINDOWS_POWERSHELL_51_LAUNCHERS=PASS"
