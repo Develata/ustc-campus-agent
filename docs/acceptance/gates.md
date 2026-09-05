@@ -22,6 +22,10 @@ git diff --check
 
 For a local docs-only iteration, `python3 scripts/check_repo_contracts.py` and `git diff --check` are the minimum quick gate; final PR readiness still uses the complete CI command set. The doctest command remains an unconditional, blocking `Doc tests` step in the `rust` job on `pull_request`; moving, conditioning, making it non-blocking or changing it to a multiline carrier requires an explicit checker-contract update.
 
+## Usability and SSO example gate
+
+`UE-001`–`UE-003` and `SSO-001` are active PR rows in `matrix.tsv`. `.github/workflows/ci.yml` runs the standalone SSO real-HTTP suite, both JavaScript unit suites, and the compiled-binary usability browser suite on pull requests and main pushes. This job must pass alongside the existing CI jobs before accepting the enhanced submission source or replacing its package; the SSO sample's passing rejection tests do not establish real-school authentication. Exact-main artifact rebuild and download/read-back remain separate requirements.
+
 ## Core demo gate
 
 Every `matrix.tsv` row whose `gate` contains `core-demo` must pass for the claimed demo scope. A feature can be omitted from a smaller intermediate demonstration only if the claim and gate profile are explicitly narrowed; the full three-Plugin competition demo cannot reinterpret planned as pass.

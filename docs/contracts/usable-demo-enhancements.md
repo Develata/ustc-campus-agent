@@ -34,7 +34,7 @@ The separately executable [SSO reservation sample](../../examples/sso-interface/
 
 ## Acceptance (all planned before implementation)
 
-Bindings: `scripts/test_usable_enhancements_browser.mjs`, plus existing `scripts/test_agent_chat_browser.mjs`, Python contracts/tests, and Rust gates for compiled asset wiring.
+Bindings: active `UE-001`, `UE-002`, `UE-003` and `SSO-001` rows in [`../acceptance/matrix.tsv`](../acceptance/matrix.tsv), executed by `.github/workflows/ci.yml` on pull requests and main; `scripts/test_usable_enhancements_browser.mjs`, plus existing `scripts/test_agent_chat_browser.mjs`, Python contracts/tests, and Rust gates for compiled asset wiring. The new rows add no production SSO success path and leave every pre-existing matrix row unchanged.
 
 - UE-01A: changed valid constraints reach the real Rust endpoint and produce an observably different plan or honest infeasible result; compare at least two inputs.
 - UE-01B: invalid bounds, fractional input, unavailable catalog code rejected; no implicit consent, no old-profile confirmation carryover; uncertain retry preserves bytes.
