@@ -104,7 +104,8 @@ cd ustc-campus-agent
 仓库提供可复现的打包脚本；组装完成的演示包包含 Windows、macOS 和 Linux launcher。打包脚本本身要求 **x86_64 GNU/Linux** 构建环境与 source-bound ELF binary。先构建 binary，再组装一个此前不存在的输出目录：
 
 ```bash
-cargo build --release --locked -p ustc-agentd
+UCA_SOURCE_COMMIT="$(git rev-parse HEAD)" \
+  cargo build --release --locked -p ustc-agentd
 ./scripts/package_three_plugin_mvp_compose.sh \
   --binary target/release/ustc-agentd \
   --output-dir dist/ustc-campus-agent-mvp-compose \

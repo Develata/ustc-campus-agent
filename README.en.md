@@ -106,7 +106,8 @@ Course planning requires creating a synthetic demo profile in the page and separ
 The repository includes reproducible packaging scripts; the assembled demo package contains Windows, macOS, and Linux launchers. The packaging script itself requires an **x86-64 GNU/Linux** build environment and a source-bound ELF binary. Build the binary, then assemble into an output path that does not already exist:
 
 ```bash
-cargo build --release --locked -p ustc-agentd
+UCA_SOURCE_COMMIT="$(git rev-parse HEAD)" \
+  cargo build --release --locked -p ustc-agentd
 ./scripts/package_three_plugin_mvp_compose.sh \
   --binary target/release/ustc-agentd \
   --output-dir dist/ustc-campus-agent-mvp-compose \
