@@ -1,12 +1,14 @@
 # Usable demo enhancements v1
 
-Status: approved independent candidate scope (2026-09-05); not accepted or a replacement for frozen R2.
+Status: user-approved enhanced submission scope (2026-09-05); merge and replacement require exact-source checks and artifact read-back, not this status line.
 
 ## Scope and ownership
 
 User approved configurable synthetic course planning, personal Affairs checklist export, and guided scene entry. Preserve existing visual language and Rust authority. Main owns integration, contracts, scenarios, acceptance and final verdict. Course and checklist writers own separate browser files; formal reviewer is native codex-reviewer. This bounded user-approved interaction improvement does not adopt a new frontend framework/design system or the historical unconfigured design-model lanes.
 
-Baseline: `91321f040f8cdfa6937b831f496630eeac43eb27`. No changes to delivered R2, source freeze artifact, APK, auth, tool catalogue, planner algorithm, calendar or deployment. Develata additionally authorized candidate-branch push, CI and artifact download after local checks and independent review. No merge, tag, Release or R2 replacement is authorized. Separate candidate may be locally committed and packaged; replacement needs a later decision.
+Baseline: `91321f040f8cdfa6937b831f496630eeac43eb27`. Product changes remain limited to these interactions: no changes to authentication authority, tool catalogue, planner algorithm, calendar or deployment semantics. The initial candidate grant excluded main and R2 replacement. Develata subsequently authorized protected-main synchronization and replacement of the competition submission bundle with the final enhanced source, subject to review, exact-head CI, exact-main artifact rebuild and read-back. Previously delivered archives remain historical rollback copies. No tag, Release, public runtime or competition-portal upload is authorized by this scope.
+
+The separately executable [SSO reservation sample](../../examples/sso-interface/README.zh-CN.md) documents the authorization/configuration prerequisite and exercises only disabled status/start/callback HTTP responses. It is not wired into `ustc-agentd`, creates no identity or session, and does not promote M00 or M10 authentication readiness. Its standalone acceptance command is `python3 -B -m unittest discover -s examples/sso-interface -p 'test_*.py' -v`; application and artifact gates remain separate.
 
 ## UE-01 Configurable synthetic profiles
 

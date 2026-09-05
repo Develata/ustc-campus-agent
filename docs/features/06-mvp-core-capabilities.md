@@ -140,15 +140,17 @@ Every admitted tool-backed request should show a readable summary and successful
 - Production-signed Android, secure authenticated HTTPS sessions and complete real-device `CLIENT-002` evidence; the bounded debug APK does not imply these.
 - Skill loading/runtime and usable inbound or outbound MCP adapters remain unimplemented and unclaimed.
 
-## 7. Independent usability candidate
+## 7. Usability enhancements and SSO reservation sample
 
-This branch additionally implements the bounded [usable-demo enhancements contract](../contracts/usable-demo-enhancements.md); it is not yet a replacement for the frozen competition package.
+This source additionally implements the bounded [usable-demo enhancements contract](../contracts/usable-demo-enhancements.md). User-authorized main synchronization and submission replacement require independent review, exact-source CI and artifact read-back; this paragraph does not certify those external outcomes.
 
 - **可配置演示档案**：在 synthetic 课程目录中选择已修课程、学分范围和偏好，明确同意后创建新的档案快照；比较 Rust 生成的候选方案。编辑草稿不会修改已保存档案，切换档案不会继承 Chat 授权。
 - **个人办理清单**：对当前成功查询的 Affairs 步骤标记个人进度，复制／下载带来源与不确定性说明的 Markdown。标记不代表官方受理或审批，页面刷新不保留勾选。
 - **场景入口**：四个入口只填问题和导航，不自动发送、授权或写日历；课程入口引导缺少档案的用户完成显式创建。
 
-The API/catalog/planner remains unchanged. Synthetic pending-create values are snapshotted with the existing idempotency envelope for exact retries; this is not support for storing real student records in browser storage. The supplemental acceptance cases are bound in the enhancement contract and its retained browser test. The historical matrix remains byte-identical because its legacy M60 projection is frozen; this candidate does not promote those historical rows. Exact compiled-binary gates, independent review and package read-back are required before the candidate can replace the frozen delivery. Build infrastructure remains separate from product source and does not authorize merge or Release.
+The API/catalog/planner remains unchanged. Synthetic pending-create values are snapshotted with the existing idempotency envelope for exact retries; this is not support for storing real student records in browser storage. The supplemental acceptance cases are bound in the enhancement contract and its retained browser test. The historical matrix remains byte-identical because its legacy M60 projection is frozen; this candidate does not promote those historical rows. Exact compiled-binary gates, independent review and package read-back are required before the candidate can replace the frozen delivery. Build infrastructure remains separate from product source and grants no authority by itself; the user authorized protected-main synchronization and submission replacement, not a tag or Release.
+
+- **SSO 接口样例（独立、未配置）**：正式学校统一认证需要接入授权、应用登记及回调配置；当前使用本机演示用户会话，不收集学校密码。[源码样例](../../examples/sso-interface/README.zh-CN.md)提供状态查询与明确拒绝的登录/回调接口，不签发会话、不调用校园服务器、不接入应用运行时；取得授权后仍须完成实际协议适配、身份验证和 M00 会话集成。样例 acceptance：`python3 -B -m unittest discover -s examples/sso-interface -p 'test_*.py' -v`。该证据不推进生产认证的未完成项。
 
 Architecture and lifecycle details:
 
