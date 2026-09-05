@@ -140,6 +140,18 @@ class SsoInterfaceTests(unittest.TestCase):
         self.assertNotIn(b"SYNTHETIC_SECRET", response)
         self.assertIn(b"invalid_http_request", response)
 
+    def test_malformed_headers_fail_closed_without_reflection(self):
+        for malformed in ("BrokenHeader", "Bad Header: x", ": bad"):
+            with self.subTest(header=malformed):
+                request = (f"GET {BASE}/status HTTP/1.1\r\n"
+                           f"Host: 127.0.0.1:{self.server.server_port}\r\n"
+                           f"{malformed}\r\n\r\n").encode()
+                response = self.raw(request)
+                self.assertIn(b"400 Bad Request", response)
+                self.assertIn(b"invalid_http_request", response)
+                self.assertNotIn(malformed.encode(), response)
+                self.assertNotIn(b"Set-Cookie:", response)
+
     def test_only_loopback_is_bound(self):
         self.assertEqual(self.server.server_address[0], "127.0.0.1")
 

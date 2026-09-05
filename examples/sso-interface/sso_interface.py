@@ -58,6 +58,9 @@ class SsoInterfaceHandler(BaseHTTPRequestHandler):
             self.wfile.write(payload)
 
     def handle_request(self) -> None:
+        if self.headers.defects:
+            self.respond(400, envelope(error="invalid_http_request"))
+            return
         hosts = self.headers.get_all("Host", [])
         assert isinstance(self.server, HTTPServer)
         port = self.server.server_port
