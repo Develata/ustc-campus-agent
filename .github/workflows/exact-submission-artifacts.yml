@@ -1,0 +1,147 @@
+name: exact-submission-artifacts
+
+on:
+  push:
+    branches: [artifact/sep5-exact-91321f04]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exact-submission-artifacts-91321f040f8cdfa6937b831f496630eeac43eb27
+  cancel-in-progress: false
+
+jobs:
+  android-build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TARGET_SHA: 91321f040f8cdfa6937b831f496630eeac43eb27
+    steps:
+      - name: Checkout exact frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 1
+      - name: Verify source identity
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain=v1)"
+      - name: Install Java 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Rust 1.97.1
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          toolchain: 1.97.1
+      - name: Install Android SDK components
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "emulator" \
+            "system-images;android-35;google_apis;x86_64"
+      - name: Build exact Rust server
+        run: UCA_SOURCE_COMMIT="$TARGET_SHA" cargo build --locked -p ustc-agentd --bin ustc-agentd
+      - name: Build, lint and verify debug APK
+        run: bash scripts/build_android_demo.sh --source-commit "$TARGET_SHA" --output-dir "$RUNNER_TEMP/android-artifact"
+      - name: Run emulator and WebView journey
+        run: |
+          test -c /dev/kvm
+          sudo chmod 0666 /dev/kvm
+          test -r /dev/kvm -a -w /dev/kvm
+          apk="$RUNNER_TEMP/android-artifact/ustc-campus-agent-android-debug-${TARGET_SHA}.apk"
+          bash scripts/smoke_android_demo_emulator.sh \
+            --apk "$apk" \
+            --server-binary target/debug/ustc-agentd \
+            --evidence-dir "$RUNNER_TEMP/android-artifact" \
+            --api-level 35
+      - name: Record builder/source identities
+        if: ${{ always() }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-artifact"
+          printf 'builder_commit=%s\nsource_commit=%s\n' "$GITHUB_SHA" "$TARGET_SHA" \
+            > "$RUNNER_TEMP/android-artifact/source-identity.txt"
+      - name: Upload exact Android artifact and evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ustc-campus-agent-android-${{ env.TARGET_SHA }}
+          path: ${{ runner.temp }}/android-artifact
+          if-no-files-found: error
+          retention-days: 14
+
+  compose-package-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TARGET_SHA: 91321f040f8cdfa6937b831f496630eeac43eb27
+    steps:
+      - name: Checkout exact frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 1
+      - name: Verify source identity
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain=v1)"
+      - name: Install Rust 1.97.1
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          toolchain: 1.97.1
+      - name: Run deterministic Compose delivery gate
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/compose-evidence"
+          bash scripts/check_mvp_compose_delivery.sh \
+            | tee "$RUNNER_TEMP/compose-evidence/compose-delivery-check.txt"
+          grep -Fq "MVP_COMPOSE_DELIVERY=PASS source_commit=$TARGET_SHA" \
+            "$RUNNER_TEMP/compose-evidence/compose-delivery-check.txt"
+      - name: Produce and independently read back both archives
+        run: |
+          short=${TARGET_SHA:0:12}
+          out="$RUNNER_TEMP/compose-package"
+          test ! -e "$out"
+          bash scripts/package_three_plugin_mvp_compose.sh \
+            --binary target/release/ustc-agentd \
+            --output-dir "$out" \
+            --source-commit "$TARGET_SHA"
+          manifest="$out/ustc-campus-agent-mvp-compose-${short}.sha256"
+          tarball="$out/ustc-campus-agent-mvp-compose-${short}.tar.gz"
+          zipfile="$out/ustc-campus-agent-mvp-compose-${short}.zip"
+          test -f "$manifest" -a -f "$tarball" -a -f "$zipfile"
+          (cd "$out" && sha256sum -c "$(basename "$manifest")")
+          mkdir -p "$RUNNER_TEMP/readback-tar" "$RUNNER_TEMP/readback-zip"
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/readback-tar"
+          unzip -q "$zipfile" -d "$RUNNER_TEMP/readback-zip"
+          diff -qr \
+            "$RUNNER_TEMP/readback-tar/ustc-campus-agent-mvp-compose" \
+            "$RUNNER_TEMP/readback-zip/ustc-campus-agent-mvp-compose"
+          for root in "$RUNNER_TEMP/readback-tar" "$RUNNER_TEMP/readback-zip"; do
+            package="$root/ustc-campus-agent-mvp-compose"
+            (cd "$package" && sha256sum -c SHA256SUMS)
+            test "$("$package/bin/ustc-agentd" source-commit)" = "$TARGET_SHA"
+          done
+          printf 'builder_commit=%s\nsource_commit=%s\narchive_pair_readback=PASS\n' \
+            "$GITHUB_SHA" "$TARGET_SHA" > "$out/source-identity.txt"
+      - name: Record failure-safe builder/source identities
+        if: ${{ always() }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/compose-evidence"
+          printf 'builder_commit=%s\nsource_commit=%s\n' "$GITHUB_SHA" "$TARGET_SHA" \
+            > "$RUNNER_TEMP/compose-evidence/source-identity.txt"
+      - name: Upload exact Compose package and evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ustc-campus-agent-compose-${{ env.TARGET_SHA }}
+          path: |
+            ${{ runner.temp }}/compose-evidence
+            ${{ runner.temp }}/compose-package
+          if-no-files-found: error
+          retention-days: 14
