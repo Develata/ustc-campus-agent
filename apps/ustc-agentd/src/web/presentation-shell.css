@@ -1,0 +1,46 @@
+/* Compact campus workspace: quiet chrome, a focused composer and readable answers. */
+@media(min-width:1000px) { .app-shell { grid-template-columns:264px minmax(0,1fr); } }
+.app-sidebar { padding:22px 14px 16px; }
+.app-sidebar .brand { font-size:16px; font-weight:600; letter-spacing:-.4px; padding:4px 12px; }
+.primary-nav { margin-top:20px; gap:6px; }
+#app-sidebar #chat-clear { background:var(--bg); border:1px solid var(--line); box-shadow:0 1px 2px rgb(0 0 0 / 2%); }
+#app-sidebar #chat-clear[aria-current="page"] { background:var(--bg); }
+.conversation-history { margin-top:24px; }
+.conversation-history-status { font-size:12px; line-height:1.8; }
+.conversation-open { letter-spacing:.05px; }
+.app-topbar { height:60px; padding:0 22px; }
+#view-title { font-size:14px; font-weight:500; }
+.chat-empty strong { font-size:32px; font-weight:500; letter-spacing:-.6px; }
+.is-empty .chat-scroll { padding-bottom:22px; }
+.is-empty .chat-surface { padding-bottom:10dvh; }
+.composer-dock { position:relative; width:min(776px,calc(100% - 56px)); }
+.chat-composer { border-radius:24px; padding:16px 18px 10px; box-shadow:0 4px 22px rgb(22 35 64 / 4%); }
+.chat-composer:focus-within { border-color:color-mix(in srgb,var(--accent) 40%,var(--line)); }
+.chat-composer #chat-input { font-size:16px; min-height:54px; line-height:1.65; }
+.chat-composer #chat-send { width:44px; height:44px; min-width:44px; min-height:44px; }
+.composer-toolbar { gap:8px; }
+.chat-model-picker select { font-size:12px; }
+#calendar-proposals { border:0; background:transparent; margin:0 0 6px; }
+#calendar-proposals > details > summary { color:var(--muted); font-size:12px; font-weight:400; padding:10px 12px; }
+#calendar-proposals > details[open] { background:var(--bg); border:1px solid var(--line); border-radius:16px; margin-bottom:8px; }
+.chat-message { margin-bottom:32px; }
+.chat-message[data-role="user"] { border-radius:20px; padding:12px 18px; background:var(--surface); }
+.chat-message-body { font-size:16px; line-height:1.85; }
+.chat-speaker { font-size:12px; letter-spacing:.05px; }
+.chat-message-actions { opacity:.82; }
+.chat-message:focus-within .chat-message-actions,.chat-message:hover .chat-message-actions { opacity:1; }
+.chat-latest { position:absolute; z-index:3; left:50%; top:-52px; transform:translateX(-50%); width:44px; height:44px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--bg); color:var(--ink); box-shadow:var(--shadow); }
+.chat-latest[hidden] { display:none; }
+.chat-latest:hover { background:var(--surface); }
+:is(.chat-latest,.nav-item,.quiet-button):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+@media(max-width:760px) {
+  .app-topbar { height:56px; padding:0 12px; }
+  .chat-empty strong { font-size:26px; letter-spacing:-.5px; }
+  .composer-dock { width:calc(100% - 24px); }
+  .chat-composer { border-radius:22px; padding:14px 14px 8px; }
+  .chat-scroll { padding:20px 18px 24px; }
+  .chat-message-body { font-size:15px; }
+  .is-empty .chat-surface { padding-bottom:8dvh; }
+  #calendar-proposals > details > summary { padding-inline:8px; font-size:11px; }
+}
+@media(prefers-reduced-motion:reduce) { .chat-message-actions { transition:none; } }

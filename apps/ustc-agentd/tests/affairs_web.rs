@@ -1706,7 +1706,7 @@ fn embedded_web_shell_and_health_are_hardened() {
     assert!(page.headers.contains("x-frame-options: deny"));
     assert!(page.body.contains("USTC Campus Agent"));
     assert!(!page.body.contains("科大校园助手"));
-    assert!(page.body.contains("今天想聊些什么？"));
+    assert!(page.body.contains("今天，想完成什么？"));
     for id in [
         "chat-form",
         "chat-input",

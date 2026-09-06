@@ -124,6 +124,8 @@ const STYLES_CSS: &str = concat!(
     include_str!("web/plugin-management.css"),
     "\n",
     include_str!("web/model-selection.css"),
+    include_str!("web/presentation-shell.css"),
+    include_str!("web/plugin-presentation.css"),
 );
 const OPPORTUNITY_CONFIRMATION_HEADER: &str = "x-ustc-opportunity-confirmation";
 

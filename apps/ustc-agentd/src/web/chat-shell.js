@@ -3,7 +3,7 @@ window.UcaShell = (() => {
   "use strict";
   const views = new Map([...document.querySelectorAll("[data-view]")].map(el => [el.dataset.view, el]));
   const labels = { chat: "新对话", plugins: "插件", "plugins/affairs": "办事导航",
-    "plugins/radar": "变更雷达", "plugins/planning": "课程规划", "plugins/calendar": "简单日历", "plugins/manage": "MCP 与 Skills", settings: "设置" };
+    "plugins/radar": "变更雷达", "plugins/planning": "课程规划", "plugins/calendar": "日历", "plugins/manage": "MCP 与 Skills", settings: "设置" };
   const sidebar = document.querySelector("#app-sidebar");
   const column = document.querySelector("#app-column");
   const toggle = document.querySelector("#nav-toggle");
@@ -14,6 +14,16 @@ window.UcaShell = (() => {
   const scroll = document.querySelector("#chat-scroll");
   let current = "chat";
   let drawer = false;
+  let followTail = true;
+  const latestButton = document.querySelector("#chat-latest");
+  function syncFollow() {
+    followTail = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
+    latestButton.hidden = followTail || !chatMessages.querySelector(".chat-message");
+  }
+  scroll.addEventListener("scroll", syncFollow, {passive:true});
+  latestButton.addEventListener("click", () => {
+    followTail = true; scroll.scrollTo({top:scroll.scrollHeight,behavior:"instant"}); syncFollow();
+  });
 
   function setDrawer(open, restore = true) {
     drawer = mobile.matches && open;
@@ -38,6 +48,7 @@ window.UcaShell = (() => {
   }
   function syncChat() {
     const hasMessages = Boolean(chatMessages.querySelector(".chat-message"));
+    if (!hasMessages) { followTail = true; latestButton.hidden = true; }
     document.querySelector("#chat-view").classList.toggle("is-empty", !hasMessages);
     document.querySelector("#nav-chat").hidden = !hasMessages;
     document.querySelector("#view-title").textContent = current === "chat" && hasMessages ? "对话" : labels[current];
@@ -103,7 +114,8 @@ window.UcaShell = (() => {
   chatOpportunityConfirm.addEventListener("change", syncChat);
   window.addEventListener("uca:chat-state", () => {
     syncChat();
-    if (current === "chat") scroll.scrollTo({ top: scroll.scrollHeight, behavior: "instant" });
+    if (current === "chat" && followTail) scroll.scrollTo({ top: scroll.scrollHeight, behavior: "instant" });
+    latestButton.hidden = followTail || !chatMessages.querySelector(".chat-message");
   });
   // The browser's invalid event must reveal an optional control before it can be focused.
   chatPromptCustomization.addEventListener("invalid", () => showOptions(true));

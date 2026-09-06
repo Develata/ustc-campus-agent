@@ -38,12 +38,13 @@
           <section id="chat-surface" class="chat-surface" aria-label="与校园 Agent 对话" aria-busy="false">
             <div id="chat-scroll" class="chat-scroll">
               <ol id="chat-messages" class="chat-messages" aria-label="对话记录" aria-live="polite" aria-relevant="additions text">
-                <li id="chat-empty" class="chat-empty"><strong>今天想聊些什么？</strong></li>
+                <li id="chat-empty" class="chat-empty"><strong>今天，想完成什么？</strong></li>
               </ol>
               <div id="chat-progress" class="chat-progress" role="status" aria-live="polite" hidden><span class="progress-mark" aria-hidden="true"></span><span>正在准备对话…</span></div>
               <section id="chat-activity" class="chat-activity" aria-label="Agent 执行状态" hidden></section>
             </div>
             <div class="composer-dock">
+              <button id="chat-latest" class="chat-latest" type="button" aria-label="跳转到最新消息" title="跳转到最新消息" hidden><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-6-6 6 6 6-6"/></svg></button>
               <div id="chat-error" class="chat-error" role="alert" hidden><strong>这次没有得到回答</strong><p id="chat-error-message">请检查连接后重试。</p><p class="chat-error-reference">参考代码：<code id="chat-error-code">network_error</code></p></div>
               <section id="conversation-recovery" class="conversation-recovery" aria-label="对话请求恢复" hidden></section>
               <section id="calendar-proposals" aria-label="日历提案与事项"></section>

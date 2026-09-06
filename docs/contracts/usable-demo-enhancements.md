@@ -31,6 +31,7 @@ The separately executable [SSO reservation sample](../../examples/sso-interface/
 - Four buttons fill supported prompts for Affairs, Radar, planning and read-only Calendar list. Never auto-submit, pre-check consent, create profiles or mutate Calendar.
 - Prompts are reached through Plugins directory/detail views, leaving the conversation canvas uncluttered. Navigation and browser back preserve drafts and pending state; source links reveal the corresponding detail view. Settings contain presentation preferences and collapsed administrator demo controls.
 - Planning without current profile directs to the editor/explicit create control; existing current profile requires separate one-request Chat confirmation.
+- Chat follows new output only while the reader stays near the end; scrolling into history preserves the reading position and offers an explicit return-to-latest control. The compact execution view keeps server-owned running/error/confirmation states visible and respects manual detail expansion.
 - Copy-answer and source-panel navigation may be provided adjacent to results. No arbitrary provider text is promoted to verified-source evidence. Failure remains visible.
 
 ## Acceptance (all planned before implementation)
