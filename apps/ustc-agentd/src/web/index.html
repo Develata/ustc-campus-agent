@@ -55,9 +55,11 @@
                   <button id="chat-options-toggle" class="quiet-button" type="button" aria-label="对话选项" title="对话选项" aria-expanded="false" aria-controls="chat-options"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg><span>对话选项</span><span id="options-indicator" hidden>已设置</span></button>
                   <div class="composer-controls">
                     <div class="chat-model-picker">
-                      <label class="visually-hidden" for="chat-model-select">选择模型</label>
-                      <select id="chat-model-select" aria-describedby="chat-model-note" disabled><option value="">正在读取模型…</option></select>
-                      <svg class="model-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+                      <button id="chat-model-trigger" class="model-trigger" type="button" aria-label="选择模型" aria-haspopup="menu" aria-expanded="false" aria-controls="chat-model-menu" aria-describedby="chat-model-note" disabled>
+                        <span id="chat-model-label">正在读取模型…</span>
+                        <svg class="model-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+                      </button>
+                      <div id="chat-model-menu" class="model-menu" role="menu" aria-label="选择模型" hidden></div>
                     </div>
                   <button id="chat-send" class="send-button" type="submit" aria-label="发送消息"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 12 5-5 5 5M12 7v11"/></svg></button>
                   </div>

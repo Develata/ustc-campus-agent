@@ -48,7 +48,7 @@ export async function checkConversationManagement({evaluate,waitFor,cdp,sessionI
 
     await evaluate(`window.fetch=async(url,options={})=>{const response=await window.__manageTrackedFetch(url,options);if(String(url).endsWith('/manage'))throw Error('controlled committed manage response lost');return response;};`);
     await rename(first,'网络恢复后的名称');await waitFor("document.querySelector('#conversation-retry-manage')&&!document.querySelector('#conversation-retry-manage').disabled",'uncertain management');
-    assert.equal(await evaluate("document.querySelector('#chat-send').disabled&&document.querySelector('#chat-model-select').disabled&&[...document.querySelectorAll('.conversation-menu-trigger')].every(el=>el.disabled)"),true);
+    assert.equal(await evaluate("document.querySelector('#chat-send').disabled&&document.querySelector('#chat-model-trigger').disabled&&[...document.querySelectorAll('.conversation-menu-trigger')].every(el=>el.disabled)"),true);
     const lost=await evaluate('window.__manageWrites.at(-1)');await evaluate('window.fetch=window.__manageTrackedFetch');await click('#conversation-retry-manage');await ready();
     assert.equal(await evaluate('window.__manageWrites.at(-1)'),lost);assert.equal(await evaluate(`document.querySelector(${JSON.stringify(row(first))}).textContent`),firstDate+'网络恢复后的名称');
     pass('MANAGE-unknown-outcome-locks-writes-exact-explicit-retry');
