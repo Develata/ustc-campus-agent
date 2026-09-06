@@ -549,3 +549,19 @@ fn catalog_metadata_does_not_claim_all_package_runtime_readiness() {
         assert!(manifest.install_policy().user_disable_allowed());
     }
 }
+
+#[test]
+fn optional_first_party_companion_is_valid_but_cannot_default_enable() {
+    let source = include_str!("../../../market/packages/ustc.simple-calendar/package.json");
+    let manifest = load_package_manifest(source.as_bytes()).expect("optional first-party package");
+    assert_eq!(manifest.package_id().as_str(), "ustc.simple-calendar");
+    assert!(!manifest.install_policy().default_installed());
+    assert!(!manifest.install_policy().default_enabled());
+    for field in ["defaultInstalled", "defaultEnabled"] {
+        let changed = source.replace(
+            &format!("\"{field}\": false"),
+            &format!("\"{field}\": true"),
+        );
+        assert!(load_package_manifest(changed.as_bytes()).is_err());
+    }
+}

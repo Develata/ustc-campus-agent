@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use axum::extract::rejection::JsonRejection;
+use axum::extract::rejection::{JsonRejection, PathRejection};
 use axum::extract::{DefaultBodyLimit, Path as AxumPath, Request, State};
 use axum::http::uri::Authority;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, Uri, header};
@@ -33,20 +33,51 @@ use ustc_campus_agent_client_protocol::{
 };
 
 use super::agent_chat::{ChatError, ChatRequestDto, run_bounded_chat};
+use super::chat_conversations::ConversationError;
 use super::chat_provider::ChatProvider;
+use super::conversation_application::ConversationApplication;
+use super::model_catalog::ModelCatalog;
+
+mod conversation_routes;
 use super::chat_tools::{CalendarAction, ChatToolExecution, ChatToolRequest};
+use super::market_catalog::{MarketCatalogError, MarketCatalogQuery};
 use super::{AffairsComposition, parse_loopback_socket_addr};
 use ustc_campus_agent_simple_calendar::CalendarError;
 
+#[path = "calendar_chat.rs"]
+mod calendar_chat;
+mod plugin_routes;
+
 const INDEX_HTML: &str = include_str!("web/index.html");
 const APP_JS: &str = concat!(
+    include_str!("web/chat-markdown.js"),
+    "\n;\n",
+    include_str!("web/admin-controls.js"),
+    "\n;\n",
+    include_str!("web/chat-activity.js"),
+    "\n;\n",
+    include_str!("web/conversation-menu.js"),
+    "\n;\n",
+    include_str!("web/conversations.js"),
+    "\n;\n",
+    include_str!("web/model-selection.js"),
+    "\n;\n",
     include_str!("web/app.js"),
     "\n;\n",
     include_str!("web/course-editor.js"),
     "\n;\n",
     include_str!("web/affairs-checklist.js"),
     "\n;\n",
+    include_str!("web/chat-shell.js"),
+    "\n;\n",
     include_str!("web/scene-entry.js"),
+    "\n;\n",
+    include_str!("web/provider-status.js"),
+    "\n;\n",
+    include_str!("web/market-catalog.js"),
+    "\n;\n",
+    include_str!("web/plugin-management.js"),
+    "\n;window.UcaPluginManagement.mount(document.querySelector(\"#plugin-management\"));\n",
 );
 const STYLES_CSS: &str = concat!(
     include_str!("web/styles.css"),
@@ -56,6 +87,20 @@ const STYLES_CSS: &str = concat!(
     include_str!("web/affairs-checklist.css"),
     "\n",
     include_str!("web/scene-entry.css"),
+    "\n",
+    include_str!("web/chat-shell.css"),
+    "\n",
+    include_str!("web/market-catalog.css"),
+    "\n",
+    include_str!("web/conversations.css"),
+    "\n",
+    include_str!("web/conversation-menu.css"),
+    "\n",
+    include_str!("web/chat-activity.css"),
+    "\n",
+    include_str!("web/plugin-management.css"),
+    "\n",
+    include_str!("web/model-selection.css"),
 );
 const OPPORTUNITY_CONFIRMATION_HEADER: &str = "x-ustc-opportunity-confirmation";
 
@@ -67,15 +112,41 @@ const ADMINISTRATOR_DEMO_CONFIRMATION: &str = "confirm-v1";
 struct WebState {
     composition: Arc<Mutex<AffairsComposition>>,
     next_request: Arc<AtomicU64>,
-    chat_provider: ChatProvider,
+    models: ModelCatalog,
+    market_catalog: Arc<Result<MarketCatalogQuery, MarketCatalogError>>,
+    conversations: Arc<Result<ConversationApplication, ConversationError>>,
+    plugins: Arc<Result<crate::plugin_runtime::PluginRuntime, crate::plugin_runtime::PluginError>>,
 }
 
 impl WebState {
-    fn new(composition: Arc<Mutex<AffairsComposition>>, chat_provider: ChatProvider) -> Self {
+    fn new(composition: Arc<Mutex<AffairsComposition>>, models: ModelCatalog) -> Self {
+        let conversations = composition
+            .lock()
+            .map_err(|_| ConversationError::Unavailable)
+            .and_then(|composition| {
+                ConversationApplication::open(
+                    composition.conversation_store_path.clone(),
+                    models.clone(),
+                )
+            });
+        let plugins = composition
+            .lock()
+            .map_err(|_| crate::plugin_runtime::PluginError::Unavailable)
+            .and_then(|composition| {
+                crate::plugin_runtime::PluginRuntime::open(
+                    composition
+                        .conversation_store_path
+                        .with_extension("plugins")
+                        .join("authority.bin"),
+                )
+            });
         Self {
+            plugins: Arc::new(plugins),
             composition,
+            conversations: Arc::new(conversations),
             next_request: Arc::new(AtomicU64::new(1)),
-            chat_provider,
+            models,
+            market_catalog: Arc::new(MarketCatalogQuery::bundled()),
         }
     }
 
@@ -659,6 +730,12 @@ fn web_router_with_provider(
     composition: Arc<Mutex<AffairsComposition>>,
     chat_provider: ChatProvider,
 ) -> Router {
+    web_router_with_models(composition, ModelCatalog::single(chat_provider))
+}
+fn web_router_with_models(
+    composition: Arc<Mutex<AffairsComposition>>,
+    models: ModelCatalog,
+) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/assets/app.js", get(app_js))
@@ -667,6 +744,36 @@ fn web_router_with_provider(
         .route("/api/v1/server/info", get(server_info))
         .route("/api/v1/client/capabilities", get(capability_list))
         .route("/api/v1/agent/chat", post(agent_chat))
+        .route("/api/v1/agent/status", get(agent_provider_status))
+        .route("/api/v1/agent/models", get(agent_models))
+        .route(
+            "/api/v1/agent/conversations/{id}/activity",
+            get(conversation_routes::activity),
+        )
+        .route(
+            "/api/v1/agent/conversations",
+            get(conversation_routes::list).post(conversation_routes::create),
+        )
+        .route(
+            "/api/v1/agent/conversations/{id}",
+            get(conversation_routes::get_one),
+        )
+        .route(
+            "/api/v1/agent/conversations/{id}/turns",
+            post(conversation_routes::submit),
+        )
+        .route(
+            "/api/v1/agent/conversations/{id}/manage",
+            post(conversation_routes::manage),
+        )
+        .route("/api/v1/plugins", get(plugin_routes::list))
+        .route("/api/v1/plugins/commands", post(plugin_routes::command))
+        .route("/api/v1/plugins/probe", post(plugin_routes::probe))
+        .route("/api/v1/market/packages", get(market_catalog_browse))
+        .route(
+            "/api/v1/market/packages/{package_id}/{version}",
+            get(market_package_detail),
+        )
         .route("/api/v1/affairs/{procedure_id}", get(affairs_get))
         .route(
             "/api/v1/demo/administrator/affairs/publication",
@@ -693,7 +800,7 @@ fn web_router_with_provider(
         )
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(middleware::from_fn(admit_loopback_request))
-        .with_state(WebState::new(composition, chat_provider))
+        .with_state(WebState::new(composition, models))
 }
 
 impl AffairsComposition {
@@ -703,7 +810,7 @@ impl AffairsComposition {
     ///
     /// Rejects non-loopback addresses and reports listener/server failures.
     pub async fn serve_web(self, bind_addr: &str) -> Result<(), String> {
-        let chat_provider = ChatProvider::from_env()
+        let models = ModelCatalog::from_env()
             .map_err(|_| "agent provider configuration invalid".to_owned())?;
         let socket_addr = parse_loopback_socket_addr(bind_addr)?;
         let listener = tokio::net::TcpListener::bind(socket_addr)
@@ -719,7 +826,7 @@ impl AffairsComposition {
             .map_err(|error| format!("stdout flush failed: {error}"))?;
         axum::serve(
             listener,
-            web_router_with_provider(Arc::new(Mutex::new(self)), chat_provider),
+            web_router_with_models(Arc::new(Mutex::new(self)), models),
         )
         .await
         .map_err(|error| format!("web serve failed: {error}"))
@@ -738,12 +845,51 @@ async fn styles_css() -> Response {
     static_response(STYLES_CSS, "text/css; charset=utf-8")
 }
 
-async fn healthz() -> Response {
+async fn healthz(State(state): State<WebState>) -> Response {
+    let ready = state.lock().ok().is_some_and(|composition| {
+        state
+            .conversations
+            .as_ref()
+            .as_ref()
+            .is_ok_and(|application| {
+                application
+                    .list(&composition.current_tenant_id, &composition.current_user_id)
+                    .is_ok()
+            })
+    });
+    if !ready {
+        return typed_json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({"schema":"ustc-agentd-health/v1","status":"unavailable"}),
+        );
+    }
     hardened(
         Json(HealthEnvelope {
             schema: "ustc-agentd-health/v1",
             status: "ok",
         })
+        .into_response(),
+    )
+}
+
+async fn agent_models(State(state): State<WebState>, headers: HeaderMap) -> Response {
+    if let Err(error) = dispatch_with_protocol_major(presented_protocol_major(&headers), || ()) {
+        return compatibility_response(error);
+    }
+    typed_json_response(StatusCode::OK, state.models.view())
+}
+
+async fn agent_provider_status(State(state): State<WebState>) -> Response {
+    let Ok(provider) = state.models.resolve("default") else {
+        return chat_error_response(ChatError::Internal);
+    };
+    hardened(
+        Json(serde_json::json!({
+            "schema": "ustc-agent-provider-status/v1",
+            "provider": provider.identity(),
+            "tool_calling": provider.tool_calling_enabled(),
+            "context_limit_tokens": provider.context_limit_tokens(),
+        }))
         .into_response(),
     )
 }
@@ -768,6 +914,55 @@ async fn capability_list(headers: HeaderMap) -> Response {
     }) {
         Ok(response) => typed_json_response(StatusCode::OK, response),
         Err(compatibility) => compatibility_response(compatibility),
+    }
+}
+
+async fn market_catalog_browse(State(state): State<WebState>, headers: HeaderMap) -> Response {
+    match dispatch_with_protocol_major(presented_protocol_major(&headers), || {
+        state
+            .market_catalog
+            .as_ref()
+            .as_ref()
+            .map(MarketCatalogQuery::browse)
+            .map_err(|error| *error)
+    }) {
+        Ok(Ok(catalog)) => typed_json_response(StatusCode::OK, catalog),
+        Ok(Err(error)) => market_catalog_error(error),
+        Err(compatibility) => compatibility_response(compatibility),
+    }
+}
+
+async fn market_package_detail(
+    State(state): State<WebState>,
+    headers: HeaderMap,
+    reference: Result<AxumPath<(String, String)>, PathRejection>,
+) -> Response {
+    match dispatch_with_protocol_major(presented_protocol_major(&headers), || {
+        let AxumPath((package_id, version)) =
+            reference.map_err(|_| MarketCatalogError::InvalidReference)?;
+        state
+            .market_catalog
+            .as_ref()
+            .as_ref()
+            .map_err(|error| *error)
+            .and_then(|query| query.detail(&package_id, &version))
+    }) {
+        Ok(Ok(package)) => typed_json_response(StatusCode::OK, package),
+        Ok(Err(error)) => market_catalog_error(error),
+        Err(compatibility) => compatibility_response(compatibility),
+    }
+}
+
+fn market_catalog_error(error: MarketCatalogError) -> Response {
+    match error {
+        MarketCatalogError::Unavailable => web_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "market_catalog_unavailable",
+        ),
+        MarketCatalogError::InvalidReference => {
+            web_error(StatusCode::BAD_REQUEST, "invalid_package_reference")
+        }
+        MarketCatalogError::NotFound => web_error(StatusCode::NOT_FOUND, "package_not_found"),
     }
 }
 
@@ -806,9 +1001,27 @@ async fn agent_chat(
         opportunity_confirmation(&headers),
         OpportunityConfirmationDto::Confirmed
     );
-    let provider = state.chat_provider.clone();
-    let execution_state = state.clone();
-    let mut executor = move |request| execute_chat_tool(&execution_state, request);
+    if let Err(error) =
+        crate::agent_chat::validate_chat_request(request.clone(), opportunity_confirmed)
+    {
+        return chat_error_response(error);
+    }
+    let provider = match request.selected_model_id().and_then(|id| {
+        state
+            .models
+            .resolve(id)
+            .map_err(|_| ChatError::InvalidChatRequest)
+    }) {
+        Ok(provider) => provider,
+        Err(error) => return chat_error_response(error),
+    };
+    let mut executor =
+        match plugin_routes::WebChatExecutor::new(state.clone(), provider.tool_calling_enabled())
+            .await
+        {
+            Ok(executor) => executor,
+            Err(error) => return chat_error_response(error),
+        };
     match run_bounded_chat(
         run_id,
         request,
@@ -846,6 +1059,9 @@ fn change_chat_outcome_succeeded(outcome: &M70ChangeFeedOutcomeDto) -> bool {
 
 fn execute_chat_tool(state: &WebState, request: ChatToolRequest) -> ChatToolExecution {
     match request {
+        ChatToolRequest::Plugin { .. } => {
+            ChatToolExecution::denied(json!({"code":"plugin_runtime_unavailable"}))
+        }
         ChatToolRequest::AffairsNavigatorGet { procedure_id } => {
             match state.submit(procedure_id, None) {
                 Ok(response) => project_chat_tool_response(
@@ -926,12 +1142,7 @@ fn execute_calendar_chat_tool(
     };
     match action {
         CalendarAction::List => match composition.calendar_items() {
-            Ok(items) => ChatToolExecution::succeeded(json!({
-                "schema": "ustc-simple-calendar-result/v1",
-                "package_id": "ustc.simple-calendar",
-                "action": "list",
-                "items": items,
-            })),
+            Ok(items) => calendar_chat::list_result(&items),
             Err(error) => calendar_error_execution(error),
         },
         CalendarAction::Record => {
@@ -1578,6 +1789,10 @@ fn hardened(mut response: Response) -> Response {
 
 #[cfg(test)]
 mod configured_provider_route_tests;
+#[cfg(all(test, unix))]
+mod conversation_management_route_tests;
+#[cfg(all(test, unix))]
+mod model_selection_route_tests;
 
 #[cfg(test)]
 mod tests {

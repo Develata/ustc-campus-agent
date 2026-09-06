@@ -165,3 +165,13 @@ Discovery is bounded by page/tool/schema size and time. Execution is exact bindi
 ## 14. Exit gate
 
 `M51` is standalone-ready when a fake MCP server proves lifecycle, pagination, drift, SSRF rejection, session isolation, timeout, malformed and oversized output. It is accepted when one reviewed binding executes a read-only tool through `M40` with exact grant/schema/correlation/receipt evidence and no direct Agent dependency.
+
+## Current bounded package implementation evidence
+
+The single-component public-read package profile is specified by
+[`plugin-management.md`](../../contracts/plugin-management.md), with M20 admission
+and ledger codecs, the M51 Streamable HTTP adapter, standard Skill parsing and
+read-only resources, a frozen Chat tool projection and M30 persisted call journals.
+This supplies bounded evidence only; broader module exit gates, production identity,
+private/write approvals, central stdio, arbitrary executable Skills and update/rollback
+are not promoted by this profile.

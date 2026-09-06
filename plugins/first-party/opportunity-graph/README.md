@@ -14,11 +14,13 @@ Canonical documentation:
 `crates/opportunity-graph` owns exact consent, tenant-private profile,
 qualification/planning, source/profile staleness and revoke/delete semantics.
 The bounded MVP composition now adds typed M10 profile/view/plan/delete operations,
-current Market grant rechecks, Harness/ToolGateway mediation, a DemoReviewed M60
+transaction-current Market authority for the four static application use cases, a DemoReviewed M60
 source adapter, an atomic file-backed private-profile store and a colocated Web
 journey. The declared native/resource components live under
 [`market/packages/ustc.opportunity-graph/components`](../../../market/packages/ustc.opportunity-graph/components/).
 
-This remains a loopback demo boundary: the catalog is synthetic and visibly
-`DemoReviewed`; production SSO/TLS, live USTC M60 retrieval, enrollment/application
+This remains a loopback demo boundary: structured demo facts are synthetic and visibly
+`DemoReviewed`. Course Planning also uses an iCourse aggregate-rating snapshot with
+unresolved data-use permission; see the [current data scope](../../../docs/features/06-mvp-core-capabilities.md).
+Production SSO/TLS, live USTC M60 retrieval, enrollment/application
 effects and backup-erasure guarantees are not claimed.

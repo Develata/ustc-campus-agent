@@ -2,15 +2,19 @@
 
 ## Metadata
 
-- `Status`: bounded debug artifact delivered; source-bound remote build, emulator journey and exact-source CI complete
+- `Status`: Historical source-bound debug artifact delivered; the candidate below passed build, emulator and exact-source CI checks
 - `Owning module`: `M80 Client Core and Interaction Shells`
 - `Contract`: [`client-shell/v2.3`](../contracts/client-shell.md)
-- `A...[truncated]
+- `Acceptance`: [bounded artifact gate](../tasks/03-android-demo-apk.md); long-horizon `CLIENT-002` remains planned
 - `Artifact`: debug-signed APK built from `apps/ustc-android-demo/`
 
 ## User-visible result
 
-An Android 8.0+ user can install the APK, connect it to the existing USTC Campus Agent Web MVP, and use the same Agent Chat, Affairs, ChangeRadar, Course Planning and Simple Calendar journeys inside an Android `WebView`.
+An Android 8.0+ user can install the debug APK and load the server's Web MVP inside
+an Android `WebView`. The recorded emulator check covers the Affairs Chat journey
+on the exact candidate below. Later Web features, including installed MCP/Skills
+and conversation management, need fresh Android checks; the old receipt does not
+verify them.
 
 For the bounded local demonstration, the phone or emulator reaches the host's loopback-only Rust service through:
 

@@ -1,5 +1,7 @@
 //! Explicit reviewed capability-grant authority for `market-grant/v0`.
 
+pub mod persistence;
+
 use crate::identity::{TenantId, UserId};
 use crate::invocation::{
     CapabilityGrantSnapshot, CapabilityId, CatalogRevision, ConfirmationPolicy, GrantSnapshotId,
@@ -434,6 +436,23 @@ impl fmt::Debug for GrantCommand {
 }
 
 impl GrantCommand {
+    #[must_use]
+    pub fn matches_issue(
+        &self,
+        snapshot: &GrantSnapshotId,
+        approval: &GrantApprovalId,
+        revision: &InstallationRevision,
+        capability: &CapabilityId,
+        scope: &GrantScope,
+        confirmation: ConfirmationPolicy,
+    ) -> bool {
+        matches!(&self.action, GrantCommandAction::Issue(e) if e.snapshot_id() == snapshot && e.approval_id() == approval && e.expected_installation_revision() == revision && e.capability_id() == capability && e.scope() == scope && e.confirmation_policy() == confirmation)
+    }
+    #[must_use]
+    pub fn matches_revoke(&self, version: &GrantVersion) -> bool {
+        matches!(&self.action, GrantCommandAction::Revoke { expected_version } if expected_version == version)
+    }
+
     pub fn issue(
         command_id: GrantCommandId,
         evidence: GrantAdmissionEvidence,
@@ -956,6 +975,11 @@ impl fmt::Debug for GrantCommandReceipt {
 
 impl GrantCommandReceipt {
     #[must_use]
+    pub const fn command(&self) -> &GrantCommand {
+        &self.command
+    }
+
+    #[must_use]
     pub const fn command_id(&self) -> &GrantCommandId {
         self.command.command_id()
     }
@@ -1101,6 +1125,8 @@ struct AuthorityKey {
 struct LedgerEntry {
     command: GrantCommand,
     receipt: GrantCommandReceipt,
+    observed_pre_snapshot: Option<GrantSnapshot>,
+    commit_ordinal: usize,
 }
 
 #[derive(Clone)]
@@ -1120,6 +1146,43 @@ impl fmt::Debug for InMemoryGrantRepository {
 }
 
 impl InMemoryGrantRepository {
+    /// Historical owner lookup; ownerless missing-target rejections are not disclosed.
+    #[must_use]
+    pub fn lookup_owned_receipt(
+        &self,
+        tenant: &TenantId,
+        user: &UserId,
+        id: &GrantCommandId,
+    ) -> Option<GrantCommandReceipt> {
+        let entry = self.command_ledger.get(id)?;
+        let owner = entry
+            .command
+            .evidence()
+            .map(|e| (e.tenant_id(), e.user_id()))
+            .or_else(|| {
+                entry
+                    .observed_pre_snapshot
+                    .as_ref()
+                    .map(|s| (s.tenant_id(), s.user_id()))
+            });
+        owner
+            .filter(|(t, u)| *t == tenant && *u == user)
+            .map(|_| entry.receipt.clone())
+    }
+
+    /// Return the historical receipt before consulting current state.
+    /// The caller must enforce owner authorization before exposing the result.
+    pub fn lookup_receipt(
+        &self,
+        command: &GrantCommand,
+    ) -> Result<Option<GrantCommandReceipt>, GrantRepositoryError> {
+        match self.command_ledger.get(command.command_id()) {
+            Some(entry) if &entry.command == command => Ok(Some(entry.receipt.clone())),
+            Some(_) => Err(GrantRepositoryError::CommandConflict),
+            None => Ok(None),
+        }
+    }
+
     #[must_use]
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
@@ -1254,6 +1317,8 @@ impl InMemoryGrantRepository {
                     LedgerEntry {
                         command,
                         receipt: receipt.clone(),
+                        observed_pre_snapshot,
+                        commit_ordinal: repository.command_ledger.len(),
                     },
                 )
                 .is_some()
@@ -1345,6 +1410,7 @@ impl GrantRepository for InMemoryGrantRepository {
             }
         }
         let current = self.aggregates.get(command.snapshot_id());
+        let observed_pre_snapshot = current.cloned();
         let decision = repository_rejection
             .as_ref()
             .map_or_else(|| decide(current, &command), |(error, _)| Err(*error));
@@ -1401,6 +1467,8 @@ impl GrantRepository for InMemoryGrantRepository {
             LedgerEntry {
                 command,
                 receipt: receipt.clone(),
+                observed_pre_snapshot,
+                commit_ordinal: self.command_ledger.len(),
             },
         );
         Ok(receipt)
@@ -3707,5 +3775,300 @@ mod tests {
             assert!(!rendered.contains("raw-secret"));
             assert!(!rendered.contains("arbitrary-payload"));
         }
+    }
+    #[test]
+    fn snapshot_codec_rejects_extra_fields_in_empty_variants() {
+        let fixture = Fixture::new();
+        let mut repository = InMemoryGrantRepository::new();
+        repository
+            .execute(fixture.issue(
+                "grant:empty-variants",
+                "grant-approval:empty-variants",
+                "grant-cmd:empty-variants",
+            ))
+            .expect("grant fixture");
+        let bytes = persistence::encode_snapshot(&repository).expect("snapshot");
+        let restored = persistence::decode_snapshot(&bytes).expect("original snapshot");
+        assert_eq!(
+            persistence::encode_snapshot(&restored).expect("unchanged wire"),
+            bytes
+        );
+        let text = String::from_utf8(bytes).expect("JSON snapshot");
+        let mut accepted = Vec::new();
+        for (name, marker) in [
+            ("pre", r#""pre":{"kind":"Absent"}"#),
+            ("scope", r#""scope":{"kind":"CampusPublic"}"#),
+        ] {
+            assert!(text.contains(marker), "original empty-variant wire: {name}");
+            for extra in [
+                r#","unexpected":true"#,
+                r#","unexpected":true,"unexpected":false"#,
+            ] {
+                let replacement = format!(
+                    "{}{extra}}}",
+                    marker.strip_suffix('}').expect("object marker")
+                );
+                let changed = text.replacen(marker, &replacement, 1);
+                if persistence::decode_snapshot(changed.as_bytes()).is_ok() {
+                    accepted.push(format!("{name}: {extra}"));
+                }
+            }
+        }
+        assert!(
+            accepted.is_empty(),
+            "accepted non-closed variants: {accepted:?}"
+        );
+    }
+
+    #[test]
+    fn snapshot_codec_preserves_grant_rejections_and_consumed_approval_witnesses() {
+        let fixture = Fixture::new();
+        let other_user = UserId::parse("user:other").expect("other owner");
+        let mut repository = InMemoryGrantRepository::new();
+        let issue = fixture.issue("grant:codec", "grant-approval:codec", "grant-cmd:z-issue");
+        let issued = repository.execute(issue.clone()).expect("codec fixture");
+        let duplicate_approval = fixture.issue(
+            "grant:other",
+            "grant-approval:codec",
+            "grant-cmd:a-approval",
+        );
+        let approval_receipt = repository
+            .execute(duplicate_approval.clone())
+            .expect("codec fixture");
+        assert_eq!(
+            rejected(&approval_receipt),
+            GrantDecisionError::ApprovalAlreadyConsumed
+        );
+        let conflict = fixture.issue(
+            "grant:conflict",
+            "grant-approval:other",
+            "grant-cmd:b-conflict",
+        );
+        let conflict_receipt = repository.execute(conflict.clone()).expect("codec fixture");
+        assert_eq!(
+            rejected(&conflict_receipt),
+            GrantDecisionError::AuthorityConflict
+        );
+        let private = fixture.private_issue(
+            "grant:private-codec",
+            "grant-approval:private-codec",
+            "grant-cmd:c-private",
+        );
+        let private_receipt = repository.execute(private.clone()).expect("codec fixture");
+        let bytes = persistence::encode_snapshot(&repository).expect("codec fixture");
+        let mut restored = persistence::decode_snapshot(&bytes).expect("codec fixture");
+        for (command, receipt) in [
+            (issue.clone(), issued.clone()),
+            (duplicate_approval, approval_receipt),
+            (conflict, conflict_receipt),
+            (private, private_receipt),
+        ] {
+            assert_eq!(
+                restored.execute(command.clone()).expect("codec fixture"),
+                receipt
+            );
+            assert_eq!(
+                restored.lookup_owned_receipt(&fixture.tenant, &fixture.user, command.command_id()),
+                Some(receipt)
+            );
+        }
+        assert!(
+            restored
+                .lookup_owned_receipt(&fixture.tenant, &other_user, issue.command_id())
+                .is_none()
+        );
+        let e = issue.evidence().expect("codec fixture");
+        assert!(issue.matches_issue(
+            e.snapshot_id(),
+            e.approval_id(),
+            e.expected_installation_revision(),
+            e.capability_id(),
+            e.scope(),
+            e.confirmation_policy()
+        ));
+        assert!(!issue.matches_issue(
+            e.snapshot_id(),
+            &GrantApprovalId::parse("grant-approval:different").expect("codec fixture"),
+            e.expected_installation_revision(),
+            e.capability_id(),
+            e.scope(),
+            e.confirmation_policy()
+        ));
+        let revoke = GrantCommand::revoke(
+            GrantCommandId::parse("grant-cmd:revoke-codec").expect("codec fixture"),
+            issue.snapshot_id().clone(),
+            accepted(&issued).1.version().clone(),
+        )
+        .expect("codec fixture");
+        restored.execute(revoke).expect("codec fixture");
+        let again = persistence::decode_snapshot(
+            &persistence::encode_snapshot(&restored).expect("codec fixture"),
+        )
+        .expect("codec fixture");
+        assert_eq!(
+            again
+                .load_exact(issue.snapshot_id())
+                .expect("codec fixture")
+                .expect("codec fixture")
+                .state(),
+            GrantState::Revoked
+        );
+        assert_eq!(
+            again.lookup_receipt(&issue).expect("codec fixture"),
+            Some(issued)
+        );
+    }
+
+    #[test]
+    fn snapshot_codec_rejects_grant_order_outcome_and_json_corruption() {
+        let fixture = Fixture::new();
+        let mut repository = InMemoryGrantRepository::new();
+        let issue = fixture.issue(
+            "grant:codec-order",
+            "grant-approval:codec-order",
+            "grant-cmd:z-order",
+        );
+        repository.execute(issue).expect("codec fixture");
+        repository
+            .execute(fixture.issue(
+                "grant:other-order",
+                "grant-approval:codec-order",
+                "grant-cmd:a-order",
+            ))
+            .expect("codec fixture");
+        let bytes = persistence::encode_snapshot(&repository).expect("codec fixture");
+        let original: serde_json::Value = serde_json::from_slice(&bytes).expect("codec fixture");
+        for path in [
+            "/records/0/action/evidence/evidence_digest",
+            "/records/0/outcome/event_digest",
+            "/records/1/outcome/category",
+            "/history_digest",
+        ] {
+            let mut changed = original.clone();
+            *changed.pointer_mut(path).expect("codec fixture") =
+                serde_json::Value::String("tampered".to_owned());
+            assert!(
+                persistence::decode_snapshot(&serde_json::to_vec(&changed).expect("codec fixture"))
+                    .is_err(),
+                "{path}"
+            );
+        }
+        let mut reordered = original.clone();
+        reordered["records"]
+            .as_array_mut()
+            .expect("codec fixture")
+            .reverse();
+        assert!(
+            persistence::decode_snapshot(&serde_json::to_vec(&reordered).expect("codec fixture"))
+                .is_err()
+        );
+        let mut unknown = original.clone();
+        unknown["records"][0]["unknown"] = serde_json::Value::Bool(true);
+        assert!(
+            persistence::decode_snapshot(&serde_json::to_vec(&unknown).expect("codec fixture"))
+                .is_err()
+        );
+        let text = String::from_utf8(bytes).expect("codec fixture");
+        let duplicate = text.replacen("\"version\":", "\"version\":null,\"version\":", 1);
+        assert!(persistence::decode_snapshot(duplicate.as_bytes()).is_err());
+        let duplicate_kind = text.replacen("\"kind\":", "\"kind\":\"Issue\",\"kind\":", 1);
+        assert!(persistence::decode_snapshot(duplicate_kind.as_bytes()).is_err());
+        assert_eq!(
+            persistence::decode_snapshot(&vec![b' '; 16 * 1024 * 1024 + 1])
+                .expect_err("invalid snapshot"),
+            persistence::SnapshotCodecError::TooLarge
+        );
+    }
+
+    #[test]
+    fn snapshot_codec_grant_commit_failure_and_id_conflict_do_not_change_state() {
+        let fixture = Fixture::new();
+        let mut repository = InMemoryGrantRepository::new();
+        let before = persistence::encode_snapshot(&repository).expect("codec fixture");
+        let issue = fixture.issue(
+            "grant:codec-failure",
+            "grant-approval:codec-failure",
+            "grant-cmd:codec-failure",
+        );
+        repository.fail_next_commit_for_testing();
+        assert_eq!(
+            repository.execute(issue.clone()),
+            Err(GrantRepositoryError::InjectedPersistenceFailure)
+        );
+        assert_eq!(
+            persistence::encode_snapshot(&repository).expect("codec fixture"),
+            before
+        );
+        repository.execute(issue.clone()).expect("codec fixture");
+        let conflict = fixture.issue(
+            "grant:other-codec",
+            "grant-approval:other-codec",
+            "grant-cmd:codec-failure",
+        );
+        assert_eq!(
+            repository.lookup_receipt(&conflict),
+            Err(GrantRepositoryError::CommandConflict)
+        );
+        let bytes = persistence::encode_snapshot(&repository).expect("codec fixture");
+        let restored = persistence::decode_snapshot(&bytes).expect("codec fixture");
+        assert_eq!(
+            restored.lookup_receipt(&conflict),
+            Err(GrantRepositoryError::CommandConflict)
+        );
+        assert_eq!(
+            persistence::encode_snapshot(&restored).expect("codec fixture"),
+            bytes
+        );
+    }
+    #[test]
+    fn snapshot_codec_roundtrips_replace_stale_and_expired_grant_commands() {
+        let fixture = Fixture::new();
+        let mut repository = InMemoryGrantRepository::new();
+        let issue = fixture.issue(
+            "grant:codec-transitions",
+            "grant-approval:first-codec",
+            "grant-cmd:codec-first",
+        );
+        let initial = repository.execute(issue.clone()).expect("issue");
+        let replace = GrantCommand::replace(
+            GrantCommandId::parse("grant-cmd:codec-replace").expect("id"),
+            accepted(&initial).1.version().clone(),
+            fixture.evidence("grant:codec-transitions", "grant-approval:replace-codec"),
+        )
+        .expect("replace");
+        let replaced = repository
+            .execute(replace.clone())
+            .expect("replace receipt");
+        let stale = GrantCommand::mark_stale(
+            GrantCommandId::parse("grant-cmd:codec-stale").expect("id"),
+            issue.snapshot_id().clone(),
+            accepted(&replaced).1.version().clone(),
+            GrantInvalidationReason::PolicyChanged,
+        )
+        .expect("stale");
+        let staled = repository.execute(stale.clone()).expect("stale receipt");
+        let expire = GrantCommand::expire(
+            GrantCommandId::parse("grant-cmd:codec-expire").expect("id"),
+            issue.snapshot_id().clone(),
+            accepted(&staled).1.version().clone(),
+        )
+        .expect("expire");
+        let expired = repository.execute(expire.clone()).expect("expire receipt");
+        let bytes = persistence::encode_snapshot(&repository).expect("snapshot");
+        let mut restored = persistence::decode_snapshot(&bytes).expect("restore");
+        for (command, receipt) in [(replace, replaced), (stale, staled), (expire, expired)] {
+            assert_eq!(
+                restored.execute(command).expect("historical receipt"),
+                receipt
+            );
+        }
+        assert_eq!(
+            restored
+                .load_exact(issue.snapshot_id())
+                .expect("read")
+                .expect("snapshot")
+                .state(),
+            GrantState::Expired
+        );
     }
 }

@@ -1,0 +1,21 @@
+{
+  "capabilityManifestDigest": "sha256:717e3ef9cf102d010237a04ed03baaedf655822d6ceb68110a7d61e59a884f58",
+  "componentSetDigest": "sha256:6b25667ba39d04062eb4818e39913235168223a4b2d133eb322a82ed80a2cae1",
+  "components": [
+    {
+      "componentDigest": "sha256:cb26265883321bf8be29528f267792b018bca0b5047919ff8163e0e3c2fba8a3",
+      "componentId": "component:ustc.simple-calendar/native",
+      "componentVersion": "0.1.0",
+      "executionIdentity": "execution:ustc.simple-calendar/in-process-demo/v0",
+      "fields": [],
+      "mode": "in-process-demo",
+      "path": "crates/simple-calendar/src/lib.rs",
+      "schemaDigest": "sha256:777692fe3b3d876474752c0b5aa7cc9e6c96f193ec212ce0ef627ce45176edf2",
+      "type": "NativeRustComponent"
+    }
+  ],
+  "packageDigest": "sha256:459c3e96721fb2b465165784af7bc28c3b10e6a6f7ef43d89c7a1e2bb51af594",
+  "packageId": "ustc.simple-calendar",
+  "packageVersion": "0.1.0",
+  "schemaVersion": "package-component-configuration/v1"
+}

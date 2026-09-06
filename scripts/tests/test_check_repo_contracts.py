@@ -7324,7 +7324,7 @@ class PlatformSessionImplementationTests(unittest.TestCase):
                 r"\A(?:pub )?use crate::identity::(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]*\});\Z",
             )
             self.assertNotIn(" as ", admitted_text)
-        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 9)
+        self.assertEqual(len(checker.PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS), 12)
 
     def test_forbidden_dependency_carrier_fails_closed(self) -> None:
         # A path-qualified call inside a function body declares no item, so the item allowlist

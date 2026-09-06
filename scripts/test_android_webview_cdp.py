@@ -7,6 +7,7 @@ import argparse
 import base64
 import hashlib
 import json
+import math
 import os
 import socket
 import struct
@@ -223,6 +224,89 @@ def discover_page(endpoint: str, expected_origin: str, timeout: float) -> dict[s
     raise SmokeFailure(f"WebView page not discovered; last targets={last_targets!r}")
 
 
+READY_EXPRESSION = """(() => {
+  const input = document.querySelector('#chat-input');
+  const form = document.querySelector('#chat-form');
+  const send = document.querySelector('#chat-send');
+  const selection = window.UcaModelSelection;
+  return {
+    title: document.title, origin: location.origin, ready: document.readyState,
+    chat: Boolean(input && form && send),
+    canSend: Boolean(input && form && send && !input.disabled && !send.disabled
+      && document.querySelector('#chat-surface')?.getAttribute('aria-busy') !== 'true'
+      && (!selection || selection.readiness === true))
+  };
+})()"""
+
+SUBMIT_EXPRESSION = """(() => {
+  const input = document.querySelector('#chat-input');
+  const form = document.querySelector('#chat-form');
+  const send = document.querySelector('#chat-send');
+  if (!input || !form || !send || input.disabled || send.disabled
+      || document.querySelector('#chat-surface')?.getAttribute('aria-busy') === 'true'
+      || (window.UcaModelSelection && window.UcaModelSelection.readiness !== true)) {
+    return { submitted: false };
+  }
+  const assistantCount = document.querySelectorAll('.chat-message[data-role=assistant]').length;
+  input.value = '成绩单证明怎么办';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  if (!form.checkValidity()) return { submitted: false };
+  form.requestSubmit();
+  return { submitted: true, assistantCount };
+})()"""
+
+RESULT_EXPRESSION = """(() => {
+  const replies = document.querySelectorAll('.chat-message[data-role=assistant]');
+  const reply = replies[__ASSISTANT_INDEX__];
+  return {
+    busy: document.querySelector('#chat-surface')?.getAttribute('aria-busy'),
+    assistantCount: replies.length,
+    answer: reply?.querySelector('.chat-message-body')?.textContent || '',
+    trace: reply?.querySelector('.chat-tool-trace')?.textContent || ''
+  };
+})()"""
+
+
+def run_chat_smoke(cdp: Cdp, expected_origin: str, timeout: float) -> dict[str, object]:
+    """Wait for actual send readiness and verify only this submission's new reply."""
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise SmokeFailure("timeout must be a finite positive number")
+    deadline = time.monotonic() + timeout
+    initial: object = None
+    while time.monotonic() < deadline:
+        initial = cdp.evaluate(READY_EXPRESSION)
+        if not isinstance(initial, dict):
+            raise SmokeFailure(f"invalid initial page state: {initial!r}")
+        if initial.get("origin") != expected_origin.rstrip("/"):
+            raise SmokeFailure(f"unexpected WebView origin: {initial!r}")
+        if (initial.get("ready") == "complete" and initial.get("chat") is True
+                and initial.get("canSend") is True):
+            break
+        time.sleep(min(0.25, max(0, deadline - time.monotonic())))
+    else:
+        raise SmokeFailure(f"WebView chat surface did not become send-ready: {initial!r}")
+
+    submitted = cdp.evaluate(SUBMIT_EXPRESSION)
+    if not isinstance(submitted, dict) or submitted.get("submitted") is not True:
+        raise SmokeFailure("Android WebView chat became unavailable before submission")
+    before = submitted.get("assistantCount")
+    if type(before) is not int or before < 0:
+        raise SmokeFailure("invalid pre-submission assistant count")
+
+    state: object = None
+    expression = RESULT_EXPRESSION.replace("__ASSISTANT_INDEX__", str(before))
+    while time.monotonic() < deadline:
+        state = cdp.evaluate(expression)
+        if (isinstance(state, dict) and state.get("busy") == "false"
+                and state.get("assistantCount") == before + 1
+                and "办事流程：" in str(state.get("answer", ""))
+                and "办理步骤：" in str(state.get("answer", ""))
+                and "办事导航" in str(state.get("trace", ""))):
+            return initial
+        time.sleep(min(0.25, max(0, deadline - time.monotonic())))
+    raise SmokeFailure(f"Android WebView new chat reply did not converge: {state!r}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--devtools", default="http://127.0.0.1:9222")
@@ -238,60 +322,7 @@ def main() -> int:
     try:
         cdp = Cdp(web_socket)
         cdp.call("Runtime.enable")
-        initial = cdp.evaluate(
-            """(() => ({
-              title: document.title,
-              origin: location.origin,
-              ready: document.readyState,
-              chat: Boolean(document.querySelector('#chat-form') && document.querySelector('#chat-input'))
-            }))()"""
-        )
-        if not isinstance(initial, dict):
-            raise SmokeFailure(f"invalid initial page state: {initial!r}")
-        if initial.get("origin") != args.origin.rstrip("/"):
-            raise SmokeFailure(f"unexpected WebView origin: {initial!r}")
-        if initial.get("ready") != "complete" or initial.get("chat") is not True:
-            raise SmokeFailure(f"WebView chat surface is not ready: {initial!r}")
-
-        submitted = cdp.evaluate(
-            """(() => {
-              const input = document.querySelector('#chat-input');
-              const form = document.querySelector('#chat-form');
-              if (!input || !form) return false;
-              input.value = '成绩单证明怎么办';
-              input.dispatchEvent(new Event('input', { bubbles: true }));
-              form.requestSubmit();
-              return true;
-            })()"""
-        )
-        if submitted is not True:
-            raise SmokeFailure("failed to submit Android WebView chat request")
-
-        deadline = time.monotonic() + args.timeout_seconds
-        state: object = None
-        while time.monotonic() < deadline:
-            state = cdp.evaluate(
-                """(() => {
-                  const answer = document.querySelector('.chat-message[data-role=assistant] .chat-message-body');
-                  const trace = document.querySelector('.chat-message[data-role=assistant] .chat-tool-trace');
-                  return {
-                    busy: document.querySelector('#chat-surface')?.getAttribute('aria-busy'),
-                    answer: answer?.textContent || '',
-                    trace: trace?.textContent || ''
-                  };
-                })()"""
-            )
-            if (
-                isinstance(state, dict)
-                and state.get("busy") == "false"
-                and "办事流程：" in str(state.get("answer", ""))
-                and "办理步骤：" in str(state.get("answer", ""))
-                and "办事导航" in str(state.get("trace", ""))
-            ):
-                break
-            time.sleep(1)
-        else:
-            raise SmokeFailure(f"Android WebView chat did not converge: {state!r}")
+        initial = run_chat_smoke(cdp, args.origin, args.timeout_seconds)
 
         print(
             "android-webview-smoke: PASS "

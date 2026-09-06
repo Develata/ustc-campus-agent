@@ -6,7 +6,7 @@
 - `Status`: Accepted blueprint; bounded Chat MVP adapter exists, complete provider platform planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m50-model-provider/v0`
-- `Last Review`: `2026-09-03`
+- `Last Review`: `2026-09-05`
 - `Primary code area`: current bounded adapter in `apps/ustc-agentd/src/chat_provider.rs`; future extraction into replaceable provider modules under `crates/adapters/` or a dedicated crate after two real consumers
 
 ## 1. Purpose
@@ -161,3 +161,13 @@ Hot paths are request serialization, token measurement, streaming decode and bou
 ## 14. Exit gate
 
 `M50` is integration-ready when one adapter and one fake pass equal-contract tests for normal, stream, tool call, malformed, timeout, cancel, rate limit, secret failure and estimator drift. It is accepted when `M30` completes one bounded run through the adapter with stream/non-stream final parity and no fallback.
+
+## Bounded model selection extension
+
+The user-authorized MODEL-001 slice adds an immutable operator-configured catalog
+of existing provider profiles, specified by [model-selection](../../contracts/model-selection.md).
+M10 exposes only safe identifiers and capabilities; M30 resolves a selected ID once
+per new request and pins that provider. Exact saved results replay independently of
+the current catalog. Browser settings cannot add endpoints, keys or tool authority.
+This is a cohesive extension of current app-private profile validation, not the
+complete provider profile/entitlement, streaming or billing platform.

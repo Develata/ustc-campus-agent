@@ -1,0 +1,13 @@
+/* Small, factual activity projection below the transcript. */
+.chat-activity { max-width: 760px; margin: 0 auto; padding: 6px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.chat-activity-status { display: flex; align-items: baseline; gap: 9px; margin: 0; overflow-wrap: anywhere; }
+.chat-activity-status::before { content: ""; display: block; width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: currentColor; opacity: .65; }
+.chat-activity[data-state="running"] .chat-activity-status::before { animation: activity-pulse 1.6s ease-in-out infinite; }
+.chat-activity-details { margin: 0 0 0 15px; }
+.chat-activity-details summary { min-height: 44px; width: fit-content; padding: 11px 4px 9px 0; cursor: pointer; font-size: 12px; }
+.chat-activity-details ol { list-style: none; margin: 0; padding: 0 0 0 12px; border-left: 1px solid var(--line); }
+.chat-activity-details li { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 5px 0; max-width: 400px; }
+.chat-activity-step-status { white-space: nowrap; font-size: 12px; }
+.chat-activity-details li[data-status="running"] { color: var(--ink); }
+@keyframes activity-pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .chat-activity[data-state="running"] .chat-activity-status::before { animation: none; } }

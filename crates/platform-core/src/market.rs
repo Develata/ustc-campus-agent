@@ -1,7 +1,11 @@
 //! Typed package-manifest validation and deterministic catalog metadata for M20-B1-1.
 
+pub mod admission;
 pub mod authority;
 pub mod capability;
+pub mod configuration_binding;
+pub mod configuration_catalog;
+pub mod configuration_schema;
 pub mod grant;
 pub mod installation;
 pub mod update;
@@ -359,6 +363,39 @@ impl CatalogReadModel {
         &self.catalog_digest
     }
 
+    /// Parse a catalog reference using the same grammar as manifest admission.
+    pub fn find_reference(
+        &self,
+        package_id: &str,
+        package_version: &str,
+    ) -> Result<Option<&ValidatedPackageManifest>, PackageValidationError> {
+        if !is_valid_package_id(package_id) {
+            return Err(invalid(
+                PackageField::PackageId,
+                PackageValidationErrorKind::InvalidFormat,
+            ));
+        }
+        if package_version.len() > 64 || !is_valid_release_version(package_version) {
+            return Err(invalid(
+                PackageField::PackageVersion,
+                PackageValidationErrorKind::InvalidFormat,
+            ));
+        }
+        let id = PackageId::parse(package_id).map_err(|_| {
+            invalid(
+                PackageField::PackageId,
+                PackageValidationErrorKind::InvalidFormat,
+            )
+        })?;
+        let version = PackageVersion::parse(package_version).map_err(|_| {
+            invalid(
+                PackageField::PackageVersion,
+                PackageValidationErrorKind::InvalidFormat,
+            )
+        })?;
+        Ok(self.find(&id, &version))
+    }
+
     #[must_use]
     pub fn find(
         &self,
@@ -633,7 +670,9 @@ fn validate_install_policy(
             raw.default_installed && raw.default_enabled && raw.user_disable_allowed
         }
         (
-            PackageTier::VerifiedCommunityText | PackageTier::VerifiedRemoteMcp,
+            PackageTier::FirstParty
+            | PackageTier::VerifiedCommunityText
+            | PackageTier::VerifiedRemoteMcp,
             InstallPolicyClass::UserInstalledPlugin,
         ) => !raw.default_installed && !raw.default_enabled,
         _ => false,

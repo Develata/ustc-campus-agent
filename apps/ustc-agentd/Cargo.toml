@@ -9,6 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+ustc-campus-agent-adapters = { path = "../../crates/adapters" }
 axum.workspace = true
 reqwest.workspace = true
 ustc-campus-agent-runtime = { path = "../../crates/agent-runtime" }
@@ -30,3 +31,6 @@ tokio.workspace = true
 
 [lints]
 workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", features = ["fs"] }

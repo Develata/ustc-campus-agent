@@ -6,7 +6,7 @@
 - `Status`: Accepted blueprint; `M00-B1 identity-types`, `M00-B2 session-domain`, bounded `M00-B3 request-context`, B4a `session-port`, B4b `control-evidence` and fixed Affairs/ChangeRadar B5 compositions implemented; generic B5 composition planned beyond those bounded slices
 - `Implementation State`: `partial-evidence`
 - `Version`: `m00-platform-control/v1`
-- `Last Review`: `2026-08-30`
+- `Last Review`: `2026-09-05`
 - `Composition`: `apps/ustc-agentd`
 - `Primary code area`: `crates/platform-core/src/identity.rs` for `M00-B1`; `crates/platform-core/src/session.rs` for `M00-B2`; `crates/platform-core/src/request_context.rs` for bounded `M00-B3`; `crates/platform-core/src/session_port.rs` plus app-private `apps/ustc-agentd/src/m00_session.rs` for B4a; `crates/platform-core/src/control_evidence.rs` plus app-private `apps/ustc-agentd/src/m00_control_evidence.rs`, `affairs_publication.rs` and `change_publication.rs` for B4b/B5; later production adapters under `M90`
 - `Primary Contract`: [`platform-identity/v0`](../../contracts/platform-identity.md), [`platform-session/v0`](../../contracts/platform-session.md), [`platform-request-context/v0`](../../contracts/platform-request-context.md), [`platform-session-port/v0`](../../contracts/platform-session-port.md), [`platform-control-evidence/v0`](../../contracts/platform-control-evidence.md), and [`module-boundaries.md`](../../contracts/module-boundaries.md)
@@ -219,3 +219,20 @@ B4a and B4b complete only the typed interface/fake scope of B4. No production ev
 ## 18. Exit gate
 
 `M00` is integration-ready when standalone tests prove tenant/session scope, expire/revoke, duplicate/conflicting command behavior, redaction and deterministic replay through fake ports. It is accepted only after `M10` proves one admitted and one denied request without invoking a downstream fake on denial.
+
+## Multi-user account continuation
+
+M00 also owns administrator-configured application accounts, verified SSO associations,
+role assignment and credential-generation references under [platform-account/v0](../../contracts/platform-account.md).
+This approved construction contract keeps credential verification and durable
+transactions behind M90 ports, M10 transport protection in its adapter, and private
+product access behind per-request admitted tenant/user context. Existing session
+histories remain canonical. Account/credential/session transaction implementation
+and proposed `ACCOUNT-*` evidence are planned, not implied by the current demo.
+[The delivery task](../../tasks/multi-user-campus-agent.md) sequences these dependencies;
+user entry is limited to SSO and backend-configured users, without public or invitation
+registration. Live SSO awaits its verified protocol/issuer/callback inputs; a controlled
+adapter keeps independent product development moving. Chat, Market and campus product
+modules may develop against controlled admitted contexts before real account ingress
+is assembled. This does not establish multi-user runtime readiness. No legacy demo
+state is silently reassigned and no SSO provider is invented.

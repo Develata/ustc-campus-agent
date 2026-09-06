@@ -114,3 +114,16 @@ Rule-of-two applies only to generic/reusable abstractions: a second independentl
 ### 8.4 Course Planning status
 
 Course Planning now has a bounded deterministic Rust planner plus consent-bound profile and loopback-Web composition over reviewed synthetic fixtures. It remains non-production and must not be presented as live SIS data, automatic registration or a substitute for a future live-source Affairs slice.
+
+## Confirmed multi-user product target
+
+The product target is a campus Agent service with Chat as the main entry and Plugin
+Market as its capability/configuration entry. The current loopback demo remains a
+bounded implementation, not multi-user deployment evidence. Independent accounts
+with invitation registration precede school SSO; M00's [account contract](../contracts/platform-account.md)
+owns identity, while M20 owns each user's installations and grants. Administrators
+provide a default model and public catalog; user configuration and credentials stay
+private. [The delivery task](../tasks/multi-user-campus-agent.md) records concrete
+Chat, official-information, calendar and course-recommendation completion flows and
+competition evidence. It does not rename the default packages or treat model subject
+knowledge/community reviews as official course facts.

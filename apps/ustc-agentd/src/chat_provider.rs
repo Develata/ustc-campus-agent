@@ -26,13 +26,16 @@ const MAX_KEY_FILE_PATH_BYTES: usize = 4_096;
 const MAX_API_KEY_BYTES: usize = 4_096;
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 const MAX_PROVIDER_MESSAGES: usize = 24;
-const MAX_PROVIDER_TOOLS: usize = 4;
+const MAX_PROVIDER_TOOLS: usize = 32;
 const MAX_PROVIDER_TEXT_BYTES: usize = 64 * 1024;
 const MAX_TOOL_CALL_ID_BYTES: usize = 256;
 const MAX_TOOL_NAME_BYTES: usize = 128;
 const MAX_TOOL_ARGUMENT_BYTES: usize = 4 * 1024;
 const MAX_MOCK_ANSWER_BYTES: usize = 12 * 1024;
 const MIN_CONTEXT_TOKENS: u64 = 16 * 1024;
+const MIN_LOCAL_CONTEXT_TOKENS: u64 = 1024;
+const LOCAL_OUTPUT_RESERVE_TOKENS: u64 = 256;
+const LOCAL_ESTIMATOR_RESERVE_TOKENS: u64 = 256;
 const MAX_CONTEXT_TOKENS: u64 = 1024 * 1024;
 #[cfg(test)]
 const DEFAULT_TEST_CONTEXT_TOKENS: u64 = 128 * 1024;
@@ -51,6 +54,28 @@ const OPPORTUNITY_UNAVAILABLE_NOTICE: &str = "课程规划请求未执行：需�
 pub(crate) enum ChatProvider {
     DeterministicMock,
     OpenAiCompatible(OpenAiCompatibleProvider),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NetworkProfile {
+    OpenAiCompatible,
+    LocalChat,
+}
+
+impl NetworkProfile {
+    const fn output_reserve(self) -> u64 {
+        match self {
+            Self::OpenAiCompatible => OUTPUT_RESERVE_TOKENS,
+            Self::LocalChat => LOCAL_OUTPUT_RESERVE_TOKENS,
+        }
+    }
+
+    const fn estimator_reserve(self) -> u64 {
+        match self {
+            Self::OpenAiCompatible => ESTIMATOR_RESERVE_TOKENS,
+            Self::LocalChat => LOCAL_ESTIMATOR_RESERVE_TOKENS,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -147,7 +172,7 @@ impl ChatProvider {
         };
         match profile.as_str() {
             "mock" => Ok(Self::deterministic_mock()),
-            "openai-compatible" => {
+            "openai-compatible" | "local-chat" => {
                 let base_url =
                     required_env("UCA_AGENT_BASE_URL", ProviderConfigError::MissingBaseUrl)?;
                 let model = required_env("UCA_AGENT_MODEL", ProviderConfigError::MissingModel)?;
@@ -170,6 +195,15 @@ impl ChatProvider {
                 )?
                 .parse::<u64>()
                 .map_err(|_| ProviderConfigError::InvalidContextLimit)?;
+                if profile == "local-chat" {
+                    return Self::local_chat(
+                        &base_url,
+                        &model,
+                        Path::new(&key_file),
+                        timeout_ms,
+                        context_limit_tokens,
+                    );
+                }
                 Self::openai_compatible(
                     &base_url,
                     &model,
@@ -197,6 +231,22 @@ impl ChatProvider {
         }
     }
 
+    pub(crate) fn tool_calling_enabled(&self) -> bool {
+        match self {
+            Self::DeterministicMock => true,
+            Self::OpenAiCompatible(provider) => {
+                provider.profile == NetworkProfile::OpenAiCompatible
+            }
+        }
+    }
+
+    pub(crate) fn context_limit_tokens(&self) -> Option<u64> {
+        match self {
+            Self::DeterministicMock => None,
+            Self::OpenAiCompatible(provider) => Some(provider.context_limit_tokens),
+        }
+    }
+
     pub(crate) async fn complete(
         &self,
         request: &ProviderRequest,
@@ -208,7 +258,7 @@ impl ChatProvider {
         }
     }
 
-    fn openai_compatible(
+    pub(crate) fn openai_compatible(
         base_url: &str,
         model: &str,
         key_file: &Path,
@@ -216,14 +266,61 @@ impl ChatProvider {
         context_limit_tokens: u64,
         permit_test_loopback_http: bool,
     ) -> Result<Self, ProviderConfigError> {
-        let endpoint = chat_completions_endpoint(base_url, permit_test_loopback_http)?;
+        Self::network_provider(
+            base_url,
+            model,
+            key_file,
+            timeout_ms,
+            context_limit_tokens,
+            NetworkProfile::OpenAiCompatible,
+            permit_test_loopback_http,
+        )
+    }
+
+    pub(crate) fn local_chat(
+        base_url: &str,
+        model: &str,
+        key_file: &Path,
+        timeout_ms: u64,
+        context_limit_tokens: u64,
+    ) -> Result<Self, ProviderConfigError> {
+        Self::network_provider(
+            base_url,
+            model,
+            key_file,
+            timeout_ms,
+            context_limit_tokens,
+            NetworkProfile::LocalChat,
+            false,
+        )
+    }
+
+    fn network_provider(
+        base_url: &str,
+        model: &str,
+        key_file: &Path,
+        timeout_ms: u64,
+        context_limit_tokens: u64,
+        profile: NetworkProfile,
+        permit_test_loopback_http: bool,
+    ) -> Result<Self, ProviderConfigError> {
+        let endpoint = match profile {
+            NetworkProfile::OpenAiCompatible => {
+                chat_completions_endpoint(base_url, permit_test_loopback_http)?
+            }
+            NetworkProfile::LocalChat => local_chat_endpoint(base_url)?,
+        };
         let model = bounded_nonblank(model, MAX_MODEL_BYTES)
             .ok_or(ProviderConfigError::InvalidModel)?
             .to_owned();
         if !(MIN_TIMEOUT_MS..=MAX_TIMEOUT_MS).contains(&timeout_ms) {
             return Err(ProviderConfigError::InvalidTimeout);
         }
-        if !(MIN_CONTEXT_TOKENS..=MAX_CONTEXT_TOKENS).contains(&context_limit_tokens) {
+        let minimum_context = match profile {
+            NetworkProfile::OpenAiCompatible => MIN_CONTEXT_TOKENS,
+            NetworkProfile::LocalChat => MIN_LOCAL_CONTEXT_TOKENS,
+        };
+        if !(minimum_context..=MAX_CONTEXT_TOKENS).contains(&context_limit_tokens) {
             return Err(ProviderConfigError::InvalidContextLimit);
         }
         let api_key = read_api_key(key_file)?;
@@ -231,7 +328,13 @@ impl ChatProvider {
         let client = Client::builder()
             .redirect(Policy::none())
             .connect_timeout(timeout)
-            .timeout(timeout)
+            .timeout(timeout);
+        let client = if profile == NetworkProfile::LocalChat {
+            client.no_proxy()
+        } else {
+            client
+        };
+        let client = client
             .build()
             .map_err(|_| ProviderConfigError::ClientUnavailable)?;
         Ok(Self::OpenAiCompatible(OpenAiCompatibleProvider {
@@ -239,8 +342,13 @@ impl ChatProvider {
             endpoint,
             api_key,
             context_limit_tokens,
+            profile,
             identity: ProviderIdentity {
-                mode: "openai-compatible".to_owned(),
+                mode: match profile {
+                    NetworkProfile::OpenAiCompatible => "openai-compatible",
+                    NetworkProfile::LocalChat => "local-chat",
+                }
+                .to_owned(),
                 model,
             },
         }))
@@ -278,6 +386,7 @@ pub(crate) struct OpenAiCompatibleProvider {
     endpoint: Url,
     api_key: SecretString,
     context_limit_tokens: u64,
+    profile: NetworkProfile,
     identity: ProviderIdentity,
 }
 
@@ -292,9 +401,9 @@ impl std::fmt::Debug for SecretString {
 
 impl OpenAiCompatibleProvider {
     async fn complete(&self, request: &ProviderRequest) -> Result<ProviderTurn, ProviderError> {
-        let wire_request = build_wire_request(&self.identity.model, request)?;
+        let wire_request = build_wire_request(&self.identity.model, request, self.profile)?;
         let wire_bytes = serde_json::to_vec(&wire_request).map_err(|_| ProviderError::Protocol)?;
-        preflight_context_budget(wire_bytes.len(), self.context_limit_tokens)?;
+        preflight_context_budget(wire_bytes.len(), self.context_limit_tokens, self.profile)?;
         let response = self
             .client
             .post(self.endpoint.clone())
@@ -351,10 +460,11 @@ fn map_transport_error(error: reqwest::Error) -> ProviderError {
 fn preflight_context_budget(
     serialized_request_bytes: usize,
     context_limit_tokens: u64,
+    profile: NetworkProfile,
 ) -> Result<(), ProviderError> {
     let send_ceiling = context_limit_tokens.saturating_mul(SEND_CEILING_BPS) / 10_000;
     let input_budget = send_ceiling
-        .checked_sub(OUTPUT_RESERVE_TOKENS + ESTIMATOR_RESERVE_TOKENS)
+        .checked_sub(profile.output_reserve() + profile.estimator_reserve())
         .ok_or(ProviderError::ContextBudgetExceeded)?;
     // Every tokenizer token covers at least one serialized UTF-8 byte, so byte count is a
     // conservative tokenizer-independent upper bound for input tokens.
@@ -405,9 +515,25 @@ fn chat_completions_endpoint(
     Ok(url)
 }
 
+fn local_chat_endpoint(base_url: &str) -> Result<Url, ProviderConfigError> {
+    let url = Url::parse(base_url).map_err(|_| ProviderConfigError::InvalidBaseUrl)?;
+    let numeric_loopback = url.host_str().is_some_and(|host| {
+        host.trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
+    });
+    if url.scheme() != "http" || !numeric_loopback {
+        return Err(ProviderConfigError::InsecureBaseUrl);
+    }
+    chat_completions_endpoint(base_url, true)
+}
+
 fn is_loopback_host(host: &str) -> bool {
     host.eq_ignore_ascii_case("localhost")
         || host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
             .parse::<IpAddr>()
             .is_ok_and(|address| address.is_loopback())
 }
@@ -538,9 +664,12 @@ fn validate_tool_call(call: &ProviderToolCall) -> Result<(), ProviderError> {
 struct OpenAiRequest<'a> {
     model: &'a str,
     messages: Vec<OpenAiMessage<'a>>,
-    tools: Vec<OpenAiTool<'a>>,
-    tool_choice: &'static str,
-    parallel_tool_calls: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<OpenAiTool<'a>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parallel_tool_calls: Option<bool>,
     stream: bool,
     max_tokens: u64,
 }
@@ -585,8 +714,19 @@ struct OpenAiToolFunction<'a> {
 fn build_wire_request<'a>(
     model: &'a str,
     request: &'a ProviderRequest,
+    profile: NetworkProfile,
 ) -> Result<OpenAiRequest<'a>, ProviderError> {
     validate_provider_request(request)?;
+    if profile == NetworkProfile::LocalChat
+        && (!request.tools.is_empty()
+            || request.messages.iter().any(|message| match message {
+                ProviderMessage::Tool { .. } => true,
+                ProviderMessage::Assistant { tool_calls, .. } => !tool_calls.is_empty(),
+                _ => false,
+            }))
+    {
+        return Err(ProviderError::Protocol);
+    }
     let messages = request
         .messages
         .iter()
@@ -650,11 +790,11 @@ fn build_wire_request<'a>(
     Ok(OpenAiRequest {
         model,
         messages,
-        tools,
-        tool_choice: "auto",
-        parallel_tool_calls: false,
+        tools: (profile == NetworkProfile::OpenAiCompatible).then_some(tools),
+        tool_choice: (profile == NetworkProfile::OpenAiCompatible).then_some("auto"),
+        parallel_tool_calls: (profile == NetworkProfile::OpenAiCompatible).then_some(false),
         stream: false,
-        max_tokens: OUTPUT_RESERVE_TOKENS,
+        max_tokens: profile.output_reserve(),
     })
 }
 
@@ -1116,8 +1256,10 @@ fn summarize_calendar_result(data: &Value) -> Option<String> {
             for (index, item) in items.iter().enumerate() {
                 let item_id = json_text(item, "/id")?;
                 let title = json_text(item, "/title")?;
-                let scheduled_for = optional_json_text(item, "scheduled_for")?;
-                item.get("created_at_unix_secs").and_then(Value::as_u64)?;
+                let scheduled_for = match item.get("scheduled_for") {
+                    None => None,
+                    Some(_) => optional_json_text(item, "scheduled_for")?,
+                };
                 if index < 10 {
                     summary.push_str(&format!("\n- {item_id}｜{title}"));
                     if let Some(scheduled_for) = scheduled_for {
@@ -1156,27 +1298,31 @@ fn deterministic_calendar_arguments(user: &str) -> Option<String> {
         CalendarMutationIntent::None => {}
     }
 
-    if user.contains("校历") || contains_ascii_term(user, "academic calendar") {
-        return None;
-    }
-
-    let wants_calendar = user.contains("日历")
-        || user.contains("待办")
-        || user.contains("事项")
-        || contains_ascii_term(user, "calendar")
-        || contains_ascii_term(user, "reminder");
-    if !wants_calendar {
-        return None;
-    }
-    if user.contains("查看")
-        || user.contains("列出")
-        || user.contains("有哪些")
-        || contains_ascii_term(user, "list")
-        || contains_ascii_term(user, "show")
-    {
-        return Some(serde_json::json!({"action": "list"}).to_string());
-    }
-    None
+    // Scope list intent to a clause: an academic-calendar query must not
+    // suppress a separate personal list request or lend its verb to help text.
+    let lower = user.to_ascii_lowercase();
+    let wants_list = lower
+        .split(['，', ',', '。', ';', '；', '\n', '并'])
+        .flat_map(|clause| clause.split(" and "))
+        .flat_map(|clause| clause.split(" then "))
+        .any(|clause| {
+            if clause.contains("校历") || contains_ascii_term(clause, "academic calendar") {
+                return false;
+            }
+            let wants_calendar = clause.contains("日历")
+                || clause.contains("待办")
+                || clause.contains("事项")
+                || contains_ascii_term(clause, "calendar")
+                || contains_ascii_term(clause, "reminder")
+                || contains_ascii_term(clause, "reminders");
+            let wants_list = clause.contains("查看")
+                || clause.contains("列出")
+                || clause.contains("有哪些")
+                || contains_ascii_term(clause, "list")
+                || contains_ascii_term(clause, "show");
+            wants_calendar && wants_list
+        });
+    wants_list.then(|| serde_json::json!({"action": "list"}).to_string())
 }
 
 fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, ProviderError> {
@@ -1432,6 +1578,11 @@ mod tests {
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))
                 .unwrap();
+            // Oversize-response tests intentionally stop reading the body. A
+            // bounded peer write prevents join() from waiting on a full socket.
+            stream
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
             let mut request_bytes = vec![0_u8; 64 * 1024];
             let _ = stream.read(&mut request_bytes);
             thread::sleep(delay);
@@ -1505,6 +1656,45 @@ mod tests {
                 .unwrap();
             assert_eq!(turn.tool_calls.len(), 1, "prompt={prompt}");
             assert_eq!(turn.tool_calls[0].name, expected, "prompt={prompt}");
+        }
+    }
+
+    #[test]
+    fn deterministic_mixed_calendar_queries_keep_both_read_only_tools() {
+        for prompt in [
+            "查看校历变化，并列出我的日历事项",
+            "查询成绩单、校历变更，规划课程，并列出我的待办事项",
+            "show the academic calendar and list my calendar items",
+            "SHOW THE ACADEMIC CALENDAR AND LIST MY REMINDERS",
+        ] {
+            let turn = deterministic_turn(&request(
+                prompt,
+                &[AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL, CALENDAR_TOOL],
+            ))
+            .unwrap();
+            assert!(turn.tool_calls.iter().any(|call| call.name == CHANGE_TOOL));
+            let calendar = turn
+                .tool_calls
+                .iter()
+                .find(|call| call.name == CALENDAR_TOOL)
+                .unwrap_or_else(|| panic!("missing explicit personal Calendar list: {prompt}"));
+            assert_eq!(
+                serde_json::from_str::<Value>(&calendar.arguments).unwrap(),
+                json!({"action": "list"})
+            );
+        }
+        for prompt in [
+            "查看校历",
+            "列出校历事项",
+            "show the academic calendar",
+            "list academic calendar reminders",
+            "show academic calendars",
+        ] {
+            assert_eq!(
+                deterministic_calendar_arguments(prompt),
+                None,
+                "prompt={prompt}"
+            );
         }
     }
 
@@ -1737,6 +1927,260 @@ mod tests {
     }
 
     #[test]
+    fn local_chat_profile_url_and_context_are_explicit_and_bounded() {
+        for accepted in [
+            "http://127.0.0.1:8123/v1",
+            "http://127.2.3.4/v1/",
+            "http://[::1]:8123/v1",
+        ] {
+            assert!(local_chat_endpoint(accepted).is_ok(), "{accepted}");
+        }
+        for rejected in [
+            "http://localhost:8123/v1",
+            "http://127.0.0.1.example.com/v1",
+            "http://192.168.1.1/v1",
+            "http://0.0.0.0/v1",
+            "http://[::]/v1",
+            "https://127.0.0.1/v1",
+            "https://example.com/v1",
+            "http://example.com/v1",
+            "http://user@127.0.0.1/v1",
+            "http://127.0.0.1/v1?q=1",
+            "http://127.0.0.1/v1#f",
+        ] {
+            assert!(local_chat_endpoint(rejected).is_err(), "{rejected}");
+        }
+        let key = key_file();
+        for context in [1024, 2048, MAX_CONTEXT_TOKENS] {
+            let provider = ChatProvider::local_chat(
+                "http://127.0.0.1:9/v1",
+                "local-model",
+                &key,
+                MIN_TIMEOUT_MS,
+                context,
+            )
+            .unwrap();
+            assert_eq!(provider.identity().mode, "local-chat");
+            assert_eq!(provider.context_limit_tokens(), Some(context));
+            assert!(!provider.tool_calling_enabled());
+        }
+        for context in [0, 1023, MAX_CONTEXT_TOKENS + 1] {
+            assert!(matches!(
+                ChatProvider::local_chat(
+                    "http://127.0.0.1:9/v1",
+                    "local-model",
+                    &key,
+                    MIN_TIMEOUT_MS,
+                    context
+                ),
+                Err(ProviderConfigError::InvalidContextLimit)
+            ));
+        }
+        assert!(
+            ChatProvider::openai_compatible(
+                "http://127.0.0.1:9/v1",
+                "local-model",
+                &key,
+                MIN_TIMEOUT_MS,
+                MIN_CONTEXT_TOKENS,
+                false
+            )
+            .is_err()
+        );
+        let normal = ChatProvider::openai_compatible(
+            "https://example.com/v1",
+            "tool-model",
+            &key,
+            MIN_TIMEOUT_MS,
+            MIN_CONTEXT_TOKENS,
+            false,
+        )
+        .unwrap();
+        assert!(normal.tool_calling_enabled());
+        assert_eq!(normal.identity().mode, "openai-compatible");
+        assert_eq!(normal.context_limit_tokens(), Some(MIN_CONTEXT_TOKENS));
+        assert!(ChatProvider::deterministic_mock().tool_calling_enabled());
+        assert_eq!(
+            ChatProvider::deterministic_mock().context_limit_tokens(),
+            None
+        );
+        fs::remove_file(key).unwrap();
+    }
+
+    #[test]
+    fn local_chat_wire_omits_tools_and_applies_exact_complete_wire_budget() {
+        let request = request("hello", &[]);
+        let wire = build_wire_request("local-model", &request, NetworkProfile::LocalChat).unwrap();
+        let value = serde_json::to_value(&wire).unwrap();
+        for absent in ["tools", "tool_choice", "parallel_tool_calls"] {
+            assert!(value.get(absent).is_none());
+        }
+        assert_eq!(value["max_tokens"], 256);
+        assert_eq!(value["stream"], false);
+        let budget = 2048 * SEND_CEILING_BPS / 10000 - 512;
+        assert_eq!(
+            preflight_context_budget(budget as usize, 2048, NetworkProfile::LocalChat),
+            Ok(())
+        );
+        assert_eq!(
+            preflight_context_budget(budget as usize + 1, 2048, NetworkProfile::LocalChat),
+            Err(ProviderError::ContextBudgetExceeded)
+        );
+        let baseline_bytes = serde_json::to_vec(&wire).unwrap().len();
+        let mut boundary = request.clone();
+        boundary.messages.push(ProviderMessage::User {
+            content: "x".to_owned(),
+        });
+        let one_byte_len = serde_json::to_vec(
+            &build_wire_request("local-model", &boundary, NetworkProfile::LocalChat).unwrap(),
+        )
+        .unwrap()
+        .len();
+        boundary
+            .messages
+            .last_mut()
+            .map(|message| {
+                *message = ProviderMessage::User {
+                    content: "x".repeat(budget as usize - one_byte_len + 1),
+                }
+            })
+            .unwrap();
+        let exact_wire = serde_json::to_vec(
+            &build_wire_request("local-model", &boundary, NetworkProfile::LocalChat).unwrap(),
+        )
+        .unwrap();
+        assert!(baseline_bytes < exact_wire.len());
+        assert_eq!(exact_wire.len(), budget as usize);
+        assert_eq!(
+            preflight_context_budget(exact_wire.len(), 2048, NetworkProfile::LocalChat),
+            Ok(())
+        );
+        boundary.messages.push(ProviderMessage::User {
+            content: "x".to_owned(),
+        });
+        let oversized = serde_json::to_vec(
+            &build_wire_request("local-model", &boundary, NetworkProfile::LocalChat).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            preflight_context_budget(oversized.len(), 2048, NetworkProfile::LocalChat),
+            Err(ProviderError::ContextBudgetExceeded)
+        );
+        let mut tool_request = request.clone();
+        tool_request.tools.push(ProviderToolDefinition {
+            name: AFFAIRS_TOOL.to_owned(),
+            description: "tool".to_owned(),
+            input_schema: json!({"type":"object"}),
+        });
+        assert!(matches!(
+            build_wire_request("local-model", &tool_request, NetworkProfile::LocalChat),
+            Err(ProviderError::Protocol)
+        ));
+        tool_request.tools.clear();
+        tool_request.messages.push(ProviderMessage::Assistant {
+            content: None,
+            tool_calls: vec![mock_call(1, AFFAIRS_TOOL, "{}")],
+        });
+        assert!(matches!(
+            build_wire_request("local-model", &tool_request, NetworkProfile::LocalChat),
+            Err(ProviderError::Protocol)
+        ));
+        tool_request.messages.pop();
+        tool_request.messages.push(ProviderMessage::Tool {
+            tool_call_id: "call-1".to_owned(),
+            content: "untrusted result".to_owned(),
+        });
+        assert!(matches!(
+            build_wire_request("local-model", &tool_request, NetworkProfile::LocalChat),
+            Err(ProviderError::Protocol)
+        ));
+    }
+
+    #[test]
+    fn local_chat_bypasses_environment_proxy() {
+        // Poison only a child test process: parallel tests never observe mutated environment.
+        const MARKER: &str = "UCA_TEST_LOCAL_PROXY_CHILD";
+        if std::env::var_os(MARKER).is_none() {
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+            child
+                .args([
+                    "--exact",
+                    "chat_provider::tests::local_chat_bypasses_environment_proxy",
+                    "--nocapture",
+                ])
+                .env(MARKER, "1")
+                .env_remove("NO_PROXY")
+                .env_remove("no_proxy");
+            for name in [
+                "HTTP_PROXY",
+                "http_proxy",
+                "HTTPS_PROXY",
+                "https_proxy",
+                "ALL_PROXY",
+                "all_proxy",
+            ] {
+                child.env(name, "http://127.0.0.1:9");
+            }
+            let output = child.output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+            return;
+        }
+        let key = key_file();
+        let (base, peer) = spawn_http_peer("HTTP/1.1 200 OK", &[], br#"{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"local peer"}}]}"#.to_vec(), Duration::ZERO);
+        let provider =
+            ChatProvider::local_chat(&base, "local-model", &key, MIN_TIMEOUT_MS, 2048).unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let reply = runtime
+            .block_on(provider.complete(&request("hello", &[])))
+            .unwrap();
+        assert_eq!(reply.content.as_deref(), Some("local peer"));
+        peer.join().unwrap();
+        fs::remove_file(key).unwrap();
+    }
+
+    #[test]
+    fn local_chat_rejects_redirect_and_oversize_before_network() {
+        let key = key_file();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (base, peer) = spawn_http_peer(
+            "HTTP/1.1 302 Found",
+            &[("location", "http://127.0.0.1:9/credential-target")],
+            Vec::new(),
+            Duration::ZERO,
+        );
+        let provider =
+            ChatProvider::local_chat(&base, "local-model", &key, MIN_TIMEOUT_MS, 2048).unwrap();
+        assert_eq!(
+            runtime.block_on(provider.complete(&request("hello", &[]))),
+            Err(ProviderError::Unavailable)
+        );
+        peer.join().unwrap();
+        let provider = ChatProvider::local_chat(
+            "http://127.0.0.1:9/v1",
+            "local-model",
+            &key,
+            MIN_TIMEOUT_MS,
+            2048,
+        )
+        .unwrap();
+        assert_eq!(
+            runtime.block_on(provider.complete(&request(&"x".repeat(2048), &[]))),
+            Err(ProviderError::ContextBudgetExceeded)
+        );
+        fs::remove_file(key).unwrap();
+    }
+
+    #[test]
     fn openai_request_is_nonstreaming_ordered_and_disables_parallel_tools() {
         let mut request = request("成绩单怎么办", &[AFFAIRS_TOOL]);
         request.messages.insert(
@@ -1746,7 +2190,8 @@ mod tests {
                     .to_owned(),
             },
         );
-        let wire = build_wire_request("model-fixed", &request).unwrap();
+        let wire =
+            build_wire_request("model-fixed", &request, NetworkProfile::OpenAiCompatible).unwrap();
         let value = serde_json::to_value(wire).unwrap();
         assert_eq!(value["model"], "model-fixed");
         assert_eq!(value["stream"], false);
@@ -1771,17 +2216,26 @@ mod tests {
             - OUTPUT_RESERVE_TOKENS
             - ESTIMATOR_RESERVE_TOKENS;
         assert_eq!(
-            preflight_context_budget(input_budget as usize, MIN_CONTEXT_TOKENS),
+            preflight_context_budget(
+                input_budget as usize,
+                MIN_CONTEXT_TOKENS,
+                NetworkProfile::OpenAiCompatible
+            ),
             Ok(())
         );
         assert_eq!(
-            preflight_context_budget(input_budget as usize + 1, MIN_CONTEXT_TOKENS),
+            preflight_context_budget(
+                input_budget as usize + 1,
+                MIN_CONTEXT_TOKENS,
+                NetworkProfile::OpenAiCompatible
+            ),
             Err(ProviderError::ContextBudgetExceeded)
         );
 
         let one_byte = request("x", &[AFFAIRS_TOOL]);
         let one_byte_len = serde_json::to_vec(
-            &build_wire_request("model-fixed", &one_byte).expect("one-byte wire request"),
+            &build_wire_request("model-fixed", &one_byte, NetworkProfile::OpenAiCompatible)
+                .expect("one-byte wire request"),
         )
         .expect("one-byte wire bytes")
         .len();
@@ -1799,21 +2253,31 @@ mod tests {
             },
         );
         let baseline_bytes = serde_json::to_vec(
-            &build_wire_request("model-fixed", &baseline).expect("baseline wire request"),
+            &build_wire_request("model-fixed", &baseline, NetworkProfile::OpenAiCompatible)
+                .expect("baseline wire request"),
         )
         .expect("baseline bytes");
         let customized_bytes = serde_json::to_vec(
-            &build_wire_request("model-fixed", &customized).expect("customized wire request"),
+            &build_wire_request("model-fixed", &customized, NetworkProfile::OpenAiCompatible)
+                .expect("customized wire request"),
         )
         .expect("customized bytes");
         assert_eq!(baseline_bytes.len(), input_budget as usize);
         assert!(customized_bytes.len() > baseline_bytes.len());
         assert_eq!(
-            preflight_context_budget(baseline_bytes.len(), MIN_CONTEXT_TOKENS),
+            preflight_context_budget(
+                baseline_bytes.len(),
+                MIN_CONTEXT_TOKENS,
+                NetworkProfile::OpenAiCompatible
+            ),
             Ok(())
         );
         assert_eq!(
-            preflight_context_budget(customized_bytes.len(), MIN_CONTEXT_TOKENS),
+            preflight_context_budget(
+                customized_bytes.len(),
+                MIN_CONTEXT_TOKENS,
+                NetworkProfile::OpenAiCompatible
+            ),
             Err(ProviderError::ContextBudgetExceeded)
         );
     }
@@ -2026,10 +2490,7 @@ mod tests {
     #[test]
     fn local_openai_peer_receives_bearer_and_returns_one_turn() {
         let key = key_file();
-        let expected_bearer = format!(
-            "authorization: Bearer {}",
-            fs::read_to_string(&key).unwrap().trim()
-        );
+        let expected_bearer = format!("Bearer {}", fs::read_to_string(&key).unwrap().trim());
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         let server = thread::spawn(move || {
@@ -2051,7 +2512,15 @@ mod tests {
             }
             let request_text = String::from_utf8_lossy(&request);
             assert!(request_text.contains("POST /v1/chat/completions HTTP/1.1"));
-            assert!(request_text.contains(&expected_bearer));
+            let authorization = request_text
+                .lines()
+                .filter_map(|line| line.split_once(':'))
+                .find(|(name, _)| name.eq_ignore_ascii_case("authorization"))
+                .map(|(_, value)| value.trim());
+            assert!(
+                authorization == Some(expected_bearer.as_str()),
+                "exact synthetic bearer header"
+            );
             let body = r#"{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"bounded answer","tool_calls":[]}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}"#;
             write!(
                 stream,

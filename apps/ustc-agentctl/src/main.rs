@@ -1,3 +1,4 @@
+mod package_configuration;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::PathBuf;
@@ -52,6 +53,9 @@ fn run(args: &[String]) -> Result<(), String> {
                 println!("first_party_package={}@{}", plugin.id, plugin.version);
             }
             Ok(())
+        }
+        [cmd, sub, rest @ ..] if cmd == "market" && sub == "prepare-component-config" => {
+            package_configuration::run(rest)
         }
         [cmd, sub, rest @ ..] if cmd == "course" && sub == "plan" => run_course_plan(rest),
         [cmd, sub, rest @ ..] if cmd == "affairs" && sub == "publication-status" => {
@@ -351,7 +355,7 @@ fn parse_course_plan_options(args: &[String]) -> Result<CoursePlanOptions, Strin
 
 fn print_help() {
     println!(
-        "{PRODUCT_NAME} operator CLI\n\nCommands:\n  doctor                         print repository/product invariants\n  market validate                point to the market contract validator\n  course plan --fixture PATH     produce deterministic Course Planning JSON\n              [--format json]\n  affairs publication-status     read bounded durable Affairs publication status\n              --server LOOPBACK:PORT\n  affairs publish-demo           run the fixed M10 → M00/evidence → M71 demo command\n              --server LOOPBACK:PORT --confirm\n  change publication-status      read bounded durable ChangeRadar publication status\n              --server LOOPBACK:PORT\n  change publish-demo            run the fixed M10 → M00/evidence → M70 demo command\n              --server LOOPBACK:PORT --confirm\n  changes ...                    accepted alias for the ChangeRadar commands\n  --version                      show binary version\n  help                           show this message"
+        "{PRODUCT_NAME} operator CLI\n\nCommands:\n  doctor                         print repository/product invariants\n  market validate                point to the market contract validator\n  market prepare-component-config --package-dir PATH\n                                 create a checked local MCP/Skill sidecar (never overwrite)\n  course plan --fixture PATH     produce deterministic Course Planning JSON\n              [--format json]\n  affairs publication-status     read bounded durable Affairs publication status\n              --server LOOPBACK:PORT\n  affairs publish-demo           run the fixed M10 → M00/evidence → M71 demo command\n              --server LOOPBACK:PORT --confirm\n  change publication-status      read bounded durable ChangeRadar publication status\n              --server LOOPBACK:PORT\n  change publish-demo            run the fixed M10 → M00/evidence → M70 demo command\n              --server LOOPBACK:PORT --confirm\n  changes ...                    accepted alias for the ChangeRadar commands\n  --version                      show binary version\n  help                           show this message"
     );
 }
 

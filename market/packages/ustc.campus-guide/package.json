@@ -1,0 +1,29 @@
+{
+  "id": "ustc.campus-guide",
+  "version": "0.1.0",
+  "publisher": "first-party",
+  "tier": "FirstParty",
+  "displayName": "校园使用指南",
+  "description": "帮助 Agent 核对校园信息的来源，组织选课问题和日历任务。",
+  "implementationStatus": "development",
+  "installPolicy": {
+    "class": "UserInstalledPlugin",
+    "defaultInstalled": false,
+    "defaultEnabled": false,
+    "userDisableAllowed": true
+  },
+  "components": [
+    {
+      "type": "SkillComponent",
+      "path": "skills/campus-guide/SKILL.md"
+    }
+  ],
+  "capabilities": [
+    "campus.public_rules.read"
+  ],
+  "sourcePolicy": {
+    "source": "reviewed bundled documentation; no remote fetch",
+    "personalData": "none; skill guidance cannot grant access",
+    "execution": "read-only task context; no script execution"
+  }
+}

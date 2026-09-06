@@ -4,14 +4,17 @@ import { spawn } from "node:child_process";
 import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repo = resolve(new URL("..", import.meta.url).pathname);
+const repo = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const binary = resolve(process.argv[2] ?? "target/debug/ustc-agentd");
 const port = 18790;
-const base = `http://127.0.0.1:${port}`;
+const externalBase = process.argv[2] === "--base" ? process.argv[3] : null;
+if (process.argv[2] === "--base" && (!externalBase || !/^http:\/\/127\.0\.0\.1:[0-9]+$/.test(externalBase))) throw Error("test base must be numeric loopback");
+const base = externalBase ?? `http://127.0.0.1:${port}`;
 const work = await mkdtemp(join(tmpdir(), "uca-agent-chat-browser-"));
 
-await access(binary);
+if (!externalBase) await access(binary);
 
 const boundedOutput = (current, chunk) => `${current}${chunk}`.slice(-32768);
 let serverOutput = "";
@@ -26,7 +29,7 @@ for (const name of [
 ]) {
   delete serverEnv[name];
 }
-const server = spawn(binary, [
+const server = externalBase ? null : spawn(binary, [
   "serve-web",
   "--bind", `127.0.0.1:${port}`,
   "--fixture", join(repo, "fixtures/affairs/proc-011-reviewed.json"),
@@ -38,8 +41,8 @@ const server = spawn(binary, [
   "--idempotency", join(work, "affairs-idempotency.json"),
   "--session-store", join(work, "m00-sessions.json")
 ], { cwd: repo, env: serverEnv, stdio: ["ignore", "pipe", "pipe"] });
-server.stdout.on("data", (chunk) => { serverOutput = boundedOutput(serverOutput, chunk); });
-server.stderr.on("data", (chunk) => { serverOutput = boundedOutput(serverOutput, chunk); });
+server?.stdout.on("data", (chunk) => { serverOutput = boundedOutput(serverOutput, chunk); });
+server?.stderr.on("data", (chunk) => { serverOutput = boundedOutput(serverOutput, chunk); });
 
 let chrome;
 let cdp;
@@ -47,7 +50,7 @@ const delay = (ms) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms)
 
 async function waitForHealth() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (server.exitCode !== null) {
+    if (server && server.exitCode !== null) {
       throw new Error(`server exited early (${server.exitCode}):\n${serverOutput}`);
     }
     const controller = new AbortController();
@@ -299,17 +302,17 @@ try {
       return replaceState(...args);
     };
     window.fetch = (...args) => {
-      if (args[0] === '/api/v1/agent/chat') {
+      if (String(args[0]).startsWith('/api/v1/agent/conversations/') && String(args[0]).endsWith('/turns')) {
         window.__ucaChatRequests.push(JSON.parse(args[1].body));
       }
-      if (window.__ucaRejectChatOnce && args[0] === '/api/v1/agent/chat') {
+      if (window.__ucaRejectChatOnce && String(args[0]).startsWith('/api/v1/agent/conversations/') && String(args[0]).endsWith('/turns')) {
         window.__ucaRejectChatOnce = false;
         return Promise.resolve(new Response(
-          JSON.stringify({schema: 'ustc-agent-chat-error/v1', error: 'invalid_chat_request'}),
+          JSON.stringify({schema: 'chat-conversation-error/v1', error: 'invalid_chat_request'}),
           {status: 400, headers: {'Content-Type': 'application/json'}}
         ));
       }
-      if (delayChatOnce && args[0] === '/api/v1/agent/chat') {
+      if (delayChatOnce && String(args[0]).startsWith('/api/v1/agent/conversations/') && String(args[0]).endsWith('/turns')) {
         delayChatOnce = false;
         return new Promise((resolveFetch) => {
           let released = false;
@@ -324,6 +327,7 @@ try {
       return original(...args);
     };
   })()`);
+  await waitFor("!document.querySelector('#chat-send').disabled", "conversation store ready");
   const beforeFirst = await evaluate("window.__ucaAssistantAdds");
   await evaluate(`(() => {
     const input = document.querySelector('#chat-input');
@@ -336,8 +340,12 @@ try {
   }, sessionId);
   await waitFor("document.querySelector('#chat-surface').getAttribute('aria-busy') === 'true'", "Affairs chat busy");
   assert.equal(await evaluate("document.querySelector('#chat-send').disabled"), true);
-  assert.equal(await evaluate("document.querySelector('#chat-progress').hidden"), false);
+  await waitFor("typeof window.__ucaReleaseDelayedChat === 'function'", "conversation created and turn delivery delayed");
   assert.equal(await evaluate("typeof window.__ucaReleaseDelayedChat"), "function");
+  assert.equal(await evaluate("document.querySelector('#chat-progress').hidden"), true);
+  assert.equal(await evaluate("document.querySelector('#chat-activity').hidden"), false);
+  assert.equal(await evaluate("document.querySelector('#chat-activity').dataset.state"), "waiting");
+  assert.equal(await evaluate("document.querySelector('.chat-activity-status').textContent"), "请求已发送，等待状态");
   await evaluate("window.__ucaReleaseDelayedChat()");
   await cdp.send("Input.dispatchKeyEvent", {
     type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13
@@ -358,7 +366,8 @@ try {
   assert.doesNotMatch(affairsAnswer, /ordered_steps|command_id/);
   assert.equal(await evaluate("document.activeElement === document.querySelector('#chat-input')"), true);
   const emptyPreferenceRequest = await evaluate("window.__ucaChatRequests.at(-1)");
-  assert.equal(emptyPreferenceRequest.schema, "ustc-agent-chat-request/v1");
+  assert.equal(emptyPreferenceRequest.schema, "chat-conversation-turn/v2");
+  assert.equal(emptyPreferenceRequest.model_id, "default");
   assert.equal(Object.hasOwn(emptyPreferenceRequest, "prompt_customization"), false);
 
   await evaluate(`(() => {
@@ -378,12 +387,17 @@ try {
     "  failure-retained-preference  "
   );
   const rejectedPreferenceRequest = await evaluate("window.__ucaChatRequests.at(-1)");
-  assert.equal(rejectedPreferenceRequest.schema, "ustc-agent-chat-request/v2");
+  assert.equal(rejectedPreferenceRequest.schema, "chat-conversation-turn/v2");
+  assert.equal(rejectedPreferenceRequest.model_id, "default");
   assert.deepEqual(rejectedPreferenceRequest.prompt_customization, {text: "failure-retained-preference"});
 
+  await evaluate("document.querySelector('#conversation-check-result').click()");
+  await waitFor("document.querySelector('#conversation-cancel-send') && !document.querySelector('#conversation-cancel-send').disabled", "rejected request confirmed absent");
+  await evaluate("document.querySelector('#conversation-cancel-send').click()");
   await submitWithEnter("校历最近有什么变更？", false, "  请用简洁的要点回答。  ");
   const customizedRequest = await evaluate("window.__ucaChatRequests.at(-1)");
-  assert.equal(customizedRequest.schema, "ustc-agent-chat-request/v2");
+  assert.equal(customizedRequest.schema, "chat-conversation-turn/v2");
+  assert.equal(customizedRequest.model_id, "default");
   assert.deepEqual(customizedRequest.prompt_customization, {text: "请用简洁的要点回答。"});
   assert.equal(await evaluate("document.querySelector('#chat-prompt-customization').value"), "");
   assert.equal(await evaluate("document.querySelector('#chat-prompt-customization-counter').textContent"), "0 / 2048 UTF-8 bytes");
@@ -409,7 +423,8 @@ try {
 
   await submitWithEnter("记录事项：提交开题报告");
   const laterRequest = await evaluate("window.__ucaChatRequests.at(-1)");
-  assert.equal(laterRequest.schema, "ustc-agent-chat-request/v1");
+  assert.equal(laterRequest.schema, "chat-conversation-turn/v2");
+  assert.equal(laterRequest.model_id, "default");
   assert.equal(Object.hasOwn(laterRequest, "prompt_customization"), false);
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
@@ -456,7 +471,7 @@ try {
   assert.doesNotMatch(courseAnswer, /course_codes|command_id/);
 
   await submitWithEnter(
-    "请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，并列出日历事项",
+    "请查询成绩单，并查看校历变化，根据当前档案规划课程，并列出日历事项",
     true
   );
   assert.equal(await evaluate("document.querySelector('#chat-opportunity-confirm').checked"), false);
@@ -481,40 +496,26 @@ try {
   }
 
   await submitWithEnter("普通问题 0");
-  const unconfirmedHistory = await evaluate(`(() => {
-    const request = window.__ucaChatRequests.at(-1);
-    return {
-      opportunityContext: request.opportunity_context,
-      contents: request.messages.map((message) => message.content)
-    };
-  })()`);
-  assert.equal(unconfirmedHistory.opportunityContext, null);
-  assert.equal(
-    unconfirmedHistory.contents.some((content) =>
-      content.includes('请按当前档案规划课程') || content.includes('MATH2001')
-    ),
-    false,
-    "unconfirmed requests must omit consent-bound Opportunity history"
-  );
+  const unconfirmedRequest = await evaluate("window.__ucaChatRequests.at(-1)");
+  assert.equal(unconfirmedRequest.opportunity_context, null);
+  assert.equal(Object.hasOwn(unconfirmedRequest, "messages"), false,
+    "the browser supplies no canonical history or prior profile context; Rust owns context filtering");
+  assert.equal(unconfirmedRequest.message, "普通问题 0");
   for (let index = 1; index < 6; index += 1) {
     await submitWithEnter(`普通问题 ${index}`);
   }
   await submitWithEnter("普通问题 6");
-  const boundedHistory = await evaluate(`(() => {
-    const request = window.__ucaChatRequests.at(-1);
-    return {
-      count: request.messages.length,
-      roles: request.messages.map((message) => message.role)
-    };
+  const durableHistory = await evaluate(`(async () => {
+    const id=document.querySelector('.conversation-open[aria-current=true]').dataset.conversationId;
+    const response=await fetch('/api/v1/agent/conversations/'+encodeURIComponent(id), {headers:{'X-USTC-Client-Protocol-Major':'1'}});
+    const detail=await response.json();
+    return {count:detail.turns.length,phases:detail.turns.map(turn=>turn.phase),
+      dom:document.querySelectorAll('.chat-message').length,request:window.__ucaChatRequests.at(-1)};
   })()`);
-  assert.equal(boundedHistory.count <= 12, true);
-  assert.equal(boundedHistory.count % 2, 1, "history must contain complete turns plus the current user message");
-  assert.deepEqual(
-    boundedHistory.roles,
-    boundedHistory.roles.map((_, index) => index % 2 === 0 ? "user" : "assistant"),
-    "bounded history must not begin with an orphan assistant reply"
-  );
-  assert.equal(await evaluate("document.querySelectorAll('.chat-message').length"), 12, "DOM transcript must remain bounded");
+  assert.equal(durableHistory.count <= 100, true, "durable history stays within the conversation bound");
+  assert.deepEqual(durableHistory.phases, durableHistory.phases.map(()=>"completed"));
+  assert.equal(durableHistory.dom, durableHistory.count * 2, "saved complete turns remain visible without clipping canonical history");
+  assert.equal(Object.hasOwn(durableHistory.request,"messages"), false, "client does not re-author server prompt history");
 
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: 390, height: 844, deviceScaleFactor: 1, mobile: true
@@ -555,7 +556,7 @@ try {
 
   const exceptions = cdp.events.filter((event) => event.method === "Runtime.exceptionThrown");
   assert.deepEqual(exceptions, [], `browser exceptions: ${JSON.stringify(exceptions)}`);
-  console.log("agent-chat-browser: PASS journeys=14 human-summaries=PASS four-tool-trace=PASS turn-pairs=PASS oversized-turn=OMITTED viewport=390 reduced-motion=PASS clear=PASS");
+  console.log("agent-chat-browser: PASS journeys=14 human-summaries=PASS four-tool-trace=PASS durable-turn-pairs=PASS legacy-oversized-projection=OMITTED viewport=390 reduced-motion=PASS clear=PASS");
 } catch (error) {
   console.error(error?.stack ?? error);
   if (serverOutput) console.error(`server output:\n${serverOutput}`);

@@ -1,162 +1,83 @@
-# MVP core capabilities
+# 当前校园 Agent 能力
 
-> Status: implemented loopback MVP · Last review: 2026-09-05
+当前源码面向一个具体需求：学生在同一段对话中核对办事资料、比较课程选择、
+查看校历变化并记录个人事项。模型提出工具调用，Rust 检查参数、来源和当前权限后执行。
+这是学生竞赛演示系统，使用本机演示会话；不是学校官方服务。
 
-## 1. Design
+## 能完成的任务
 
-The MVP follows four rules:
+| 校园任务 | 当前操作与结果 | 使用条件与限制 |
+|---|---|---|
+| 核对成绩单证明怎么办 | 查询经复核的固定流程，查看步骤、官方入口和来源；个人办理清单可复制或下载 | 勾选清单不代表官方受理，刷新不保留勾选；当前未覆盖所有办事流程 |
+| 比较课程方案 | 创建演示档案，按先修、开课、时间冲突和学分约束筛选，返回最多三个方案与解释 | 每次对话使用档案都需确认；课程壳与档案为 synthetic，不代表当前真实开课情况 |
+| 查看校历变化 | 查询经复核的固定变更板，展示版本差异和来源 | 不代表实时抓取学校通知或自动推送 |
+| 记录个人事项 | 记录、列出、按事项 ID 删除；写入成功后重启可回读 | 记录须用 `记录事项：<标题>`，删除须用 `删除事项 calendar:item:N`；没有日期解析、提醒或同步 |
+| 使用校园指南 Skill | 安装、检查、授权、启用后，Agent 可读取指南和包内声明资源；停用或撤销阻止后续调用 | 按需安装；需要支持工具调用的真实模型，正文不执行为脚本 |
+| 接入 MCP 工具 | 运行方配置包和服务地址，用户核对发现的工具与权限后启用 | 当前仅支持单组件、公开只读的 Streamable HTTP；不接受网页任意命令或主机路径 |
+| 连续对话与恢复 | 服务端保存对话、工具轨迹和标题；支持刷新后续问、重命名、逻辑删除及未知结果检查 | 删除对话不撤销已执行的事项或插件操作；结果不明时只显式检查或重试原请求 |
 
-1. **Server authority.** The browser and model may propose; Rust validates every request, tool name, argument and permission boundary.
-2. **Small complete paths.** A normal answer and each tool call have an executable end-to-end path, not only a manifest or UI mock.
-3. **Source-labelled output.** Official/synthetic facts, community signals and private profile state remain distinguishable. Community feedback affects only soft ranking.
-4. **Honest degradation.** Missing consent, stale source, provider failure and unsupported features return explicit non-success outcomes instead of plausible text.
+选课样例包含 2026-09-03 的两个真实 iCourse 公开聚合评分快照，映射到 synthetic
+课程壳；不复制评课正文，不做实时爬取，聚合分数仅用于软排序。教师、学期和开课
+身份须在外链核对，数据使用许可尚未闭环，不能将整份样例称为纯虚构数据或已获授权。
+见[样例目录](../../market/fixtures/course-planning/minimal-v0.json)与[课程规划说明](03-campus-opportunity-graph.md)。
 
-## 2. User-visible flow
+## 对话与插件的使用方式
 
-```text
-Browser or Android demo WebView (loopback only)
-  → POST /api/v1/agent/chat
-  → bounded ChatRun
-  → deterministic mock or OpenAI-compatible provider
-  → fixed reviewed Rust tool catalogue
-       affairs_navigator_get
-       change_radar_get
-       simple_calendar_items
-       opportunity_graph_plan_current_profile (only with per-request consent)
-  → typed tool results marked untrusted
-  → concise human summary + redacted tool trace
-```
+默认界面以 Chat 为主，侧栏提供历史对话、插件和设置。场景入口只准备草稿；
+模型选项来自服务端配置。运行中或结果未确认时禁止切换模型，历史回答保留实际
+模型信息。首次对话以 `YYMMDD|话题` 命名；模型命名失败时保留日期与消息摘要，
+手动标题不会被自动覆盖。
 
-The default mock mode needs no API key and is intended for deterministic judging and offline acceptance. For every known successful tool shape it emits a server-owned bounded Chinese summary—procedure steps and official entry points, changed fields, course candidates and iCourse link-outs, or Calendar mutations—rather than transport JSON. Shape drift becomes an explicit summary-contract notice. The optional real-provider mode uses the same fixed definitions and Rust executor; its key remains file-backed and server-side. Neither mode derives a dynamic provider catalogue from package disable/revoke state.
+| 模型模式 | 可用范围 |
+|---|---|
+| 离线 mock | 无需密钥，可确定性演示四项内置校园工具；不会执行安装的 MCP/Skill |
+| `local-chat` | 验证本地真实模型文本连接，工具调用关闭 |
+| 支持工具调用的真实模型 | 可提出内置工具及已启用 MCP/Skill 调用；仍受当前权限和预算检查 |
 
-The debug Android APK is a thin presentation bridge over this exact route. It reaches the host loopback service through explicit `adb reverse`, contains no local tool or product implementation, and exposes native loading/offline/retry/server-origin controls. See [`07-android-demo-client.md`](07-android-demo-client.md).
+安装不等于授权，配置成功不等于模型连接成功，模型声称成功不等于工具成功。
+界面显示实际执行状态；网络结果不明时不会自动重复写入。
+Skill 首次可用空参数读取声明入口，大文件按页选读，回答必须说明未读部分。
+模型密钥保留在服务端私有文件，不进入页面。
 
-## 3. Capability matrix
+## 一〇七杯评分与证据
 
-### Normal Agent Q&A
+[学校通知](https://www.ustc.edu.cn/info/1360/25272.htm)按创新性、实用性、技术难度、
+完成度综合评审，未公布权重。下表对应当前实现，不是得分预测。
 
-- Multi-turn page-local conversation with bounded history.
-- Deterministic offline response or explicitly configured OpenAI-compatible Chat Completions provider; both cross the complete loopback HTTP route in retained tests.
-- Optional request v2 carries one closed, non-persistent `prompt_customization.text` user preference: at most 2048 UTF-8 bytes, nonblank after trim, and free of disallowed control, bidi, zero-width and BOM scalars. The immutable system policy remains first; the separately labelled untrusted preference changes no tool or authority. Empty Web input preserves request v1, while nonempty request-scope input uses v2 and is never added to history or `localStorage`.
-- Maximum 3 provider turns, 4 tool calls, 4 KiB arguments per call, 64 KiB result per call and 16 KiB final answer.
-- The deterministic provider uses tool-aware human summaries with fair per-result budgets, so a large course plan neither exposes protocol plumbing nor erases a later Calendar result.
-- Redacted trace exposes only call order, tool name and `succeeded | denied | failed`.
+| 维度 | 细项 | 当前依据与证据 |
+|---|---|---|
+| 创新性 | 场景创新 | 将办事资料、校历、选课和事项组织到同一对话；[录像步骤](../guides/competition-demo.md#录像顺序)展示校园任务组合 |
+| 创新性 | 交互与体验创新 | Chat 主入口、场景草稿、来源核对、请求级同意和可恢复历史；[交互验收](../contracts/usable-demo-enhancements.md)提供可验证操作 |
+| 创新性 | 多智能体协作创新 | **尚未实现**多智能体 Workflow；当前是[单 Agent 的有限工具循环](../contracts/agent-chat.md)，不把多个工具称为多个智能体 |
+| 实用性 | 场景真实性与问题匹配度 | 面向本科生办事、选课和校园生活任务；当前验证使用固定流程及演示档案，真实来源范围与许可见上文 |
+| 实用性 | 功能完整性与解决方案有效性 | 可核对办理步骤、解释课程约束、记录并回读事项；[任务录像](../guides/competition-demo.md#录像顺序)展示结果，日期写入与提醒仍缺失 |
+| 实用性 | 可扩展性与推广价值 | [包配置与安装指南](../guides/mcp-skills.md)支持他人接入受控 MCP/Skill；有源码运行说明，生产多用户与任意协议兼容尚未完成 |
+| 技术难度 | 大模型应用深度 | 当前 Prompt 使用固定系统提示、工具 schema、请求级表达偏好和预算收尾提示，见[模型调用契约](../contracts/agent-chat.md)；**RAG 尚未实现** |
+| 技术难度 | Workflow 与系统设计 | 模型提议→Rust 检查→执行回执→回答；插件安装授权独立于执行。[架构图](../overview/architecture.md)与[插件契约](../contracts/plugin-management.md)说明流程 |
+| 技术难度 | 调试与优化能力 | 覆盖超时、摘要漂移、输出分页和精确重试；[预检脚本](../../scripts/smoke_model_plugins.py)记录耗时、用量及真实工具状态，尚无并发性能基准 |
+| 完成度 | 作品完整性 | 当前 Linux/WSL 源码可构建运行，浏览器、HTTP 和重启路径有[验收绑定](../acceptance/matrix.tsv)；Android 构建与真机状态分开列于下文 |
+| 完成度 | 设计文档与材料质量 | 提供[架构图](../overview/architecture.md)、[模型配置说明](../guides/model-selection.md)与[提交清单](../guides/competition-demo.md#提交清单)；最终材料仍需与候选包逐项核对 |
+| 完成度 | 演示效果 | [四分钟录像顺序](../guides/competition-demo.md#录像顺序)给出输入、操作和结果；实际录制、上传及接收状态分别确认，不把脚本通过当作视频交付 |
 
-Contract: [`../contracts/agent-chat.md`](../contracts/agent-chat.md)
+一次受控真实模型预检已完成校园 Skill 与 Calendar 两项调用；这证明该配置下的
+实际执行，不代表任意模型、全部 MCP 服务或所有平台均已通过。测试结果、源码版本、
+模型模式和提交包应对应同一候选。
 
-### Affairs Navigator — procedure lookup
+## 当前未完成项
 
-- Market package: [`../../market/packages/ustc.affairs-navigator/package.json`](../../market/packages/ustc.affairs-navigator/package.json)
-- Agent tool: `affairs_navigator_get`
-- MVP query: reviewed public transcript-certificate procedure.
-- The model cannot choose arbitrary routes, publish procedures or manufacture source freshness.
+- 生产多用户与学校 SSO、实时校园数据导入、iCourse 数据许可、完整机会图谱。
+- 多智能体协作、RAG、流式输出、自动模型切换和长期记忆。
+- 日期提案、课程批量写入日历、事项修改、提醒、重复事项与跨设备同步。
+- 任意脚本执行、中心主机 stdio、完整插件更新回滚及生产部署。
 
-Detailed design: [`../plan/06-first-party-plugins.md`](../plan/06-first-party-plugins.md)
+Android 是连接同一服务的 WebView 壳。本轮本地构建、4 项端点测试、lint 和签名
+检查通过；小米真机安装被 `INSTALL_FAILED_USER_RESTRICTED` 阻止，尚未完成安装，
+键盘、返回键、旋转及离线恢复均未取得本轮真机证据。详见[Android 指南](../guides/android-demo.md)。
 
-### Opportunity Graph — course recommendation
+## 进一步核对
 
-- Market package: [`../../market/packages/ustc.opportunity-graph/package.json`](../../market/packages/ustc.opportunity-graph/package.json)
-- Agent tool: `opportunity_graph_plan_current_profile`
-- Inputs: an existing owner profile plus explicit confirmation on this chat request.
-- Hard filters: prerequisite, availability, unresolved identity, timetable conflict and credit/requirement bounds.
-- Soft ranking: user preference plus non-stale community signals.
-- Output: up to three deterministic candidates, hard-constraint status, rationale, fact-level provenance and `community_evidence` link-outs.
-
-The reproducible MVP fixture is [`../../market/fixtures/course-planning/minimal-v0.json`](../../market/fixtures/course-planning/minimal-v0.json). It contains a synthetic catalog/profile and two title-matched public aggregate-rating snapshots retrieved from USTC iCourse on 2026-09-03 UTC:
-
-- [Real Analysis (iCourse course 2059)](https://icourse.club/course/2059/): aggregate score mapped to the synthetic `MATH2001` signal.
-- [Probability Theory (iCourse course 3839)](https://icourse.club/course/3839/): aggregate score mapped to the synthetic `MATH2003` signal.
-
-This is deliberately **orientation-level evidence**. Review text is not copied or cached; teacher, term and offering identity must be checked on the linked page. Community evidence never overrides official hard constraints. The current MVP is not a live iCourse crawler and does not claim current USTC course availability.
-
-**Unresolved data-use documentation:** an aggregate-rating snapshot is stored derived data, not merely a link-out. The [security plan](../plan/08-security-and-delivery.md) still requires an explicit data-use contract for more than link-outs, and the [public-readiness permission item](../acceptance/public-readiness.md) remains unchecked. This feature description records the existing fixture; it does not supply that missing permission or approve further collection/publication. Public visibility, synthetic course mapping and absence of review text do not by themselves close the data-use gate.
-
-Planner implementation: [`../../crates/course-planning/src/lib.rs`](../../crates/course-planning/src/lib.rs)
-
-### Change Radar — third campus-data tool
-
-- Market package: [`../../market/packages/ustc.change-radar/package.json`](../../market/packages/ustc.change-radar/package.json)
-- Agent tool: `change_radar_get`
-- Queries the fixed reviewed academic-calendar change board.
-- Publication/admin operations stay outside the model-visible catalogue.
-
-### Simple Calendar — owner-local in-process companion
-
-- Market package: [`../../market/packages/ustc.simple-calendar/package.json`](../../market/packages/ustc.simple-calendar/package.json)
-- Rust crate: [`../../crates/simple-calendar`](../../crates/simple-calendar)
-- Agent tool: `simple_calendar_items`
-- Operations: `record`, `list`, `delete`.
-- Record intent: the final user message is exactly `记录事项：<nonblank title>` or `记录事项:<nonblank title>`; the outer-trimmed suffix equals the provider-call title byte-for-byte and `scheduled_for` is absent.
-- Delete intent: the final user message is exactly `删除事项 calendar:item:N`, with one complete stable ID equal to the provider-call ID and no hidden/extra suffix.
-- List is read-only. Bounds remain 128 items and a 256-byte title.
-- Absent or mismatched mutation intent yields a bounded denied result/trace and zero executor/store operation. Provider text cannot mint confirmation, and the deterministic mock uses the same exact grammar rather than keyword matching.
-- Persistence: owner-local `calendar-items.json`, regular non-symlink store, bounded load, atomic temp-file write and success only after durable commit.
-
-The package declaration is optional (`defaultInstalled=false`) so the frozen three-path default topology remains intact. The loopback MVP composes it directly as a fixed in-process companion; this is not evidence of generalized installation, disable/revoke projection or isolated execution. It does not implement reminders, recurrence, CalDAV, sharing, synchronization or natural-language date parsing.
-
-## 4. Runtime and state
-
-`ustc-agentd` is the composition root. The same process owns HTTP admission, provider adaptation, tool validation, product services and local state. This avoids a second policy authority in the browser or model.
-
-The Compose profile persists one complete locked state set in a named volume. Calendar state is `idempotency_path.with_extension("calendar-items.json")`: a fresh bootstrap persists canonical empty mode-`0600` state, rollback removes it with every other newly created member, and a non-fresh missing member fails `durable_state_set_incomplete`. Restart preserves committed items. Chat history itself remains page-local and is not durable.
-
-The assembled Compose directory, tar archive and ZIP archive each carry package-root `LICENSE.md` byte-identical to repository-root `LICENSE.md`, mode `0644`, and listed in `SHA256SUMS`. Archive acceptance reads back both formats and preserves deterministic-byte and provider-secret checks.
-
-Runbook: [`../../deploy/mvp-compose/README.md`](../../deploy/mvp-compose/README.md)
-
-## 5. Quick acceptance
-
-After starting the loopback MVP, try:
-
-- `你好，介绍一下你能做什么。`
-- `成绩单证明怎么办？`
-- `校历最近有什么变更？`
-- `记录事项：提交开题报告`
-- `列出我的待办事项。`
-- `删除事项 calendar:item:1`
-- Create an Opportunity profile in the page, enable the per-request consent checkbox, then ask `请根据我的偏好和评课社区信号推荐课程。`
-
-Every admitted tool-backed request should show a readable summary and successful trace in deterministic mock mode. Answers should expose user facts such as procedure steps, changed fields, course codes/link-outs and Calendar item IDs, but not raw field names such as `ordered_steps`, `changed_fields`, `course_codes` or `command_id`. `日历怎么用`, `提醒我日历怎么用`, `calendar help`, provider-proposed mutation for a read-only prompt, mismatched title/ID, and hidden/extra suffixes must show denied/non-mutation behavior with zero Calendar state change. Course planning must be denied or omitted without the explicit profile context and per-request confirmation. A nonempty request preference may change response presentation only; it must not change the first system policy, tool count or authorization, and it must not appear in the next request.
-
-## 6. Current boundaries and TODO
-
-### P0 — before claiming production use
-
-- Replace synthetic course catalog/profile fixtures with versioned approved USTC sources.
-- Define and implement lawful, rate-limited community-signal ingestion with source freshness and deletion policy; retain derived metadata rather than review text where possible.
-- Add production authentication, tenant isolation, CSRF/session controls and durable consent/grant administration.
-- Complete the generalized Market installation/grant lifecycle and isolated execution; the current fixed reviewed demo catalogue does not claim it.
-
-### P1 — product completeness
-
-- Calendar structured editor, completion state, reminders, recurrence and timezone UX.
-- Durable chat sessions, streaming responses and provider fallback.
-- Persisted prompt profiles or editable system/developer policy.
-- Broader Affairs/ChangeRadar coverage with source-by-source freshness indicators.
-- Real-provider browser smoke in an authorized environment.
-
-### Deferred
-
-- A command sandbox is not part of this MVP. An allowlist wrapper must not be called a sandbox; arbitrary shell execution is explicitly rejected.
-- Multi-agent graphs, remote hosting and shared-client parity.
-- Production-signed Android, secure authenticated HTTPS sessions and complete real-device `CLIENT-002` evidence; the bounded debug APK does not imply these.
-- Skill loading/runtime and usable inbound or outbound MCP adapters remain unimplemented and unclaimed.
-
-## 7. Usability enhancements and SSO reservation sample
-
-This source additionally implements the bounded [usable-demo enhancements contract](../contracts/usable-demo-enhancements.md). User-authorized main synchronization and submission replacement require independent review, exact-source CI and artifact read-back; this paragraph does not certify those external outcomes.
-
-- **可配置演示档案**：在 synthetic 课程目录中选择已修课程、学分范围和偏好，明确同意后创建新的档案快照；比较 Rust 生成的候选方案。编辑草稿不会修改已保存档案，切换档案不会继承 Chat 授权。
-- **个人办理清单**：对当前成功查询的 Affairs 步骤标记个人进度，复制／下载带来源与不确定性说明的 Markdown。标记不代表官方受理或审批，页面刷新不保留勾选。
-- **场景入口**：四个入口只填问题和导航，不自动发送、授权或写日历；课程入口引导缺少档案的用户完成显式创建。
-
-The API/catalog/planner remains unchanged. Synthetic pending-create values are snapshotted with the existing idempotency envelope for exact retries; this is not support for storing real student records in browser storage. The supplemental acceptance cases are bound in the enhancement contract and its retained browser test, and registered as active UE-001 through UE-003 plus SSO-001 in the acceptance matrix and coverage projection. The existing [ci.yml](../../.github/workflows/ci.yml) workflow executes these bindings on PR and main. All pre-existing matrix rows remain byte-identical; adding unrelated demo rows does not promote legacy M60 or production-authentication readiness. Exact compiled-binary gates, independent review and package read-back are required before the candidate can replace the frozen delivery. Build infrastructure remains separate from product source and grants no authority by itself; the user authorized protected-main synchronization and submission replacement, not a tag or Release.
-
-- **SSO 接口样例（独立、未配置）**：正式学校统一认证需要接入授权、应用登记及回调配置；当前使用本机演示用户会话，不收集学校密码。[源码样例](../../examples/sso-interface/README.zh-CN.md)提供状态查询与明确拒绝的登录/回调接口，不签发会话、不调用校园服务器、不接入应用运行时；取得授权后仍须完成实际协议适配、身份验证和 M00 会话集成。样例 acceptance：`python3 -B -m unittest discover -s examples/sso-interface -p 'test_*.py' -v`。该证据不推进生产认证的未完成项。
-
-Architecture and lifecycle details:
-
-- [`../plan/07-runtime-and-integration.md`](../plan/07-runtime-and-integration.md)
-- [`../plan/04-market-and-plugin-lifecycle.md`](../plan/04-market-and-plugin-lifecycle.md)
-- [`../plan/modules/40-agent-harness-runtime.md`](../plan/modules/40-agent-harness-runtime.md)
-- [`../tasks/01-execution-roadmap.md`](../tasks/01-execution-roadmap.md)
+实现约束分别由 [Agent Chat](../contracts/agent-chat.md)、
+[模型选择](../contracts/model-selection.md)、[对话管理](../contracts/conversation-management.md)、
+[执行活动](../contracts/chat-activity.md)、[Skill 上下文](../contracts/skill-context.md)
+和[插件配置指南](../guides/mcp-skills.md)说明。后续开发顺序见[任务表](../tasks/multi-user-campus-agent.md)；
+计划项不作为当前能力或已通过验收的证据。

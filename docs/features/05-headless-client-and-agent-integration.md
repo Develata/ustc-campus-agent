@@ -1,8 +1,8 @@
 # Headless client and external Agent integration
 
-- `Status`: Accepted phased journey with retained bounded client-core, fixture-loopback ordinary-user Affairs CLI and Affairs-first M10 protocol/compatibility evidence; production transport/auth/streams, inbound MCP and Dioxus peer journeys remain planned
+- `Status`: Planned full peer journey with bounded Affairs user-CLI, M10 protocol and client-core evidence; inbound MCP, Dioxus clients, production authentication and streaming remain planned
 - `Owning plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
-- `Contracts`: [`client-shell/v2.3`](../contracts/client-shell.md), [`cli/v2.2`](../contracts/cli.md), [`application-interface-registry/v2.1`](../contracts/interfaces.md), [`permissions/v2`](../contracts/permissions.md)
+- `Contracts`: [client shell](../contracts/client-shell.md), [CLI](../contracts/cli.md), [interface registry](../contracts/interfaces.md), [permissions](../contracts/permissions.md)
 - `Decision`: [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
 - `Acceptance`: `CLIENT-007`, `CLIENT-008`, `CLIENT-009`, `CLIENT-010`
 
@@ -12,13 +12,7 @@ A student can use USTC Campus Agent without a graphical client, and an explicitl
 
 The headless surface is a first-class client, not a debug wrapper around backend crates. It uses the same typed client semantics as Dioxus while keeping CLI and MCP protocol concerns at their outer adapters.
 
-### Current bounded evidence, not full client readiness
-
-The retained `crates/client-core` and `apps/ustc-agent` implement public `affairs get` and capability-stdin `affairs lookup` over numeric loopback, typed response reduction, canonical `ustc-client-result/v1` JSON and stable exit classes. They do not import backend/operator implementations or accept raw session/operator authority. The accepted Affairs-first prerequisite additionally retains the M10-owned major-1 `server.info`, `capability.list`, `affairs.get` protocol and Web/client-core compatibility rejection before application dispatch. See the current [client contract](../contracts/client-shell.md), [CLI contract](../contracts/cli.md) and [operation registry](../contracts/interfaces.md).
-
-These are supporting partial proofs, not a production user profile, remote HTTP/TLS transport, streaming/reconnect/cancellation matrix, complete Dioxus peer, inbound MCP server or full cross-platform CLI acceptance. The Android debug WebView and composition-owned Chat page are separate demo evidence; neither promotes the full client contract.
-
-## Planned production user and automation journey
+## Target user and automation journey
 
 ```text
 user configures an admitted server and least-privilege profile
@@ -41,7 +35,7 @@ client submits correlated intent
 
 Stopping the CLI does not claim server cancellation or success.
 
-## Planned external Agent journey
+## Target external Agent journey
 
 ```text
 external Agent connects to reviewed inbound MCP surface
@@ -133,4 +127,9 @@ This is the M10/M80 client-access lane order. It does not replace the product im
 - `CLIENT-009`: real `ustc-agent` read path proves JSON/NDJSON framing, typed exit/error, auth isolation, compatibility and reconnect/cancellation distinction.
 - `CLIENT-010`: external MCP conformance proves bounded discovery/invocation, tenant/grant isolation, instruction-isolated results and no M51/domain/operator reach-through.
 
-All four rows remain `planned` and non-pass in the [active matrix](../acceptance/matrix.tsv). CLIENT-007 and CLIENT-009 retain supporting Affairs-first protocol/client-core evidence, and the fixture-loopback CLI is executable, but the full peer/host/stream/authentication assertions are not satisfied. CLIENT-008's complete confinement manifest and CLIENT-010's external MCP conformance remain future bindings. No MCP endpoint, live campus-source activation, production client or Dioxus readiness is claimed.
+All four rows remain `planned` for their complete peer/conformance scope. Existing
+supporting evidence includes the major-1 `server.info`, `capability.list` and
+`affairs.get` carriers, shared client-core compatibility checks and a runnable
+ordinary-user Affairs CLI. See the [CLI contract](../contracts/cli.md) for its exact
+fixture-backed commands. This does not establish production authentication, streams,
+an inbound MCP endpoint or a Dioxus client.

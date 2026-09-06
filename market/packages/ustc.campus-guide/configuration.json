@@ -1,0 +1,21 @@
+{
+  "capabilityManifestDigest": "sha256:4db8de62654354ec7ae17c4cae255b371a6b4681cfc5786cc0622b1607e31e05",
+  "componentSetDigest": "sha256:650f28317b0c9f21d02f14cdf572beec36b57cafb39fde467e3130e7ab103d89",
+  "components": [
+    {
+      "componentDigest": "sha256:1b892434a422c3d6dd01f00ad479ea619dd61dd748f38919898593760397fb95",
+      "componentId": "component:ustc.campus-guide/skill",
+      "componentVersion": "0.1.0",
+      "executionIdentity": "execution:ustc.campus-guide/skill/v1",
+      "fields": [],
+      "mode": null,
+      "path": "skills/campus-guide/SKILL.md",
+      "schemaDigest": "sha256:777692fe3b3d876474752c0b5aa7cc9e6c96f193ec212ce0ef627ce45176edf2",
+      "type": "SkillComponent"
+    }
+  ],
+  "packageDigest": "sha256:78c965e59827b86913a9a234ec38575eb2a72126d5b72431c81ed5e5c0bc1bdd",
+  "packageId": "ustc.campus-guide",
+  "packageVersion": "0.1.0",
+  "schemaVersion": "package-component-configuration/v1"
+}

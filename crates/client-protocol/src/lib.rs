@@ -11,6 +11,7 @@ pub mod capsule;
 pub mod change;
 pub mod digest;
 pub mod error;
+pub mod market;
 pub mod opportunity;
 pub mod protocol;
 pub mod transport;
@@ -21,7 +22,10 @@ pub use capsule::*;
 pub use change::*;
 pub use digest::*;
 pub use error::*;
+pub use market::*;
 pub use opportunity::*;
 pub use protocol::*;
 pub use transport::*;
 pub use value::*;
+
+pub mod plugins;

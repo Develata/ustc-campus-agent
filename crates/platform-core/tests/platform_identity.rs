@@ -1745,8 +1745,74 @@ fn assert_public_surface_is_frozen() {
         (
             "market.rs",
             MARKET_SOURCE,
-            &["authority", "capability", "grant", "installation", "update"] as &[&str],
+            &[
+                "admission",
+                "authority",
+                "capability",
+                "configuration_binding",
+                "configuration_catalog",
+                "configuration_schema",
+                "grant",
+                "installation",
+                "update",
+            ] as &[&str],
             &ADMITTED_MARKET_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
+            "market/admission.rs",
+            ADMISSION_SOURCE,
+            &["tests"] as &[&str],
+            &ADMITTED_ADMISSION_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
+            "market/admission/tests.rs",
+            ADMISSION_TESTS_SOURCE,
+            &[] as &[&str],
+            &ADMITTED_ADMISSION_TESTS_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
+            "market/installation/persistence.rs",
+            INSTALLATION_PERSISTENCE_SOURCE,
+            &[] as &[&str],
+            &ADMITTED_INSTALLATION_PERSISTENCE_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
+            "market/grant/persistence.rs",
+            GRANT_PERSISTENCE_SOURCE,
+            &[] as &[&str],
+            &ADMITTED_GRANT_PERSISTENCE_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
+            "market/configuration_catalog.rs",
+            CONFIGURATION_CATALOG_SOURCE,
+            &[] as &[&str],
+            &ADMITTED_CONFIGURATION_CATALOG_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
+            "market/configuration_binding.rs",
+            CONFIGURATION_BINDING_SOURCE,
+            &[] as &[&str],
+            &ADMITTED_CONFIGURATION_BINDING_ITEMS as &[&str],
+            &[] as &[&str],
+            false,
+        ),
+        (
+            "market/configuration_schema.rs",
+            CONFIGURATION_SCHEMA_SOURCE,
+            &[] as &[&str],
+            &ADMITTED_CONFIGURATION_SCHEMA_ITEMS as &[&str],
             &[] as &[&str],
             false,
         ),
@@ -1876,6 +1942,15 @@ fn assert_public_surface_is_frozen() {
             "identity.rs" => &ADMITTED_IDENTITY_MACRO_INVOCATIONS,
             "invocation.rs" => &ADMITTED_INVOCATION_MACRO_INVOCATIONS,
             "market.rs" => &ADMITTED_MARKET_MACRO_INVOCATIONS,
+            "market/configuration_binding.rs" => &ADMITTED_CONFIGURATION_BINDING_MACRO_INVOCATIONS,
+            "market/admission.rs" => &ADMITTED_ADMISSION_MACRO_INVOCATIONS,
+            "market/admission/tests.rs" => &ADMITTED_ADMISSION_TESTS_MACRO_INVOCATIONS,
+            "market/installation/persistence.rs" => {
+                &ADMITTED_INSTALLATION_PERSISTENCE_MACRO_INVOCATIONS
+            }
+            "market/grant/persistence.rs" => &ADMITTED_GRANT_PERSISTENCE_MACRO_INVOCATIONS,
+            "market/configuration_catalog.rs" => &ADMITTED_CONFIGURATION_CATALOG_MACRO_INVOCATIONS,
+            "market/configuration_schema.rs" => &ADMITTED_CONFIGURATION_SCHEMA_MACRO_INVOCATIONS,
             "lib.rs" => &ADMITTED_LIB_MACRO_INVOCATIONS,
             "control_evidence.rs" => &ADMITTED_CONTROL_EVIDENCE_MACRO_INVOCATIONS,
             "session.rs" => &ADMITTED_SESSION_MACRO_INVOCATIONS,
@@ -1986,6 +2061,25 @@ fn assert_public_surface_is_frozen() {
         ("control_evidence.rs", CONTROL_EVIDENCE_SOURCE),
         ("invocation.rs", INVOCATION_SOURCE),
         ("market.rs", MARKET_SOURCE),
+        (
+            "market/configuration_binding.rs",
+            CONFIGURATION_BINDING_SOURCE,
+        ),
+        ("market/admission.rs", ADMISSION_SOURCE),
+        ("market/admission/tests.rs", ADMISSION_TESTS_SOURCE),
+        (
+            "market/installation/persistence.rs",
+            INSTALLATION_PERSISTENCE_SOURCE,
+        ),
+        ("market/grant/persistence.rs", GRANT_PERSISTENCE_SOURCE),
+        (
+            "market/configuration_catalog.rs",
+            CONFIGURATION_CATALOG_SOURCE,
+        ),
+        (
+            "market/configuration_schema.rs",
+            CONFIGURATION_SCHEMA_SOURCE,
+        ),
         ("lib.rs", LIB_SOURCE),
         ("session.rs", SESSION_SOURCE),
         ("session_port.rs", SESSION_PORT_SOURCE),
@@ -2079,6 +2173,13 @@ fn assert_public_surface_is_frozen() {
         let admitted_impls: &[&str] = match label {
             "invocation.rs" => &ADMITTED_INVOCATION_IMPLS,
             "market.rs" => &ADMITTED_MARKET_IMPLS,
+            "market/configuration_binding.rs" => &ADMITTED_CONFIGURATION_BINDING_IMPLS,
+            "market/admission.rs" => &ADMITTED_ADMISSION_IMPLS,
+            "market/admission/tests.rs" => &ADMITTED_ADMISSION_TESTS_IMPLS,
+            "market/installation/persistence.rs" => &ADMITTED_INSTALLATION_PERSISTENCE_IMPLS,
+            "market/grant/persistence.rs" => &ADMITTED_GRANT_PERSISTENCE_IMPLS,
+            "market/configuration_catalog.rs" => &ADMITTED_CONFIGURATION_CATALOG_IMPLS,
+            "market/configuration_schema.rs" => &ADMITTED_CONFIGURATION_SCHEMA_IMPLS,
             "lib.rs" => &ADMITTED_LIB_IMPLS,
             "control_evidence.rs" => &ADMITTED_CONTROL_EVIDENCE_IMPLS,
             "session.rs" => &ADMITTED_SESSION_IMPLS,
@@ -2264,10 +2365,26 @@ const DESERIALIZE_BODY_INDEX: usize = 13;
 ///
 /// The rule belongs to every governed source, not only the identity module: an unadmitted
 /// attribute in a sibling is the same carrier reached one file over.
-const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 6] = [
+const ADMITTED_SIBLING_ATTRIBUTE_NAMES: [(&str, &[&str]); 13] = [
+    ("market/admission.rs", &["cfg", "derive", "must_use"]),
+    ("market/admission/tests.rs", &["test"]),
+    ("market/installation/persistence.rs", &["derive", "serde"]),
+    ("market/grant/persistence.rs", &["derive", "serde"]),
+    (
+        "market/configuration_catalog.rs",
+        &["cfg", "derive", "must_use", "serde", "test"],
+    ),
     ("control_evidence.rs", &["derive", "must_use", "serde"]),
     ("invocation.rs", &["derive", "must_use"]),
     ("market.rs", &["derive", "must_use", "serde"]),
+    (
+        "market/configuration_binding.rs",
+        &["cfg", "derive", "must_use", "test"],
+    ),
+    (
+        "market/configuration_schema.rs",
+        &["cfg", "derive", "must_use", "test"],
+    ),
     ("lib.rs", &["cfg", "derive", "must_use", "serde", "test"]),
     (
         "session.rs",
@@ -4137,6 +4254,9 @@ const CONTROL_EVIDENCE_SOURCE: &str = include_str!("../src/control_evidence.rs")
 const IDENTITY_SOURCE: &str = include_str!("../src/identity.rs");
 const INVOCATION_SOURCE: &str = include_str!("../src/invocation.rs");
 const MARKET_SOURCE: &str = include_str!("../src/market.rs");
+const CONFIGURATION_BINDING_SOURCE: &str = include_str!("../src/market/configuration_binding.rs");
+const CONFIGURATION_CATALOG_SOURCE: &str = include_str!("../src/market/configuration_catalog.rs");
+const CONFIGURATION_SCHEMA_SOURCE: &str = include_str!("../src/market/configuration_schema.rs");
 const LIB_SOURCE: &str = include_str!("../src/lib.rs");
 const SESSION_SOURCE: &str = include_str!("../src/session.rs");
 const SESSION_PORT_SOURCE: &str = include_str!("../src/session_port.rs");
@@ -4227,9 +4347,13 @@ const ADMITTED_INVOCATION_ITEMS: [&str; 6] = [
     ),
 ];
 
-const ADMITTED_MARKET_ITEMS: [&str; 12] = [
+const ADMITTED_MARKET_ITEMS: [&str; 16] = [
+    "pub mod admission;",
     "pub mod authority;",
     "pub mod capability;",
+    "pub mod configuration_binding;",
+    "pub mod configuration_catalog;",
+    "pub mod configuration_schema;",
     "pub mod grant;",
     "pub mod installation;",
     "pub mod update;",
@@ -4496,7 +4620,11 @@ fn manifest_keys(entries: &[(String, String)], table: &str) -> Vec<String> {
 /// text. Adding a row is registered surface drift that must be mirrored in
 /// `scripts/check_repo_contracts.py`; it changes no accepted grammar, bound, error precedence,
 /// Serde shape or nominal kind set.
-const ADMITTED_CROSS_FILE_IDENTITY_BINDINGS: [(&str, &str); 4] = [
+const ADMITTED_CROSS_FILE_IDENTITY_BINDINGS: [(&str, &str); 7] = [
+    (
+        "market/admission.rs",
+        "use crate::identity::{TenantId, UserId};",
+    ),
     (
         "control_evidence.rs",
         "use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};",
@@ -4510,6 +4638,14 @@ const ADMITTED_CROSS_FILE_IDENTITY_BINDINGS: [(&str, &str); 4] = [
         "use crate::identity::{SessionId, TenantId, UserId};",
     ),
     ("session_port.rs", "use crate::identity::SessionId;"),
+    (
+        "market/configuration_binding.rs",
+        "use crate::identity::TenantId;",
+    ),
+    (
+        "market/configuration_schema.rs",
+        "use crate::identity::TenantId;",
+    ),
 ];
 
 /// The six kinds whose public surface `platform-identity/v0` freezes.
@@ -4878,3 +5014,170 @@ fn market_invocation_authority_uses_m00_identity_definitions() {
     let m00_error: IdentityValueError = TenantId::parse(" ").expect_err("M00 rejects whitespace");
     assert_eq!(m00_error.value_kind(), "TenantId");
 }
+
+const ADMITTED_CONFIGURATION_SCHEMA_ITEMS: [&str; 9] = [
+    "use super::installation::{ConfigurationKey, ConfigurationValue, InstallationConfiguration};",
+    "use crate::invocation::Sha256Digest;",
+    "use std::collections::BTreeMap;",
+    "use std::error::Error;",
+    "use std::fmt;",
+    "#[cfg(test)] mod tests",
+    "use super::super::installation::{NonSecretText, SecretRef, SecretRefId};",
+    "use super::*;",
+    "use crate::identity::TenantId;",
+];
+
+const ADMITTED_CONFIGURATION_SCHEMA_IMPLS: [&str; 8] = [
+    "impl ConfigurationFieldSchema",
+    "impl ConfigurationSchema",
+    "impl Error for ConfigurationSchemaError",
+    "impl Error for ConfigurationValidationError",
+    "impl fmt::Debug for ConfigurationFieldSchema",
+    "impl fmt::Debug for ConfigurationSchema",
+    "impl fmt::Display for ConfigurationSchemaError",
+    "impl fmt::Display for ConfigurationValidationError",
+];
+
+const ADMITTED_CONFIGURATION_SCHEMA_MACRO_INVOCATIONS: [&str; 6] =
+    ["assert", "assert_eq", "assert_ne", "format", "vec", "write"];
+
+const ADMITTED_CONFIGURATION_BINDING_ITEMS: [&str; 11] = [
+    "use super::configuration_schema::{ConfigurationSchema, ConfigurationValidationError};",
+    "use super::installation::{InstallationConfiguration, InstallationPackagePin};",
+    "use crate::invocation::{ComponentId, Sha256Digest};",
+    "use std::error::Error;",
+    "use std::fmt;",
+    "#[cfg(test)] mod tests",
+    "use super::super::configuration_schema::ConfigurationFieldSchema;",
+    "use super::super::installation::{ConfigurationKey, ConfigurationValue, InstalledComponentPin};",
+    "use super::*;",
+    "use crate::identity::TenantId;",
+    "use crate::invocation::{ CatalogRevision, ComponentKind, ComponentVersion, ExecutionIdentity, PackageId, PackageVersion, };",
+];
+
+const ADMITTED_CONFIGURATION_BINDING_IMPLS: [&str; 4] = [
+    "impl ComponentConfigurationBinding",
+    "impl Error for ConfigurationBindingError",
+    "impl fmt::Debug for ComponentConfigurationBinding",
+    "impl fmt::Display for ConfigurationBindingError",
+];
+
+const ADMITTED_CONFIGURATION_BINDING_MACRO_INVOCATIONS: [&str; 5] =
+    ["assert", "assert_eq", "format", "vec", "write"];
+
+const ADMITTED_CONFIGURATION_CATALOG_ITEMS: [&str; 18] = [
+    "use super::ValidatedPackageManifest;",
+    "use super::configuration_binding::ComponentConfigurationBinding;",
+    "use super::configuration_schema::{ConfigurationFieldSchema, ConfigurationSchema};",
+    "use super::installation::{ConfigurationKey, InstallationPackagePin, InstalledComponentPin};",
+    "use crate::invocation::{ CatalogRevision, ComponentId, ComponentKind, ComponentVersion, ExecutionIdentity, Sha256Digest, };",
+    "use serde::Deserialize;",
+    "use serde::de::{self, MapAccess, SeqAccess, Visitor};",
+    "use serde_json::Value;",
+    "use std::collections::{BTreeMap, BTreeSet};",
+    "use std::error::Error;",
+    "use std::fmt;",
+    "use ConfigurationCatalogError as E;",
+    "use ConfigurationCatalogError::InvalidSchema;",
+    "type Value = UniqueValue;",
+    "#[cfg(test)] mod tests",
+    "use super::*;",
+    "use crate::market::load_package_manifest;",
+    "use serde_json::json;",
+];
+
+const ADMITTED_CONFIGURATION_CATALOG_IMPLS: [&str; 8] = [
+    "impl Deserialize<'de> for UniqueValue",
+    "impl Error for ConfigurationCatalogError",
+    "impl RawField",
+    "impl RawKind",
+    "impl ValidatedPackageConfiguration",
+    "impl Visitor<'de> for UniqueVisitor",
+    "impl fmt::Debug for ValidatedPackageConfiguration",
+    "impl fmt::Display for ConfigurationCatalogError",
+];
+
+const ADMITTED_CONFIGURATION_CATALOG_MACRO_INVOCATIONS: [&str; 8] = [
+    "assert",
+    "assert_eq",
+    "assert_ne",
+    "format",
+    "include_bytes",
+    "json",
+    "vec",
+    "write",
+];
+
+const ADMISSION_SOURCE: &str = include_str!("../src/market/admission.rs");
+
+const ADMITTED_ADMISSION_ITEMS: [&str; 5] = [
+    "use super::{ ValidatedPackageManifest, capability::{CapabilityRegistry, CapabilityStatus, ScopeKind}, configuration_binding::ComponentConfigurationBinding, configuration_catalog::ValidatedPackageConfiguration, grant::*, installation::*, };",
+    "use crate::identity::{TenantId, UserId};",
+    "use crate::invocation::{ CapabilityId, CatalogToolDefinition, ComponentKind, ConfirmationPolicy, GrantSnapshotId, GrantState, InstallationId, InstallationRevision, Sha256Digest, };",
+    "use std::{collections::BTreeSet, fmt};",
+    "#[cfg(test)] mod tests;",
+];
+
+const ADMITTED_ADMISSION_IMPLS: [&str; 10] = [
+    "impl ComponentReadiness",
+    "impl MarketAdmissionService<'a>",
+    "impl fmt::Debug for ComponentReadiness",
+    "impl fmt::Display for AdmissionError",
+    "impl std::error::Error for AdmissionError",
+    "impl-arg GrantRepository",
+    "impl-arg GrantRepository",
+    "impl-arg InstallationRepository",
+    "impl-arg InstallationRepository",
+    "impl-arg InstallationRepository",
+];
+
+const ADMITTED_ADMISSION_MACRO_INVOCATIONS: [&str; 2] = ["matches", "write"];
+
+const ADMISSION_TESTS_SOURCE: &str = include_str!("../src/market/admission/tests.rs");
+
+const ADMITTED_ADMISSION_TESTS_ITEMS: [&str; 3] = [
+    "use super::*;",
+    "use crate::{ invocation::{ CatalogRevision, ToolId, UnvalidatedSchemaNodeV0, UnvalidatedToolInputSchemaV0, ValidatedToolInputSchemaV0, }, market::{ capability::load_capability_registry, configuration_catalog::load_package_configuration, configuration_schema::{ConfigurationFieldSchema, ConfigurationSchema}, load_package_manifest, }, };",
+    "use serde_json::{Value, json};",
+];
+
+const ADMITTED_ADMISSION_TESTS_IMPLS: [&str; 1] = ["impl Fixture"];
+
+const ADMITTED_ADMISSION_TESTS_MACRO_INVOCATIONS: [&str; 8] = [
+    "assert",
+    "assert_eq",
+    "format",
+    "include_bytes",
+    "json",
+    "matches",
+    "panic",
+    "vec",
+];
+
+const INSTALLATION_PERSISTENCE_SOURCE: &str =
+    include_str!("../src/market/installation/persistence.rs");
+
+const ADMITTED_INSTALLATION_PERSISTENCE_ITEMS: [&str; 2] =
+    ["use super::*;", "use serde::{Deserialize, Serialize};"];
+
+const ADMITTED_INSTALLATION_PERSISTENCE_IMPLS: [&str; 2] = [
+    "impl Error for SnapshotCodecError",
+    "impl fmt::Display for SnapshotCodecError",
+];
+
+const ADMITTED_INSTALLATION_PERSISTENCE_MACRO_INVOCATIONS: [&str; 1] = ["format"];
+
+const GRANT_PERSISTENCE_SOURCE: &str = include_str!("../src/market/grant/persistence.rs");
+
+const ADMITTED_GRANT_PERSISTENCE_ITEMS: [&str; 3] = [
+    "use super::*;",
+    "use serde::{Deserialize, Serialize};",
+    "use crate::market::capability::load_capability_registry;",
+];
+
+const ADMITTED_GRANT_PERSISTENCE_IMPLS: [&str; 2] = [
+    "impl Error for SnapshotCodecError",
+    "impl fmt::Display for SnapshotCodecError",
+];
+
+const ADMITTED_GRANT_PERSISTENCE_MACRO_INVOCATIONS: [&str; 2] = ["format", "vec"];

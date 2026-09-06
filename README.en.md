@@ -1,206 +1,114 @@
 # USTC Campus Agent
 
-> The model proposes. Rust validates and executes.
+A campus assistant for administrative procedures, calendar changes, course comparison and personal items.
+Its Plugin Market configures MCP tools and Skill guidance for the Agent. Models propose calls; Rust validates permissions and executes them.
 
-<p align="center">
-  <a href="https://github.com/Develata/ustc-campus-agent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Develata/ustc-campus-agent/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Rust" src="https://img.shields.io/badge/core-Rust-000000?logo=rust">
-  <img alt="Docker Compose" src="https://img.shields.io/badge/demo-Docker%20Compose-2496ED?logo=docker&logoColor=white">
-  <a href="LICENSE.md"><img alt="MIT License" src="https://img.shields.io/github/license/Develata/ustc-campus-agent"></a>
-</p>
+[简体中文](README.md) · [Capabilities and scoring evidence](docs/features/06-mvp-core-capabilities.md) · [Demo walkthrough](docs/guides/competition-demo.md) · [Documentation](docs/README.md)
 
-<p align="center">
-  <a href="README.zh-CN.md">简体中文</a> ·
-  <a href="README.en.md">English</a> ·
-  <a href="docs/features/06-mvp-core-capabilities.md">Capabilities & boundaries</a> ·
-  <a href="deploy/mvp-compose/README.md">Docker runbook</a>
-</p>
-
-USTC Campus Agent is a **bounded campus Agent student-competition project**. A model may interpret a request, organize steps, and propose tool calls; Rust remains authoritative for parameter validation, permissions, data provenance, state transitions, and side effects.
-
-This is not a general chat interface with campus branding. The project explores a narrower question: once an Agent starts looking up procedures, using a private profile, or writing to a calendar, how can every step remain **constrained, explainable, and verifiable**?
-
-> [!IMPORTANT]
-> This project is independently maintained and **is not an official service of the University of Science and Technology of China**. The current build is a loopback-only competition MVP. It does not connect to university accounts or provide a production public deployment.
-
-<details>
-<summary>Table of contents</summary>
-
-- [The project in one minute](#overview)
-- [Core capabilities](#features)
-- [Quick start](#quick-start)
-- [How it works](#architecture)
-- [Data, privacy, and SSO](#privacy)
-- [Android demo client](#android)
-- [Project boundaries](#boundaries)
-- [Development and verification](#development)
-- [Documentation](#documentation)
-- [License](#license)
-
-</details>
+A student competition project, not an official USTC service. The current runnable version is a loopback demo with fixed sources and a demo identity. Production multi-user hosting and university SSO are not integrated.
 
 <a id="overview"></a>
-
-## The project in one minute
-
-A typical request follows this path:
-
-```text
-user request
-  → model interprets intent and proposes a bounded tool call
-  → Rust validates the tool, arguments, consent, and current state
-  → a fixed-scope campus capability executes
-  → the UI returns a readable answer, provenance, and a redacted trace
-```
-
-The default `mock` provider needs no API key and supports deterministic offline demos and acceptance runs. An explicitly configured server-side OpenAI-compatible provider is also supported. Both modes use the same Rust-owned tool definitions and execution boundaries; the browser never owns model credentials or campus-data authority.
-
 <a id="features"></a>
 
-## Core capabilities
+## What works
 
-| Capability | What it currently does | What it deliberately does not do |
+| Task | Current result | Inputs and conditions |
 |---|---|---|
-| **Affairs Navigator** | Reads one reviewed transcript-certificate procedure with steps, an official entry point, and source status | Does not fabricate acceptance, approval, or live official results |
-| **ChangeRadar** | Presents one fixed, reviewed semantic academic-calendar change set | Does not turn model-visible reads into administrator publication authority |
-| **Opportunity Graph** | With explicit consent, produces reproducible course plans from a synthetic profile and public aggregate signals | Does not claim live enrollment, a complete degree audit, or university endorsement |
-| **Simple Calendar** | Records, lists, and exactly deletes owner-local items; committed state survives restart | Does not implement reminders, recurrence, CalDAV, or natural-language date parsing |
+| Transcript-certificate procedure | Conditions, steps, official links and an exportable personal checklist | Fixed reviewed procedure data |
+| Academic-calendar changes | Revision differences, sources and a change board | Fixed reviewed calendar examples |
+| Course comparison | Candidate plans and reasons from a demo profile | Explicit consent for the current request; data limits below |
+| Personal items | Record, list and delete by ID; retain committed items after restart | Local items; no dated planning or reminders |
+| Agent extensions | Install, configure, probe, grant, enable, disable and revoke packages | Reviewed single-component, public-read MCP or Skill packages |
 
-The current Web demo also includes:
-
-- **Guided scene entry** that fills supported prompts without sending, consenting, or mutating automatically;
-- **Configurable course drafts** selected from the checked-in synthetic catalog, with candidates still generated by Rust;
-- **A personal Affairs checklist** that copies or downloads source-labelled Markdown without implying official completion;
-- **Readable tool traces** limited to call order, tool name, and `succeeded / denied / failed` rather than private raw arguments.
+Chat supports saved history, follow-up questions, rename/delete and automatic `YYMMDD|topic` titles.
+The model selector sits beside the composer. Tool progress reflects actual execution, and administrator demo controls are secondary.
 
 <a id="quick-start"></a>
 
-## Quick start
+## Run from source
 
-### Run from source
-
-Git and a Rust toolchain are required:
+Use Linux/WSL, Git and the Rust toolchain pinned by the repository:
 
 ```bash
 git clone https://github.com/Develata/ustc-campus-agent.git
 cd ustc-campus-agent
-./scripts/run_three_plugin_mvp.sh
+bash scripts/run_three_plugin_mvp.sh
 ```
 
-Open <http://127.0.0.1:8787> when the service is ready. Try:
+Open <http://127.0.0.1:8787>. These Chinese prompts exercise the deterministic demo:
 
 ```text
-你好，介绍一下你能做什么。
 成绩单证明怎么办？
-校历最近有什么变更？
-记录事项：提交开题报告
+校历最近有什么变化？
+记录事项：准备成绩单申请材料
 列出我的待办事项
 ```
 
-These intentionally Chinese prompts are the deterministic MVP's supported acceptance examples: introduce the Agent, look up a transcript-certificate procedure, inspect an academic-calendar change, record a calendar item, and list current items.
+They query a transcript procedure, inspect calendar changes, record an item and list items.
+For course planning, create a demo profile first and consent to its use in the current Chat request.
+For packaged execution, see the [Docker Compose guide](deploy/mvp-compose/README.md).
+Current development sources and the historical R3.1 package have different feature scopes.
+Mock execution needs no key or model network; an initial build may still download dependencies and images.
 
-Course planning requires creating a synthetic demo profile in the page and separately consenting to its use for **that request**. Without confirmation, the system must deny or omit the tool rather than infer permission.
+### Models and plugins
 
-### Use the Docker Compose demo package
+| Mode | Scope |
+|---|---|
+| `mock` | Deterministic execution of four built-in campus tools; no installed MCP/Skill calls |
+| `local-chat` | Text-only connection testing with a small local model; no tools |
+| `openai-compatible` | A configured tool-capable model can call currently authorized built-in and package tools |
 
-The repository includes reproducible packaging scripts; the assembled demo package contains Windows, macOS, and Linux launchers. The packaging script itself requires an **x86-64 GNU/Linux** build environment and a source-bound ELF binary. Build the binary, then assemble into an output path that does not already exist:
-
-```bash
-UCA_SOURCE_COMMIT="$(git rev-parse HEAD)" \
-  cargo build --release --locked -p ustc-agentd
-./scripts/package_three_plugin_mvp_compose.sh \
-  --binary target/release/ustc-agentd \
-  --output-dir dist/ustc-campus-agent-mvp-compose \
-  --source-commit "$(git rev-parse HEAD)"
-cd dist/ustc-campus-agent-mvp-compose/ustc-campus-agent-mvp-compose
-```
-
-Then start from inside the package directory:
-
-```bash
-./start.sh       # macOS / Linux
-# start.cmd      # Windows 11 + Docker Desktop
-```
-
-The launcher waits for the health check and prints the ready URL. On macOS / Linux, use `docker compose down` to stop while retaining state; on Windows, use `stop.cmd`. The `reset` launcher deletes this MVP's Docker volume after another confirmation. See the [Docker runbook](deploy/mvp-compose/README.md) for configuration, ports, provider-secret handling, and checksum verification.
-
-> The first `docker compose up --build` needs network access to pull the base image and install system packages. The application-level default mock/fixture runtime does not retrieve live campus sources.
+Endpoints and private key files are configured on the server. The browser selects an admitted model ID.
+See [model configuration](docs/guides/model-selection.md) and [MCP/Skill configuration](docs/guides/mcp-skills.md).
+Installation does not grant permission; every invocation checks current state, arguments and authority.
 
 <a id="architecture"></a>
 
-## How it works
+## Implementation and competition evidence
 
-```text
-Web browser ───────────────┐
-                           ├─ loopback HTTP ─→ ustc-agentd
-Android debug thin client ─┘                     │
-                                                  ├─ bounded ChatRun
-mock / server-side provider ─────────────────────┤  model proposes only
-                                                  └─ Rust validates and executes
-                                                       ├─ Affairs Navigator
-                                                       ├─ ChangeRadar
-                                                       ├─ Opportunity Graph
-                                                       └─ Simple Calendar
-                                                              ↓
-                                                reviewed/synthetic fixtures
-                                                + local durable state
+```mermaid
+flowchart LR
+    Client[Web / Android] --> API[Application ingress]
+    API --> Agent[Bounded Agent loop]
+    Agent <--> Model[Model adapter]
+    Agent --> Gate[Rust argument and permission checks]
+    Gate --> Campus[Procedures / Changes / Courses / Items]
+    Gate --> Plugin[MCP / Skill adapters]
+    Market[Package configuration and grants] --> Gate
+    Gate --> State[Durable state and receipts]
 ```
 
-Five constraints shape the implementation:
+| Scoring dimension | Demonstrable evidence |
+|---|---|
+| Innovation | Campus tasks, source checks and permissioned plugins through one Chat entry |
+| Practicality | Working procedure lookup, saved items and course comparison with explicit prerequisites |
+| Technical difficulty | Model/tool protocols, validation, source boundaries, bounded execution, revocation and exact retries |
+| Completion | Runnable Web and Android debug clients, verification commands, architecture and recording instructions |
 
-1. **Server authority:** clients render state and submit intent; they do not own domain rules or effects.
-2. **A fixed tool catalog:** the model proposes calls only from a reviewed set and cannot register arbitrary commands.
-3. **Explicit consent:** private-profile use is authorized per request; provider text cannot manufacture confirmation.
-4. **Honest degradation:** missing consent, source conflict, argument mismatch, or provider failure returns an explicit non-success outcome.
-5. **Bounded execution:** provider turns, tool calls, arguments, and results all have hard limits.
-
-See the [Agent Chat contract](docs/contracts/agent-chat.md) and [MVP capability contract](docs/features/06-mvp-core-capabilities.md) for state, error, and permission semantics.
+See the [capability and evidence map](docs/features/06-mvp-core-capabilities.md) for detailed criteria.
+Planned RAG, multi-agent workflows and production features are not presented as implemented. Test evidence does not establish a competition score.
 
 <a id="privacy"></a>
+<a id="boundaries"></a>
 
-## Data, privacy, and SSO
+## Data and current limits
 
-- The service binds to `127.0.0.1` by default and is not exposed to the LAN.
-- Campus facts distinguish reviewed fixtures, synthetic fixtures, public aggregate signals, and owner-local private state.
-- Provider keys stay behind a server-side file boundary; they must not enter the browser, repository, Compose YAML, or command arguments.
-- USTC credentials, CAS cookies, API keys, real student data, and logs containing private payloads must not be committed.
-
-A real university SSO integration requires institutional authorization, application registration, and approved callback configuration. The current runtime uses a local demo-user session, **does not collect university credentials, and does not claim USTC SSO integration**.
-
-The repository includes an [independent, fail-closed SSO interface sample](examples/sso-interface/README.zh-CN.md) to document a possible future adapter shape. It is not wired into `ustc-agentd`, contacts no campus server, and issues no application session. Protocol verification, identity mapping, and platform-session integration would still be required after authorization.
+- Procedures and calendar changes use fixed reviewed data, not live campus retrieval. The course catalog mixes synthetic course facts with an iCourse aggregate-rating snapshot; permission for the latter remains unresolved.
+- Profile use requires request-specific consent. Item writes require explicit intent. Dated proposals, batch-write confirmation, reminders and streaming remain unimplemented.
+- The server binds to loopback. Model credentials come from private server files and never enter the page, repository or tool receipts.
+- Planned user entry is SSO or administrator-configured accounts, without self-registration. Production authentication, multi-user hosting and real university identity integration remain unfinished.
 
 <a id="android"></a>
 
-## Android demo client
+## Android
 
-`apps/ustc-android-demo` is a debug-signed thin client that reaches the same host loopback Web service through `adb reverse`. It does not contain a second Agent or campus-tool implementation.
-
-```bash
-adb reverse tcp:8787 tcp:8787
-adb install -r <source-bound-debug-apk>
-```
-
-This is a competition demo bridge, not a Play Store or production Android release. Physical-device acceptance, production signing, a public HTTPS service, and complete lifecycle validation remain outside the current boundary. See the [Android demo guide](docs/guides/android-demo.md).
-
-<a id="boundaries"></a>
-
-## Project boundaries
-
-The current build is a **runnable local vertical slice**, not a production campus platform. It does not yet include:
-
-- production authentication, USTC SSO, public HTTPS hosting, or multi-tenant administration;
-- live campus-data ingestion, broad source coverage, or official data authorization;
-- generalized third-party plugin installation/isolation, a command sandbox, or a usable MCP server;
-- durable chat history, streaming, reminders, recurring calendar items, or cross-device sync;
-- production-signed Android or app-store distribution.
-
-“Bounded” is a product contract, not a euphemism: an explicit refusal is preferable to letting plausible model text cross a permission, provenance, or state boundary.
+The debug APK uses `adb reverse` to reach the same Rust backend and renders Chat and plugins in Android WebView.
+See the [Android guide](docs/guides/android-demo.md) for installation, explicit device selection and evidence boundaries.
+The current local build passed; Xiaomi installation was blocked by device policy, so physical-device feature acceptance remains unverified.
 
 <a id="development"></a>
 
 ## Development and verification
-
-Rust builds can consume substantial disk space; check capacity before starting. Common local verification commands are:
 
 ```bash
 cargo fmt --all -- --check
@@ -209,31 +117,26 @@ cargo test --locked --all-targets --all-features
 python3 scripts/check_repo_contracts.py
 ```
 
-The SSO reservation sample can be checked independently:
+Run affected-module tests during development and the baseline at integration checkpoints.
+These commands describe checks, not their results. See the [development guide](docs/guides/development.md),
+[acceptance matrix](docs/acceptance/matrix.tsv) and [AGENTS.md](AGENTS.md).
 
-```bash
-python3 -B -m unittest discover -s examples/sso-interface -p 'test_*.py' -v
-```
+<details>
+<summary>Session and audit storage</summary>
 
-At runtime, `m00-sessions.json` is the `event-history-only` current-session read authority. The `B4b stable redacted control-event/error` journal is a `data-only` evidence carrier. Neither is formal SSO nor a general administrator API.
+`m00-sessions.json` is the `event-history-only` current-session read authority.
+The `B4b stable redacted control-event/error` journal is `data-only` evidence, not an authentication or administrator API.
 
-Read [`AGENTS.md`](AGENTS.md) and the [development guide](docs/guides/development.md) before contributing. The repository uses protected `main`, exact-path staging, PR review, and required checks; each commit carries one semantic intent.
+</details>
 
 <a id="documentation"></a>
 
 ## Documentation
 
-- [MVP capabilities, architecture, and TODO](docs/features/06-mvp-core-capabilities.md)
-- [Docker Compose runbook](deploy/mvp-compose/README.md)
-- [Agent Chat contract](docs/contracts/agent-chat.md)
-- [Permissions contract](docs/contracts/permissions.md)
-- [Android demo boundary](docs/guides/android-demo.md)
-- [Engineering blueprint](docs/plan/)
-- [Acceptance matrix and gates](docs/acceptance/)
-- [Complete documentation map](docs/README.md)
+[Capabilities and evidence](docs/features/06-mvp-core-capabilities.md) · [Demo and submission](docs/guides/competition-demo.md) · [Models](docs/guides/model-selection.md) · [Plugins](docs/guides/mcp-skills.md) · [Technical map](docs/README.md)
 
 <a id="license"></a>
 
 ## License
 
-Project-authored software and documentation are available under the [MIT License](LICENSE.md). The license does not imply USTC endorsement, production readiness, or permission to republish third-party content or campus data; those source and rights boundaries remain separate.
+Project-authored code and documentation use the [MIT License](LICENSE.md). Rights to third-party content and campus data are established separately.

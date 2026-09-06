@@ -1,66 +1,44 @@
-# Android demo guide
+# Android 演示指南
 
-The current Android artifact is a debug-signed thin client for the loopback MVP. It is intended for a controlled competition demonstration, not Play Store or public-server deployment.
+APK 是连接现有 Rust 服务的 debug 签名 WebView 客户端。手机展示同一套 Chat 和插件页面，业务与数据留在服务端；它不能离线运行后端，也不是生产发布包。
 
-Verified candidate:
+## 连接与演示
 
-```text
-Source: ee8cbc2138184651e32f955efbfec7462a3270e2
-APK:    ustc-campus-agent-android-debug-ee8cbc2138184651e32f955efbfec7462a3270e2.apk
-SHA-256: 83df5784e05bfefd9e16d8b41b05c9ba0f1ba29b589111869fa16475557baf31
-Size:   886296 bytes
-```
-
-Before installing, keep the APK and its generated `.sha256` file in the same directory and verify the exact bytes:
-
-```bash
-sha256sum -c ustc-campus-agent-android-debug-ee8cbc2138184651e32f955efbfec7462a3270e2.apk.sha256
-```
-
-## 1. Start the backend
-
-From the repository root:
+在主机仓库根目录启动服务：
 
 ```bash
 ./scripts/run_three_plugin_mvp.sh
 ```
 
-Wait until the service reports:
+等候服务输出：
 
 ```text
 Web:   http://127.0.0.1:8787/
 ```
 
-## 2. Connect a device
-
-Enable Android developer options and USB debugging, then verify exactly one intended device:
+手机开启开发者选项和 USB 调试，确认仅连接预期设备：
 
 ```bash
 adb devices
 ```
 
-Forward the device's TCP 8787 to the host's loopback TCP 8787:
+建立设备到主机回环地址的转发；连接多台设备时，每条命令加 `-s DEVICE_SERIAL` 指定目标：
 
 ```bash
 adb reverse tcp:8787 tcp:8787
 adb reverse --list
 ```
 
-This preserves the Rust server's loopback-only boundary; the service is not opened to the LAN.
-
-## 3. Install and launch
+这不会把 Rust 服务开放到局域网。将 APK 和配套 `.sha256` 放在同一目录，替换下面的实际文件名，再校验、安装和启动：
 
 ```bash
-adb install -r ustc-campus-agent-android-debug-ee8cbc2138184651e32f955efbfec7462a3270e2.apk
+sha256sum -c your-android-debug.apk.sha256
+adb install -r your-android-debug.apk
 adb shell am start -n \
   com.develata.ustccampusagent.debug/com.develata.ustccampusagent.MainActivity
 ```
 
-The app defaults to `http://127.0.0.1:8787/`. If the native offline screen appears, confirm the backend is running, repeat `adb reverse`, and tap **重试连接**.
-
-## 4. Exercise the MVP
-
-In **Agent Chat**, try:
+应用默认连接 `http://127.0.0.1:8787/`。出现离线页时检查服务和转发，再点“重试连接”。在 Chat 中依次试用：
 
 ```text
 成绩单证明怎么办？
@@ -69,41 +47,60 @@ In **Agent Chat**, try:
 列出我的待办事项
 ```
 
-The WebView uses the same server-owned route and state as the browser demo. The APK does not contain a second local implementation.
+应看到回答和工具状态。官方信息来自受审阅演示资料；日历记录在主机持久化，没有提醒推送。模型能力见[模型指南](model-selection.md)。
 
-## 5. Endpoint policy
+## 从源码构建
 
-The native **服务器** control accepts:
-
-- `http://127.0.0.1:<port>/` or `http://localhost:<port>/` for explicit development forwarding;
-- a path-free `https://<host>[:port]/` origin for a future reviewed remote deployment.
-
-It rejects remote HTTP, embedded credentials, paths, query strings, fragments and non-HTTP(S) schemes. The current repository does not claim a production remote HTTPS/auth service.
-
-## 6. Remove
-
-```bash
-adb reverse --remove tcp:8787
-adb uninstall com.develata.ustccampusagent.debug
-```
-
-Removing the app does not delete the host-side Rust state directory. The server launcher prints that directory when it starts.
-
-## Build from source
-
-With JDK 17 and Android SDK 36/build-tools 36.0.0 installed:
+本机复现环境为 JDK 21、Android SDK 36、build-tools 36.0.0；Java 编译目标仍为 17。在仓库根目录执行：
 
 ```bash
 cd apps/ustc-android-demo
 ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
-For a source-bound build, run the repository helper in an environment with JDK 17 and the pinned Android SDK packages, then verify the adjacent checksum before installation:
+需要带校验文件、签名检查和构建信息的本地包时，回到仓库根目录：
 
 ```bash
-UCA_SOURCE_COMMIT="$(git rev-parse HEAD)" \
-  ./scripts/build_android_demo.sh --output-dir ./dist/android
-(cd dist/android && sha256sum -c ustc-campus-agent-android-debug-<SOURCE_SHA>.apk.sha256)
+./scripts/build_android_demo.sh --source-commit local --output-dir ./dist/android-local
 ```
 
-The delivered candidate's source-bound build and API 35 emulator smoke are retained in [Actions run 33850505578](https://github.com/Develata/ustc-campus-agent/actions/runs/33850505578). Exact-source repository CI is [run 33851287216](https://github.com/Develata/ustc-campus-agent/actions/runs/33851287216). These receipts prove the bounded debug artifact only; they do not establish production signing, authenticated remote deployment or physical-device acceptance.
+`local` 表示本地构建。只有从已核对的干净提交构建时，才用 `--source-commit <SOURCE_SHA>` 绑定来源；不能给含未提交修改的 APK 标上旧提交身份。
+
+## 当前验证结果
+
+截至 2026-09-06：
+
+| 检查 | 结果 |
+| --- | --- |
+| 本机 JDK 21 / SDK 36 | 4 项单元测试、lint、APK 构建和签名校验通过 |
+| 小米 API 35 真机安装 | `INSTALL_FAILED_USER_RESTRICTED`，被设备安装限制阻断 |
+| 当前真机功能 | 尚未完成安装，无真机功能通过证据 |
+
+安装限制解除后仍需验证启动、连接和实际 Chat 操作。本轮本地结果不是带公开来源身份的新 APK 发布。
+
+<details>
+<summary>历史来源绑定候选与模拟器证据</summary>
+
+以下身份仅对应旧候选，不代表当前修改已打包：
+
+```text
+Source: ee8cbc2138184651e32f955efbfec7462a3270e2
+APK:    ustc-campus-agent-android-debug-ee8cbc2138184651e32f955efbfec7462a3270e2.apk
+SHA-256: 83df5784e05bfefd9e16d8b41b05c9ba0f1ba29b589111869fa16475557baf31
+Size:   886296 bytes
+```
+
+构建及 API 35 模拟器 Chat 证据见 [Actions 33850505578](https://github.com/Develata/ustc-campus-agent/actions/runs/33850505578)，对应源码 CI 见 [33851287216](https://github.com/Develata/ustc-campus-agent/actions/runs/33851287216)。
+
+</details>
+
+## 地址与退出
+
+“服务器”接受回环 HTTP 地址或不含路径的 HTTPS origin，拒绝远程 HTTP、凭据、路径、查询和片段。当前没有可据此使用的生产 HTTPS／认证服务。
+
+```bash
+adb reverse --remove tcp:8787
+adb uninstall com.develata.ustccampusagent.debug
+```
+
+卸载不删除主机数据。客户端范围、Dioxus、生产签名、远程认证和真机验收要求见[客户端契约](../contracts/client-shell.md)及 [Android 功能说明](../features/07-android-demo-client.md)。

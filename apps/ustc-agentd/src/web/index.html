@@ -10,90 +10,104 @@
   <script src="/assets/app.js" defer></script>
 </head>
 <body>
-  <header class="site-header" aria-label="产品标识">
-    <a class="brand" href="/" aria-label="USTC Campus Agent 首页">
-      <span class="brand-mark" aria-hidden="true">科</span>
-      <span>USTC Campus Agent</span>
-    </a>
-    <span class="demo-badge">Bounded demo</span>
-  </header>
-
-  <main>
-    <section class="chat-hero" aria-labelledby="chat-title">
-      <header class="chat-heading">
-        <p class="eyebrow">BOUNDED CAMPUS AGENT · 本机演示</p>
-        <h1 id="chat-title">先说你要做什么。</h1>
-        <p class="lead">询问办事流程、校历变更、记录本地事项，或在你逐次允许后使用当前 synthetic profile 规划课程。回答只来自这个有界演示允许调用的工具。</p>
+  <div class="app-shell">
+    <aside id="app-sidebar" class="app-sidebar" aria-label="应用导航">
+      <a class="brand" href="#chat">USTC Campus Agent</a>
+      <button id="nav-close" class="icon-button" type="button" aria-label="关闭导航"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
+      <nav class="primary-nav" aria-label="主要功能">
+        <button id="chat-clear" class="nav-item" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>新对话</span></button>
+        <a id="nav-chat" class="nav-item" href="#chat" hidden><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg><span>当前对话</span></a>
+        <a id="nav-plugins" class="nav-item" href="#plugins"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>插件</span></a>
+      </nav>
+      <section id="conversation-history" class="conversation-history" aria-label="历史对话"></section>
+      <div class="sidebar-bottom">
+        <a id="nav-settings" class="nav-item" href="#settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg><span>设置</span></a>
+        <p>非官方校园助手</p>
+      </div>
+    </aside>
+    <button id="nav-scrim" type="button" aria-label="关闭导航" hidden></button>
+    <div id="app-column" class="app-column">
+      <header class="app-topbar">
+        <div><button id="nav-toggle" class="icon-button" type="button" aria-label="切换侧栏" aria-controls="app-sidebar" aria-expanded="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button><span id="view-title">新对话</span></div>
+        <p id="provider-status" class="provider-status" role="status" aria-live="polite">正在读取模型配置…</p>
+        <a id="return-chat" href="#chat" hidden>返回对话 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></a>
       </header>
-
-      <section id="chat-surface" class="chat-surface" aria-label="与校园 Agent 对话" aria-busy="false">
-        <ol id="chat-messages" class="chat-messages" aria-label="对话记录" aria-live="polite" aria-relevant="additions text">
-          <li id="chat-empty" class="chat-empty">
-            <strong>从一个具体问题开始</strong>
-            <span>例如：“成绩单证明怎么办？”、“推荐课程”，或“记录事项：提交开题报告”。</span>
-          </li>
-        </ol>
-
-        <div id="chat-progress" class="chat-progress" role="status" aria-live="polite" hidden>
-          <span class="progress-mark" aria-hidden="true"></span>
-          <span>Agent 正在核对可用工具与来源…</span>
-        </div>
-
-        <div id="chat-error" class="chat-error" role="alert" hidden>
-          <strong>这次没有得到回答</strong>
-          <p id="chat-error-message">请检查连接后重试。</p>
-          <p class="chat-error-reference">参考代码：<code id="chat-error-code">network_error</code></p>
-        </div>
-
-        <form id="chat-form" class="chat-composer" aria-describedby="chat-hint chat-opportunity-state">
-          <label class="visually-hidden" for="chat-input">发送给校园 Agent 的消息</label>
-          <textarea id="chat-input" name="message" rows="3" maxlength="4096" enterkeyhint="send" autocomplete="off" aria-describedby="chat-hint chat-opportunity-state" placeholder="问一个校园事务问题…" required></textarea>
-          <div class="chat-prompt-customization">
-            <label for="chat-prompt-customization">
-              <span>响应偏好 <small>可选 · 仅这次请求</small></span>
-            </label>
-            <textarea id="chat-prompt-customization" name="prompt-customization" rows="2" maxlength="2048" autocomplete="off" aria-describedby="chat-prompt-customization-hint chat-prompt-customization-counter" placeholder="例如：请用简洁的要点回答。"></textarea>
-            <div class="chat-prompt-customization-meta">
-              <span id="chat-prompt-customization-hint">作为不可信 user preference 发送；不能改变工具、权限或服务器 policy，成功后清空。</span>
-              <output id="chat-prompt-customization-counter" for="chat-prompt-customization">0 / 2048 UTF-8 bytes</output>
+      <main id="app-main" tabindex="-1">
+        <section id="chat-view" class="page-view chat-view is-empty" data-view="chat" aria-labelledby="chat-title">
+          <h1 id="chat-title" class="visually-hidden">校园 Agent 对话</h1>
+          <section id="chat-surface" class="chat-surface" aria-label="与校园 Agent 对话" aria-busy="false">
+            <div id="chat-scroll" class="chat-scroll">
+              <ol id="chat-messages" class="chat-messages" aria-label="对话记录" aria-live="polite" aria-relevant="additions text">
+                <li id="chat-empty" class="chat-empty"><strong>今天想聊些什么？</strong></li>
+              </ol>
+              <div id="chat-progress" class="chat-progress" role="status" aria-live="polite" hidden><span class="progress-mark" aria-hidden="true"></span><span>正在准备对话…</span></div>
+              <section id="chat-activity" class="chat-activity" aria-label="Agent 执行状态" hidden></section>
             </div>
-          </div>
-          <div class="chat-composer-footer">
-            <label class="chat-opportunity-control" for="chat-opportunity-confirm">
-              <input id="chat-opportunity-confirm" type="checkbox" aria-describedby="chat-opportunity-state" disabled>
-              <span>仅这次请求使用当前 synthetic profile</span>
-            </label>
-            <div class="chat-actions">
-              <button id="chat-clear" type="button">清空对话</button>
-              <button id="chat-send" type="submit">发送</button>
+            <div class="composer-dock">
+              <div id="chat-error" class="chat-error" role="alert" hidden><strong>这次没有得到回答</strong><p id="chat-error-message">请检查连接后重试。</p><p class="chat-error-reference">参考代码：<code id="chat-error-code">network_error</code></p></div>
+              <section id="conversation-recovery" class="conversation-recovery" aria-label="对话请求恢复" hidden></section>
+              <form id="chat-form" class="chat-composer" aria-describedby="chat-hint chat-opportunity-state">
+                <label class="visually-hidden" for="chat-input">发送给校园 Agent 的消息</label>
+                <textarea id="chat-input" name="message" rows="2" maxlength="4096" enterkeyhint="send" autocomplete="off" placeholder="给校园 Agent 发消息…" required></textarea>
+                <div class="composer-toolbar">
+                  <button id="chat-options-toggle" class="quiet-button" type="button" aria-label="对话选项" title="对话选项" aria-expanded="false" aria-controls="chat-options"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg><span>对话选项</span><span id="options-indicator" hidden>已设置</span></button>
+                  <div class="composer-controls">
+                    <div class="chat-model-picker">
+                      <label class="visually-hidden" for="chat-model-select">选择模型</label>
+                      <select id="chat-model-select" aria-describedby="chat-model-note" disabled><option value="">正在读取模型…</option></select>
+                      <svg class="model-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+                    </div>
+                  <button id="chat-send" class="send-button" type="submit" aria-label="发送消息"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 12 5-5 5 5M12 7v11"/></svg></button>
+                  </div>
+                </div>
+                <div class="chat-model-feedback">
+                  <p id="chat-model-note" role="status" aria-live="polite">正在读取服务端模型配置…</p>
+                  <button id="chat-model-refresh" type="button" class="quiet-button" hidden>重试模型列表</button>
+                </div>
+                <div id="chat-options" class="chat-options" hidden>
+                  <div class="chat-prompt-customization">
+                    <label for="chat-prompt-customization">响应偏好 <small>仅这次请求</small></label>
+                    <textarea id="chat-prompt-customization" name="prompt-customization" rows="2" maxlength="2048" autocomplete="off" aria-describedby="chat-prompt-customization-hint chat-prompt-customization-counter" placeholder="例如：请用简洁的要点回答。"></textarea>
+                    <div class="chat-prompt-customization-meta"><span id="chat-prompt-customization-hint">只调整回答方式，不改变工具和权限。</span><output id="chat-prompt-customization-counter" for="chat-prompt-customization">0 / 2048 UTF-8 bytes</output></div>
+                  </div>
+                  <label class="chat-opportunity-control" for="chat-opportunity-confirm"><input id="chat-opportunity-confirm" type="checkbox" aria-describedby="chat-opportunity-state" disabled><span>仅这次请求使用当前演示档案</span></label>
+                  <p id="chat-opportunity-state" class="chat-context-state">尚无演示档案，请在插件中明确同意并创建。</p>
+                  <a href="#plugins/planning">管理课程档案 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></a>
+                </div>
+              </form>
+              <p id="chat-hint" class="chat-hint">回答仅供参考，请核对来源。</p>
+              <p id="scene-hint" class="scene-hint" role="status" hidden></p>
             </div>
+          </section>
+        </section>
+        <section id="plugins-view" class="page-view directory-view" data-view="plugins" aria-labelledby="plugins-title" hidden>
+          <header class="page-heading"><p class="eyebrow">AGENT CAPABILITIES</p><h1 id="plugins-title">Agent 可以帮你做什么</h1><p>在这里了解能力、使用条件和资料来源，再回到对话提出任务。</p></header>
+          <p><a class="market-button" href="#plugins/manage">管理 MCP 与 Skills →</a></p>
+          <div class="plugin-page-tabs" role="tablist" aria-label="插件页面">
+            <button id="plugin-tab-capabilities" type="button" role="tab" aria-selected="true" aria-controls="plugin-capabilities" tabindex="0">可用能力</button>
+            <button id="plugin-tab-market" type="button" role="tab" aria-selected="false" aria-controls="market-catalog" tabindex="-1">插件目录</button>
           </div>
-          <p id="chat-opportunity-state" class="chat-context-state">尚无可用的 synthetic profile；可在下方 Opportunity Graph 面板中明确同意并创建。</p>
-          <p id="chat-hint" class="chat-hint">Enter 发送 · Shift + Enter 换行 · 最近最多 12 条 user/assistant 消息参与请求</p>
-        </form>
-      </section>
-    </section>
-
-    <section class="diagnostics-intro" aria-labelledby="diagnostics-title">
-      <p class="eyebrow">DETAILS &amp; CONTROLS · 诊断与明确同意</p>
-      <h2 id="diagnostics-title">核对来源、发布状态与 consent。</h2>
-      <p>以下详细面板保留原有查询与管理员演示控件。Chat 不会替你创建、读取或删除 profile，也不会执行发布操作。</p>
-    </section>
-
-    <section class="hero diagnostics-hero" aria-labelledby="hero-title">
+          <section id="plugin-capabilities" role="tabpanel" aria-labelledby="plugin-tab-capabilities" tabindex="0">
+          <p class="capability-scope">以下为内置演示能力。是否能在当前对话中调用，还取决于模型模式和本次授权。</p>
+          <div class="plugin-list" id="plugin-directory">
+<article class="plugin-row"><span class="plugin-icon" data-kind="affairs"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 3H20v19H6.5A2.5 2.5 0 0 1 4 19.5v-14A2.5 2.5 0 0 1 6.5 3Z"/></svg></span><div class="plugin-copy"><h2>办事导航</h2><p>Agent 查询成绩单证明的办理步骤和官方入口。</p><small>Affairs Navigator</small><p class="capability-condition">公开查询 · 经复核的固定办事资料</p></div><div class="capability-actions"><button type="button" data-capability-scene="affairs" aria-label="向 Agent 询问办事导航">询问 Agent</button><a href="#plugins/affairs">核对办事资料</a></div></article>
+<article class="plugin-row"><span class="plugin-icon" data-kind="radar"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="m12 12 7-7"/></svg></span><div class="plugin-copy"><h2>变更雷达</h2><p>Agent 查询已发布的校历变化，并说明变化内容。</p><small>ChangeRadar</small><p class="capability-condition">公开查询 · 经复核的固定校历快照</p></div><div class="capability-actions"><button type="button" data-capability-scene="radar" aria-label="向 Agent 询问变更雷达">询问 Agent</button><a href="#plugins/radar">核对变更来源</a></div></article>
+<article class="plugin-row"><span class="plugin-icon" data-kind="planning"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-5 9 5-9 5-9-5Zm4 3v6c3 2 7 2 10 0v-6M21 9v7"/></svg></span><div class="plugin-copy"><h2>课程规划</h2><p>Agent 使用当前档案生成课程方案并解释结果。</p><small>Opportunity Graph</small><p class="capability-condition">需创建模拟档案并逐次同意使用 · 模拟课程资料</p></div><div class="capability-actions"><button type="button" data-capability-scene="planning" aria-label="向 Agent 询问课程规划">询问 Agent</button><a href="#plugins/planning">管理档案与方案</a></div></article>
+<article class="plugin-row"><span class="plugin-icon" data-kind="calendar"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18M8 15h2M14 15h2"/></svg></span><div class="plugin-copy"><h2>简单日历</h2><p>Agent 列出事项，按你的明确指令记录或删除事项。</p><small>Simple Calendar</small><p class="capability-condition">本机个人事项 · 写入需完整指令，暂不提供提醒</p></div><div class="capability-actions"><button type="button" data-capability-scene="calendar" aria-label="向 Agent 询问简单日历">询问 Agent</button><a href="#plugins/calendar">查看使用条件</a></div></article>
+</div><p class="directory-note">内置能力由服务端校验并执行。查阅详情或进入对话不会自动授权、发布资料或写入事项。</p></section><section id="market-catalog" class="market-catalog" role="tabpanel" aria-labelledby="plugin-tab-market" tabindex="0" hidden></section></section><section id="plugin-affairs" class="plugin-detail page-view" data-view="plugins/affairs" aria-label="办事导航" hidden><a class="back-link" href="#plugins"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>全部插件</a>    <section class="hero diagnostics-hero" aria-labelledby="hero-title">
       <p class="eyebrow">AFFAIRS NAVIGATOR · 办事导航</p>
-      <h2 id="hero-title">把“怎么办”变成<br><span>可核对的下一步。</span></h2>
-      <p class="lead">不猜流程，也不替你作决定。页面只呈现保留并校验过的公开来源快照、办理条件、官方入口与证据状态。</p>
+      <h2 id="hero-title">办理成绩单证明</h2>
+      <p class="lead">Agent 可查询这些经复核的固定办理资料。这里用于核对来源与记录个人办理进度，请以学校最新要求为准。</p>
 
-      <form id="lookup-form" class="lookup" aria-describedby="lookup-hint">
+      <details class="detail-disclosure"><summary>查询其他流程</summary><form id="lookup-form" class="lookup" aria-describedby="lookup-hint">
         <label for="procedure-id">流程 ID</label>
         <div class="lookup-row">
           <textarea id="procedure-id" name="procedure-id" rows="2" autocomplete="off" spellcheck="false" aria-describedby="procedure-id-preview lookup-hint" required>proc:ustc:undergraduate:transcript-certificate</textarea>
           <button id="lookup-button" type="submit">查看流程</button>
         </div>
         <output id="procedure-id-preview" class="input-preview" for="procedure-id">完整流程 ID：proc:ustc:undergraduate:transcript-certificate</output>
-        <p id="lookup-hint">当前演示绑定一个中国科大教务处公开页面的 source-grounded fixture，并在启动时经过 DemoReviewed review/publication path；它不是 M00 身份认证过的管理员操作。</p>
-      </form>
+        <p id="lookup-hint">当前提供经复核的成绩单证明演示资料，其他流程可能暂不可用。</p>
+      </form></details>
       <p id="status" class="status" role="status" aria-live="polite">正在读取可验证结果…</p>
     </section>
 
@@ -165,10 +179,10 @@
           </section>
         </div>
 
-        <aside class="evidence-column" aria-labelledby="evidence-title">
+        <details class="evidence-column detail-disclosure"><summary id="evidence-title">来源与核验详情</summary>
           <div class="section-heading compact">
             <span>EVIDENCE</span>
-            <h3 id="evidence-title">为什么可信</h3>
+            <h3>为什么可信</h3>
           </div>
           <dl class="evidence-list">
             <div>
@@ -205,72 +219,22 @@
             </div>
           </dl>
           <div id="source-list" class="source-list"></div>
-        </aside>
+        </details>
       </div>
     </article>
 
-    <section class="opportunity-board" aria-labelledby="publication-admin-title">
-      <div class="radar-heading">
-        <div>
-          <p class="eyebrow">AFFAIRS PUBLICATION · ADMINISTRATOR DEMO</p>
-          <h2 id="publication-admin-title">显式确认后，才进入 M10 → M00/evidence → M71。</h2>
-          <p>此面板只调用本机 loopback 的固定 DemoReviewed 管理员命令；自定义请求头阻断普通跨站表单，M00 的 durable session、grant、permission 与 evidence 仍是发布 authority。它不是生产 SSO 或通用内容管理后台。</p>
-        </div>
-        <div class="radar-actions">
-          <button id="publication-refresh" type="button">读取持久状态</button>
-        </div>
-      </div>
-      <div class="opportunity-consent">
-        <label class="consent-check" for="publication-confirm">
-          <input id="publication-confirm" type="checkbox">
-          <span>我确认执行固定的 DemoReviewed revision publish；重复提交必须返回同一 receipt。</span>
-        </label>
-        <div class="opportunity-actions">
-          <button id="publication-publish" type="button" disabled>发布 demo revision</button>
-        </div>
-      </div>
-      <p id="publication-status" class="status" role="status" aria-live="polite">等待读取 durable publication state…</p>
-      <dl class="radar-evidence">
-        <div><dt>Publication revision</dt><dd id="publication-revision">—</dd></div>
-        <div><dt>Publication receipt</dt><dd id="publication-receipt">—</dd></div>
-        <div><dt>Control evidence events</dt><dd id="publication-evidence-count">—</dd></div>
-        <div><dt>Recovery mode</dt><dd>strict reopen · canonical JSON</dd></div>
-      </dl>
-    </section>
-
-    <section class="radar-board" aria-labelledby="radar-title">
+</section><section id="plugin-radar" class="plugin-detail page-view" data-view="plugins/radar" aria-label="变更雷达" hidden><a class="back-link" href="#plugins"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>全部插件</a>    <section class="radar-board" aria-labelledby="radar-title">
       <div class="radar-heading">
         <div>
           <p class="eyebrow">CHANGE RADAR · 语义变更</p>
-          <h2 id="radar-title">只看真正改变了什么。</h2>
-          <p>同一 source identity 的两个 immutable DemoReviewed revisions，经管理员审阅后形成确定性语义变更；不是原始文本 diff。</p>
+          <h2 id="radar-title">校历有什么变化？</h2>
+          <p>Agent 可查询已发布的校历变更。这里对照两次经复核的固定快照，供你核对来源与变化内容。</p>
         </div>
         <div class="radar-actions">
           <button id="radar-load" type="button">读取变更板</button>
           <a href="/api/v1/changes/board%3Austc%3Aacademic-calendar/atom">Atom feed ↗</a>
         </div>
       </div>
-      <div class="opportunity-consent radar-admin-panel">
-        <div>
-          <strong>管理员发布 · 非生产演示</strong>
-          <p>仅固定 DemoReviewed candidate；显式确认后跨越 M10 → M00 durable evidence → owning M70 port。</p>
-        </div>
-        <label class="consent-check" for="radar-publication-confirm">
-          <input id="radar-publication-confirm" type="checkbox">
-          <span>我确认发布这一个固定 semantic change；exact retry 必须返回同一 receipt。</span>
-        </label>
-        <div class="opportunity-actions">
-          <button id="radar-publication-refresh" type="button">读取发布状态</button>
-          <button id="radar-publication-publish" type="button" disabled>发布固定变更</button>
-        </div>
-      </div>
-      <p id="radar-publication-status" class="status" role="status" aria-live="polite">等待读取 ChangeRadar durable publication state…</p>
-      <dl class="radar-evidence radar-publication-evidence">
-        <div><dt>Review records</dt><dd id="radar-publication-review-count">—</dd></div>
-        <div><dt>Publication records</dt><dd id="radar-publication-count">—</dd></div>
-        <div><dt>Publication receipt</dt><dd id="radar-publication-receipt">—</dd></div>
-        <div><dt>Control evidence events</dt><dd id="radar-publication-evidence-count">—</dd></div>
-      </dl>
       <p id="radar-status" class="status" role="status" aria-live="polite">等待读取 source-grounded feed…</p>
       <div id="radar-result" class="radar-result" hidden>
         <div class="radar-meta">
@@ -281,7 +245,7 @@
           <span id="radar-published"></span>
         </div>
         <div id="radar-fields" class="radar-fields"></div>
-        <dl class="radar-evidence">
+        <details class="detail-disclosure"><summary>来源与版本详情</summary><dl class="radar-evidence">
           <div><dt>来源</dt><dd id="radar-source"></dd></div>
           <div><dt>旧 revision</dt><dd id="radar-old-revision"></dd></div>
           <div><dt>旧 raw digest</dt><dd id="radar-old-raw-digest"></dd></div>
@@ -292,16 +256,16 @@
           <div><dt>新 normalized digest</dt><dd id="radar-new-normalized-digest"></dd></div>
           <div><dt>新 review provenance</dt><dd id="radar-new-review"></dd></div>
           <div><dt>证据集</dt><dd id="radar-evidence-digest"></dd></div>
-        </dl>
+        </dl></details>
       </div>
     </section>
 
-    <section class="opportunity-board" aria-labelledby="opportunity-title">
+</section><section id="plugin-planning" class="plugin-detail page-view" data-view="plugins/planning" aria-label="课程规划" hidden><a class="back-link" href="#plugins"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>全部插件</a>    <section class="opportunity-board" aria-labelledby="opportunity-title">
       <div class="radar-heading">
         <div>
           <p class="eyebrow">OPPORTUNITY GRAPH · CONSENT-BOUND 课程规划</p>
-          <h2 id="opportunity-title">先同意，再规划；撤回后即不再读取。</h2>
-          <p>使用不含真实个人数据的 synthetic academic profile 和 DemoReviewed catalog。服务端从 authenticated demo session 推导 tenant/user；浏览器保存不具 authority 的 profile ID hint；待确认的创建请求还会暂存公开 synthetic 输入以便原样重试，不支持真实学生资料导入。</p>
+          <h2 id="opportunity-title">为下一学期做个计划</h2>
+          <p>在这里配置模拟课程档案并核对方案；Agent 仅在你单独允许本次请求后使用当前档案。创建档案也需明确同意，不导入真实学生资料。</p>
         </div>
       </div>
 
@@ -324,7 +288,7 @@
 
       <p id="opportunity-status" class="status" role="status" aria-live="polite">等待明确 consent…</p>
       <section id="opportunity-profile" class="opportunity-result" aria-labelledby="opportunity-profile-title" hidden>
-        <h3 id="opportunity-profile-title">Tenant-private profile receipt</h3>
+        <h3 id="opportunity-profile-title">当前演示档案</h3>
         <dl class="radar-evidence">
           <div><dt>Profile snapshot</dt><dd id="opportunity-profile-id"></dd></div>
           <div><dt>Consent receipt</dt><dd id="opportunity-consent-id"></dd></div>
@@ -334,7 +298,7 @@
       </section>
 
       <section id="opportunity-plan-result" class="opportunity-result" aria-labelledby="opportunity-plan-title" hidden>
-        <h3 id="opportunity-plan-title">Source-grounded qualification &amp; plan</h3>
+        <h3 id="opportunity-plan-title">课程方案</h3>
         <dl class="radar-evidence">
           <div><dt>Planning receipt</dt><dd id="opportunity-plan-receipt"></dd></div>
           <div><dt>Source revision</dt><dd id="opportunity-source-revision"></dd></div>
@@ -354,21 +318,62 @@
       </section>
 
       <section id="opportunity-deleted" class="notice notice-error" aria-labelledby="opportunity-deleted-title" hidden>
-        <h3 id="opportunity-deleted-title">Private payload 已删除</h3>
+        <h3 id="opportunity-deleted-title">档案已删除</h3>
         <p id="opportunity-delete-receipt"></p>
       </section>
     </section>
 
-    <section class="notice" aria-labelledby="boundary-title">
-      <p class="eyebrow">BOUNDARY</p>
-      <h2 id="boundary-title">这是可验证的三插件 + 本地 Calendar companion 演示纵切，不是自动审批或选课系统。</h2>
-      <p>页面仅绑定本机 loopback。Affairs 与 ChangeRadar 使用显著标识的 DemoReviewed source snapshots；Opportunity Graph 使用 synthetic private profile，并将 active payload 与不含原始 profile 的 deletion tombstone 写入本机 durable store；Simple Calendar 只保存 owner-local 事项。它们不代表正式 USTC SSO、实时官方 M60 导入、自动审批、自动选课或提醒服务；最终要求仍以中国科学技术大学官方页面和现场通知为准。</p>
-    </section>
-  </main>
-
-  <footer>
-    <span>USTC Campus Agent</span>
-    <span>Source-aware · Fail-closed · Human-verifiable</span>
-  </footer>
+</section><section id="plugin-calendar" class="plugin-detail page-view" data-view="plugins/calendar" aria-label="简单日历" hidden><a class="back-link" href="#plugins"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>全部插件</a><header class="page-heading"><p class="eyebrow">SIMPLE CALENDAR</p><h1>记下下一件要做的事</h1><p>直接在对话中管理事项，已经记录的内容会保留在本机服务中。</p></header><div class="calendar-guide"><h2>一句话，记下来</h2><p>单独发送一条记录指令，标题由你确定。</p><code>记录事项：提交开题报告</code><h2>看一看，再划掉</h2><p>先列出事项，取得实际 ID，再单独发送删除指令。</p><code>删除事项 calendar:item:N</code><p class="muted">N 必须替换为列表中的实际编号。当前不提供提醒、日期解析或外部日历同步。</p></div></section><section id="plugin-management-view" class="page-view directory-view" data-view="plugins/manage" aria-label="MCP 与 Skills" hidden><a class="back-link" href="#plugins">← 全部插件</a><div id="plugin-management"></div></section><section id="settings-view" class="page-view settings-view" data-view="settings" aria-labelledby="settings-title" hidden>
+          <header class="page-heading"><h1 id="settings-title">设置</h1><p>让这里更适合你的使用习惯。</p></header>
+          <section class="setting-section"><label class="setting-row" for="theme-select"><span><strong>外观</strong><small>选择浅色、深色，或跟随设备。</small></span><select id="theme-select"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label></section>
+          <section class="setting-section provider-settings" aria-labelledby="provider-settings-title">
+            <div class="setting-row"><h2 id="provider-settings-title">模型与连接</h2><button id="provider-status-refresh" class="secondary-action" type="button">刷新配置状态</button></div>
+            <dl class="provider-facts"><div><dt>当前模型</dt><dd id="provider-model">正在读取…</dd></div></dl>
+            <p id="provider-connection-note">尚未确认当前配置。发送消息后的结果才代表实际连接情况。</p>
+            <p id="provider-tool-note">正在读取 Agent 工具调用模式…</p>
+            <p class="setting-footnote">模型地址与密钥由本机服务端配置，浏览器不保存密钥。</p>
+          </section>
+          <section class="setting-section"><h2>关于这个助手</h2><p>USTC Campus Agent 是学生竞赛项目，非中国科学技术大学官方服务。当前使用本机演示会话，不连接学校账号。</p><p>对话保存在当前服务端，刷新后可从历史对话恢复；新对话不会删除旧对话。删除只从历史列表移除，后台仍保留记录，也不会撤销已执行的日历操作或删除课程档案。课程档案的创建与使用始终需要你的明确同意。</p><p>Enter 发送，Shift + Enter 换行。回答由 AI 生成，办理与选课请核对官方来源。</p></section>
+          <details class="setting-section operator-settings">
+            <summary>管理员演示控件</summary>
+            <p class="operator-intro">维护提供给 Agent 查询的固定演示资料。发布会更新本机已保存的资料状态，需由管理员在此明确确认。</p>
+            <section class="publication-section" aria-labelledby="publication-admin-title">
+              <header class="publication-heading"><div><p class="eyebrow">办事资料</p><h2 id="publication-admin-title">发布成绩单办理流程</h2></div><button id="publication-refresh" class="secondary-action" type="button">刷新状态</button></header>
+              <p>发布经复核的固定流程版本，供办事导航和 Agent 查询。此处不编辑资料，也不抓取学校网站。</p>
+              <p id="publication-status" class="publication-state" role="status" aria-live="polite">尚未读取发布状态。</p>
+              <div class="publication-confirmation">
+                <label class="consent-check" for="publication-confirm"><input id="publication-confirm" type="checkbox"><span>我确认发布这份固定的办理流程演示资料。</span></label>
+                <p class="publication-retry-note">重复提交同一固定版本会返回同一发布收据，不会创建额外版本。</p>
+                <button id="publication-publish" class="primary-action" type="button" disabled>发布办理流程</button>
+              </div>
+              <details class="publication-receipts"><summary>查看发布收据与技术详情</summary><dl class="radar-evidence">
+                <div><dt>发布版本</dt><dd id="publication-revision">—</dd></div>
+                <div><dt>发布收据</dt><dd id="publication-receipt">—</dd></div>
+                <div><dt>审计事件数</dt><dd id="publication-evidence-count">—</dd></div>
+                <div><dt>状态恢复</dt><dd>启动时严格核对已保存记录</dd></div>
+              </dl></details>
+            </section>
+            <section class="publication-section" aria-labelledby="radar-publication-title">
+              <header class="publication-heading"><div><p class="eyebrow">校历资料</p><h2 id="radar-publication-title">发布校历变更</h2></div><button id="radar-publication-refresh" class="secondary-action" type="button">刷新状态</button></header>
+              <p>发布一条经复核的固定校历变更，供 Agent、变更板与订阅源查询。发布不会修改你的个人事项。</p>
+              <p id="radar-publication-status" class="publication-state" role="status" aria-live="polite">尚未读取发布状态。</p>
+              <div class="publication-confirmation">
+                <label class="consent-check" for="radar-publication-confirm"><input id="radar-publication-confirm" type="checkbox"><span>我确认发布这条固定的校历变更演示资料。</span></label>
+                <p class="publication-retry-note">重复提交同一条固定变更会返回同一发布收据，不会增加重复变更。</p>
+                <button id="radar-publication-publish" class="primary-action" type="button" disabled>发布校历变更</button>
+              </div>
+              <details class="publication-receipts"><summary>查看发布收据与技术详情</summary><dl class="radar-evidence radar-publication-evidence">
+                <div><dt>复核记录数</dt><dd id="radar-publication-review-count">—</dd></div>
+                <div><dt>发布记录数</dt><dd id="radar-publication-count">—</dd></div>
+                <div><dt>发布收据</dt><dd id="radar-publication-receipt">—</dd></div>
+                <div><dt>审计事件数</dt><dd id="radar-publication-evidence-count">—</dd></div>
+              </dl></details>
+            </section>
+            <p class="setting-footnote">这些维护操作由管理员手动发起，不能由 Agent 调用。当前为本机演示管理入口。</p>
+          </details>
+        </section>
+      </main>
+    </div>
+  </div>
 </body>
 </html>

@@ -1,8 +1,8 @@
 # Market browse, install and control
 
-- `Status`: Planned user journey; typed catalog/capability/installation/grant/update plus bounded transaction-current authority-assembly evidence exist without API/browser delivery, durable adapters, artifact switching or runnable package composition
+- `Status`: Partial user journey: bundled browsing and durable single-component public-read MCP/Skill lifecycle are implemented in the loopback application; authenticated multi-client delivery, package updates and artifact switching remain planned
 - `Owning plan`: `docs/plan/04-market-and-plugin-lifecycle.md`
-- `Contracts`: `docs/contracts/plugin-package.md`, `docs/contracts/market-lifecycle.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
+- `Contracts`: `docs/contracts/market-catalog-query.md`, `docs/contracts/plugin-package.md`, `docs/contracts/market-lifecycle.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
 - `Acceptance`: `MARKET-*`, `PKG-019/020`, `AGENT-002`, `AGENT-017/018`, `FP-006`, `FP-015`, `FP-007`
 
 ## Goal
@@ -22,7 +22,10 @@ Error with recovery action
 
 The UI never displays a package as installed or runnable solely because its manifest has a default-install policy.
 
-## Journey
+## Target journey
+
+The authenticated journey below is the product target. The current loopback flow
+uses a controlled demo owner; its supported package scope is described below.
 
 ```text
 anonymous visitor browses package metadata
@@ -63,4 +66,58 @@ Package installation or update never updates the Agent framework. The Agent cons
 
 ## Verification
 
-Current automated evidence validates exact manifest/catalog identities, the immutable capability registry, pure installation/grant/update domains and the adopted invocation resolver. Bounded `market_authority_assembly` proves separate catalog/installation/grant/policy carrier loads under one semantic read revision, service-owned projection/current assembly, immediate current denial and post-success precondition verification. Bounded `market::update::tests` and `market_package_update` prove exact B6 update/rollback decisions, approval/readiness/confirmation/rollback evidence, disabled-only Apply/Rollback, complete-current grant staling, receipt-prefix rebuild and atomic in-memory package-update fake behavior. These remain supporting proofs only: no production grant/enable/update issuer, durable adapter/database transaction, crash recovery, artifact switch, effect-intent coupling, M10/M80 delivery, current-call/in-flight composition or B7 application composition exists. Therefore `MARKET-001` through `MARKET-004`, `MARKET-007`, `PKG-020` and the user journey remain planned, and no current package is runnable.
+Core evidence covers package/catalog identities, capability and installation/grant
+rules, bounded transaction-current authority-assembly evidence and update/rollback
+decisions. Update
+and rollback retain domain/semantic-fake evidence; they do not switch live artifacts.
+
+The [application profile](../contracts/plugin-management.md) adds durable
+install/configure/grant/enable/disable/revoke commands, original-receipt replay,
+restart recovery, frozen tool projections and M30 call journals for single-component
+public-read MCP/Skill packages. `PLUGIN-001` binds the bounded application/browser
+path; it does not complete the full Market module.
+
+For the full authenticated target, `MARKET-001` through `MARKET-004`, `MARKET-007`, `PKG-020` and the user journey remain planned.
+Production authentication, general package composition, durable update/rollback
+and artifact switching remain outside this implemented profile.
+
+## Package component configuration
+
+The approved direction is install an exact package, configure its declared MCP or
+Skill components, review permissions, then explicitly enable. Independent component
+import is outside this delivery scope. Configuration alone does not make a component
+available to the Agent.
+
+`M20-CONFIG-001` adds pure typed schema validation as supporting evidence: required
+fields, closed keys, text/integer bounds and secret-reference types. This validator
+alone grants no runtime authority. The supported application flow below adds the
+configuration API, persistence and component execution within its narrower profile.
+
+## Bundled directory delivery
+
+The static Plugins page also reads the server's immutable bundled package catalog.
+Users can search names/identities/permissions, open an exact revision, inspect its
+publisher/components/requested permissions/source policy and return to the list.
+Failures have retry actions; stale detail responses cannot replace another selection.
+This read-only surface has no installation or grant side effect. Current metadata
+can describe planned packages even while the separate fixed demo capability works.
+`market-catalog-query/v1` is specified in [the query contract](../contracts/market-catalog-query.md);
+`MARKET-008` binds bounded application/HTTP/browser evidence. Full multi-client
+`MARKET-001` delivery and authenticated lifecycle `MARKET-002` remain planned.
+
+
+The source build loads the reviewed Simple Calendar configuration declaration together
+with the bundled catalog, under [M20-CONFIG-003](../contracts/market-component-configuration.md).
+It explicitly declares an empty configuration schema for the existing native demo
+component. This declaration lookup is separate from the application lifecycle;
+loading a sidecar alone neither installs nor authorizes a component.
+
+## Supported MCP / Skill package flow
+
+The plugin page now links to **管理 MCP 与 Skills**. The supported single-component
+profile follows install → typed configuration → check components → review individual
+permissions → review the discovered tools/resources and enable. Disabling stops new
+Agent calls. Removed package sources retain historical disable/revoke controls.
+The embedded campus guide is an optional Skill; operator-reviewed MCP packages can
+join the same flow. Broader package classes and private/write approval remain planned.
+Use [the setup guide](../guides/mcp-skills.md) for exact supported formats and limits.

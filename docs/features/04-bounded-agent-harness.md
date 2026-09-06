@@ -64,6 +64,12 @@ Canonical history remains recoverable. If a safe request still cannot be built, 
 
 Affairs and ChangeRadar calls enter their existing M10 and fixed M30/M40 product paths. Opportunity is offered only for an existing consent-bound profile with explicit request confirmation and remains the static M10/M20/M72 deterministic plan path; the model cannot create, view, revoke or delete the profile or add courses outside the planner result. This slice proves a useful product journey but does not claim durable conversation history, the complete task graph/review harness, generic portable Plugin execution, streaming parity or Dioxus.
 
+The owner-local Calendar companion records, lists and deletes explicitly requested
+items. Chat list results retain every item's ID, title and any existing scheduled
+time while omitting storage timestamps and empty scheduling metadata, including
+when the durable store is near its byte limit. This does not add reminders or time
+interpretation; record/delete confirmations retain their existing result shape.
+
 ## Non-goals
 
 - an endless chat turn presented as one task;

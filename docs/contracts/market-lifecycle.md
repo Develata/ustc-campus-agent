@@ -50,7 +50,7 @@ Catalog `installPolicy`, including `default-installed`/`default-enabled` declara
 
 The accepted Rust package boundary is `crate::market`. `load_package_manifest(source: &[u8]) -> Result<ValidatedPackageManifest, PackageLoadError>` is the only B1-1 JSON ingress. It MUST bound source bytes to `1_048_576` before decoding, reject malformed JSON, unknown fields and duplicate object members, then construct immutable private-field values. In particular, the free-form `sourcePolicy` object MUST use duplicate-rejecting loading rather than a last-wins map. `PackageLoadError` and `PackageValidationError` expose only stable field/reason categories; their `Debug` and `Display` MUST NOT contain source JSON or a rejected value.
 
-The exact B1-1 public type set is `PackageField`, `PackageValidationErrorKind`, `PackageValidationError`, `PackageLoadError`, `PackageTier`, `ImplementationStatus`, `InstallPolicyClass`, `InstallPolicy`, `ComponentDeclaration`, `ValidatedPackageManifest`, `CatalogReadModelError` and `CatalogReadModel`, plus `load_package_manifest`. The values reuse M20-owned IDs/digests from `crate::invocation` rather than defining aliases. Validated values expose read-only accessors; `CatalogReadModel` exposes `new`, `catalog_revision`, `packages`, `catalog_digest` and exact `find`. They do not implement public Serde construction or wire serialization; an application adapter must project its own DTO rather than deserializing around validation.
+The exact B1-1 public type set is `PackageField`, `PackageValidationErrorKind`, `PackageValidationError`, `PackageLoadError`, `PackageTier`, `ImplementationStatus`, `InstallPolicyClass`, `InstallPolicy`, `ComponentDeclaration`, `ValidatedPackageManifest`, `CatalogReadModelError` and `CatalogReadModel`, plus `load_package_manifest`. The values reuse M20-owned IDs/digests from `crate::invocation` rather than defining aliases. Validated values expose read-only accessors; `CatalogReadModel` exposes `new`, `catalog_revision`, `packages`, `catalog_digest`, exact typed `find` and `find_reference`. `find_reference` validates text references with the same package-ID and canonical release-version grammar as manifest ingress (version text bounded to 64 bytes), returns a stable field/category error for malformed references and `None` for an absent exact revision; it performs no I/O. They do not implement public Serde construction or wire serialization; an application adapter must project its own DTO rather than deserializing around validation.
 
 The validated surface projects the existing package schema with these additional bounds and coherence rules:
 
@@ -59,7 +59,7 @@ The validated surface projects the existing package schema with these additional
 - at most `64` component declarations exist; each has one unique relative slash-separated ASCII path of at most `512` bytes, no empty/`.`/`..` segment or backslash, and an optional mode of `1..=64` bytes using only ASCII alphanumeric, `.`, `_` or `-`;
 - at most `64` unique capability IDs exist; registry membership, risk class and auto-grant eligibility remain `M20-B2` `capability-registry` authority rather than package-schema authority;
 - `sourcePolicy` has `1..=32` unique entries; each key matches `^[A-Za-z][A-Za-z0-9_.-]{0,63}$` and each non-empty control-free value is at most `4096` bytes;
-- default enable requires default install; `UserInstalledPlugin` is never default-installed or default-enabled; `FirstParty` and `FirstPartySystemPlugin` must agree and the current system policy remains default-installed, default-enabled and user-disableable;
+- default enable requires default install; `UserInstalledPlugin` is never default-installed or default-enabled; `FirstPartySystemPlugin` requires `FirstParty` tier and the current system policy remains default-installed, default-enabled and user-disableable; an optional first-party companion may use `UserInstalledPlugin` with both defaults false, as the existing Simple Calendar manifest does;
 - `planned` carries no component declaration, while `implemented` carries at least one. `development` remains metadata and is never runnable proof.
 
 Filesystem existence, component artifact digest, execution identity, publisher/capability admission and publication review are deliberately outside the source decoder. A validated manifest is not a published `CatalogPackageRevision`, installation, grant or resolver input.
@@ -183,12 +183,92 @@ pub enum ConfigurationValue {
 
 `InstallationConfiguration` MUST be an immutable `BTreeMap<ConfigurationKey, ConfigurationValue>` with at most `128` entries. Construction MUST reject duplicate keys and cross-tenant `SecretRef`s. It MUST compute a deterministic lowercase `sha256:<64 hex>` digest under domain separator `market-installation-configuration/v0\0`, with explicit typed tags and length-prefix encoding. The digest binds opaque reference IDs, never secret material.
 
+#### M20-CONFIG-001 — bounded configuration schema validation
+
+`crate::market::configuration_schema` owns a pure configuration-schema validator
+that specializes the typed configuration rules above. It performs no I/O, reads no
+catalog, issues no grant/enable evidence and changes no installation. This is a
+supporting module for `MARKET-002`, not production lifecycle or UI delivery.
+
+`ConfigurationFieldSchema` MUST have private fields and checked construction from
+an existing `ConfigurationKey`. It declares one required/optional field of exactly
+one kind: text with a maximum UTF-8 byte length in `1..=4096`, integer with inclusive
+`i64` minimum/maximum and `minimum <= maximum`, boolean, or opaque secret reference.
+Text/integer constructors reject invalid bounds. Boolean/secret constructors may
+be infallible because their checked key and boolean flag carry no invalid range.
+Read-only accessors expose declaration metadata, never runtime values.
+
+`ConfigurationSchema::new` accepts zero through 128 unique field declarations and
+rejects duplicate keys. It canonicalizes by key using a `BTreeMap` and exposes
+read-only fields and a schema digest. The schema does not supply implicit defaults.
+`validate(&InstallationConfiguration)` rejects undeclared keys, missing required
+keys, wrong typed variants and out-of-range text/integer values. It performs no
+coercion, secret lookup or input mutation; a text value never substitutes for a
+secret reference. The existing configuration constructor retains tenant ownership
+and cross-tenant secret validation.
+
+The schema digest MUST use `market-installation-configuration-schema/v0\0`, an
+unsigned 64-bit big-endian field count, then key-sorted fields encoded as unsigned
+64-bit big-endian key byte length + UTF-8 key bytes, a required byte (`0` or `1`),
+a one-byte kind tag (`1` text, `2` integer, `3` boolean, `4` secret), and kind bounds.
+Text bounds use unsigned 64-bit big-endian byte count. Integer minimum and maximum
+use signed 64-bit big-endian two's-complement. Boolean/secret add no bound bytes.
+Reordering declarations preserves the digest; any key/required/kind/bound change
+changes the encoded declaration. The digest is a schema fingerprint, never a
+fingerprint of secret material or proof of package admission.
+
+Construction and validation errors MUST contain only stable categories; diagnostic
+`Debug`/`Display` output must not reveal runtime configuration values, submitted
+identifiers or secret references. No public Serde deserialization is admitted.
+
+The future M20 application service MUST obtain the schema from the exact reviewed
+package/component and bind its digest with the existing package/component pins
+before calling the validator. Arbitrary browser-supplied schemas cannot authorize
+configuration. This slice does not add fields to the current package manifest or
+claim a production schema loader, durable config store, MCP binding or Skill
+context projection. Those remain separate declared modules and acceptance work.
+
+#### M20-CONFIG-002 — exact component configuration binding
+
+`crate::market::configuration_binding::ComponentConfigurationBinding` is a pure,
+immutable coherence check over an existing `InstallationPackagePin`, a selected
+`ComponentId`, an expected schema digest and a checked `ConfigurationSchema`.
+Construction MUST first reject a component absent from that exact package pin,
+then reject a schema whose computed digest differs from the expected digest.
+It retains the checked package pin and schema without creating another digest
+format or modifying the package manifest schema.
+
+`validate(current_package_pin, configuration)` MUST reject differences in catalog
+revision, package ID/version/digest, component-set digest or capability-manifest
+digest as `PackagePinMismatch` before comparing component members. It MUST then
+compare the complete canonical component list, including IDs, kinds, versions,
+digests and execution identities, and reject any difference as
+`ComponentPinMismatch`. Only after these checks may it invoke the existing
+`ConfigurationSchema::validate`; a value rejection becomes
+`InvalidConfiguration(ConfigurationValidationError)`. A matching component name
+or unchanged claimed component-set digest cannot mask a changed member. Changes
+to sibling components also invalidate this binding. Errors and binding `Debug`
+output contain no submitted identifiers or configuration values.
+
+This type proves input consistency only. Its public constructor and caller-supplied
+expected digest do not establish reviewed provenance, catalog publication, tenant
+ownership, install state or permission. A future production issuer MUST load and
+hold the binding from an exact reviewed package/component declaration; accepting a
+browser-created binding or expected schema digest is not admitted. The existing
+installation domain retains tenant/revision checks. No production loader, durable
+configuration service, grant/enable evidence, decoder or executor is added here.
+`MARKET-002` remains planned; controlled pin/configuration inputs provide bounded
+supporting evidence only.
+
 Pins:
 
 - `InstalledComponentPin` MUST bind exact component ID, kind, version, digest and execution identity.
 - `InstallationPackagePin` MUST bind catalog revision, package ID/version/digest, sorted unique component pins, component-set digest and capability-manifest digest.
 
 Pin constructors MUST canonicalize ordering and reject duplicate component IDs.
+
+Reviewed sidecar loading and fixed bundle provenance are owned by
+[market-component-configuration](market-component-configuration.md), `M20-CONFIG-003`.
 
 #### Managed lifecycle
 
@@ -322,7 +402,7 @@ No generic record-store or arbitrary query API is admitted.
 - accepted: resulting snapshot plus exact event;
 - rejected: exact typed `InstallationDecisionError` and no event.
 
-The in-memory fake MUST keep a global command ledger `command_id → {complete command, receipt}`. Therefore:
+The in-memory repository MUST keep one global command ledger `command_id → {complete command, receipt, observed pre-state, commit ordinal}`; LC016 adds only historical recovery metadata to that original owner. Therefore:
 
 - identical command ID plus identical complete command returns the exact stored receipt and performs no append;
 - same command ID plus different command is `CommandConflict` regardless of current aggregate state;
@@ -620,7 +700,7 @@ pub fn revoke(
 ) -> Result<Self, GrantConstructionError>;
 ```
 
-Every command carries `GrantCommandId` and `GrantSnapshotId`. Issue and Replace obtain the snapshot identity only from their `GrantAdmissionEvidence`; there is no second caller-supplied identity to disagree with it. Every non-Issue command carries exact expected `GrantVersion`. Read-only accessors are exactly `command_id` and `snapshot_id`; actions/payloads remain private.
+Every command carries `GrantCommandId` and `GrantSnapshotId`. Issue and Replace obtain the snapshot identity only from their `GrantAdmissionEvidence`; there is no second caller-supplied identity to disagree with it. Every non-Issue command carries exact expected `GrantVersion`. Read-only identity accessors remain `command_id` and `snapshot_id`; LC016 additionally admits exact `matches_issue` and `matches_revoke` comparisons for historical request replay. Actions/payloads remain private.
 
 `GrantConstructionError` is exactly:
 
@@ -810,7 +890,7 @@ pub trait GrantRepository {
 The in-memory fake keeps:
 
 - aggregate/event streams by `GrantSnapshotId`;
-- global `GrantCommandId -> {complete command, receipt}` ledger;
+- one global `GrantCommandId -> {complete command, receipt, observed pre-state, commit ordinal}` ledger, with LC016 recovery metadata;
 - global consumed `GrantApprovalId -> {GrantSnapshotId, evidence digest}` index for accepted Issue/Replace only;
 - one current non-revoked grant per exact `(tenant,user,installation,capability,scope)` authority tuple;
 - a narrowly named one-shot pre-commit failure injection.
@@ -918,11 +998,84 @@ Package update, disable or revoke MUST change only future projections and curren
 
 This contract does not own:
 
-- anonymous browse/detail delivery through M10/M80 application/query adapters remains planned (`MARKET-001`); the `M20-B1` (historical `B1-1`) anonymous metadata domain read model is implemented but is not delivery evidence;
+- complete anonymous browse/detail delivery through M10/M80 peers remains planned (`MARKET-001`); bounded static bundled catalog queries and browser delivery are specified by `market-catalog-query.md` and `MARKET-008`; the `M20-B1` (historical `B1-1`) anonymous metadata domain read model is implemented but is not delivery evidence;
 - durable installation/grant/enable/disable/update mutation and production composition remain planned (`MARKET-002`/`MARKET-003`/`MARKET-004`); bounded B3/B4/B6 domain evidence issues no production enable/grant/update issuer evidence, bounded B5 semantic authority transactions and bounded B6 package-update transactions create no durable state or acceptance promotion, and B6 does not switch artifacts;
 - a production database/repository transaction, durable update repository, crash-recovery proof or TOCTOU closure (planned);
 - provider, network, MCP, daemon HTTP/SSE or UI adapters;
 - external tool execution, durable journal or crash recovery;
 - M30 `EffectIntent`, M40 executor dispatch, or M51 process isolation.
 
-Current repository status: the pure P0a resolver/recheck is implemented and adopted (`MARKET-005`/`MARKET-006`); B1–B4 provide bounded catalog/capability/installation/grant evidence; bounded B5 adds carrier-by-carrier semantic authority reads, service-owned projection/current assembly, shared call preflight and post-success revision verification under `crate::market::authority`; bounded B6 adds pure update/rollback aggregate evidence and an atomic in-memory semantic package-update repository under `crate::market::update` with `market::update::tests` and `market_package_update` coverage. No production database, durable grant/update/rollback repository, crash recovery, artifact switch, production grant/enable/update issuer, effect-intent coupling, B7 application composition, current-call/in-flight composition or M10/M80 browse/API/UI delivery exists yet. M20 remains `partial-evidence`; `MARKET-003`/`MARKET-004`/`MARKET-007`/`PKG-020` remain `planned`, and no current first-party manifest is made runnable by these slices.
+Current repository status: the pure P0a resolver/recheck is implemented and adopted (`MARKET-005`/`MARKET-006`); B1–B4 provide bounded catalog/capability/installation/grant evidence; bounded B5 adds carrier-by-carrier semantic authority reads, service-owned projection/current assembly, shared call preflight and post-success revision verification under `crate::market::authority`; bounded B6 adds pure update/rollback aggregate evidence and an atomic in-memory semantic package-update repository under `crate::market::update` with `market::update::tests` and `market_package_update` coverage. No production database, durable grant/update/rollback repository, crash recovery, artifact switch, production grant/enable/update issuer, effect-intent coupling, B7 application composition, current-call/in-flight composition or complete M10/M80 lifecycle delivery exists yet. The separate immutable bundled catalog HTTP/browser query is bounded by `market-catalog-query.md` and `MARKET-008`. M20 remains `partial-evidence`; `MARKET-003`/`MARKET-004`/`MARKET-007`/`PKG-020` remain `planned`, and no current first-party manifest is made runnable by these slices.
+
+## 10. M20-LC-016 — bounded authority snapshot codec
+
+The original installation and grant command ledgers retain each observed pre-state
+and commit order alongside their original receipt. Closed versioned codecs encode
+those ledgers with a 16 MiB and 4096-command ceiling per repository. Restoration
+replays checked commands in commit order, validates original outcomes and observed
+pre-states, then uses the existing history/receipt rebuild checks. Aggregates and
+indexes are rebuilt views; decoding never makes arbitrary JSON into domain authority.
+Accepted and rejected receipts both survive restart. Conflicting command reuse is
+still rejected. Owner-scoped historical receipt reads precede fresh catalog or
+readiness checks for exact retries. They do not re-execute a command.
+
+The exact persistence entrypoints are `installation::persistence::{encode_snapshot,
+decode_snapshot}` and `grant::persistence::{encode_snapshot, decode_snapshot}`. Each
+returns only bytes or the existing checked in-memory repository, with category-only
+`SnapshotCodecError`; domain objects gain no public deserializer. Private JSON
+carriers require explicit version, record count, original event-history digest and
+ordered command/pre-state/outcome records, rejecting unknown and duplicate fields,
+wrong types, malformed checked values, missing records and mismatched outcomes.
+Installation pin decoding is limited to 64 components. These are private trusted
+storage recovery entrypoints, never browser-provided installation/grant imports.
+
+Original repositories expose `lookup_receipt` for an exact checked command and
+`lookup_owned_receipt` by historical tenant/user plus command ID. The latter derives
+ownership from the original install/grant evidence or observed pre-state; ownerless
+missing-target rejections are not disclosed by an owner-scoped lookup. Installation
+also exposes `list_owned` and `latest_enable_evidence`; the latter returns original
+evidence only for a currently enabled installation with an enabled last event.
+Receipts expose their original command only to trusted application code. Installation
+commands admit `install_package_pin` and exact `matches_install`, `matches_configure`,
+`matches_enable`, `matches_disable`, `matches_revoke`, `matches_uninstall` queries;
+grant commands admit `matches_issue` and `matches_revoke`. Enable replay compares
+expected revision and the previously reviewed readiness digest. Application request
+comparison also binds the target installation/snapshot ID and authenticated owner;
+configuration values and evidence are never projected into public receipt responses.
+
+The application adapter owns one exclusive writer and one installation-plus-grant
+container: clone, execute, encode, atomically replace and sync, then publish memory
+and acknowledge. Uncertain persistence poisons that writer until reopen; no success
+is returned before persistence. Update/rollback ledgers are explicitly outside this
+codec profile, and update-bearing input fails closed. A later update adapter must
+share the same authority transaction instead of introducing another mutable owner.
+
+## 11. M20-LC-017 — checked single-component admission
+
+The initial application admission service accepts one reviewed manifest and its
+CONFIG003 binding set, one authenticated tenant/user, and the current capability
+registry. This profile admits exactly one MCP or Skill component per installation.
+The existing flat configuration remains limited to 128 fields across the package;
+multi-component installation is rejected explicitly pending a grouped configuration
+carrier. CONFIG003 loading still supports complete multi-component declarations.
+
+Grant issuance derives scope from the registry and authenticated owner, validates
+the exact current installation revision and package pin, and uses the original
+restricted grant-evidence constructor and grant repository. A browser or model
+cannot submit a scope, ready boolean, raw secret, or admission evidence.
+
+Enable admission rechecks owner, current revision, complete configuration, exact
+package/component identity, every declared capability against the current registry,
+and the complete active grant set. Opaque component readiness binds the checked
+configuration and pin to a verified Skill artifact, or to the complete compiled MCP
+tool inventory and the user's exact reviewed inventory digest. Unsupported schemas,
+undeclared capabilities, mismatched configuration and missing/stale grants reject.
+Readiness constructors prove consistency; trusted composition owns actual parser,
+probe and catalog provenance. They never issue grants. The readiness digest is
+retained in the original enable evidence, so reconnect after restart must match the
+previously reviewed inventory; restart is not permission to approve changed tools.
+
+Call-time checks remain required after enable. Disable/revoke prevents new context
+loads and MCP calls, without rewriting an already acknowledged effect or historical
+receipt. This profile does not admit executable Skills, central stdio commands,
+auto-grants for arbitrary servers, update/rollback, or production SSO identity.

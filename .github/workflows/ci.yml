@@ -35,6 +35,8 @@ jobs:
         run: UCA_SOURCE_COMMIT=$GITHUB_SHA cargo build --locked -p ustc-agentd --bin ustc-agentd && node scripts/test_agent_chat_browser.mjs target/debug/ustc-agentd
       - name: Usability unit tests
         run: node --test scripts/tests/test_course_editor.mjs scripts/tests/test_affairs_checklist.mjs
+      - name: Administrator presentation boundary
+        run: node --test scripts/tests/test_admin_controls.mjs
       - name: SSO interface HTTP contract
         run: python3 -B -W error::ResourceWarning -m unittest discover -s examples/sso-interface -p 'test_*.py' -v
       - name: Usability browser behavior

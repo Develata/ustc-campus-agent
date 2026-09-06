@@ -216,3 +216,12 @@ Planned later:
 - executable Plugin packaging/tool-host conformance;
 - durable intent/receipt journal and restart replay beyond the current in-memory ordering proof;
 - independent Agent/framework replacement conformance.
+
+### Shared argument validation and package context reads
+
+`ValidatedToolInputSchemaV0::accepts` in the owned tool protocol is the single typed
+argument/schema matcher reused by invocation authorization and protocol adapters.
+Wire decoders preserve duplicate-key rejection before canonicalization. The bounded
+application's Skill read tool is a platform-owned context projection over an admitted
+Skill artifact; it never executes Skill scripts or treats allowed-tools as a grant.
+Application frozen session authority remains outside the Agent tool definitions.

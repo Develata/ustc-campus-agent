@@ -15,5 +15,8 @@ ustc-campus-agent-core = { path = "../../crates/platform-core" }
 ustc-campus-agent-course-planning = { path = "../../crates/course-planning" }
 ustc-campus-agent-runtime = { path = "../../crates/agent-runtime" }
 
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+
 [lints]
 workspace = true

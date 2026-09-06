@@ -13,8 +13,8 @@ const chatOpportunityConfirm = document.querySelector("#chat-opportunity-confirm
 const chatOpportunityState = document.querySelector("#chat-opportunity-state");
 const chatPromptCustomization = document.querySelector("#chat-prompt-customization");
 const chatPromptCustomizationCounter = document.querySelector("#chat-prompt-customization-counter");
-const CHAT_REQUEST_SCHEMA_V1 = "ustc-agent-chat-request/v1";
-const CHAT_REQUEST_SCHEMA_V2 = "ustc-agent-chat-request/v2";
+const CHAT_REQUEST_SCHEMA_V3 = "ustc-agent-chat-request/v3";
+
 const CHAT_RESPONSE_SCHEMA = "ustc-agent-chat-response/v1";
 const CHAT_ERROR_SCHEMA = "ustc-agent-chat-error/v1";
 const CHAT_MAX_MESSAGES = 12;
@@ -29,6 +29,16 @@ const CHAT_PROMPT_DISALLOWED_SCALAR_PATTERN = /[\p{Cc}\p{Cf}]/u;
 const chatTextEncoder = new TextEncoder();
 const chatHistory = [];
 let chatPending = false;
+let conversationClient = null;
+let conversationCanSend = false;
+let conversationCanSwitch = true;
+function syncModelAvailability() {
+  const ready = window.UcaModelSelection?.readiness === true;
+  chatSend.disabled = chatPending || !conversationCanSend || !ready;
+  chatSend.setAttribute("aria-disabled", String(chatSend.disabled));
+  window.UcaModelSelection?.setLocked(chatPending || !conversationCanSwitch);
+}
+let restoredConversationDraft = null;
 
 const form = document.querySelector("#lookup-form");
 const procedureInput = document.querySelector("#procedure-id");
@@ -41,14 +51,6 @@ const errorMessage = document.querySelector("#error-message");
 const radarButton = document.querySelector("#radar-load");
 const radarStatus = document.querySelector("#radar-status");
 const radarResult = document.querySelector("#radar-result");
-const radarPublicationRefresh = document.querySelector("#radar-publication-refresh");
-const radarPublicationConfirm = document.querySelector("#radar-publication-confirm");
-const radarPublicationPublish = document.querySelector("#radar-publication-publish");
-const radarPublicationStatus = document.querySelector("#radar-publication-status");
-const publicationRefresh = document.querySelector("#publication-refresh");
-const publicationConfirm = document.querySelector("#publication-confirm");
-const publicationPublish = document.querySelector("#publication-publish");
-const publicationStatus = document.querySelector("#publication-status");
 const opportunityConsent = document.querySelector("#opportunity-consent");
 const opportunityCreate = document.querySelector("#opportunity-create");
 const opportunityView = document.querySelector("#opportunity-view");
@@ -103,6 +105,7 @@ const CHAT_TOOL_LABELS = Object.freeze({
   affairs_navigator_get: "办事导航 · 查询公开流程",
   change_radar_get: "变更雷达 · 查询校历变更",
   simple_calendar_items: "简单日历 · 记录与查看事项",
+  plugin_tool: "插件能力",
   opportunity_graph_plan_current_profile: "机会图谱 · 规划当前档案"
 });
 
@@ -121,7 +124,7 @@ const CHAT_ERROR_MESSAGES = Object.freeze({
   provider_timeout: "等待回答超时；服务器没有返回完成结果。请稍后重试。",
   provider_unavailable: "回答服务暂时不可用。请稍后重试。",
   provider_protocol_error: "回答服务返回了无法安全读取的结果。请稍后重试。",
-  context_budget_exceeded: "这段对话超过当前模型的安全上下文预算。请清空对话或缩短问题后重试。",
+  context_budget_exceeded: "这段对话超过当前模型的安全上下文预算。请新建对话或缩短问题后重试。",
   tool_call_rejected: "校园工具拒绝了这次调用。请换一种更具体的问法。",
   tool_result_too_large: "校园工具结果超过本次对话上限。请缩小问题范围。",
   tool_budget_exhausted: "这次问题需要的工具调用超过上限。请拆成更小的问题。",
@@ -131,6 +134,13 @@ const CHAT_ERROR_MESSAGES = Object.freeze({
   internal_chat_error: "服务器未能完成这次请求。请稍后重试。",
   message_too_large: "这条消息编码后超过 4 KiB。请缩短后重试。",
   invalid_response: "服务器返回了无法安全呈现的回答。请稍后重试。",
+  conversation_unavailable: "暂时无法读取保存的对话。请刷新侧栏历史对话后继续。",
+  conversation_in_progress: "这次请求尚未确定完成。请先检查结果，不要重复发送。",
+  conversation_revision_conflict: "这段对话已在其他页面更新。已读取最新记录，你输入的草稿仍保留，请核对后再发送。",
+  conversation_request_conflict: "原请求与已保存记录不一致。请检查结果，核对已执行内容。",
+  conversation_capacity_exceeded: "对话服务已达到当前容量上限，本次请求未被接纳。请保留草稿，检查已保存状态后再继续。",
+  conversation_limit_reached: "保存的对话已达到当前上限。请继续已有对话。",
+  conversation_turn_limit_reached: "这段对话已达到当前上限，请新建对话继续。",
   request_failed: "服务器拒绝了这次请求，但没有返回可识别的恢复信息。",
   network_error: "无法连接到本机 Agent 服务。请确认演示仍在运行后重试。"
 });
@@ -206,7 +216,8 @@ function createChatRequest(userContent, opportunityProfileHint, promptCustomizat
     : { profile_snapshot_id: opportunityProfileHint };
   const makeRequest = () => {
     const request = {
-      schema: promptCustomization == null ? CHAT_REQUEST_SCHEMA_V1 : CHAT_REQUEST_SCHEMA_V2,
+      schema: CHAT_REQUEST_SCHEMA_V3,
+      model_id: window.UcaModelSelection?.selectedId,
       messages,
       opportunity_context: opportunityContext
     };
@@ -236,15 +247,13 @@ function assertChatRequestContract(request, headers, body) {
     "prompt_customization"
   );
   const expectedKeys = hasPromptCustomization
-    ? "messages,opportunity_context,prompt_customization,schema"
-    : "messages,opportunity_context,schema";
+    ? "messages,model_id,opportunity_context,prompt_customization,schema"
+    : "messages,model_id,opportunity_context,schema";
   if (requestKeys !== expectedKeys) {
     throw chatFailure("invalid_chat_request");
   }
   if (
-    (hasPromptCustomization
-      ? request.schema !== CHAT_REQUEST_SCHEMA_V2
-      : request.schema !== CHAT_REQUEST_SCHEMA_V1) ||
+    request.schema !== CHAT_REQUEST_SCHEMA_V3 || typeof request.model_id !== "string" || !/^[A-Za-z0-9._-]{1,64}$/.test(request.model_id) ||
     !Array.isArray(request.messages) ||
     request.messages.length < 1 ||
     request.messages.length > CHAT_MAX_MESSAGES ||
@@ -334,6 +343,8 @@ function assertChatDomContract() {
 
 function syncChatEmptyState() {
   chatEmpty.hidden = chatMessages.querySelector(".chat-message") !== null;
+  syncModelAvailability();
+  window.dispatchEvent(new Event("uca:chat-state"));
 }
 
 function clearChatConversation() {
@@ -346,6 +357,7 @@ function clearChatConversation() {
   }
   chatError.hidden = true;
   chatInput.value = "";
+  chatOpportunityConfirm.checked = false;
   chatInput.setCustomValidity("");
   chatPromptCustomization.value = "";
   chatPromptCustomization.setCustomValidity("");
@@ -390,13 +402,15 @@ function appendChatMessage(role, content, toolTrace = []) {
   const item = document.createElement("li");
   item.className = "chat-message";
   item.dataset.role = role;
+  if (role === "assistant") item.ucaAnswerText = content;
   item.setAttribute("aria-label", role === "user" ? "你的消息" : "校园 Agent 的回答");
   const speaker = document.createElement("span");
   speaker.className = "chat-speaker";
   speaker.textContent = role === "user" ? "你" : "校园 Agent";
-  const body = document.createElement("p");
+  const body = document.createElement("div");
   body.className = "chat-message-body";
-  body.textContent = content;
+  if (role === "assistant") window.UcaChatMarkdown.render(body, content);
+  else body.textContent = content;
   item.append(speaker, body);
   if (role === "assistant") {
     renderChatToolTrace(item, toolTrace);
@@ -411,7 +425,9 @@ function commitChatTurn(userContent, assistantContent, opportunityProfileHint) {
     utf8Length(userContent) > CHAT_MAX_MESSAGE_BYTES ||
     utf8Length(assistantContent) > CHAT_MAX_MESSAGE_BYTES
   ) {
-    return;
+    // A later follow-up must not skip this visible turn and reconnect to an older topic.
+    chatHistory.splice(0, chatHistory.length);
+    return false;
   }
   chatHistory.push(
     {
@@ -428,6 +444,7 @@ function commitChatTurn(userContent, assistantContent, opportunityProfileHint) {
   while (chatHistory.length > CHAT_MAX_MESSAGES) {
     chatHistory.splice(0, 2);
   }
+  return true;
 }
 
 function validateChatResponse(payload) {
@@ -471,9 +488,25 @@ function normalizeChatErrorCode(value, fallback) {
     : fallback;
 }
 
-function showChatError(code) {
+function calendarMutationRecoveryHint(userContent) {
+  // Presentation guidance only; Rust owns admission and mutation authority.
+  return /^(?:记录事项[：:]|删除事项(?:\s|$))/u.test(userContent)
+    ? "事项可能已经变更；请先发送“列出我的待办事项”核对，再决定是否重试。"
+    : "";
+}
+
+function appendChatNotice(item, className, message) {
+  const notice = document.createElement("p");
+  notice.className = `chat-hint ${className}`;
+  notice.setAttribute("role", "status");
+  notice.textContent = message;
+  item.appendChild(notice);
+}
+
+function showChatError(code, userContent = "") {
   const safeCode = normalizeChatErrorCode(code, "request_failed");
-  chatErrorMessage.textContent = CHAT_ERROR_MESSAGES[safeCode] ?? CHAT_ERROR_MESSAGES.request_failed;
+  chatErrorMessage.textContent = calendarMutationRecoveryHint(userContent)
+    || CHAT_ERROR_MESSAGES[safeCode] || CHAT_ERROR_MESSAGES.request_failed;
   chatErrorCode.textContent = safeCode;
   chatError.hidden = false;
 }
@@ -486,14 +519,17 @@ function setChatBusy(busy) {
   chatClear.setAttribute("aria-disabled", String(busy));
   chatSend.disabled = busy;
   chatSend.setAttribute("aria-disabled", String(busy));
-  chatSend.textContent = busy ? "发送中…" : "发送";
+  chatSend.setAttribute("aria-label", busy ? "正在发送" : "发送消息");
+  chatSend.dataset.busy = String(busy);
   chatPromptCustomization.disabled = busy;
   chatPromptCustomization.setAttribute("aria-disabled", String(busy));
-  chatOpportunityConfirm.disabled = busy || !opportunityProfileId;
+  chatOpportunityConfirm.disabled = busy || !opportunityProfileId || window.UcaModelSelection?.toolCalling === false;
   chatOpportunityConfirm.setAttribute(
     "aria-disabled",
-    String(busy || !opportunityProfileId)
+    String(busy || !opportunityProfileId || window.UcaModelSelection?.toolCalling === false)
   );
+  syncModelAvailability();
+  window.dispatchEvent(new Event("uca:chat-state"));
 }
 
 async function requestChat(body, headers) {
@@ -521,10 +557,14 @@ async function requestChat(body, headers) {
       : "request_failed";
     throw chatFailure(code);
   }
-  return validateChatResponse(payload);
+  const validated = validateChatResponse(payload);
+  window.dispatchEvent(new CustomEvent("uca:provider-response", {detail: payload.provider}));
+  return validated;
 }
 
 async function submitChat() {
+  if (!conversationCanSend) return;
+  if (!window.UcaModelSelection?.readiness) { document.querySelector("#chat-model-select").focus(); return; }
   if (chatPending) {
     return;
   }
@@ -553,7 +593,8 @@ async function submitChat() {
     return;
   }
 
-  const useOpportunity = Boolean(opportunityProfileId && chatOpportunityConfirm.checked);
+  const useOpportunity = Boolean(opportunityProfileId && chatOpportunityConfirm.checked
+    && window.UcaModelSelection?.toolCalling !== false);
   const opportunityProfileHint = useOpportunity ? opportunityProfileId : null;
   const headers = {
     "Accept": "application/json",
@@ -563,42 +604,66 @@ async function submitChat() {
     headers["X-USTC-Opportunity-Confirmation"] = "confirmed";
   }
 
-  let prepared;
-  try {
-    prepared = createChatRequest(
-      userContent,
-      opportunityProfileHint,
-      promptCustomization
-    );
-    assertChatRequestContract(prepared.request, headers, prepared.body);
-  } catch (error) {
-    showChatError(error?.code ?? "invalid_chat_request");
+  if (!conversationClient) {
+    showChatError("conversation_unavailable");
     return;
   }
-
+  const intent = {
+    message: userContent,
+    model_id: window.UcaModelSelection.selectedId,
+    opportunity_context: opportunityProfileHint == null ? null : { profile_snapshot_id: opportunityProfileHint }
+  };
+  if (promptCustomization != null) intent.prompt_customization = { text: promptCustomization };
   chatError.hidden = true;
   const pendingItem = appendChatMessage("user", userContent);
   chatInput.value = "";
   chatOpportunityConfirm.checked = false;
-  setChatBusy(true);
   try {
-    const response = await requestChat(prepared.body, headers);
-    commitChatTurn(userContent, response.answer, opportunityProfileHint);
-    appendChatMessage("assistant", response.answer, response.toolTrace);
+    const turn = await conversationClient.submit(intent, headers);
     chatPromptCustomization.value = "";
     syncPromptCustomizationCounter();
-    trimChatTranscript();
-  } catch (error) {
-    pendingItem.remove();
-    syncChatEmptyState();
-    if (!chatInput.value) {
-      chatInput.value = userContent;
+    if (turn.phase !== "completed") {
+      if (!chatInput.value) chatInput.value = userContent;
+      showChatError(turn.error || "request_failed", userContent);
     }
-    showChatError(error?.code ?? "network_error");
+    else window.dispatchEvent(new CustomEvent("uca:provider-response", { detail: turn.response.provider }));
+  } catch (error) {
+    if (!chatInput.value) { chatInput.value = userContent; restoredConversationDraft = userContent; }
+    if (pendingItem.isConnected) {
+      pendingItem.dataset.status = "unconfirmed";
+      appendChatNotice(pendingItem, "chat-failed-turn", "等待核对服务器结果；不会自动重新执行。");
+    }
+    showChatError(error?.code ?? "network_error", userContent);
   } finally {
-    setChatBusy(false);
     chatInput.focus({ preventScroll: true });
+    syncChatEmptyState();
   }
+}
+
+function renderSavedConversation(detail) {
+  // The transcript is a server projection, never a second source for future prompt history.
+  const turns = detail?.turns ?? [];
+  const validated = turns.map(turn => turn.response ? validateChatResponse(turn.response) : null);
+  chatHistory.splice(0, chatHistory.length);
+  for (const item of chatMessages.querySelectorAll(".chat-message")) item.remove();
+  turns.forEach((turn, index) => {
+    const user = appendChatMessage("user", turn.user);
+    if (turn.phase === "completed") {
+      const answer = validated[index];
+      const item = appendChatMessage("assistant", answer.answer, answer.toolTrace);
+      if (utf8Length(answer.answer) > CHAT_MAX_MESSAGE_BYTES) appendChatNotice(item, "chat-context-boundary",
+        "这条回答较长，已完整保存；追问时请补充必要背景，服务器不会跨过这条记录选取更早的上下文。");
+    } else {
+      user.dataset.status = turn.phase;
+      const messages = {
+        running: "正在处理中，可以检查服务器结果。",
+        failed: "这次没有完成回答。已执行的操作可能仍然有效，请先核对工具结果再决定是否重新提出任务。",
+        interrupted: "这次请求被中断，系统不会自动重新执行；请先核对相关事项。"
+      };
+      appendChatNotice(user, "conversation-turn-state", messages[turn.phase]);
+    }
+  });
+  syncChatEmptyState();
 }
 
 function syncProcedurePreview() {
@@ -812,7 +877,7 @@ function renderFound(terminal) {
 
   errorPanel.hidden = true;
   result.hidden = false;
-  status.textContent = "已载入当前 source-grounded published fixture 结果。";
+  status.textContent = "已载入经复核的演示资料。";
 }
 
 function renderResponse(payload, checklistToken) {
@@ -871,151 +936,6 @@ async function lookup() {
       submitButton.disabled = false;
       submitButton.textContent = "查看流程";
     }
-  }
-}
-
-async function requestPublication(method, body) {
-  const response = await fetch("/api/v1/demo/administrator/affairs/publication", {
-    method,
-    headers: {
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-      "X-USTC-Agent-Administrator-Demo": "confirm-v1"
-    },
-    body,
-    cache: "no-store"
-  });
-  const payload = await response.json();
-  if (!response.ok) {
-    const detail = payload?.outcome?.error ?? payload?.error ?? `HTTP ${response.status}`;
-    throw new Error(detail);
-  }
-  return payload;
-}
-
-function renderPublicationStatus(payload) {
-  if (payload?.schema !== "ustc-affairs-publication-status/v1") {
-    throw new Error("publication status schema 不匹配");
-  }
-  text(document.querySelector("#publication-revision"), payload.publication_revision);
-  text(document.querySelector("#publication-receipt"), payload.publication_receipt_id);
-  text(document.querySelector("#publication-evidence-count"), payload.control_evidence_event_count);
-  publicationStatus.textContent = `已恢复 durable publication revision ${payload.publication_revision ?? "unknown"}。`;
-}
-
-async function loadPublicationStatus() {
-  publicationRefresh.disabled = true;
-  publicationStatus.textContent = "正在读取 durable publication 与 M00 control evidence 状态…";
-  try {
-    renderPublicationStatus(await requestPublication("GET"));
-  } catch (error) {
-    publicationStatus.textContent = `状态读取失败：${error instanceof Error ? error.message : "未知错误"}`;
-  } finally {
-    publicationRefresh.disabled = false;
-  }
-}
-
-async function publishAffairsDemo() {
-  if (!publicationConfirm.checked) {
-    publicationStatus.textContent = "必须先显式确认固定 demo publication。";
-    return;
-  }
-  publicationPublish.disabled = true;
-  publicationStatus.textContent = "正在执行 M10 → M00 admission/evidence → M71 publication…";
-  try {
-    const payload = await requestPublication(
-      "POST",
-      JSON.stringify({ confirm_publish: true })
-    );
-    if (
-      payload?.schema !== "ustc-affairs-publication-response/v1" ||
-      payload?.outcome?.kind !== "published"
-    ) {
-      throw new Error("publication response schema 无法呈现");
-    }
-    publicationStatus.textContent = `M71 已返回 revision ${payload.outcome.publication_revision}；正在回读 durable state…`;
-    await loadPublicationStatus();
-  } catch (error) {
-    publicationStatus.textContent = `发布失败：${error instanceof Error ? error.message : "未知错误"}`;
-  } finally {
-    publicationPublish.disabled = !publicationConfirm.checked;
-  }
-}
-
-async function requestChangePublication(method, body) {
-  const response = await fetch("/api/v1/demo/administrator/changes/publication", {
-    method,
-    headers: {
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-      "X-USTC-Agent-Administrator-Demo": "confirm-v1"
-    },
-    body,
-    cache: "no-store"
-  });
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload?.error ?? `HTTP ${response.status}`);
-  }
-  return payload;
-}
-
-function renderChangePublicationStatus(payload) {
-  if (payload?.schema !== "ustc-change-publication-status/v1") {
-    throw new Error("ChangeRadar publication status schema 不匹配");
-  }
-  text(document.querySelector("#radar-publication-review-count"), payload.review_count);
-  text(document.querySelector("#radar-publication-count"), payload.publication_count);
-  text(
-    document.querySelector("#radar-publication-receipt"),
-    payload.publication_receipt_id ?? "尚未发布"
-  );
-  text(
-    document.querySelector("#radar-publication-evidence-count"),
-    payload.control_evidence_event_count
-  );
-  radarPublicationStatus.textContent = payload.publication_count === 0
-    ? "固定 candidate 已准备，但尚未发布；public JSON/Atom 仍为空。"
-    : `已恢复 durable ChangeRadar publication ${payload.publication_receipt_id}。`;
-}
-
-async function loadChangePublicationStatus() {
-  radarPublicationRefresh.disabled = true;
-  radarPublicationStatus.textContent = "正在读取 ChangeRadar durable state…";
-  try {
-    renderChangePublicationStatus(await requestChangePublication("GET"));
-  } catch (error) {
-    radarPublicationStatus.textContent = `状态读取失败：${error instanceof Error ? error.message : "未知错误"}`;
-  } finally {
-    radarPublicationRefresh.disabled = false;
-  }
-}
-
-async function publishChangeDemo() {
-  if (!radarPublicationConfirm.checked) {
-    radarPublicationStatus.textContent = "必须先显式确认固定 ChangeRadar demo publication。";
-    return;
-  }
-  radarPublicationPublish.disabled = true;
-  radarPublicationStatus.textContent = "正在执行 M10 → M00 durable evidence → owning M70 publication…";
-  try {
-    const payload = await requestChangePublication(
-      "POST",
-      JSON.stringify({ confirm_publish: true })
-    );
-    if (
-      payload?.schema !== "ustc-change-publication-response/v1" ||
-      payload?.outcome?.kind !== "published"
-    ) {
-      throw new Error("ChangeRadar publication response schema 无法呈现");
-    }
-    radarPublicationStatus.textContent = "M70 已返回 typed publication receipt；正在回读 durable state 与 public feed…";
-    await loadChangePublicationStatus();
-    await loadChangeFeed();
-  } catch (error) {
-    radarPublicationStatus.textContent = `发布失败：${error instanceof Error ? error.message : "未知错误"}`;
-  } finally {
-    radarPublicationPublish.disabled = !radarPublicationConfirm.checked;
   }
 }
 
@@ -1087,7 +1007,7 @@ function renderChangeFeed(payload) {
     fields.appendChild(card);
   }
   radarResult.hidden = false;
-  radarStatus.textContent = "已通过 M00 → M10 → bounded Harness → Market current authorization → ToolGateway → ChangeRadar Plugin 读取。";
+  radarStatus.textContent = "已读取当前发布的校历变更。可展开来源记录核对。";
 }
 
 async function loadChangeFeed() {
@@ -1136,18 +1056,24 @@ function setOpportunityHint(value) {
   } catch (_error) {
     // The server remains authoritative; storage is only a best-effort UI hint.
   }
-  const enabled = Boolean(normalizedValue);
-  opportunityView.disabled = !enabled;
-  opportunityPlan.disabled = !enabled;
-  opportunityDelete.disabled = !enabled;
+  syncOpportunityAvailability();
+}
+
+function syncOpportunityAvailability() {
+  const enabled = Boolean(opportunityProfileId);
+  setOpportunityBusy(opportunityBusy);
   if (!enabled) {
     chatOpportunityConfirm.checked = false;
   }
-  chatOpportunityConfirm.disabled = chatPending || !enabled;
-  chatOpportunityConfirm.setAttribute("aria-disabled", String(chatPending || !enabled));
-  chatOpportunityState.textContent = enabled
-    ? "已有 synthetic profile hint。勾选后只允许下一次 Chat 请求使用；发送后会自动取消勾选。"
-    : "尚无可用的 synthetic profile；可在下方 Opportunity Graph 面板中明确同意并创建。";
+  const toolsUnavailable = window.UcaModelSelection?.toolCalling === false;
+  if (toolsUnavailable) chatOpportunityConfirm.checked = false;
+  chatOpportunityConfirm.disabled = chatPending || !enabled || toolsUnavailable;
+  chatOpportunityConfirm.setAttribute("aria-disabled", String(chatOpportunityConfirm.disabled));
+  chatOpportunityState.textContent = toolsUnavailable
+    ? "当前模型连接不提供工具调用，无法在对话中使用课程档案。"
+    : enabled
+    ? "已找到演示档案。勾选后仅这次请求可使用，发送后会自动取消。"
+    : "尚无可用的演示档案；请进入课程规划插件，明确同意并创建。";
 }
 
 function readOpportunityHint() {
@@ -1438,7 +1364,7 @@ function renderOpportunityPlan(terminal) {
   renderCandidates(plan.decision);
   opportunityPlanResult.hidden = false;
   opportunityDeleted.hidden = true;
-  opportunityStatus.textContent = "已通过 M00 → M10 → transaction-current M20 authorization → static M72 Opportunity use case → M60 current source 生成计划。";
+  opportunityStatus.textContent = "已根据保存的档案和当前课程资料生成方案。";
 }
 
 async function createOpportunityProfile() {
@@ -1599,8 +1525,40 @@ chatForm.addEventListener("submit", (event) => {
   event.preventDefault();
   void submitChat();
 });
-chatClear.addEventListener("click", clearChatConversation);
+const chatActivity = window.UcaChatActivity.mount(document.querySelector("#chat-activity"));
+conversationClient = window.UcaConversations.mount(
+  document.querySelector("#conversation-history"), document.querySelector("#conversation-recovery"), {
+    activityStarted: (id, requestId) => { chatProgress.hidden = true; chatActivity.start(id, requestId); },
+    activityFinished: outcome => chatActivity.stop(outcome),
+    activityCleared: () => chatActivity.clear(),
+    render: renderSavedConversation,
+    validateResponse: validateChatResponse,
+    busy: (value, context) => { setChatBusy(value); if (context?.kind === "management") chatProgress.hidden = true; },
+    availability: ({ canSend, canSwitch }) => {
+      conversationCanSend = canSend; conversationCanSwitch = canSwitch; syncModelAvailability();
+      chatClear.disabled = !canSwitch; chatClear.setAttribute("aria-disabled", String(!canSwitch));
+    },
+    error: code => showChatError(code),
+    selected: ({preserveDraft = false} = {}) => {
+      if (!preserveDraft) {
+      chatInput.value = ""; restoredConversationDraft = null; chatInput.setCustomValidity("");
+      chatPromptCustomization.value = ""; chatPromptCustomization.setCustomValidity("");
+      chatOpportunityConfirm.checked = false;
+      }
+      chatError.hidden = true; syncPromptCustomizationCounter(); window.UcaShell?.navigate("chat"); syncChatEmptyState();
+    },
+    recovered: turn => {
+      chatError.hidden = true;
+      if (turn.phase === "completed" && restoredConversationDraft === turn.user && chatInput.value.trim() === turn.user) chatInput.value = "";
+      restoredConversationDraft = null;
+      if (turn.response) window.dispatchEvent(new CustomEvent("uca:provider-response", { detail: turn.response.provider }));
+      syncChatEmptyState();
+    }
+  }
+);
+chatClear.addEventListener("click", () => { conversationClient.newConversation(); });
 chatInput.addEventListener("input", () => {
+  restoredConversationDraft = null;
   chatInput.setCustomValidity("");
 });
 chatPromptCustomization.addEventListener("input", () => {
@@ -1610,30 +1568,10 @@ chatPromptCustomization.addEventListener("input", () => {
 chatInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
-    if (!chatPending) {
+    if (!chatSend.disabled) {
       chatForm.requestSubmit();
     }
   }
-});
-
-publicationConfirm.addEventListener("change", () => {
-  publicationPublish.disabled = !publicationConfirm.checked;
-});
-publicationRefresh.addEventListener("click", () => {
-  void loadPublicationStatus();
-});
-publicationPublish.addEventListener("click", () => {
-  void publishAffairsDemo();
-});
-
-radarPublicationConfirm.addEventListener("change", () => {
-  radarPublicationPublish.disabled = !radarPublicationConfirm.checked;
-});
-radarPublicationRefresh.addEventListener("click", () => {
-  void loadChangePublicationStatus();
-});
-radarPublicationPublish.addEventListener("click", () => {
-  void publishChangeDemo();
 });
 
 opportunityCreate.addEventListener("click", () => {
@@ -1673,6 +1611,14 @@ if (opportunityProfileId) {
 }
 
 void lookup();
-void loadPublicationStatus();
-void loadChangePublicationStatus();
+window.UcaAdminControls.mount({
+  root: document.querySelector('.operator-settings'),
+  request: (...args) => fetch(...args),
+  onChangePublished: loadChangeFeed
+});
 void loadChangeFeed();
+
+window.addEventListener("uca:provider-status", syncOpportunityAvailability);
+
+window.addEventListener("uca:model-selection", () => { syncModelAvailability(); syncOpportunityAvailability(); });
+syncModelAvailability();
