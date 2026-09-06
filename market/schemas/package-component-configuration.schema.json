@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Develata/ustc-campus-agent/market/schemas/package-component-configuration.schema.json",
+  "title": "USTC Campus Agent reviewed package component configuration",
+  "$comment": "This closed carrier is a projection. The Rust loader also enforces the 1 MiB source limit, unique JSON keys, UTF-8 byte identity bounds, checked identities, exact manifest membership and pins, unique component paths/IDs and field keys, integer min <= max, and recomputed schema digests. JSON Schema alone cannot establish reviewed provenance or execution readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "packageId",
+    "packageVersion",
+    "packageDigest",
+    "componentSetDigest",
+    "capabilityManifestDigest",
+    "components"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "package-component-configuration/v1"
+    },
+    "packageId": {
+      "$ref": "#/$defs/packageId"
+    },
+    "packageVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "packageDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "componentSetDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "capabilityManifestDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "packageId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$"
+    },
+    "identity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "$comment": "Rust checked identity parser enforces at most 256 UTF-8 bytes and excludes Unicode whitespace/control characters."
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "type",
+        "mode",
+        "componentId",
+        "componentVersion",
+        "componentDigest",
+        "executionIdentity",
+        "schemaDigest",
+        "fields"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "type": {
+          "enum": [
+            "SkillComponent",
+            "DeclarativeResourcePack",
+            "McpServerComponent",
+            "NativeRustComponent"
+          ]
+        },
+        "mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "componentId": {
+          "$ref": "#/$defs/identity"
+        },
+        "componentVersion": {
+          "$ref": "#/$defs/identity"
+        },
+        "componentDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "executionIdentity": {
+          "$ref": "#/$defs/identity"
+        },
+        "schemaDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "fields": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        }
+      }
+    },
+    "field": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "required",
+            "kind",
+            "maxUtf8Bytes"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "text"
+            },
+            "maxUtf8Bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "required",
+            "kind",
+            "min",
+            "max"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "integer"
+            },
+            "min": {
+              "type": "integer",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "max": {
+              "type": "integer",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "required",
+            "kind"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "required",
+            "kind"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "secret_ref"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -4,6 +4,8 @@
 //! does not issue production enable evidence, does not touch a resolver, and does not open a
 //! database, network, framework checkpoint or secret store.
 
+pub mod persistence;
+
 use crate::identity::{TenantId, UserId};
 use crate::invocation::{
     CatalogRevision, ComponentId, ComponentKind, ComponentVersion, ExecutionIdentity,
@@ -754,6 +756,53 @@ pub struct InstallationCommand {
 }
 
 impl InstallationCommand {
+    #[must_use]
+    pub fn install_package_pin(&self) -> Option<&InstallationPackagePin> {
+        match &self.action {
+            InstallationCommandAction::Install { package_pin, .. } => Some(package_pin),
+            _ => None,
+        }
+    }
+    #[must_use]
+    pub fn matches_install(
+        &self,
+        catalog: &CatalogRevision,
+        package: &PackageId,
+        version: &PackageVersion,
+        digest: &Sha256Digest,
+        configuration: &InstallationConfiguration,
+    ) -> bool {
+        matches!(&self.action, InstallationCommandAction::Install { package_pin, configuration: original, .. } if package_pin.catalog_revision() == catalog && package_pin.package_id() == package && package_pin.package_version() == version && package_pin.package_digest() == digest && original == configuration)
+    }
+    #[must_use]
+    pub fn matches_configure(
+        &self,
+        revision: &InstallationRevision,
+        configuration: &InstallationConfiguration,
+    ) -> bool {
+        matches!(&self.action, InstallationCommandAction::Configure { expected_revision, configuration: original } if expected_revision == revision && original == configuration)
+    }
+    #[must_use]
+    pub fn matches_enable(
+        &self,
+        revision: &InstallationRevision,
+        readiness_digest: &Sha256Digest,
+    ) -> bool {
+        matches!(&self.action, InstallationCommandAction::Enable { expected_revision, evidence } if expected_revision == revision && evidence.policy_admission_snapshot_digest() == readiness_digest)
+    }
+    #[must_use]
+    pub fn matches_disable(&self, revision: &InstallationRevision) -> bool {
+        matches!(&self.action, InstallationCommandAction::Disable { expected_revision } if expected_revision == revision)
+    }
+    #[must_use]
+    pub fn matches_revoke(&self, revision: &InstallationRevision) -> bool {
+        matches!(&self.action, InstallationCommandAction::Revoke { expected_revision } if expected_revision == revision)
+    }
+    #[must_use]
+    pub fn matches_uninstall(&self, revision: &InstallationRevision) -> bool {
+        matches!(&self.action, InstallationCommandAction::Uninstall { expected_revision } if expected_revision == revision)
+    }
+
     pub fn install(
         command_id: InstallationCommandId,
         installation_id: InstallationId,
@@ -1610,6 +1659,8 @@ impl Error for InstallationRepositoryError {}
 struct CommandLedgerEntry {
     command: InstallationCommand,
     receipt: InstallationCommandReceipt,
+    observed_pre_snapshot: Option<InstallationSnapshot>,
+    commit_ordinal: usize,
 }
 
 /// Deterministic semantic in-memory fake with idempotent command receipts.
@@ -1622,6 +1673,64 @@ pub struct InMemoryInstallationRepository {
 }
 
 impl InMemoryInstallationRepository {
+    #[must_use]
+    pub fn list_owned(&self, tenant: &TenantId, user: &UserId) -> Vec<InstallationSnapshot> {
+        self.aggregates
+            .values()
+            .filter(|s| s.tenant_id() == tenant && s.user_id() == user)
+            .cloned()
+            .collect()
+    }
+    /// Historical owner lookup; ownerless missing-target rejections are not disclosed.
+    #[must_use]
+    pub fn lookup_owned_receipt(
+        &self,
+        tenant: &TenantId,
+        user: &UserId,
+        id: &InstallationCommandId,
+    ) -> Option<InstallationCommandReceipt> {
+        let entry = self.command_ledger.get(id)?;
+        let owner = match &entry.command.action {
+            InstallationCommandAction::Install {
+                tenant_id, user_id, ..
+            } => Some((tenant_id, user_id)),
+            _ => entry
+                .observed_pre_snapshot
+                .as_ref()
+                .map(|s| (s.tenant_id(), s.user_id())),
+        };
+        owner
+            .filter(|(t, u)| *t == tenant && *u == user)
+            .map(|_| entry.receipt.clone())
+    }
+    /// Read the original enable evidence only while its installation is still enabled.
+    #[must_use]
+    pub fn latest_enable_evidence(
+        &self,
+        id: &InstallationId,
+    ) -> Option<EnablePreconditionEvidence> {
+        if self.aggregates.get(id)?.state() != ManagedInstallationState::Enabled {
+            return None;
+        }
+        match &self.events.get(id)?.last()?.payload {
+            InstallationEventPayload::Enabled { evidence, .. } => Some(evidence.clone()),
+            _ => None,
+        }
+    }
+
+    /// Return the historical receipt before consulting current state.
+    /// The caller must enforce owner authorization before exposing the result.
+    pub fn lookup_receipt(
+        &self,
+        command: &InstallationCommand,
+    ) -> Result<Option<InstallationCommandReceipt>, InstallationRepositoryError> {
+        match self.command_ledger.get(command.command_id()) {
+            Some(entry) if &entry.command == command => Ok(Some(entry.receipt.clone())),
+            Some(_) => Err(InstallationRepositoryError::CommandConflict),
+            None => Ok(None),
+        }
+    }
+
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -1716,6 +1825,8 @@ impl InMemoryInstallationRepository {
                     CommandLedgerEntry {
                         command,
                         receipt: receipt.clone(),
+                        observed_pre_snapshot,
+                        commit_ordinal: repository.command_ledger.len(),
                     },
                 )
                 .is_some()
@@ -1745,6 +1856,7 @@ impl InstallationRepository for InMemoryInstallationRepository {
         }
 
         let current = self.aggregates.get(command.installation_id());
+        let observed_pre_snapshot = current.cloned();
         let decision = decide(current, &command);
         if self.fail_next_commit {
             self.fail_next_commit = false;
@@ -1776,6 +1888,8 @@ impl InstallationRepository for InMemoryInstallationRepository {
             CommandLedgerEntry {
                 command,
                 receipt: receipt.clone(),
+                observed_pre_snapshot,
+                commit_ordinal: self.command_ledger.len(),
             },
         );
         Ok(receipt)
@@ -3141,5 +3255,330 @@ mod tests {
             evolve(None, &event),
             Err(InstallationReplayError::RedundantFieldMismatch)
         );
+    }
+    #[test]
+    fn snapshot_codec_rejects_extra_fields_in_empty_variants() {
+        let mut repository = InMemoryInstallationRepository::new();
+        repository
+            .execute(install_command("codec-empty-variants"))
+            .expect("install fixture");
+        let bytes = persistence::encode_snapshot(&repository).expect("snapshot");
+        let restored = persistence::decode_snapshot(&bytes).expect("original snapshot");
+        assert_eq!(
+            persistence::encode_snapshot(&restored).expect("unchanged wire"),
+            bytes
+        );
+        let text = String::from_utf8(bytes).expect("JSON snapshot");
+        let mut accepted = Vec::new();
+        let (name, marker) = ("pre", r#""pre":{"kind":"Absent"}"#);
+        assert!(text.contains(marker), "original empty-variant wire: {name}");
+        for extra in [
+            r#","unexpected":true"#,
+            r#","unexpected":true,"unexpected":false"#,
+        ] {
+            let replacement = format!(
+                "{}{extra}}}",
+                marker.strip_suffix('}').expect("object marker")
+            );
+            let changed = text.replacen(marker, &replacement, 1);
+            if persistence::decode_snapshot(changed.as_bytes()).is_ok() {
+                accepted.push(format!("{name}: {extra}"));
+            }
+        }
+        assert!(
+            accepted.is_empty(),
+            "accepted non-closed variants: {accepted:?}"
+        );
+    }
+
+    #[test]
+    fn snapshot_codec_preserves_receipts_configuration_and_enabled_evidence() {
+        let other_user = UserId::parse("user:other").expect("other owner");
+        let mut repository = InMemoryInstallationRepository::new();
+        let config = InstallationConfiguration::new(
+            &tenant(),
+            vec![
+                (
+                    ConfigurationKey::parse("label").unwrap(),
+                    ConfigurationValue::Text(NonSecretText::parse("private label").unwrap()),
+                ),
+                (
+                    ConfigurationKey::parse("count").unwrap(),
+                    ConfigurationValue::Integer(i64::MIN),
+                ),
+                (
+                    ConfigurationKey::parse("ready").unwrap(),
+                    ConfigurationValue::Boolean(true),
+                ),
+                (
+                    ConfigurationKey::parse("credential").unwrap(),
+                    ConfigurationValue::Secret(
+                        SecretRef::new(tenant(), SecretRefId::parse("secret-ref:opaque").unwrap())
+                            .unwrap(),
+                    ),
+                ),
+            ],
+        )
+        .unwrap();
+        let install = InstallationCommand::install(
+            command_id("snapshot-z-install"),
+            installation_id(),
+            tenant(),
+            user(),
+            package_pin(),
+            config.clone(),
+        )
+        .unwrap();
+        let installed = repository.execute(install.clone()).unwrap();
+        let duplicate_install = install_command("snapshot-a-reject");
+        let rejected = repository.execute(duplicate_install.clone()).unwrap();
+        assert!(matches!(
+            rejected.outcome(),
+            InstallationCommandOutcome::Rejected {
+                error: InstallationDecisionError::AggregateAlreadyPresent
+            }
+        ));
+        let enabled_evidence = evidence(1, &config);
+        let enable = InstallationCommand::enable(
+            command_id("snapshot-b-enable"),
+            installation_id(),
+            revision(1),
+            enabled_evidence.clone(),
+        )
+        .unwrap();
+        let enabled = repository.execute(enable.clone()).unwrap();
+        let bytes = persistence::encode_snapshot(&repository).unwrap();
+        let mut restored = persistence::decode_snapshot(&bytes).unwrap();
+        assert_eq!(restored.execute(install.clone()).unwrap(), installed);
+        assert_eq!(
+            restored.execute(duplicate_install.clone()).unwrap(),
+            rejected
+        );
+        assert_eq!(restored.execute(enable.clone()).unwrap(), enabled);
+        assert_eq!(
+            restored.latest_enable_evidence(&installation_id()),
+            Some(enabled_evidence.clone())
+        );
+        assert_eq!(
+            restored.lookup_owned_receipt(&tenant(), &user(), duplicate_install.command_id()),
+            Some(rejected)
+        );
+        assert!(
+            restored
+                .lookup_owned_receipt(&tenant(), &other_user, install.command_id())
+                .is_none()
+        );
+        assert_eq!(restored.list_owned(&tenant(), &user()).len(), 1);
+        assert!(restored.list_owned(&tenant(), &other_user).is_empty());
+        let pin = package_pin();
+        assert!(install.matches_install(
+            pin.catalog_revision(),
+            pin.package_id(),
+            pin.package_version(),
+            pin.package_digest(),
+            &config
+        ));
+        assert!(!install.matches_install(
+            pin.catalog_revision(),
+            pin.package_id(),
+            pin.package_version(),
+            pin.package_digest(),
+            &configuration()
+        ));
+        assert!(enable.matches_enable(
+            &revision(1),
+            enabled_evidence.policy_admission_snapshot_digest()
+        ));
+        assert!(!enable.matches_enable(
+            &revision(2),
+            enabled_evidence.policy_admission_snapshot_digest()
+        ));
+        assert!(!enable.matches_enable(&revision(1), &digest('f')));
+        let conflict = InstallationCommand::disable(
+            install.command_id().clone(),
+            installation_id(),
+            revision(2),
+        )
+        .unwrap();
+        assert_eq!(
+            restored.lookup_receipt(&conflict),
+            Err(InstallationRepositoryError::CommandConflict)
+        );
+        let disable = InstallationCommand::disable(
+            command_id("snapshot-disable"),
+            installation_id(),
+            revision(2),
+        )
+        .unwrap();
+        restored.execute(disable).unwrap();
+        assert!(
+            restored
+                .latest_enable_evidence(&installation_id())
+                .is_none()
+        );
+        let bytes = persistence::encode_snapshot(&restored).unwrap();
+        assert!(
+            persistence::decode_snapshot(&bytes)
+                .unwrap()
+                .latest_enable_evidence(&installation_id())
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn snapshot_codec_rejects_tampering_and_closed_json_drift() {
+        let mut repository = InMemoryInstallationRepository::new();
+        repository
+            .execute(install_command("snapshot-install"))
+            .unwrap();
+        let bytes = persistence::encode_snapshot(&repository).unwrap();
+        let original: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        for path in [
+            "/records/0/command_id",
+            "/records/0/outcome/event_digest",
+            "/records/0/outcome/revision",
+            "/history_digest",
+        ] {
+            let mut changed = original.clone();
+            *changed.pointer_mut(path).unwrap() = serde_json::Value::String("tampered".to_owned());
+            assert!(
+                persistence::decode_snapshot(&serde_json::to_vec(&changed).unwrap()).is_err(),
+                "{path}"
+            );
+        }
+        let mut omitted = original.clone();
+        omitted["records"].as_array_mut().unwrap().clear();
+        assert!(persistence::decode_snapshot(&serde_json::to_vec(&omitted).unwrap()).is_err());
+        let mut duplicated = original.clone();
+        duplicated["records"]
+            .as_array_mut()
+            .unwrap()
+            .push(original["records"][0].clone());
+        duplicated["record_count"] = serde_json::Value::from(2);
+        assert!(persistence::decode_snapshot(&serde_json::to_vec(&duplicated).unwrap()).is_err());
+        let text = String::from_utf8(bytes).unwrap();
+        for bad in [
+            text.replacen("\"version\":", "\"version\":null,\"version\":", 1),
+            text.replacen("\"kind\":", "\"kind\":\"Install\",\"kind\":", 1),
+            text.replacen("{", "{\"unknown\":1,", 1),
+            "null".to_owned(),
+            "{} trailing".to_owned(),
+            format!("{}null{}", "[".repeat(200), "]".repeat(200)),
+        ] {
+            assert!(persistence::decode_snapshot(bad.as_bytes()).is_err());
+        }
+        let error = persistence::decode_snapshot(&vec![b' '; 16 * 1024 * 1024 + 1]).unwrap_err();
+        assert_eq!(error, persistence::SnapshotCodecError::TooLarge);
+        assert!(!format!("{error:?} {error}").contains("private label"));
+    }
+
+    #[test]
+    fn snapshot_codec_failed_commit_preserves_prior_state_and_missing_rejection() {
+        let mut repository = InMemoryInstallationRepository::new();
+        let missing = InstallationCommand::disable(
+            command_id("snapshot-missing"),
+            installation_id(),
+            revision(1),
+        )
+        .unwrap();
+        let missing_receipt = repository.execute(missing.clone()).unwrap();
+        let before = persistence::encode_snapshot(&repository).unwrap();
+        repository.fail_next_commit_for_testing();
+        assert_eq!(
+            repository.execute(install_command("snapshot-failed")),
+            Err(InstallationRepositoryError::InjectedPersistenceFailure)
+        );
+        assert_eq!(persistence::encode_snapshot(&repository).unwrap(), before);
+        let restored = persistence::decode_snapshot(&before).unwrap();
+        assert_eq!(
+            restored.lookup_receipt(&missing).unwrap(),
+            Some(missing_receipt)
+        );
+        assert!(
+            restored
+                .lookup_owned_receipt(&tenant(), &user(), missing.command_id())
+                .is_none()
+        );
+    }
+    #[test]
+    fn snapshot_codec_roundtrips_configuration_and_terminal_actions_and_rejects_update() {
+        for uninstall in [false, true] {
+            let mut repository = InMemoryInstallationRepository::new();
+            repository
+                .execute(install_command("codec-actions-install"))
+                .unwrap();
+            let changed = InstallationConfiguration::new(&tenant(), Vec::new()).unwrap();
+            let configure = InstallationCommand::configure(
+                command_id("codec-configure"),
+                installation_id(),
+                revision(1),
+                changed.clone(),
+            )
+            .unwrap();
+            assert!(configure.matches_configure(&revision(1), &changed));
+            assert!(!configure.matches_configure(&revision(2), &changed));
+            repository.execute(configure.clone()).unwrap();
+            let terminal = if uninstall {
+                InstallationCommand::uninstall(
+                    command_id("codec-terminal"),
+                    installation_id(),
+                    revision(2),
+                )
+                .unwrap()
+            } else {
+                InstallationCommand::revoke(
+                    command_id("codec-terminal"),
+                    installation_id(),
+                    revision(2),
+                )
+                .unwrap()
+            };
+            let expected = repository.execute(terminal.clone()).unwrap();
+            assert!(matches!(
+                expected.outcome(),
+                InstallationCommandOutcome::Accepted { .. }
+            ));
+            let mut restored =
+                persistence::decode_snapshot(&persistence::encode_snapshot(&repository).unwrap())
+                    .unwrap();
+            assert_eq!(restored.execute(terminal).unwrap(), expected);
+            assert_eq!(
+                restored
+                    .load_exact(&installation_id())
+                    .unwrap()
+                    .unwrap()
+                    .configuration(),
+                &changed
+            );
+            assert!(restored.lookup_receipt(&configure).unwrap().is_some());
+        }
+        let mut repository = InMemoryInstallationRepository::new();
+        repository
+            .execute(install_command("codec-update-install"))
+            .unwrap();
+        let update = InstallationCommand::package_updated(
+            command_id("codec-update"),
+            installation_id(),
+            revision(1),
+            digest('a'),
+            target_package_pin(),
+        )
+        .unwrap();
+        repository.execute(update).unwrap();
+        assert_eq!(
+            persistence::encode_snapshot(&repository),
+            Err(persistence::SnapshotCodecError::UnsupportedAction)
+        );
+        let empty = persistence::encode_snapshot(&InMemoryInstallationRepository::new()).unwrap();
+        let mut raw: serde_json::Value = serde_json::from_slice(&empty).unwrap();
+        raw["version"] = serde_json::Value::String("future/v2".to_owned());
+        assert_eq!(
+            persistence::decode_snapshot(&serde_json::to_vec(&raw).unwrap()).unwrap_err(),
+            persistence::SnapshotCodecError::UnsupportedVersion
+        );
+        raw["version"] = serde_json::Value::String("market-installation-ledger/v1".to_owned());
+        raw["record_count"] = serde_json::Value::from(4097);
+        raw["records"] = serde_json::Value::Array(vec![serde_json::Value::Null; 4097]);
+        assert!(persistence::decode_snapshot(&serde_json::to_vec(&raw).unwrap()).is_err());
     }
 }

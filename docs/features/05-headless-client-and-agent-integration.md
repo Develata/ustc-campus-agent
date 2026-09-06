@@ -1,8 +1,8 @@
 # Headless client and external Agent integration
 
-- `Status`: Planned phased user journey; architecture, public-read-first scope and acceptance bindings accepted; no user CLI, inbound MCP adapter or M10 client API implemented
+- `Status`: Planned full peer journey with bounded Affairs user-CLI, M10 protocol and client-core evidence; inbound MCP, Dioxus clients, production authentication and streaming remain planned
 - `Owning plan`: [`M80 Client Core and Interaction Shells`](../plan/modules/80-dioxus-multi-client.md)
-- `Contracts`: [`client-shell/v2.1`](../contracts/client-shell.md), [`cli/v2.1`](../contracts/cli.md), [`application-interface-registry/v2`](../contracts/interfaces.md), [`permissions/v2`](../contracts/permissions.md)
+- `Contracts`: [client shell](../contracts/client-shell.md), [CLI](../contracts/cli.md), [interface registry](../contracts/interfaces.md), [permissions](../contracts/permissions.md)
 - `Decision`: [`ADR-0010`](../adr/0010-typed-client-peer-adapters.md)
 - `Acceptance`: `CLIENT-007`, `CLIENT-008`, `CLIENT-009`, `CLIENT-010`
 
@@ -12,7 +12,7 @@ A student can use USTC Campus Agent without a graphical client, and an explicitl
 
 The headless surface is a first-class client, not a debug wrapper around backend crates. It uses the same typed client semantics as Dioxus while keeping CLI and MCP protocol concerns at their outer adapters.
 
-## User and automation journey
+## Target user and automation journey
 
 ```text
 user configures an admitted server and least-privilege profile
@@ -35,7 +35,7 @@ client submits correlated intent
 
 Stopping the CLI does not claim server cancellation or success.
 
-## External Agent journey
+## Target external Agent journey
 
 ```text
 external Agent connects to reviewed inbound MCP surface
@@ -123,4 +123,9 @@ This is the M10/M80 client-access lane order. It does not replace the product im
 - `CLIENT-009`: real `ustc-agent` read path proves JSON/NDJSON framing, typed exit/error, auth isolation, compatibility and reconnect/cancellation distinction.
 - `CLIENT-010`: external MCP conformance proves bounded discovery/invocation, tenant/grant isolation, instruction-isolated results and no M51/domain/operator reach-through.
 
-All four rows are currently `planned`. This feature document does not claim a runnable binary, MCP endpoint, campus data source or Dioxus client.
+All four rows remain `planned` for their complete peer/conformance scope. Existing
+supporting evidence includes the major-1 `server.info`, `capability.list` and
+`affairs.get` carriers, shared client-core compatibility checks and a runnable
+ordinary-user Affairs CLI. See the [CLI contract](../contracts/cli.md) for its exact
+fixture-backed commands. This does not establish production authentication, streams,
+an inbound MCP endpoint or a Dioxus client.

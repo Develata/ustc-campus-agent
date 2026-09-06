@@ -118,7 +118,7 @@ Publication never creates an installation. Installation never implies a grant. E
 
 ## 8. Configuration and secrets
 
-Package manifests declare typed non-secret configuration schemas and requested capabilities. Runtime installation stores values and `SecretRef`s under tenant scope. Raw secrets never enter Market Git, model-visible definitions, normal logs or receipts.
+Reviewed package-owned declarations define typed non-secret configuration schemas; the current manifest declares requested capabilities, while the exact configuration sidecar is governed by [M20-CONFIG-003](../../contracts/market-component-configuration.md). Runtime installation stores values and `SecretRef`s under tenant scope. Raw secrets never enter Market Git, model-visible definitions, normal logs or receipts.
 
 The capability registry, not package authors, owns risk class and auto-grant eligibility.
 
@@ -180,3 +180,22 @@ The canonical roadmap batch schedule lives in [`../../tasks/01-execution-roadmap
 ## 14. Exit gate
 
 `M20` is standalone-ready when exact package, install, grant, disable/revoke, update/rollback and resolver tests pass against fake repositories. It is integration-ready when `M40` receives a frozen tool view and denial reaches no fake executor. It is accepted when `M10`/`M80` prove browse/install/disable behavior and the bound `MARKET-*`, `PKG-*` and `FP-*` rows pass.
+
+## Bundled catalog and configuration continuation
+
+[The catalog query contract](../../contracts/market-catalog-query.md) admits immutable
+bundled metadata through one application query and the M10 wire carrier. The static
+browser is bounded `MARKET-008` evidence, not M80 parity or durable lifecycle proof.
+`M20-CONFIG-001/002` validate configuration constraints and exact component/package
+consistency without issuing authority. The remaining sequence stays in
+[the package configuration task](../../tasks/m20-package-component-configuration.md).
+
+## Current bounded package implementation evidence
+
+The single-component public-read package profile is specified by
+[`plugin-management.md`](../../contracts/plugin-management.md), with M20 admission
+and ledger codecs, the M51 Streamable HTTP adapter, standard Skill parsing and
+read-only resources, a frozen Chat tool projection and M30 persisted call journals.
+This supplies bounded evidence only; broader module exit gates, production identity,
+private/write approvals, central stdio, arbitrary executable Skills and update/rollback
+are not promoted by this profile.

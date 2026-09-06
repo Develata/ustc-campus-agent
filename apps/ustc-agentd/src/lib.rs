@@ -17,11 +17,18 @@ mod change_fixture;
 mod change_invocation;
 mod change_persistence;
 mod change_publication;
+mod chat_activity;
+mod chat_conversations;
 mod chat_provider;
 mod chat_tools;
+mod conversation_application;
+mod conversation_title;
 mod durable_path;
 mod m00_control_evidence;
 mod m00_session;
+mod market_bundle;
+mod market_catalog;
+mod model_catalog;
 mod opportunity_authority;
 mod opportunity_fixture;
 mod opportunity_persistence;
@@ -84,6 +91,7 @@ pub struct AffairsComposition {
     control_evidence: DurableControlEvidenceJournal,
     sessions: DurableCurrentSessionStore,
     calendar: CalendarStore,
+    conversation_store_path: std::path::PathBuf,
     publication_counters: AffairsPublicationCounters,
     publication_capability: CapabilityDisposition,
     change_publication_counters: ChangePublicationCounters,
@@ -266,6 +274,9 @@ impl AffairsComposition {
             control_evidence,
             sessions,
             calendar,
+            conversation_store_path: idempotency_path
+                .with_extension("conversations")
+                .join("conversations.json"),
             publication_counters: AffairsPublicationCounters::default(),
             publication_capability: CapabilityDisposition::Enabled,
             change_publication_counters: ChangePublicationCounters::default(),
@@ -1180,3 +1191,6 @@ mod tests {
         assert!(result.is_err(), "unparseable bind must be rejected");
     }
 }
+
+#[cfg(unix)]
+mod plugin_runtime;

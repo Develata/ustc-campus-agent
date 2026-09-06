@@ -1,0 +1,48 @@
+.plugin-management { min-width: 0; margin: 30px 0; padding-top: 24px; border-top: 1px solid var(--line); color: var(--ink); }
+.plugin-management h2 { margin: 0; font-size: 21px; letter-spacing: -.4px; }
+.plugin-manage-intro, .plugin-manage-status, .plugin-manage-note, .plugin-manage-description { color: var(--muted); font-size: 13px; line-height: 1.75; }
+.plugin-manage-intro { max-width: 650px; margin: 8px 0 16px; }
+.plugin-manage-status { min-height: 24px; margin: 12px 0; }
+.plugin-manage-cards { display: grid; gap: 18px; }
+.plugin-manage-card { padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); min-width: 0; }
+.plugin-manage-heading { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
+.plugin-manage-heading h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.plugin-manage-state { color: var(--muted); font-size: 12px; }
+.plugin-manage-description { margin: 9px 0; }
+.plugin-manage-meta { color: var(--muted); font-size: 12px; line-height: 1.65; }
+.plugin-manage-button { min-height: 44px; padding: 10px 15px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-strong); color: var(--ink); font-size: 13px; font-weight: 500; cursor: pointer; }
+.plugin-manage-button:hover:not(:disabled) { border-color: var(--muted); }
+.plugin-manage-button:disabled { cursor: default; opacity: .5; }
+.plugin-manage-button[data-plugin-action="enable"] { background: var(--ink); color: var(--surface); }
+.plugin-manage-pending { margin: 16px 0; padding: 16px; border: 1px solid var(--accent); border-radius: 10px; font-size: 13px; line-height: 1.7; }
+.plugin-manage-pending p { margin: 0 0 12px; }
+.plugin-manage-configuration, .plugin-manage-advanced { margin: 12px 0; border-top: 1px solid var(--line); }
+.plugin-management summary { cursor: pointer; min-height: 44px; padding: 12px 0; font-size: 13px; }
+.plugin-manage-form { display: grid; gap: 12px; max-width: 560px; margin: 4px 0 16px; }
+.plugin-manage-field { display: grid; gap: 7px; min-width: 0; font-size: 13px; }
+.plugin-manage-field :is(input,select) { min-width: 0; width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface-strong); color: var(--ink); }
+.plugin-manage-form .plugin-manage-button { justify-self: start; }
+.plugin-manage-review { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.plugin-manage-review h4 { font-size: 14px; margin: 0 0 12px; }
+.plugin-manage-tools { padding-left: 20px; margin: 0 0 16px; }
+.plugin-manage-tools li { margin: 10px 0; font-size: 13px; line-height: 1.65; }
+.plugin-manage-tools :is(strong,span,code) { display: block; }
+.plugin-manage-tools span { color: var(--muted); }
+.plugin-management code { font-size: 12px; }
+.plugin-manage-grant { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.plugin-manage-granted, .plugin-manage-ready { color: var(--accent-strong); font-size: 13px; line-height: 1.7; }
+.plugin-manage-confirm { display: flex; align-items: flex-start; gap: 9px; margin: 18px 0 12px; padding: 10px 0; font-size: 13px; line-height: 1.7; cursor: pointer; }
+.plugin-manage-confirm input { width: 18px; height: 18px; flex: 0 0 auto; margin: 2px 0 0; accent-color: var(--ink); }
+.plugin-manage-revoke { margin-top: 12px; font-size: 13px; line-height: 1.7; }
+.plugin-management :is(button,input,select,summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.plugin-management :is(p,h3,h4,code,strong,span,label,li) { overflow-wrap: anywhere; }
+.plugin-management [hidden] { display: none !important; }
+@media (max-width: 560px) {
+  .plugin-manage-card { padding: 16px 13px; }
+  .plugin-manage-grant { align-items: flex-start; flex-direction: column; }
+  .plugin-manage-confirm { padding: 12px 0; }
+}
+.plugin-manage-unavailable { padding: 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+
+.plugin-manage-model-note { margin: 12px 0 18px; padding: 12px 14px; border-left: 2px solid var(--muted); color: var(--muted); background: var(--surface); font-size: 13px; line-height: 1.75; }
+.plugin-manage-model-note a { margin-left: 6px; color: var(--accent); }

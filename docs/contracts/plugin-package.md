@@ -18,6 +18,14 @@ All three use `FirstPartySystemPlugin` install policy, are default-installed/def
 
 Default first-party manifests currently declare only exact auto-grant-eligible public read/link-out capabilities. Consent-aware tenant-private capabilities enter later through explicit grant and permission-diff contracts; their existence in the registry does not auto-grant them.
 
+## Optional first-party companion
+
+`ustc.simple-calendar` is a first-party-authored `UserInstalledPlugin`, with both
+installation defaults false. Publisher tier and installation class are distinct:
+only `FirstPartySystemPlugin` requires first-party tier; first-party authorship does
+not force a package into the default system set. This does not add a fourth default
+first-party product or grant installation/execution authority.
+
 ## Lifecycle
 
 ```text

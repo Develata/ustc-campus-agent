@@ -244,4 +244,4 @@ M80 never calculate：compatibility 判定、server readiness、session 有效�
 
 - Q4 carrier；Q7 provider/server settings 可见面。
 - **Q11（新增）**：匿名/受限只读 session 是否 admitted（owner M00/M10）；决定「稍后登录」是否存在。
-- `ASSUMPTION`：onboarding step 数与顺序为设计起点；真实 auth 方式（统一认证/账号密码/邀请制）待 M00/M10 session contract。
+- `ASSUMPTION`：onboarding step 数与顺序为设计起点；当前用户入口已收敛为 SSO 与后台配置用户，见 [账户契约](../../contracts/platform-account.md)；本旧基线设计包不再把邀请制作为待选方案。

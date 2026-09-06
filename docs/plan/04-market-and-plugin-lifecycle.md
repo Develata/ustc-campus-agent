@@ -163,10 +163,10 @@ Implemented:
 
 Planned:
 
-- M10/M80 anonymous catalog browse/detail API/browser delivery (`MARKET-001`);
+- complete M10/M80 anonymous catalog delivery (`MARKET-001`); bounded static loopback HTTP/browser metadata is separately bound by `MARKET-008`;
 - durable installation/grant/update repositories, production transaction/TOCTOU closure and crash recovery;
 - grant/update issuance, production enable-evidence assembly, durable authority adapters, artifact switching and transaction coupling to effect intent;
-- Market browse/detail/update API and UI;
+- authenticated Market lifecycle/update API and UI;
 - B7 current-call/in-flight composition and production upgrade/revoke/rollback runtime.
 - production ToolGateway and executable Plugin tool-host packaging; the framework-neutral Agent tool protocol value subset is implemented.
 
@@ -217,3 +217,13 @@ Until that gate passes, the constants remain honest temporary mirrors and must n
 5. Non-first-party packages admitted into the catalog follow the same rule: their reviewed manifest is the declaration authority, and the Rust projection (once admitted) validates it.
 
 This section owns the policy and the migration-debt status. The exact manifest schema, digest rule and projection contract live in [`docs/contracts/plugin-package.md`](../contracts/plugin-package.md) and `market/schemas/plugin-package.schema.json`.
+
+### Bundled catalog query slice
+
+The existing catalog semantics now support a bounded read-only application query
+and static browser, specified by [market-catalog-query.md](../contracts/market-catalog-query.md).
+M10 owns the typed wire carrier; composition owns immutable bundled-model assembly
+and projection. It does not read user installation state or make component readiness
+claims. `MARKET-008` is the bounded evidence; generic lifecycle and M80 parity remain
+planned. Schema consistency is separately bound by `M20-CONFIG-001/002`, with no
+reviewed-source or grant evidence issued by those pure values.

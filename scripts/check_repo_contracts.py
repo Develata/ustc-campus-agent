@@ -287,19 +287,35 @@ KEY_FILES = [
     "docs/contracts/interfaces.md",
     "docs/contracts/invocation-resolution.md",
     "docs/contracts/market-lifecycle.md",
+    "docs/contracts/market-catalog-query.md",
+    "docs/contracts/market-component-configuration.md",
+    "docs/contracts/model-selection.md",
+    "docs/guides/model-selection.md",
+    "docs/contracts/mcp-execution.md",
+    "docs/contracts/skill-context.md",
+    "docs/contracts/plugin-management.md",
+    "docs/guides/mcp-skills.md",
     "docs/contracts/module-boundaries.md",
     "docs/contracts/permissions.md",
     "docs/contracts/platform-identity.md",
     "docs/contracts/platform-request-context.md",
     "docs/contracts/platform-control-evidence.md",
     "docs/contracts/platform-session.md",
+    "docs/contracts/platform-account.md",
+    "docs/contracts/chat-conversations.md",
+    "docs/contracts/conversation-management.md",
+    "docs/contracts/chat-activity.md",
     "docs/contracts/platform-session-port.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",
     "docs/contracts/source-retrieval.md",
     "market/review-policy/first-party.md",
+    "market/schemas/package-component-configuration.schema.json",
     "market/fixtures/course-planning/README.md",
     "market/fixtures/course-planning/minimal-v0.json",
+    "docs/contracts/mcp-execution.md",
+    "docs/contracts/skill-context.md",
+    "docs/contracts/plugin-management.md",
 ]
 
 EXTERNAL_AGENT_OPERATION_ROWS = {
@@ -317,8 +333,8 @@ EXTERNAL_AGENT_OPERATION_ROWS = {
         "Web, CLI, HTTP",
         "approved Affairs-first protocol slice; safe server-supported operation projection only",
     ),
-    "market.package.list": ("M20", "public-read", "read", "CLI, HTTP, inbound MCP", "planned first vertical slice"),
-    "market.package.get": ("M20", "public-read", "read", "CLI, HTTP", "planned"),
+    "market.package.list": ("M20", "public-read", "read", "HTTP; later CLI/inbound MCP", "bundled loopback query and static browser; full peer delivery planned"),
+    "market.package.get": ("M20", "public-read", "read", "HTTP; later CLI", "exact bundled revision query and static browser; full peer delivery planned"),
     "affairs.search": ("M71", "public-read", "read", "CLI, HTTP, inbound MCP", "planned after owning product contract"),
     "affairs.get": (
         "M71",
@@ -1387,6 +1403,7 @@ def check_market(issues: list[str]) -> None:
     }
     expected_optional_first_party_statuses = {
         "ustc.simple-calendar": "implemented",
+        "ustc.campus-guide": "development",
     }
     expected_first_party_statuses = {
         **expected_default_first_party_statuses,
@@ -1397,6 +1414,7 @@ def check_market(issues: list[str]) -> None:
     }
     expected_first_party_capabilities = {
         "ustc.affairs-navigator": ["campus.public_rules.read"],
+        "ustc.campus-guide": ["campus.public_rules.read"],
         "ustc.change-radar": [
             "campus.public_rules.read",
             "campus.public_changes.read",
@@ -1720,13 +1738,37 @@ def check_market(issues: list[str]) -> None:
                 fail(f"{rel_path}: component path must be a string", issues)
                 continue
             candidate = Path(component_path)
+            # SKILL-001 resources belong to their package; other components retain
+            # the reviewed repository-relative manifest convention.
+            is_skill = component.get("type") == "SkillComponent"
+            source_root = path.parent if is_skill else ROOT
             try:
-                resolved = (ROOT / candidate).resolve(strict=True)
+                resolved = (source_root / candidate).resolve(strict=True)
                 resolved.relative_to(ROOT.resolve())
+                resolved.relative_to(source_root.resolve())
             except (OSError, ValueError):
                 fail(f"{rel_path}: component path missing or unsafe: {component_path}", issues)
                 continue
-            if candidate.is_absolute() or ".." in candidate.parts or not resolved.is_file():
+            skill_path_unsafe = is_skill and (
+                not component_path
+                or "\\" in component_path
+                or ":" in component_path
+                or any(part in {"", ".", ".."} for part in component_path.split("/"))
+                or any(
+                    ROOT.joinpath(*source_root.relative_to(ROOT).parts[:index]).is_symlink()
+                    for index in range(1, len(source_root.relative_to(ROOT).parts) + 1)
+                )
+                or any(
+                    (source_root.joinpath(*candidate.parts[:index])).is_symlink()
+                    for index in range(1, len(candidate.parts) + 1)
+                )
+            )
+            if (
+                candidate.is_absolute()
+                or ".." in candidate.parts
+                or not resolved.is_file()
+                or skill_path_unsafe
+            ):
                 fail(f"{rel_path}: component path missing or unsafe: {component_path}", issues)
 
         manifest_capabilities = manifest.get("capabilities")
@@ -2967,10 +3009,17 @@ PLATFORM_CORE_SOURCE_FILES = ('src/control_evidence.rs',
  'src/invocation.rs',
  'src/lib.rs',
  'src/market.rs',
+ 'src/market/admission.rs',
+ 'src/market/admission/tests.rs',
  'src/market/authority.rs',
  'src/market/capability.rs',
+ 'src/market/configuration_binding.rs',
+ 'src/market/configuration_catalog.rs',
+ 'src/market/configuration_schema.rs',
  'src/market/grant.rs',
+ 'src/market/grant/persistence.rs',
  'src/market/installation.rs',
+ 'src/market/installation/persistence.rs',
  'src/market/update.rs',
  'src/request_context.rs',
  'src/session.rs',
@@ -3015,30 +3064,42 @@ PLATFORM_SOURCE_RETRIEVAL_ADMITTED_IDENTITY_IMPORT = "use crate::identity::Comma
 # Two independent carriers must both admit a binding — it appears in the governed source's item
 # allowlist above like any other item, AND it appears here — and neither substitutes for the
 # other. Adding a row is registered drift that must be mirrored in the Rust guard.
-PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (
-    (PLATFORM_INVOCATION_SOURCE, PLATFORM_IDENTITY_ADMITTED_REEXPORT),
-    (PLATFORM_INSTALLATION_SOURCE, PLATFORM_INSTALLATION_ADMITTED_IDENTITY_IMPORT),
-    (PLATFORM_GRANT_SOURCE, PLATFORM_GRANT_ADMITTED_IDENTITY_IMPORT),
-    (PLATFORM_UPDATE_SOURCE, PLATFORM_UPDATE_ADMITTED_IDENTITY_IMPORT),
-    (PLATFORM_AUTHORITY_SOURCE, PLATFORM_AUTHORITY_ADMITTED_IDENTITY_IMPORT),
-    (PLATFORM_SESSION_SOURCE, PLATFORM_SESSION_ADMITTED_IDENTITY_IMPORT),
-    (PLATFORM_SESSION_PORT_SOURCE, PLATFORM_SESSION_PORT_ADMITTED_IDENTITY_IMPORT),
-    (PLATFORM_CONTROL_EVIDENCE_SOURCE, PLATFORM_CONTROL_EVIDENCE_ADMITTED_IDENTITY_IMPORT),
-    (PLATFORM_SOURCE_RETRIEVAL_SOURCE, PLATFORM_SOURCE_RETRIEVAL_ADMITTED_IDENTITY_IMPORT),
-)
+PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (('crates/platform-core/src/market/configuration_binding.rs', 'use crate::identity::TenantId;'),
+ ('crates/platform-core/src/market/configuration_schema.rs', 'use crate::identity::TenantId;'),
+ ('crates/platform-core/src/invocation.rs', 'pub use crate::identity::{TenantId, UserId};'),
+ ('crates/platform-core/src/market/installation.rs', 'use crate::identity::{TenantId, UserId};'),
+ ('crates/platform-core/src/market/grant.rs', 'use crate::identity::{TenantId, UserId};'),
+ ('crates/platform-core/src/market/update.rs', 'use crate::identity::{TenantId, UserId};'),
+ ('crates/platform-core/src/market/authority.rs', 'use crate::identity::{TenantId, UserId};'),
+ ('crates/platform-core/src/session.rs', 'use crate::identity::{SessionId, TenantId, UserId};'),
+ ('crates/platform-core/src/session_port.rs', 'use crate::identity::SessionId;'),
+ ('crates/platform-core/src/control_evidence.rs',
+  'use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};'),
+ ('crates/platform-core/src/source_retrieval.rs', 'use crate::identity::CommandId;'),
+ ('crates/platform-core/src/market/admission.rs',
+  'use crate::{ identity::{TenantId, UserId}, invocation::{ CapabilityId, CatalogToolDefinition, '
+  'ComponentKind, ConfirmationPolicy, GrantSnapshotId, GrantState, InstallationId, InstallationRevision, '
+  'Sha256Digest, }, };'))
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
 # a file extension. Pinning the declarations pins the compiled set semantically, so no
 # attribute spelling — `#[path]`, `#[cfg_attr(all(), path = "x.txt")]`, or a future one — can
 # introduce a module the scan never reads.
-PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'control_evidence.rs': (),
+PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'market/admission.rs': ('tests',),
+ 'market/admission/tests.rs': (),
+ 'market/installation/persistence.rs': (),
+ 'market/grant/persistence.rs': (),
+ 'market/configuration_catalog.rs': (),
+ 'market/configuration_binding.rs': (),
+ 'market/configuration_schema.rs': (),
+ 'control_evidence.rs': (),
  'identity.rs': (),
  'invocation.rs': (),
  'lib.rs': ('control_evidence', 'identity', 'invocation', 'market', 'request_context', 'session', 'session_port', 'source_registry', 'source_retrieval', 'source_revision'),
- 'market.rs': ('authority', 'capability', 'grant', 'installation', 'update'),
+ 'market.rs': ('admission', 'authority', 'capability', 'configuration_binding', 'configuration_catalog', 'configuration_schema', 'grant', 'installation', 'update'),
  'market/authority.rs': (),
  'market/capability.rs': (),
- 'market/grant.rs': (),
- 'market/installation.rs': (),
+ 'market/grant.rs': ('persistence',),
+ 'market/installation.rs': ('persistence',),
  'market/update.rs': (),
  'request_context.rs': (),
  'session.rs': (),
@@ -3058,7 +3119,14 @@ PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'control_evidence.rs': (),
 # rejected; removing an admitted item fails too. The cost is real: an M20 change to the
 # protocol import list below must be mirrored here and in the Rust guard. That is the intended
 # price of a frozen v0 surface, and the failure message names the drift.
-PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
+PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'market/admission.rs': ('use super::{ ValidatedPackageManifest, capability::{CapabilityRegistry, CapabilityStatus, ScopeKind}, configuration_binding::ComponentConfigurationBinding, configuration_catalog::ValidatedPackageConfiguration, grant::*, installation::*, };', 'use crate::{ identity::{TenantId, UserId}, invocation::{ CapabilityId, CatalogToolDefinition, ComponentKind, ConfirmationPolicy, GrantSnapshotId, GrantState, InstallationId, InstallationRevision, Sha256Digest, }, };', 'use std::{collections::BTreeSet, fmt};', '#[cfg(test)] mod tests;'),
+ 'market/admission/tests.rs': ('use super::*;', 'use crate::{ invocation::{ CatalogRevision, ToolId, UnvalidatedSchemaNodeV0, UnvalidatedToolInputSchemaV0, ValidatedToolInputSchemaV0, }, market::{ capability::load_capability_registry, configuration_catalog::load_package_configuration, configuration_schema::{ConfigurationFieldSchema, ConfigurationSchema}, load_package_manifest, }, };', 'use serde_json::{Value, json};'),
+ 'market/installation/persistence.rs': ('use super::*;', 'use serde::{Deserialize, Serialize};'),
+ 'market/grant/persistence.rs': ('use super::*;', 'use serde::{Deserialize, Serialize};', 'use crate::market::capability::load_capability_registry;'),
+ 'market/configuration_catalog.rs': ('use super::ValidatedPackageManifest;', 'use super::configuration_binding::ComponentConfigurationBinding;', 'use super::configuration_schema::{ConfigurationFieldSchema, ConfigurationSchema};', 'use super::installation::{ConfigurationKey, InstallationPackagePin, InstalledComponentPin};', 'use crate::invocation::{ CatalogRevision, ComponentId, ComponentKind, ComponentVersion, ExecutionIdentity, Sha256Digest, };', 'use serde::Deserialize;', 'use serde::de::{self, MapAccess, SeqAccess, Visitor};', 'use serde_json::Value;', 'use std::collections::{BTreeMap, BTreeSet};', 'use std::error::Error;', 'use std::fmt;', 'use ConfigurationCatalogError as E;', 'use ConfigurationCatalogError::InvalidSchema;', 'type Value = UniqueValue;', '#[cfg(test)] mod tests', 'use super::*;', 'use crate::market::load_package_manifest;', 'use serde_json::json;'),
+ 'market/configuration_binding.rs': ('use super::configuration_schema::{ConfigurationSchema, ConfigurationValidationError};', 'use super::installation::{InstallationConfiguration, InstallationPackagePin};', 'use crate::invocation::{ComponentId, Sha256Digest};', 'use std::error::Error;', 'use std::fmt;', '#[cfg(test)] mod tests', 'use super::super::configuration_schema::ConfigurationFieldSchema;', 'use super::super::installation::{ConfigurationKey, ConfigurationValue, InstalledComponentPin};', 'use super::*;', 'use crate::identity::TenantId;', 'use crate::invocation::{ CatalogRevision, ComponentKind, ComponentVersion, ExecutionIdentity, PackageId, PackageVersion, };'),
+ 'market/configuration_schema.rs': ('use super::installation::{ConfigurationKey, ConfigurationValue, InstallationConfiguration};', 'use crate::invocation::Sha256Digest;', 'use std::collections::BTreeMap;', 'use std::error::Error;', 'use std::fmt;', '#[cfg(test)] mod tests', 'use super::super::installation::{NonSecretText, SecretRef, SecretRefId};', 'use super::*;', 'use crate::identity::TenantId;'),
+ 'control_evidence.rs': (
                  'use serde::{Deserialize, Serialize};',
                  'use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};',
                  'use crate::request_context::{ AdmissionRejectionClass, CausationId, '
@@ -3100,19 +3168,7 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
             'pub mod source_revision;',
             '#[cfg(test)] mod tests',
             'use super::*;'),
- 'market.rs': ('pub mod authority;',
-               'pub mod capability;',
-               'pub mod grant;',
-               'pub mod installation;',
-               'pub mod update;',
-               'use crate::invocation::{ CapabilityId, CatalogRevision, ComponentKind, PackageId, '
-               'PackageVersion, Sha256Digest, };',
-               'use serde::Deserialize;',
-               'use serde::de::{self, MapAccess, Visitor};',
-               'use std::collections::{BTreeMap, BTreeSet};',
-               'use std::error::Error;',
-               'use std::fmt;',
-               'type Value = UniqueStringMap;'),
+ 'market.rs': ('pub mod admission;', 'pub mod authority;', 'pub mod capability;', 'pub mod configuration_binding;', 'pub mod configuration_catalog;', 'pub mod configuration_schema;', 'pub mod grant;', 'pub mod installation;', 'pub mod update;', 'use crate::invocation::{ CapabilityId, CatalogRevision, ComponentKind, PackageId, PackageVersion, Sha256Digest, };', 'use serde::Deserialize;', 'use serde::de::{self, MapAccess, Visitor};', 'use std::collections::{BTreeMap, BTreeSet};', 'use std::error::Error;', 'use std::fmt;', 'type Value = UniqueStringMap;'),
  'market/authority.rs': ('use crate::identity::{TenantId, UserId};',
                          'use crate::invocation::{ AuthorizedInvocation, CapabilityClass, '
                          'CapabilityGrantSnapshot, CapabilityId, CatalogPackageRevision, '
@@ -3146,44 +3202,8 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
                           'use std::fmt;',
                           '#[cfg(test)] mod tests',
                           'use super::*;'),
- 'market/grant.rs': ('use crate::identity::{TenantId, UserId};',
-                     'use crate::invocation::{ CapabilityGrantSnapshot, CapabilityId, '
-                     'CatalogRevision, ConfirmationPolicy, GrantSnapshotId, GrantState, '
-                     'GrantVersion, InstallationId, InstallationRevision, ObjectScope, PackageId, '
-                     'PackageVersion, Sha256Digest, };',
-                     'use crate::market::ValidatedPackageManifest;',
-                     'use crate::market::capability::{ AutoGrantDisposition, CapabilityDefinition, '
-                     'CapabilityPolicyChange, CapabilityRegistry, CapabilityRegistryRevision, '
-                     'CapabilityStatus, DataClass, EffectClass, ScopeKind, '
-                     'compare_capability_definitions, };',
-                     'use crate::market::installation::{InstallationSnapshot, '
-                     'ManagedInstallationState};',
-                     'use std::collections::{BTreeMap, BTreeSet};',
-                     'use std::error::Error;',
-                     'use std::fmt;',
-                     'pub type GrantSnapshot = GrantAggregate;',
-                     '#[cfg(test)] mod tests',
-                     'use super::*;',
-                     'use crate::invocation::{ComponentId, ComponentKind, ComponentVersion, '
-                     'ExecutionIdentity};',
-                     'use crate::market::capability::load_capability_registry;',
-                     'use crate::market::installation::{ InstallationCommand, '
-                     'InstallationCommandId, InstallationConfiguration, InstallationPackagePin, '
-                     'InstalledComponentPin, };',
-                     'use crate::market::load_package_manifest;'),
- 'market/installation.rs': ('use crate::identity::{TenantId, UserId};',
-                            'use crate::invocation::{ CatalogRevision, ComponentId, ComponentKind, '
-                            'ComponentVersion, ExecutionIdentity, InstallationId, '
-                            'InstallationRevision, InstallationState as ResolverInstallationState, '
-                            'InstalledComponentIdentity, PackageId, PackageVersion, '
-                            'PluginInstallationSnapshot, Sha256Digest, };',
-                            'use std::collections::{BTreeMap, BTreeSet};',
-                            'use std::error::Error;',
-                            'use std::fmt;',
-                            'pub type InstallationSnapshot = InstallationAggregate;',
-                            '#[cfg(test)] #[allow(clippy::expect_used, clippy::panic, '
-                            'clippy::unwrap_used)] mod tests',
-                            'use super::*;'),
+ 'market/grant.rs': ('pub mod persistence;', 'use crate::identity::{TenantId, UserId};', 'use crate::invocation::{ CapabilityGrantSnapshot, CapabilityId, CatalogRevision, ConfirmationPolicy, GrantSnapshotId, GrantState, GrantVersion, InstallationId, InstallationRevision, ObjectScope, PackageId, PackageVersion, Sha256Digest, };', 'use crate::market::ValidatedPackageManifest;', 'use crate::market::capability::{ AutoGrantDisposition, CapabilityDefinition, CapabilityPolicyChange, CapabilityRegistry, CapabilityRegistryRevision, CapabilityStatus, DataClass, EffectClass, ScopeKind, compare_capability_definitions, };', 'use crate::market::installation::{InstallationSnapshot, ManagedInstallationState};', 'use std::collections::{BTreeMap, BTreeSet};', 'use std::error::Error;', 'use std::fmt;', 'pub type GrantSnapshot = GrantAggregate;', '#[cfg(test)] mod tests', 'use super::*;', 'use crate::invocation::{ComponentId, ComponentKind, ComponentVersion, ExecutionIdentity};', 'use crate::market::capability::load_capability_registry;', 'use crate::market::installation::{ InstallationCommand, InstallationCommandId, InstallationConfiguration, InstallationPackagePin, InstalledComponentPin, };', 'use crate::market::load_package_manifest;'),
+ 'market/installation.rs': ('pub mod persistence;', 'use crate::identity::{TenantId, UserId};', 'use crate::invocation::{ CatalogRevision, ComponentId, ComponentKind, ComponentVersion, ExecutionIdentity, InstallationId, InstallationRevision, InstallationState as ResolverInstallationState, InstalledComponentIdentity, PackageId, PackageVersion, PluginInstallationSnapshot, Sha256Digest, };', 'use std::collections::{BTreeMap, BTreeSet};', 'use std::error::Error;', 'use std::fmt;', 'pub type InstallationSnapshot = InstallationAggregate;', '#[cfg(test)] #[allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)] mod tests', 'use super::*;'),
  'market/update.rs': ('use crate::identity::{TenantId, UserId};',
                       'use crate::invocation::{ CapabilityClass, CapabilityId, '
                       'CatalogComponentRevision, CatalogPackageRevision, CatalogRevision, '
@@ -3272,7 +3292,14 @@ PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'control_evidence.rs': (
 # $t { .. } } }` plus `m!(TenantId);` implements a trait for an identity kind while every
 # self-type scan sees `$t`. Sibling macro definitions are pinned and no sibling macro
 # invocation may name a governed kind.
-PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'control_evidence.rs': (),
+PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'market/admission.rs': (),
+ 'market/admission/tests.rs': (),
+ 'market/installation/persistence.rs': (),
+ 'market/grant/persistence.rs': (),
+ 'market/configuration_catalog.rs': (),
+ 'market/configuration_binding.rs': (),
+ 'market/configuration_schema.rs': (),
+ 'control_evidence.rs': (),
  'identity.rs': ('identity_value',),
  'invocation.rs': ('authority_id',),
  'lib.rs': (),
@@ -3291,34 +3318,22 @@ PLATFORM_CORE_ADMITTED_SIBLING_MACROS = {'control_evidence.rs': (),
 # reached whatever the spelling — `include /* x */ !("f.rs")` contains no `include!` substring —
 # so the admitted name set per governed source is exact. `include_str!` stays admitted in
 # lib.rs, which legitimately embeds the first-party manifests as data.
-PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'control_evidence.rs': (),
+PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS = {'market/admission.rs': ('matches', 'write'),
+ 'market/admission/tests.rs': ('assert', 'assert_eq', 'format', 'include_bytes', 'json', 'matches', 'panic', 'vec'),
+ 'market/installation/persistence.rs': ('format',),
+ 'market/grant/persistence.rs': ('format', 'vec'),
+ 'market/configuration_catalog.rs': ('assert', 'assert_eq', 'assert_ne', 'format', 'include_bytes', 'json', 'vec', 'write'),
+ 'market/configuration_binding.rs': ('assert', 'assert_eq', 'format', 'vec', 'write'),
+ 'market/configuration_schema.rs': ('assert', 'assert_eq', 'assert_ne', 'format', 'vec', 'write'),
+ 'control_evidence.rs': (),
  'identity.rs': ('concat', 'identity_value', 'matches', 'stringify', 'write'),
  'invocation.rs': ('authority_id', 'format', 'write'),
  'lib.rs': ('assert', 'assert_eq', 'include_str', 'panic'),
  'market.rs': ('matches', 'write'),
  'market/authority.rs': ('assert', 'assert_eq', 'format', 'panic', 'parsed', 'vec', 'write'),
  'market/capability.rs': ('assert', 'assert_eq', 'matches'),
- 'market/grant.rs': ('assert',
-                     'assert_eq',
-                     'assert_ne',
-                     'category_error',
-                     'concat',
-                     'format',
-                     'include_bytes',
-                     'matches',
-                     'panic',
-                     'parsed',
-                     'unreachable',
-                     'vec',
-                     'write'),
- 'market/installation.rs': ('assert',
-                            'assert_eq',
-                            'assert_ne',
-                            'format',
-                            'matches',
-                            'panic',
-                            'vec',
-                            'write'),
+ 'market/grant.rs': ('assert', 'assert_eq', 'assert_ne', 'category_error', 'concat', 'format', 'include_bytes', 'matches', 'panic', 'parsed', 'unreachable', 'vec', 'write'),
+ 'market/installation.rs': ('assert', 'assert_eq', 'assert_ne', 'format', 'matches', 'panic', 'vec', 'write'),
  'market/update.rs': ('assert',
                       'assert_eq',
                       'assert_ne',
@@ -3381,18 +3396,18 @@ PLATFORM_AUTHORITY_ADMITTED_IDENTITY_MACRO_ARGUMENTS = (
 # freeze `parsed!` arguments separately because that helper constructs typed authority values.
 # The latter closes same-count type substitutions without turning arbitrary assertion bodies into
 # repository-contract authority.
-PLATFORM_GRANT_ADMITTED_MACRO_INVOCATION_COUNTS = (('assert', 15),
- ('assert_eq', 66),
+PLATFORM_GRANT_ADMITTED_MACRO_INVOCATION_COUNTS = (('assert', 25),
+ ('assert_eq', 81),
  ('assert_ne', 4),
  ('category_error', 3),
  ('concat', 1),
- ('format', 11),
+ ('format', 13),
  ('include_bytes', 2),
- ('matches', 12),
+ ('matches', 14),
  ('panic', 2),
  ('parsed', 74),
  ('unreachable', 1),
- ('vec', 19),
+ ('vec', 20),
  ('write', 1))
 PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS = (('CapabilityId,', 8),
  ('CatalogRevision,', 1),
@@ -3415,7 +3430,14 @@ PLATFORM_GRANT_ADMITTED_PARSED_ARGUMENT_COUNTS = (('CapabilityId,', 8),
 # A blanket `impl<T> Extension for T` names no kind and covers all six, so the sibling `impl`
 # surface is an allowlist as well. These are M20 items; a genuine M20 addition is drift that
 # must be admitted here explicitly rather than arriving unseen.
-PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'control_evidence.rs': ('impl PlatformControlError', 'impl PlatformControlEvent'),
+PLATFORM_CORE_ADMITTED_SIBLING_IMPLS = {'market/admission.rs': ('impl ComponentReadiness', "impl MarketAdmissionService<'a>", 'impl fmt::Debug for ComponentReadiness', 'impl fmt::Display for AdmissionError', 'impl std::error::Error for AdmissionError', 'impl-arg GrantRepository', 'impl-arg GrantRepository', 'impl-arg InstallationRepository', 'impl-arg InstallationRepository', 'impl-arg InstallationRepository'),
+ 'market/admission/tests.rs': ('impl Fixture',),
+ 'market/installation/persistence.rs': ('impl Error for SnapshotCodecError', 'impl fmt::Display for SnapshotCodecError'),
+ 'market/grant/persistence.rs': ('impl Error for SnapshotCodecError', 'impl fmt::Display for SnapshotCodecError'),
+ 'configuration_catalog.rs': ("impl Deserialize<'de> for UniqueValue", 'impl Error for ConfigurationCatalogError', 'impl RawField', 'impl RawKind', 'impl ValidatedPackageConfiguration', "impl Visitor<'de> for UniqueVisitor", 'impl fmt::Debug for ValidatedPackageConfiguration', 'impl fmt::Display for ConfigurationCatalogError'),
+ 'configuration_binding.rs': ('impl ComponentConfigurationBinding', 'impl Error for ConfigurationBindingError', 'impl fmt::Debug for ComponentConfigurationBinding', 'impl fmt::Display for ConfigurationBindingError'),
+ 'configuration_schema.rs': ('impl ConfigurationFieldSchema', 'impl ConfigurationSchema', 'impl Error for ConfigurationSchemaError', 'impl Error for ConfigurationValidationError', 'impl fmt::Debug for ConfigurationFieldSchema', 'impl fmt::Debug for ConfigurationSchema', 'impl fmt::Display for ConfigurationSchemaError', 'impl fmt::Display for ConfigurationValidationError'),
+ 'control_evidence.rs': ('impl PlatformControlError', 'impl PlatformControlEvent'),
  'authority.rs': ('impl AuthorityReadRevision',
                   'impl CurrentGrantKey',
                   'impl Error for AuthorityRepositoryError',
@@ -3798,10 +3820,8 @@ PLATFORM_AUTHORITY_FUNCTION_BODY_SHA256 = {
         "9e09e339d8f77741742aacb39116d041530b0e5dbf7602df9173cc47da31dcad",
     ),
 }
-PLATFORM_INVOCATION_AUTHORITY_FUNCTION_BODY_SHA256 = {
-    "preflight_projected_call": ("e500cd0fe2befa0c9dd5c72644bb7b9861144934591952444b8f04aacf0b94d2",),
-    "authorize_call": ("da6cb882d0936c5acb1f9091c200ff34aaf124216aaee0e29594969c3894f439",),
-}
+PLATFORM_INVOCATION_AUTHORITY_FUNCTION_BODY_SHA256 = {'preflight_projected_call': ('e500cd0fe2befa0c9dd5c72644bb7b9861144934591952444b8f04aacf0b94d2',),
+ 'authorize_call': ('1438b2713d6117d54e270b78a0d63b43ffad54bf5fe75536cc9942d315eb27af',)}
 PLATFORM_AUTHORITY_UNIT_TEST_FUNCTIONS = (
     "repository_rejects_duplicate_keys_and_incoherent_current_index",
     "transaction_loads_separate_carriers_under_one_revision",
@@ -3968,6 +3988,7 @@ PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn approval_id',
  'pub const fn capability_registry_revision',
  'pub const fn catalog_revision',
  'pub const fn catalog_revision',
+ 'pub const fn command',
  'pub const fn command_id',
  'pub const fn command_id',
  'pub const fn command_id',
@@ -4032,7 +4053,11 @@ PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn approval_id',
  'pub fn invalidation_reason',
  'pub fn issue',
  'pub fn kind',
+ 'pub fn lookup_owned_receipt',
+ 'pub fn lookup_receipt',
  'pub fn mark_stale',
+ 'pub fn matches_issue',
+ 'pub fn matches_revoke',
  'pub fn new',
  'pub fn new',
  'pub fn parse',
@@ -4042,6 +4067,7 @@ PLATFORM_GRANT_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn approval_id',
  'pub fn revoke',
  'pub fn tenant_private_user',
  'pub fn to_resolver_snapshot',
+ 'pub mod persistence',
  'pub struct CurrentInstallationGrantSet',
  'pub struct GrantAdmissionEvidence',
  'pub struct GrantAggregate',
@@ -4118,6 +4144,17 @@ PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn capability_m
  'pub fn evolve',
  'pub fn fail_next_commit_for_testing',
  'pub fn install',
+ 'pub fn install_package_pin',
+ 'pub fn latest_enable_evidence',
+ 'pub fn list_owned',
+ 'pub fn lookup_owned_receipt',
+ 'pub fn lookup_receipt',
+ 'pub fn matches_configure',
+ 'pub fn matches_disable',
+ 'pub fn matches_enable',
+ 'pub fn matches_install',
+ 'pub fn matches_revoke',
+ 'pub fn matches_uninstall',
  'pub fn new',
  'pub fn new',
  'pub fn new',
@@ -4134,6 +4171,7 @@ PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS = ('pub const fn capability_m
  'pub fn to_installed_identity',
  'pub fn to_resolver_snapshot',
  'pub fn uninstall',
+ 'pub mod persistence',
  'pub struct ConfigurationKey',
  'pub struct ConfigurationRevision',
  'pub struct EnablePreconditionEvidence',
@@ -4167,8 +4205,8 @@ PLATFORM_INSTALLATION_ADMITTED_ATTRIBUTE_COUNTS = (((False, 'allow', 'allow(clip
  ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq)'), 8),
  ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)'), 1),
  ((False, 'derive', 'derive(Debug, Default, Clone)'), 1),
- ((False, 'must_use', 'must_use'), 52),
- ((False, 'test', 'test'), 7))
+ ((False, 'must_use', 'must_use'), 62),
+ ((False, 'test', 'test'), 12))
 PLATFORM_UPDATE_TEST_FUNCTIONS = ('checked_public_update_values_and_stage_surface_are_deterministic',
  'empty_public_repository_and_replay_are_non_authoritative',
  'public_errors_and_debug_are_category_only_and_redacted')
@@ -4699,7 +4737,14 @@ PLATFORM_IDENTITY_COMPILE_FAIL_EXPRESSIONS = {
 # `ignore` by spelling leaves the raw form open; an exact admitted name set closes the class,
 # including attributes nobody predicted. Derive ARGUMENTS are pinned separately, because a
 # derive is the one attribute that adds public API.
-PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'control_evidence.rs': ('derive', 'must_use', 'serde'),
+PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES = {'market/admission.rs': ('cfg', 'derive', 'must_use'),
+ 'market/admission/tests.rs': ('test',),
+ 'market/installation/persistence.rs': ('derive', 'serde'),
+ 'market/grant/persistence.rs': ('derive', 'serde'),
+ 'market/configuration_catalog.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
+ 'market/configuration_binding.rs': ('cfg', 'derive', 'must_use', 'test'),
+ 'market/configuration_schema.rs': ('cfg', 'derive', 'must_use', 'test'),
+ 'control_evidence.rs': ('derive', 'must_use', 'serde'),
  'identity.rs': ('$attribute', 'derive', 'doc', 'must_use'),
  'invocation.rs': ('derive', 'must_use'),
  'lib.rs': ('cfg', 'derive', 'must_use', 'serde', 'test'),
@@ -4729,8 +4774,8 @@ PLATFORM_GRANT_ADMITTED_ATTRIBUTE_COUNTS = (((False, 'allow', 'allow(clippy::lar
  ((False, 'derive', 'derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)'), 1),
  ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq)'), 5),
  ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)'), 1),
- ((False, 'must_use', 'must_use'), 66),
- ((False, 'test', 'test'), 20))
+ ((False, 'must_use', 'must_use'), 70),
+ ((False, 'test', 'test'), 25))
 PLATFORM_IDENTITY_ADMITTED_TEST_ATTRIBUTE_NAMES = ("test",)
 # Pinning dependency NAMES pins nothing about what those names resolve to. `semver = { path =
 # "crates/fake-semver" }` keeps the admitted name while Cargo compiles an attacker-authored
@@ -8500,7 +8545,10 @@ def check_platform_identity_implementation(issues: list[str]) -> None:
                 f"{path.relative_to(ROOT).as_posix()}: {sibling_unclassified}",
                 issues,
             )
-        admitted_impls = PLATFORM_CORE_ADMITTED_SIBLING_IMPLS.get(path.name)
+        admitted_impls = PLATFORM_CORE_ADMITTED_SIBLING_IMPLS.get(
+            path.relative_to(source_root).as_posix(),
+            PLATFORM_CORE_ADMITTED_SIBLING_IMPLS.get(path.name),
+        )
         if admitted_impls is None:
             fail(
                 f"ungoverned platform-core sibling: {path.relative_to(ROOT).as_posix()}",
@@ -9714,7 +9762,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
         M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "e6e4e7ecacc70d446eab6947f8a28e55b2d78a74a72523908a1bb8a46dd9e88c",
         "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
-        "docs/acceptance/matrix.tsv": "ec11744328fbbadac5113223db80ca8c90daaaca74647cbee590c4df2d869c69",
+        "docs/acceptance/matrix.tsv": "00261c707111f037975afd32d470248d2c621f9aeb0570374a3ae9e320729b7b",
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
         "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
         "docs/contracts/module-boundaries.md": "8c663d411613713ca41502c894590976aa77009da181a4a07da333f7a1b11538",
@@ -9725,7 +9773,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
         "docs/tasks/01-execution-roadmap.md": "5b93155d140267dfe9aeff3e77a0a72f8e6134e79547838d9eecad66ba45b262",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
-        "docs/coverage-matrix.md": "05e643b3ef4f291318961447782b32cdb05425fcb4f7d8cfbe0890dc20f63e30",
+        "docs/coverage-matrix.md": "27324f857b4790ab4abf349d3e0771e01854d5cd78d0f2c5008c9a4c2e3cec39",
     }
     if tuple(frozen_projection_sha256) != declared_projection_paths:
         fail(
@@ -12424,6 +12472,8 @@ CI_GOVERNANCE_BASELINE_CI_STRUCTURE: tuple[
     (False, ("jobs", "rust", "steps", "run"), "UCA_SOURCE_COMMIT=$GITHUB_SHA cargo build --locked -p ustc-agentd --bin ustc-agentd && node scripts/test_agent_chat_browser.mjs target/debug/ustc-agentd"),
     (True, ("jobs", "rust", "steps", "name"), "Usability unit tests"),
     (False, ("jobs", "rust", "steps", "run"), "node --test scripts/tests/test_course_editor.mjs scripts/tests/test_affairs_checklist.mjs"),
+    (True, ("jobs", "rust", "steps", "name"), "Administrator presentation boundary"),
+    (False, ("jobs", "rust", "steps", "run"), "node --test scripts/tests/test_admin_controls.mjs"),
     (True, ("jobs", "rust", "steps", "name"), "SSO interface HTTP contract"),
     (False, ("jobs", "rust", "steps", "run"), "python3 -B -W error::ResourceWarning -m unittest discover -s examples/sso-interface -p 'test_*.py' -v"),
     (True, ("jobs", "rust", "steps", "name"), "Usability browser behavior"),
@@ -13780,7 +13830,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "dcfbbd3b30fd178239a2d7579bc4626e656802633f31d08e19b5684323c7d1bf", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "de886aaa072aa6d1e8339973bc2c46556bdae125f9234544f7312dc8f48c3624", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},
@@ -13791,7 +13841,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_platform_authority_implementation": {"digest": "64b767f09d0d29268af33e15bdf60d6fd879b61365abd45c1be2caa2319b92f4", "status": "active"},
     "check_platform_core_manifest": {"digest": "3082cf7fedfaf39080d287a036c8875f762751bb8832121ca2d7cd81d5947d62", "status": "active"},
     "check_platform_control_evidence": {"digest": "29ab55813d5c6872937c9753d53dac607e7f27436ce00a8297c665d2e37c9a94", "status": "active"},
-    "check_platform_identity_implementation": {"digest": "b30158e2721bb04582b6dced31eb4328b493ba13d0f9153347388ad1ccd91c29", "status": "active"},
+    "check_platform_identity_implementation": {"digest": "ce57439ab887aabb54285e8cdcda522f5f62b61350dfc9699f1b0dcf675f5caa", "status": "active"},
     "check_platform_request_context": {"digest": "716b2414ce325537cd03c1c1abdee12a12fcf61f43773a894ebf021d9a6c3fbc", "status": "active"},
     "check_platform_session_port": {"digest": "cd83696316ed74a4aa15dfdf861a4c5b3b9b397056d06c44e1a13e3def4667a6", "status": "active"},
     "check_platform_session_contract": {"digest": "e3a2e5ef5ca953bdf2739ac3072df8bcfed0ebece4a893f52980fb7ca3b15c1b", "status": "active"},

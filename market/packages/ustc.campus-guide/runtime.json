@@ -1,0 +1,11 @@
+{
+  "skillPath": "skills/campus-guide/SKILL.md",
+  "resources": [
+    {
+      "path": "skills/campus-guide/SKILL.md",
+      "sha256": "sha256:1b892434a422c3d6dd01f00ad479ea619dd61dd748f38919898593760397fb95"
+    }
+  ],
+  "kind": "skill",
+  "schemaVersion": "plugin-runtime/v1"
+}

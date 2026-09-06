@@ -10,6 +10,19 @@ homepage.workspace = true
 
 [dependencies]
 ustc-campus-agent-core = { path = "../platform-core" }
+ustc-agent-tool-protocol.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+serde-saphyr = { version = "=1.2.0", default-features = false, features = ["deserialize"] }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+
+[dev-dependencies]
+axum.workspace = true
 
 [lib]
 path = "src/lib.rs"

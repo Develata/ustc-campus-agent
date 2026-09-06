@@ -134,6 +134,12 @@ pub struct ValidatedToolInputSchemaV0 {
 }
 
 impl ValidatedToolInputSchemaV0 {
+    /// Pure schema membership; grants and call-time authority remain with M20.
+    #[must_use]
+    pub fn accepts(&self, arguments: &CanonicalArgumentValueV0) -> bool {
+        arguments_match_schema(arguments.root(), self.root())
+    }
+
     #[must_use]
     pub fn canonical_bytes(&self) -> &[u8] {
         &self.canonical_bytes
@@ -495,4 +501,99 @@ pub fn is_valid_tool_name(value: &str) -> bool {
     };
     (first.is_ascii_alphabetic() || first == b'_')
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
+}
+
+fn arguments_match_schema(
+    argument: &CanonicalArgumentNodeV0,
+    schema: &ValidatedSchemaNodeV0,
+) -> bool {
+    match (argument, schema) {
+        (CanonicalArgumentNodeV0::String(value), ValidatedSchemaNodeV0::String { enum_values }) => {
+            enum_values
+                .as_ref()
+                .is_none_or(|values| values.contains(value))
+        }
+        (CanonicalArgumentNodeV0::Integer(_), ValidatedSchemaNodeV0::Integer)
+        | (CanonicalArgumentNodeV0::Number(_), ValidatedSchemaNodeV0::Number)
+        | (CanonicalArgumentNodeV0::Boolean(_), ValidatedSchemaNodeV0::Boolean) => true,
+        (CanonicalArgumentNodeV0::Array(values), ValidatedSchemaNodeV0::Array { items }) => values
+            .iter()
+            .all(|value| arguments_match_schema(value, items)),
+        (
+            CanonicalArgumentNodeV0::Object(members),
+            ValidatedSchemaNodeV0::Object {
+                properties,
+                required,
+            },
+        ) => {
+            members.len() <= properties.len()
+                && required.iter().all(|name| members.contains_key(name))
+                && members.iter().all(|(name, value)| {
+                    properties
+                        .get(name)
+                        .is_some_and(|schema| arguments_match_schema(value, schema))
+                })
+        }
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod schema_membership_tests {
+    use super::*;
+
+    #[test]
+    fn typed_membership_preserves_required_closed_enum_and_numeric_semantics() {
+        let schema = ValidatedToolInputSchemaV0::try_from(UnvalidatedToolInputSchemaV0 {
+            dialect: "tool-input-schema/v0".to_owned(),
+            root: UnvalidatedSchemaNodeV0::Object {
+                properties: vec![
+                    (
+                        "mode".to_owned(),
+                        UnvalidatedSchemaNodeV0::String {
+                            enum_values: Some(vec!["read".to_owned()]),
+                        },
+                    ),
+                    ("count".to_owned(), UnvalidatedSchemaNodeV0::Integer),
+                ],
+                required: vec!["mode".to_owned()],
+            },
+        })
+        .expect("schema");
+        let argument = |members| {
+            CanonicalArgumentValueV0::try_from(UnvalidatedArgumentValueV0::Object(members))
+                .expect("arguments")
+        };
+        let mode = (
+            "mode".to_owned(),
+            UnvalidatedArgumentValueV0::String("read".to_owned()),
+        );
+        assert!(schema.accepts(&argument(vec![mode.clone()])));
+        assert!(schema.accepts(&argument(vec![
+            mode.clone(),
+            (
+                "count".to_owned(),
+                UnvalidatedArgumentValueV0::Integer("1".to_owned())
+            )
+        ])));
+        assert!(!schema.accepts(&argument(vec![])));
+        assert!(!schema.accepts(&argument(vec![(
+            "mode".to_owned(),
+            UnvalidatedArgumentValueV0::String("write".to_owned())
+        )])));
+        assert!(!schema.accepts(&argument(vec![
+            mode.clone(),
+            (
+                "extra".to_owned(),
+                UnvalidatedArgumentValueV0::Boolean(true)
+            )
+        ])));
+        assert!(!schema.accepts(&argument(vec![
+            mode,
+            (
+                "count".to_owned(),
+                UnvalidatedArgumentValueV0::Number("1.0".to_owned())
+            )
+        ])));
+    }
 }

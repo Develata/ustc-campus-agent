@@ -28,6 +28,26 @@ Compose 仅在 `openai-compatible` 模式下处理 secret。由于本地 Compose
 
 首次 `docker compose up --build` 需要联网拉取 `ubuntu:24.04`，并在 image build 阶段安装 `ca-certificates`、`curl`、`socat`、`util-linux`；这与 MVP application 的 fixture-only runtime 不同。镜像层已缓存后，后续启动不需要 live source retrieval。
 
+## 从源码生成演示包
+
+本节在源码仓库根目录执行；已取得解压包可直接进入下面的启动步骤。
+需要 x86_64 GNU/Linux 构建环境、已提交的干净候选和一个尚不存在的输出目录：
+
+```bash
+uca_source_commit=$(git rev-parse HEAD)
+UCA_SOURCE_COMMIT="$uca_source_commit" cargo build --release --locked -p ustc-agentd
+bash scripts/package_three_plugin_mvp_compose.sh \
+  --binary target/release/ustc-agentd \
+  --output-dir dist/uca-compose-candidate \
+  --source-commit "$uca_source_commit"
+cd dist/uca-compose-candidate/ustc-campus-agent-mvp-compose
+```
+
+打包脚本会检查源码与二进制身份并生成启动脚本、固定资料和配置模板。
+未提交的开发改动应先作为本地预览验证，不能标成已提交候选。
+当前包提供默认模型配置；额外模型目录或外部 MCP 包若用于录像，需另行确认它们
+已随实际部署配置交付，不能仅凭开发机可用推定包内具备。
+
 ## Windows 一键启动
 
 1. 启动 Docker Desktop，并等待状态变为 *Engine running*。
@@ -65,7 +85,7 @@ docker compose up --build -d
 5. **ChangeRadar**：先读取变更板，再勾选确认并发布固定变更；检查 JSON board 与 Atom 链接。
 6. **Opportunity Graph**：先显式同意并创建 profile；随后在 Chat 中再勾选一次“允许本次对话使用当前 synthetic profile”并询问课程规划。Chat 无权创建或删除 profile。
 7. **Simple Calendar**：发送“记录事项：提交开题报告”，再发送“列出我的待办事项”；确认重启前后 `calendar:item:N` 与标题稳定。
-8. **四工具组合**：重新勾选本次 Opportunity consent，发送“请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，同时记录事项：复习计划”；确认 trace 显示四个成功工具。
+8. **四工具组合**：重新勾选本次 Opportunity consent，发送“请查询成绩单，并用 Change Radar 看变化，根据当前档案规划课程，并列出日历事项”；确认 trace 显示四个成功工具。
 9. **重启恢复**：执行 `docker compose restart`，刷新页面，确认 durable publication/profile/Calendar 状态仍可读。
 
 ## 停止、保留状态与重置

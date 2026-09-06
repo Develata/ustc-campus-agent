@@ -4,7 +4,7 @@ Status: user-approved enhanced submission scope (2026-09-05); merge and replacem
 
 ## Scope and ownership
 
-User approved configurable synthetic course planning, personal Affairs checklist export, and guided scene entry. Preserve existing visual language and Rust authority. Main owns integration, contracts, scenarios, acceptance and final verdict. Course and checklist writers own separate browser files; formal reviewer is native codex-reviewer. This bounded user-approved interaction improvement does not adopt a new frontend framework/design system or the historical unconfigured design-model lanes.
+User approved configurable synthetic course planning, personal Affairs checklist export, and guided scene entry. Preserve Rust authority. Develata's subsequent 2026-09-05 approval replaces the original visual-language constraint with the Chat-first/Plugins presentation in `agent-chat.md` §7, using the existing lightweight frontend stack. Main owns integration, contracts, scenarios, acceptance and final verdict; the current slice uses an independent read-only review lane under root AGENTS. Course and checklist modules retain separate responsibilities. This does not adopt a new frontend framework or the historical unconfigured design-model lanes.
 
 Baseline: `91321f040f8cdfa6937b831f496630eeac43eb27`. Product changes remain limited to these interactions: no changes to authentication authority, tool catalogue, planner algorithm, calendar or deployment semantics. The initial candidate grant excluded main and R2 replacement. Develata subsequently authorized protected-main synchronization and replacement of the competition submission bundle with the final enhanced source, subject to review, exact-head CI, exact-main artifact rebuild and read-back. Previously delivered archives remain historical rollback copies. No tag, Release, public runtime or competition-portal upload is authorized by this scope.
 
@@ -29,6 +29,7 @@ The separately executable [SSO reservation sample](../../examples/sso-interface/
 ## UE-03 Guided entry
 
 - Four buttons fill supported prompts for Affairs, Radar, planning and read-only Calendar list. Never auto-submit, pre-check consent, create profiles or mutate Calendar.
+- Prompts are reached through Plugins directory/detail views, leaving the conversation canvas uncluttered. Navigation and browser back preserve drafts and pending state; source links reveal the corresponding detail view. Settings contain presentation preferences and collapsed administrator demo controls.
 - Planning without current profile directs to the editor/explicit create control; existing current profile requires separate one-request Chat confirmation.
 - Copy-answer and source-panel navigation may be provided adjacent to results. No arbitrary provider text is promoted to verified-source evidence. Failure remains visible.
 

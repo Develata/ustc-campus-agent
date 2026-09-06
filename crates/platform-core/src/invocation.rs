@@ -1317,7 +1317,7 @@ pub fn authorize_call(
     if call.claimed_argument_digest != *call.arguments.digest() {
         return Err(InvocationAuthorizationError::ArgumentDigestMismatch);
     }
-    if !arguments_match_schema(call.arguments.root(), entry.input_schema.root()) {
+    if !entry.input_schema.accepts(&call.arguments) {
         return Err(InvocationAuthorizationError::ArgumentsInvalid);
     }
     Ok(AuthorizedInvocation {
@@ -1328,39 +1328,4 @@ pub fn authorize_call(
         current_grant_version: current.grant.version,
         current_policy_revision: current.policy.revision,
     })
-}
-
-fn arguments_match_schema(
-    argument: &CanonicalArgumentNodeV0,
-    schema: &ValidatedSchemaNodeV0,
-) -> bool {
-    match (argument, schema) {
-        (CanonicalArgumentNodeV0::String(value), ValidatedSchemaNodeV0::String { enum_values }) => {
-            enum_values
-                .as_ref()
-                .is_none_or(|values| values.contains(value))
-        }
-        (CanonicalArgumentNodeV0::Integer(_), ValidatedSchemaNodeV0::Integer)
-        | (CanonicalArgumentNodeV0::Number(_), ValidatedSchemaNodeV0::Number)
-        | (CanonicalArgumentNodeV0::Boolean(_), ValidatedSchemaNodeV0::Boolean) => true,
-        (CanonicalArgumentNodeV0::Array(values), ValidatedSchemaNodeV0::Array { items }) => values
-            .iter()
-            .all(|value| arguments_match_schema(value, items)),
-        (
-            CanonicalArgumentNodeV0::Object(members),
-            ValidatedSchemaNodeV0::Object {
-                properties,
-                required,
-            },
-        ) => {
-            members.len() <= properties.len()
-                && required.iter().all(|name| members.contains_key(name))
-                && members.iter().all(|(name, value)| {
-                    properties
-                        .get(name)
-                        .is_some_and(|schema| arguments_match_schema(value, schema))
-                })
-        }
-        _ => false,
-    }
 }

@@ -21,8 +21,8 @@ Operation IDs name semantics independently of transport or CLI spelling. Each ad
 |---|---|---|---|---|---|
 | `server.info` | M10 | `public-read` | read | Web, CLI, HTTP | approved Affairs-first protocol slice; bootstrap requires no protocol-major header |
 | `capability.list` | M10 | `public-read` | read | Web, CLI, HTTP | approved Affairs-first protocol slice; safe server-supported operation projection only |
-| `market.package.list` | M20 | `public-read` | read | CLI, HTTP, inbound MCP | planned first vertical slice |
-| `market.package.get` | M20 | `public-read` | read | CLI, HTTP | planned |
+| `market.package.list` | M20 | `public-read` | read | HTTP; later CLI/inbound MCP | bundled loopback query and static browser; full peer delivery planned |
+| `market.package.get` | M20 | `public-read` | read | HTTP; later CLI | exact bundled revision query and static browser; full peer delivery planned |
 | `affairs.search` | M71 | `public-read` | read | CLI, HTTP, inbound MCP | planned after owning product contract |
 | `affairs.get` | M71 | `public-read` | read | Web, CLI, HTTP; later inbound MCP | bounded formal protocol-major Web/CLI route projection implemented over exact stable-ID/domain evidence; production auth/TLS/inbound-MCP remains planned |
 | `change.list` | M70 | `public-read` | read | CLI, HTTP | bounded exact semantic-change evidence through `ustc-agentd` and the loopback-only JSON/Web/Atom demo; production HTTP projection planned |
@@ -46,7 +46,7 @@ Operation IDs name semantics independently of transport or CLI spelling. Each ad
 
 `program.*` means an approved cultivation-program projection. `profile.academic.*` is the exact consent-bound M72 private-profile family; principal identity is derived only from the M00-admitted session and is never caller-supplied inside the operation payload. `planner.draft.*` means a tenant-local planning draft. Neither is an Agent/Harness plan, and no ambiguous `plan.*` alias is admitted.
 
-The first retained formal protocol proof is the Affairs-first subset: `server.info`, `capability.list` and `affairs.get`, projected only to Web and CLI under protocol major `1`. Inbound MCP, `market.package.list`, events/streams and cancellation remain deferred slices. Bounded loopback-only `affairs.get` and `change.list` domain proofs already exist as vertical-slice evidence for `M10 → deterministic Harness → current Market authorization → ToolGateway → fixed first-party owning adapter → M71/M70` and operation-specific presentation surfaces. The active M72 slice is separate: an authenticated M00 actor and exact three-field consent pass transaction-current M20 package/installation/grant/policy authorization for a declarative resource component, then one static owning M72 application use case accesses tenant-private persistence and transaction-current source health. It creates no Agent run/tool projection, provider call, ToolGateway route, effect intent/receipt or PluginExecutor request, and it does not authorize public or inbound-MCP private-profile exposure. The retained product paths remain loopback demos with reviewed/DemoReviewed source inputs and demo admission data; they do not make a remotely exposed production HTTP route, package-portable/out-of-process executor host, general M60 ingestion service, production SSO, broad search, generic M80/Dioxus shell or acceptance rows operational before their exact evidence passes.
+The first retained formal protocol proof is the Affairs-first subset: `server.info`, `capability.list` and `affairs.get`, projected only to Web and CLI under protocol major `1`. Inbound MCP, full Market client parity, events/streams and cancellation remain deferred slices. The separate loopback bundled `market.package.list` / `market.package.get` query is specified in [market-catalog-query.md](market-catalog-query.md) and bound by `MARKET-008`; it does not expand the Affairs-first conformance allowlist. Bounded loopback-only `affairs.get` and `change.list` domain proofs already exist as vertical-slice evidence for `M10 → deterministic Harness → current Market authorization → ToolGateway → fixed first-party owning adapter → M71/M70` and operation-specific presentation surfaces. The active M72 slice is separate: an authenticated M00 actor and exact three-field consent pass transaction-current M20 package/installation/grant/policy authorization for a declarative resource component, then one static owning M72 application use case accesses tenant-private persistence and transaction-current source health. It creates no Agent run/tool projection, provider call, ToolGateway route, effect intent/receipt or PluginExecutor request, and it does not authorize public or inbound-MCP private-profile exposure. The retained product paths remain loopback demos with reviewed/DemoReviewed source inputs and demo admission data; they do not make a remotely exposed production HTTP route, package-portable/out-of-process executor host, general M60 ingestion service, production SSO, broad search, generic M80/Dioxus shell or acceptance rows operational before their exact evidence passes.
 
 ### 1.1 Active M72 private-operation wire contract
 
@@ -160,3 +160,40 @@ planner.explain
 | `AgentToolResult` | ToolGateway → Agent | correlated bounded result/evidence/receipt projection for the next model turn |
 
 This Agent tool protocol and M51 outbound MCP direction are independent from the M80 inbound MCP projection above.
+
+## Bundled Market read projection
+
+`market.package.list` and `market.package.get` are public read-only M20 operations
+in the static loopback composition. Their M10 carrier is `client-protocol::market`;
+`ustc-agentd::market_catalog::MarketCatalogQuery` is the owning application query
+behind `B-M10-APP-CALL` / `B-APP-M10-RESULT`. Its DTO conversion consumes M20's checked
+catalog values. HTTP handlers call that port once after protocol admission and do
+not read manifests, repositories or private state directly. Routes, field bounds,
+snapshot binding and stable failures are owned by [the catalog query contract](market-catalog-query.md).
+This adds no inbound MCP/CLI capability, lifecycle mutation or runtime permission.
+
+## Bounded saved-dialogue projection
+
+The app-private M30 conversation service exposes `GET/POST
+/api/v1/agent/conversations`, `GET /api/v1/agent/conversations/{id}` and `POST
+/api/v1/agent/conversations/{id}/turns` only through the existing loopback composition.
+The exact closed request/result/error schemas and effect/recovery semantics are owned
+by [chat-conversations](chat-conversations.md). M10 decodes one intent and calls its
+application port; it does not load files or construct model history. Principal scope
+comes from composition and is never accepted in the request. This is not a new public
+MCP/CLI allowlist or the formal finite-Harness route above.
+
+The same app-private conversation service exposes `GET
+/api/v1/agent/conversations/{id}/activity` through the same major-1 and loopback gates.
+[Chat activity](chat-activity.md) owns the closed, owner-scoped read-only DTO; M10 calls
+one application query and never derives execution state from browser timers.
+
+## Package application HTTP profile
+
+`GET /api/v1/plugins`, `POST /api/v1/plugins/commands`, and
+`POST /api/v1/plugins/probe` are bounded loopback application adapters under
+[plugin-management.md](plugin-management.md). Closed carriers live in the M10-owned
+`client-protocol::plugins` module; protocol major 1 and existing Host/Origin admission
+apply. Ingress derives the fixture owner and invokes one application query/command.
+Requests cannot select owner, policy, credential file or filesystem path. These
+routes do not establish public deployment or production SSO readiness.

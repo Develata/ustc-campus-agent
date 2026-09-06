@@ -6,7 +6,7 @@
 - `Status`: Accepted blueprint; node-local runtime kernel, provider-free deterministic turns and one bounded app-private provider/tool Chat coordinator implemented; durable finite user-task harness planned
 - `Implementation State`: `partial-evidence`
 - `Version`: `m30-agent-runtime/v0`
-- `Last Review`: `2026-09-04`
+- `Last Review`: `2026-09-05`
 - `Owning Plan`: [`../07-runtime-and-integration.md`](../07-runtime-and-integration.md)
 - `Primary code areas`: node kernel in `crates/agent-runtime/`, current bounded app-private Chat coordinator in `apps/ustc-agentd/src/agent_chat.rs`, and future cohesive durable harness modules
 
@@ -75,6 +75,30 @@ fabricated provider token/cost usage. It is a node-local execution mode, not the
 future user-task `HarnessRun` phase machine.
 
 The app-private Chat MVP provides a second bounded M30 orchestration slice: a closed three-turn/four-call coordinator sends complete request projections through M50, validates exact tool proposals, executes tools sequentially and produces a typed final response. Its confirmed Opportunity tool may invoke the separately owned static M72 planning use case; M72 consent/profile/planning semantics remain M72 evidence, not M30/M40 implementation.
+
+### Bounded durable conversation extension
+
+The approved functional follow-up adds server-owned dialogue storage around the
+existing finite Chat coordinator, under [chat-conversations](../../contracts/chat-conversations.md).
+It owns conversation identity, ordered submitted turns, revision checks and the
+reservation/result journal. Only server-admitted tenant/user context selects a
+conversation; client history and model text cannot replace that journal. Historical
+messages supply bounded context, never renewed profile consent or effect approval.
+
+A turn is durably reserved before provider/tool execution. Repeated submission with
+the same operation identity reads the saved disposition and cannot execute twice;
+a changed payload conflicts. Unfinished turns recovered after restart are interrupted
+and never automatically dispatched. The journal does not replace product receipts,
+and an interrupted run may already have a side effect requiring product read-back.
+The current composition remains the single demo identity until real account admission
+and all private products are isolated. This extension proves saved dialogue and
+submission deduplication, not the complete durable Harness, streaming or cancellation.
+
+The [activity projection](../../contracts/chat-activity.md) adds an optional bounded
+observer over real provider/tool transitions. It is a rebuildable view of execution,
+not a parallel run journal; model tokens, hidden reasoning and cancellation remain
+outside this slice. M10 queries the current admitted owner's turn through one
+application port, and presentation never infers authority from an activity label.
 
 ## 5. Dependency direction
 
@@ -182,3 +206,29 @@ Existing `agent-runtime` is reviewed as items 1–2, not treated as proof of ite
 ## 14. Exit gate
 
 `M30` is standalone-ready when all `HARNESS-*` and owned `AGENT-*` cases execute against fake model/tool/journal ports, including replay, context overflow, in-flight cancel and review remediation. It is accepted when one real API/client task reaches an evidenced terminal state with stream/non-stream convergence and restart without duplicate effects.
+
+## Current bounded package implementation evidence
+
+The single-component public-read package profile is specified by
+[`plugin-management.md`](../../contracts/plugin-management.md), with M20 admission
+and ledger codecs, the M51 Streamable HTTP adapter, standard Skill parsing and
+read-only resources, a frozen Chat tool projection and M30 persisted call journals.
+This supplies bounded evidence only; broader module exit gates, production identity,
+private/write approvals, central stdio, arbitrary executable Skills and update/rollback
+are not promoted by this profile.
+
+## Conversation metadata lifecycle
+
+The user-authorized history-menu extension remains within the existing bounded
+conversation owner. [Conversation management](../../contracts/conversation-management.md)
+adds explicit titles and terminal logical deletion, using the same private atomic
+store, owner identity, optimistic revision and idempotency semantics. Historical
+records remain retained; no product effect is undone. Menu presentation and ingress
+submit the owning command rather than mutate client-only conversation lists. This
+does not add public authentication, physical purge or change full Harness readiness.
+
+Automatic first-turn topic naming remains metadata inside the same conversation
+owner under [CHAT-004](../../contracts/chat-conversations.md#automatic-topic-titles-chat-004).
+A bounded no-tools model proposal supplies a short topic; the store owns its
+campus date prefix, deterministic fallback, explicit-name precedence and atomic
+terminal persistence. This adds no Agent tool or independent title state owner.

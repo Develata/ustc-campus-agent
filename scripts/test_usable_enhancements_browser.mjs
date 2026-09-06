@@ -1,17 +1,25 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFile, readFile } from "node:fs/promises";
+import { checkChatShell } from "./tests/chat_shell_browser_cases.mjs";
+import { checkAdminControls } from "./tests/admin_controls_browser_cases.mjs";
+import { checkMarketCatalog } from "./tests/market_catalog_browser_cases.mjs";
+import { checkConversationManagement } from "./tests/conversation_management_browser_cases.mjs";
+import { checkModelSelection } from "./tests/model_selection_browser_cases.mjs";
+import { checkPluginManagement } from "./tests/plugin_management_browser_cases.mjs";
+import { checkChatActivity } from "./tests/chat_activity_browser_cases.mjs";
+import { checkConversations } from "./tests/conversation_browser_cases.mjs";
 
 const repo = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const binary = resolve(process.argv[2] ?? "target/debug/ustc-agentd");
 const port = 18831;
 const externalBase = process.argv[2] === "--base" ? process.argv[3] : null;
-if (externalBase && !/^http:\/\/127\.0\.0\.1:[0-9]+$/.test(externalBase)) throw Error("test base must be numeric loopback");
+if (process.argv[2] === "--base" && (!externalBase || !/^http:\/\/127\.0\.0\.1:[0-9]+$/.test(externalBase))) throw Error("test base must be numeric loopback");
 const base = externalBase ?? `http://127.0.0.1:${port}`;
 const work = await mkdtemp(join(tmpdir(), "uca-agent-chat-browser-"));
 
@@ -24,11 +32,17 @@ const serverEnv = { ...process.env, UCA_AGENT_PROVIDER: "mock" };
 for (const name of [
   "UCA_AGENT_BASE_URL",
   "UCA_AGENT_MODEL",
+  "UCA_AGENT_MODELS_FILE",
   "UCA_AGENT_API_KEY_FILE",
   "UCA_AGENT_TIMEOUT_MS",
   "UCA_AGENT_CONTEXT_TOKENS"
 ]) {
   delete serverEnv[name];
+}
+if (!externalBase && process.env.UCA_BROWSER_SUITE === "models") {
+  const modelFile = join(work, "agent-models.json");
+  await writeFile(modelFile, JSON.stringify({schema:"uca-agent-models/v1",models:[{id:"offline-demo",label:"离线演示备选",mode:"mock"}]}));
+  serverEnv.UCA_AGENT_MODELS_FILE = modelFile;
 }
 const server = externalBase ? null : spawn(binary, [
   "serve-web",
@@ -220,10 +234,21 @@ try {
   };
   await waitFor("document.readyState === 'complete' && !!window.UcaCourseEditor && !!window.UcaAffairsChecklist", "enhancements load");
   await waitFor("!!document.querySelector('#affairs-checklist-download') && !document.querySelector('#affairs-checklist-download').disabled", "real Affairs checklist");
-  const evidence = { mode: externalBase ? "PREBUILD_ASSETS_OVER_FROZEN_API" : "COMPILED_BINARY", cases: [] };
+  const evidence = { mode: externalBase ? "EXTERNAL_LOOPBACK_SERVER" : "COMPILED_BINARY", suite: process.env.UCA_BROWSER_SUITE || "full-ui", cases: [] };
   const pass = name => evidence.cases.push({ name, status: "PASS" });
+  if (!process.env.UCA_BROWSER_SUITE || process.env.UCA_BROWSER_SUITE === "conversations") {
+    // Bind deterministic malformed-response coverage to the existing CI/browser gate.
+    execFileSync(process.execPath, [join(repo, "scripts/client_tests/conversation_recovery.test.mjs")], {
+      timeout: 15000, maxBuffer: 128 * 1024, stdio: "pipe"
+    });
+    pass("CHAT-conversation-malformed-recovery-boundary");
+  }
   const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
   const field = (selector, value) => evaluate(`(() => {const e=document.querySelector(${JSON.stringify(selector)});e.value=${JSON.stringify(value)};e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  const navigate = async route => {
+    await evaluate(`window.UcaShell.navigate(${JSON.stringify(route)})`);
+    await waitFor(`!document.querySelector('[data-view="${route}"]').hidden`, `visible ${route}`);
+  };
   await evaluate(`(() => {
     window.__posts=[]; const original=window.fetch.bind(window);
     window.fetch=async (url, options={}) => {
@@ -235,7 +260,9 @@ try {
       return response;
     };
   })()`);
+  if (!["market", "plugins", "models", "management", "conversations", "shell", "activity"].includes(process.env.UCA_BROWSER_SUITE)) {
   for (const scene of ['affairs','radar','planning','calendar']) {
+    await navigate(`plugins/${scene}`);
     await field('#chat-input','');
     await click(`[data-scene=${scene}]`);
     assert.ok(await evaluate("document.querySelector('#chat-input').value.length > 0"));
@@ -243,9 +270,11 @@ try {
   }
   assert.equal(await evaluate('window.__posts.length'),0);
   await field('#chat-input','保留我的草稿');
+  await navigate('plugins/affairs');
   await click('[data-scene=affairs]');
   assert.equal(await evaluate("document.querySelector('#chat-input').value"),'保留我的草稿');
   await field('#chat-input','');
+  await navigate('plugins/planning');
   await cdp.send('Page.bringToFront', {}, sessionId);
   await evaluate("document.querySelector('[data-scene=planning]').focus()");
   await cdp.send('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space',windowsVirtualKeyCode:32,text:' '},sessionId);
@@ -254,6 +283,7 @@ try {
   assert.equal(await evaluate('window.__posts.length'),0);
   pass('UE-03-scenes-keyboard-no-effect');
 
+  await navigate('plugins/affairs');
   await click('#steps input[type=checkbox]');
   const markdown = await evaluate('window.UcaAffairsChecklist.markdown()');
   for (const required of ['- [x]','不是官方受理','最近核验','不确定性','https://','按顺序办理']) assert.ok(markdown.includes(required), required);
@@ -280,6 +310,7 @@ try {
   assert.equal(await evaluate("document.querySelectorAll('#steps input:checked').length"),0);
   pass('UE-02-no-stale-export-reset');
 
+  await navigate('plugins/planning');
   await click('#opportunity-create');
   assert.equal(await evaluate('window.__posts.length'),0,'no create without consent');
   const create = async () => {
@@ -343,21 +374,39 @@ try {
   assert.equal(await evaluate("document.querySelector('#chat-opportunity-confirm').checked"),false);
   pass('UE-01-lost-response-reload-exact-retry');
 
+  await navigate('chat');
   await evaluate("document.querySelector('#chat-input').value='成绩单证明怎么办？';document.querySelector('#chat-form').requestSubmit()");
   await waitFor("!!document.querySelector('.answer-actions') && !chatPending",'answer actions');
-  assert.ok(await evaluate("document.querySelector('.answer-actions a').getAttribute('href') === '#hero-title'"));
+  assert.ok(await evaluate("document.querySelector('.answer-actions a').getAttribute('href') === '#plugins/affairs'"));
+  await click('.answer-actions a');
+  await waitFor("!document.querySelector('#plugin-affairs').hidden", 'answer source navigation');
   pass('UE-03-real-answer-actions');
   await evaluate("document.querySelectorAll('#course-editor details').forEach(e=>e.open=true)");
   for (const width of [320,390,1280]) {
     for (const theme of ['light','dark']) {
       await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
       await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme}]},sessionId);
-      assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'),true,`${width}/${theme} overflow`);
+      for (const route of ['chat','plugins','plugins/affairs','plugins/radar','plugins/planning','plugins/calendar','settings']) {
+        await navigate(route);
+        assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth && document.querySelector("#app-main").scrollWidth <= document.querySelector("#app-main").clientWidth'),true,`${route}/${width}/${theme} overflow`);
+      }
     }
   }
   assert.deepEqual(cdp.events.filter(e=>e.method==='Runtime.exceptionThrown'),[]);
   pass('UE-03-responsive-themes-no-exceptions');
+  await checkChatShell({ evaluate, waitFor, cdp, sessionId, navigate, click, field, pass });
+  await checkAdminControls({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  }
+  if (process.env.UCA_BROWSER_SUITE === "shell") await checkChatShell({ evaluate, waitFor, cdp, sessionId, navigate, click, field, pass });
+  if (!["plugins", "models", "management", "conversations", "shell", "activity"].includes(process.env.UCA_BROWSER_SUITE)) await checkMarketCatalog({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  if (process.env.UCA_BROWSER_SUITE === "management") await checkConversationManagement({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  if (process.env.UCA_BROWSER_SUITE === "models") await checkModelSelection({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  if (process.env.UCA_BROWSER_SUITE === "plugins") await checkPluginManagement({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  if (process.env.UCA_BROWSER_SUITE === "conversations") await checkConversations({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  if (process.env.UCA_BROWSER_SUITE === "activity") await checkChatActivity({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  assert.deepEqual(cdp.events.filter(e=>e.method==='Runtime.exceptionThrown'),[]);
   if (process.env.UCA_TEST_SCREENSHOT) {
+    await navigate('plugins/planning');
     await evaluate("document.querySelector('#course-editor').scrollIntoView({block:'start'})");
     const shot=await cdp.send('Page.captureScreenshot',{format:'png'},sessionId);
     await writeFile(process.env.UCA_TEST_SCREENSHOT,Buffer.from(shot.data,'base64'));

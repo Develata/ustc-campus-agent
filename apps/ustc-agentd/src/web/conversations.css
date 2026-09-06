@@ -1,0 +1,14 @@
+/* Server-owned conversation navigation, sharing the chat shell palette. */
+.conversation-history { min-height: 0; overflow-y: auto; margin-top: 28px; flex: 1; }
+.conversation-history-header { display: flex; align-items: center; justify-content: space-between; padding-left: 12px; gap: 8px; }
+.conversation-history h2 { margin: 0; color: var(--muted); font-size: 12px; font-weight: 500; }
+.conversation-history-refresh { min-width: 44px; min-height: 44px; border: 0; padding: 8px; background: transparent; color: var(--muted); font-size: 12px; border-radius: 8px; }
+.conversation-history-status { margin: 6px 12px 12px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.conversation-history-list { list-style: none; margin: 0; padding: 0; }
+.conversation-history-list button { width: 100%; min-height: 44px; display: block; padding: 10px 12px; border: 0; border-radius: 8px; color: var(--ink); background: transparent; font-size: 13px; font-weight: 400; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.conversation-history-list button:hover, .conversation-history-list button[aria-current="true"] { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.conversation-history-list button:disabled { opacity: .55; }
+.conversation-recovery { margin: 0 0 10px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.conversation-recovery p { margin: 0 0 8px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.conversation-recovery button { min-height: 44px; padding: 8px 12px; margin-right: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font-size: 13px; }
+.conversation-turn-state { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.6; }

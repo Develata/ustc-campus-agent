@@ -7,6 +7,11 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::{collections::BTreeMap, future::Future};
+use ustc_agent_tool_protocol::{
+    CanonicalArgumentValueV0, UnvalidatedArgumentValueV0, ValidatedSchemaNodeV0,
+    ValidatedToolInputSchemaV0,
+};
 
 pub(crate) const AFFAIRS_TOOL_NAME: &str = "affairs_navigator_get";
 pub(crate) const CHANGE_TOOL_NAME: &str = "change_radar_get";
@@ -23,34 +28,181 @@ const UNTRUSTED_DATA_LABEL: &str = "untrusted_data";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ChatToolDefinition {
-    pub(crate) name: &'static str,
-    pub(crate) description: &'static str,
+    pub(crate) name: String,
+    pub(crate) description: String,
     pub(crate) input_schema: Value,
+}
+
+/// A checked framework-neutral tool projection. The JSON is generated from the
+/// compiled platform schema, so a second supplied schema cannot change meaning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ChatDynamicToolDefinition {
+    definition: ChatToolDefinition,
+    compiled_schema: ValidatedToolInputSchemaV0,
+}
+impl ChatDynamicToolDefinition {
+    pub(crate) fn new(
+        name: String,
+        description: String,
+        compiled_schema: ValidatedToolInputSchemaV0,
+    ) -> Result<Self, ChatToolValidationError> {
+        if !name.starts_with("plugin_")
+            || name.len() <= 7
+            || name.len() > 64
+            || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            || description.trim().is_empty()
+            || description.len() > 4096
+            || description.contains('\0')
+        {
+            return Err(ChatToolValidationError::InvalidArguments);
+        }
+        let input_schema = schema_json(compiled_schema.root());
+        Ok(Self {
+            definition: ChatToolDefinition {
+                name,
+                description,
+                input_schema,
+            },
+            compiled_schema,
+        })
+    }
+}
+
+fn schema_json(schema: &ValidatedSchemaNodeV0) -> Value {
+    match schema {
+        ValidatedSchemaNodeV0::Object {
+            properties,
+            required,
+        } => {
+            json!({"type":"object", "properties":properties.iter().map(|(name,schema)| (name.clone(),schema_json(schema))).collect::<BTreeMap<_,_>>(), "required":required, "additionalProperties":false})
+        }
+        ValidatedSchemaNodeV0::String {
+            enum_values: Some(values),
+        } => json!({"type":"string", "enum":values}),
+        ValidatedSchemaNodeV0::String { enum_values: None } => json!({"type":"string"}),
+        ValidatedSchemaNodeV0::Integer => json!({"type":"integer"}),
+        ValidatedSchemaNodeV0::Number => json!({"type":"number"}),
+        ValidatedSchemaNodeV0::Boolean => json!({"type":"boolean"}),
+        ValidatedSchemaNodeV0::Array { items } => {
+            json!({"type":"array", "items":schema_json(items)})
+        }
+    }
+}
+
+/// Preserve member order and duplicate keys until the canonical constructor
+/// validates them, instead of losing duplicates through serde_json::Value.
+struct CanonicalJson(UnvalidatedArgumentValueV0);
+impl<'de> Deserialize<'de> for CanonicalJson {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = CanonicalJson;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("bounded canonical tool arguments")
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(CanonicalJson(UnvalidatedArgumentValueV0::Null))
+            }
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(CanonicalJson(UnvalidatedArgumentValueV0::Boolean(v)))
+            }
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(CanonicalJson(UnvalidatedArgumentValueV0::Integer(
+                    v.to_string(),
+                )))
+            }
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+                Ok(CanonicalJson(UnvalidatedArgumentValueV0::Integer(
+                    v.to_string(),
+                )))
+            }
+            fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
+                Ok(CanonicalJson(UnvalidatedArgumentValueV0::Number(
+                    v.to_string(),
+                )))
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(CanonicalJson(UnvalidatedArgumentValueV0::String(
+                    v.to_owned(),
+                )))
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = Vec::new();
+                while let Some(CanonicalJson(value)) = seq.next_element()? {
+                    values.push(value);
+                }
+                Ok(CanonicalJson(UnvalidatedArgumentValueV0::Array(values)))
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = Vec::new();
+                while let Some((key, CanonicalJson(value))) = map.next_entry()? {
+                    values.push((key, value));
+                }
+                Ok(CanonicalJson(UnvalidatedArgumentValueV0::Object(values)))
+            }
+        }
+        deserializer.deserialize_any(Visitor)
+    }
+}
+pub(crate) fn canonical_arguments(
+    raw: &str,
+) -> Result<CanonicalArgumentValueV0, ChatToolValidationError> {
+    if raw.len() > MAX_TOOL_ARGUMENT_BYTES {
+        return Err(ChatToolValidationError::ArgumentsTooLarge);
+    }
+    let CanonicalJson(value) = parse_exact_arguments(raw)?;
+    CanonicalArgumentValueV0::try_from(value).map_err(|_| ChatToolValidationError::InvalidArguments)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ChatToolCatalog {
     opportunity_profile_snapshot_id: Option<String>,
+    dynamic: BTreeMap<String, ChatDynamicToolDefinition>,
 }
 
 impl ChatToolCatalog {
+    pub(crate) fn register_dynamic(
+        &mut self,
+        tools: Vec<ChatDynamicToolDefinition>,
+    ) -> Result<(), ChatToolValidationError> {
+        if tools.len() > 28 {
+            return Err(ChatToolValidationError::UnavailableTool);
+        }
+        let mut dynamic = BTreeMap::new();
+        for tool in tools {
+            if dynamic.insert(tool.definition.name.clone(), tool).is_some() {
+                return Err(ChatToolValidationError::UnavailableTool);
+            }
+        }
+        self.dynamic = dynamic;
+        Ok(())
+    }
+
     pub(crate) fn without_opportunity() -> Self {
         Self {
             opportunity_profile_snapshot_id: None,
+            dynamic: BTreeMap::new(),
         }
     }
 
     pub(crate) fn with_confirmed_opportunity(profile_snapshot_id: String) -> Self {
         Self {
             opportunity_profile_snapshot_id: Some(profile_snapshot_id),
+            dynamic: BTreeMap::new(),
         }
     }
 
     pub(crate) fn definitions(&self) -> Vec<ChatToolDefinition> {
         let mut definitions = vec![
             ChatToolDefinition {
-                name: AFFAIRS_TOOL_NAME,
-                description: "Read the reviewed public transcript-certificate procedure.",
+                name: AFFAIRS_TOOL_NAME.to_owned(),
+                description: "Read the reviewed public transcript-certificate procedure.".to_owned(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -64,8 +216,8 @@ impl ChatToolCatalog {
                 }),
             },
             ChatToolDefinition {
-                name: CHANGE_TOOL_NAME,
-                description: "Read the reviewed public academic-calendar change board.",
+                name: CHANGE_TOOL_NAME.to_owned(),
+                description: "Read the reviewed public academic-calendar change board.".to_owned(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -79,8 +231,8 @@ impl ChatToolCatalog {
                 }),
             },
             ChatToolDefinition {
-                name: CALENDAR_TOOL_NAME,
-                description: "Record, list, or delete bounded owner-local calendar items. Recording accepts a title only; reminders and scheduled times are outside this tool.",
+                name: CALENDAR_TOOL_NAME.to_owned(),
+                description: "Record, list, or delete bounded owner-local calendar items. Recording accepts a title only; reminders and scheduled times are outside this tool.".to_owned(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -95,9 +247,9 @@ impl ChatToolCatalog {
         ];
         if self.opportunity_profile_snapshot_id.is_some() {
             definitions.push(ChatToolDefinition {
-                name: OPPORTUNITY_TOOL_NAME,
+                name: OPPORTUNITY_TOOL_NAME.to_owned(),
                 description:
-                    "Generate up to three plans from the caller-confirmed current synthetic profile.",
+                    "Generate up to three plans from the caller-confirmed current synthetic profile.".to_owned(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {},
@@ -106,6 +258,7 @@ impl ChatToolCatalog {
                 }),
             });
         }
+        definitions.extend(self.dynamic.values().map(|tool| tool.definition.clone()));
         definitions
     }
 
@@ -149,7 +302,20 @@ impl ChatToolCatalog {
                     beam_width: 1024,
                 })
             }
-            _ => Err(ChatToolValidationError::UnknownTool),
+            _ => {
+                let tool = self
+                    .dynamic
+                    .get(name)
+                    .ok_or(ChatToolValidationError::UnknownTool)?;
+                let canonical = canonical_arguments(raw_arguments)?;
+                if !tool.compiled_schema.accepts(&canonical) {
+                    return Err(ChatToolValidationError::InvalidArguments);
+                }
+                Ok(ChatToolRequest::Plugin {
+                    tool_name: name.to_owned(),
+                    arguments: parse_exact_arguments(raw_arguments)?,
+                })
+            }
         }
     }
 }
@@ -312,6 +478,11 @@ fn valid_calendar_item_id(value: &str) -> bool {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ChatToolRequest {
+    /// Neutral validated intent; server routing and authority never enter the Agent.
+    Plugin {
+        tool_name: String,
+        arguments: Value,
+    },
     AffairsNavigatorGet {
         procedure_id: String,
     },
@@ -397,15 +568,26 @@ struct ProviderToolResult<'a> {
 pub(crate) trait ChatToolExecutor {
     /// Execute one request that has already passed exact name/schema/context
     /// validation. Implementations must not accept raw model arguments.
-    fn execute(&mut self, request: ChatToolRequest) -> ChatToolExecution;
+    fn execute(
+        &mut self,
+        request: ChatToolRequest,
+    ) -> impl Future<Output = ChatToolExecution> + Send;
+
+    /// Frozen server-owned definitions for this run; no endpoint/installation routes.
+    fn definitions(&self) -> Vec<ChatDynamicToolDefinition> {
+        Vec::new()
+    }
 }
 
 impl<F> ChatToolExecutor for F
 where
-    F: FnMut(ChatToolRequest) -> ChatToolExecution,
+    F: FnMut(ChatToolRequest) -> ChatToolExecution + Send,
 {
-    fn execute(&mut self, request: ChatToolRequest) -> ChatToolExecution {
-        self(request)
+    fn execute(
+        &mut self,
+        request: ChatToolRequest,
+    ) -> impl Future<Output = ChatToolExecution> + Send {
+        std::future::ready(self(request))
     }
 }
 
@@ -437,7 +619,7 @@ mod tests {
         assert_eq!(
             definitions
                 .iter()
-                .map(|definition| definition.name)
+                .map(|definition| definition.name.as_str())
                 .collect::<Vec<_>>(),
             vec![
                 AFFAIRS_TOOL_NAME,
@@ -683,8 +865,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn callback_receives_only_validated_request() {
+    #[tokio::test]
+    async fn callback_receives_only_validated_request() {
         let mut observed = Vec::new();
         let mut executor = |request| {
             observed.push(request);
@@ -693,8 +875,136 @@ mod tests {
         let request = confirmed_catalog()
             .validate_call(OPPORTUNITY_TOOL_NAME, "{}")
             .expect("exact opportunity request");
-        let result = executor.execute(request.clone());
+        let result = executor.execute(request.clone()).await;
         assert_eq!(observed, vec![request]);
         assert_eq!(result.status(), ChatToolStatus::Denied);
+    }
+}
+
+#[cfg(test)]
+mod dynamic_tool_tests {
+    use super::*;
+    use ustc_agent_tool_protocol::{UnvalidatedSchemaNodeV0, UnvalidatedToolInputSchemaV0};
+
+    fn schema() -> ValidatedToolInputSchemaV0 {
+        ValidatedToolInputSchemaV0::try_from(UnvalidatedToolInputSchemaV0 {
+            dialect: "tool-input-schema/v0".to_owned(),
+            root: UnvalidatedSchemaNodeV0::Object {
+                properties: vec![(
+                    "resource".to_owned(),
+                    UnvalidatedSchemaNodeV0::String {
+                        enum_values: Some(vec!["SKILL.md".to_owned()]),
+                    },
+                )],
+                required: vec!["resource".to_owned()],
+            },
+        })
+        .expect("schema")
+    }
+
+    #[test]
+    fn dynamic_definition_is_neutral_closed_and_exactly_validated() {
+        let tool = ChatDynamicToolDefinition::new(
+            "plugin_synthetic_skill_read".into(),
+            "Read synthetic instructions".into(),
+            schema(),
+        )
+        .expect("definition");
+        let mut catalog = ChatToolCatalog::without_opportunity();
+        catalog.register_dynamic(vec![tool]).expect("register");
+        let definition = catalog.definitions().pop().expect("dynamic definition");
+        assert_eq!(definition.input_schema["additionalProperties"], false);
+        assert_eq!(
+            definition.input_schema["properties"]["resource"]["enum"],
+            json!(["SKILL.md"])
+        );
+        assert_eq!(
+            catalog
+                .validate_call(&definition.name, r#"{"resource":"SKILL.md"}"#)
+                .expect("call"),
+            ChatToolRequest::Plugin {
+                tool_name: definition.name.clone(),
+                arguments: json!({"resource":"SKILL.md"})
+            }
+        );
+        for arguments in [
+            r#"{}"#,
+            r#"{"resource":"other"}"#,
+            r#"{"resource":"SKILL.md","endpoint":"http://private"}"#,
+            r#"{"resource":"SKILL.md","resource":"SKILL.md"}"#,
+            r#"{"resource":null}"#,
+        ] {
+            assert_eq!(
+                catalog.validate_call(&definition.name, arguments),
+                Err(ChatToolValidationError::InvalidArguments)
+            );
+        }
+    }
+
+    #[test]
+    fn dynamic_names_duplicates_and_count_fail_closed() {
+        for name in [
+            "affairs_navigator_get",
+            "plugin_",
+            "plugin_bad-name",
+            "plugin_../private",
+        ] {
+            assert_eq!(
+                ChatDynamicToolDefinition::new(name.into(), "Synthetic".into(), schema()).err(),
+                Some(ChatToolValidationError::InvalidArguments)
+            );
+        }
+        let tool =
+            ChatDynamicToolDefinition::new("plugin_read".into(), "Synthetic".into(), schema())
+                .expect("definition");
+        let mut catalog = ChatToolCatalog::without_opportunity();
+        assert_eq!(
+            catalog.register_dynamic(vec![tool.clone(), tool.clone()]),
+            Err(ChatToolValidationError::UnavailableTool)
+        );
+        assert_eq!(catalog.definitions().len(), 3);
+        assert_eq!(
+            catalog.register_dynamic(vec![tool; 29]),
+            Err(ChatToolValidationError::UnavailableTool)
+        );
+    }
+}
+
+#[cfg(test)]
+mod dynamic_boundaries {
+    use super::*;
+    #[test]
+    fn dynamic_name_limit_and_nested_duplicate_decoding_are_exact() {
+        let schema = ValidatedToolInputSchemaV0::try_from(
+            ustc_agent_tool_protocol::UnvalidatedToolInputSchemaV0 {
+                dialect: "tool-input-schema/v0".to_owned(),
+                root: ustc_agent_tool_protocol::UnvalidatedSchemaNodeV0::Object {
+                    properties: vec![],
+                    required: vec![],
+                },
+            },
+        )
+        .expect("schema");
+        assert!(
+            ChatDynamicToolDefinition::new(
+                format!("plugin_{}", "a".repeat(57)),
+                "Synthetic".into(),
+                schema.clone()
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            ChatDynamicToolDefinition::new(
+                format!("plugin_{}", "a".repeat(58)),
+                "Synthetic".into(),
+                schema
+            )
+            .err(),
+            Some(ChatToolValidationError::InvalidArguments)
+        );
+        assert_eq!(
+            canonical_arguments(r#"{"nested":{"same":1,"same":2}}"#),
+            Err(ChatToolValidationError::InvalidArguments)
+        );
     }
 }
