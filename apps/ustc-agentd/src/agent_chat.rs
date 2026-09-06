@@ -149,6 +149,7 @@ impl ChatUsageDto {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChatError {
+    Cancelled,
     InvalidChatRequest,
     ProviderNotConfigured,
     ProviderUnauthorized,
@@ -170,6 +171,7 @@ pub(crate) enum ChatError {
 impl ChatError {
     pub(crate) const fn code(self) -> &'static str {
         match self {
+            Self::Cancelled => "chat_cancelled",
             Self::InvalidChatRequest => "invalid_chat_request",
             Self::ProviderNotConfigured => "provider_not_configured",
             Self::ProviderUnauthorized => "provider_unauthorized",
@@ -406,7 +408,7 @@ impl ChatProviderRequestSnapshot {
 
 /// Ephemeral, redacted execution observations. No payload or provider correlation ID
 /// crosses this boundary; observers cannot approve or retry an operation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum ChatActivityTool {
     AffairsNavigatorGet,
@@ -463,8 +465,16 @@ pub(crate) enum ChatActivityEvent {
         status: ChatToolStatus,
     },
 }
-pub(crate) trait ChatActivityObserver {
+pub(crate) trait ChatActivityObserver: Send {
     fn observe(&mut self, event: ChatActivityEvent);
+    fn text_delta(&mut self, _text: &str) {}
+    fn tool_result(&mut self, _call: u8, _result: &str) {}
+    fn checkpoint(&mut self) -> Result<(), ChatError> {
+        Ok(())
+    }
+    fn check_cancelled(&self) -> Result<(), ChatError> {
+        Ok(())
+    }
 }
 impl ChatActivityObserver for () {
     fn observe(&mut self, _: ChatActivityEvent) {}
@@ -630,6 +640,7 @@ impl ChatRun {
             .collect::<Vec<_>>();
 
         for (call, request, authorized) in validated {
+            observer.check_cancelled()?;
             let public_call = u8::try_from(self.tool_trace.len())
                 .unwrap_or(MAX_TOOL_CALLS)
                 .saturating_add(1);
@@ -676,6 +687,10 @@ impl ChatRun {
                     },
                 },
             );
+            if let Ok(content) = &content {
+                observer.tool_result(public_call, content);
+            }
+            observer.checkpoint()?;
             let content = content.map_err(|error| match error {
                 ChatToolResultValidationError::TooLarge => ChatError::ToolResultTooLarge,
                 ChatToolResultValidationError::SerializationFailed => ChatError::Internal,
@@ -758,6 +773,7 @@ pub(crate) async fn run_bounded_chat_with_observer<E: ChatToolExecutor>(
         run.disable_tools();
     }
     loop {
+        observer.check_cancelled()?;
         let provider_request = run.next_provider_request()?.into_provider_request();
         observe(
             observer,
@@ -765,7 +781,13 @@ pub(crate) async fn run_bounded_chat_with_observer<E: ChatToolExecutor>(
                 turn: run.provider_turns,
             },
         );
-        let turn = provider.complete(&provider_request).await;
+        let turn = provider
+            .complete_observed(&provider_request, &mut |text| {
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    observer.text_delta(text)
+                }));
+            })
+            .await;
         observe(
             observer,
             ChatActivityEvent::ModelFinished {

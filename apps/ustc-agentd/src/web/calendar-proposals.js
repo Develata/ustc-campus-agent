@@ -92,12 +92,12 @@ window.UcaCalendarProposals = (() => {
     if (!root) return null;
     if (mounted.has(root)) return mounted.get(root);
     let disposed = false, busy = false, reading = false, generation = 0;
-    let proposals = [], items = [], now = 0, known = false, signature = "";
+    let proposals = [], items = [], batches = [], reminders = [], now = 0, known = false, signature = "";
     let editing = null, uncertain = null, recoveryChecked = false;
     root.classList.add("calendar-proposals");
     const details = node("details"), summary = node("summary", "日历事项 · 正在读取");
     const content = node("div", undefined, "calendar-proposals-content");
-    const note = node("p", "时间均为北京时间 UTC+08:00。当前未启用提醒；确认只保存或修改事项。", "calendar-proposals-note");
+    const note = node("p", "时间均为北京时间 UTC+08:00。新确认的定时事项将到点投递到站内提醒；这不是手机推送。", "calendar-proposals-note");
     const status = node("p", "", "calendar-proposals-status");
     status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
     const controls = node("div", undefined, "calendar-proposals-actions");
@@ -131,8 +131,9 @@ window.UcaCalendarProposals = (() => {
     const pendingList = node("div", undefined, "calendar-proposals-list");
     const itemsTitle = node("h3", "已保存事项");
     const itemList = node("div", undefined, "calendar-proposals-list");
+    const inbox = node("div", undefined, "calendar-proposals-list");
     manual.append(form);
-    content.append(note, controls, status, pendingTitle, pendingList, itemsTitle, itemList, manual);
+    content.append(note, controls, status, pendingTitle, pendingList, itemsTitle, itemList, inbox, manual);
     details.append(summary, content); root.append(details);
     function announce(message) { status.textContent = message; }
     function updateControls() {
@@ -158,10 +159,10 @@ window.UcaCalendarProposals = (() => {
     }
     function render(force = false) {
       const pending = proposals.filter(proposal => proposal.status === "pending");
-      summary.textContent = `日历事项 · ${pending.length} 个待确认 · ${items.length} 个已保存`;
-      const next = JSON.stringify([proposals, items, pending.map(p => p.expires_at_unix_secs <= now)]);
+      summary.textContent = `日历事项 · ${pending.length + batches.filter(b => b.status === "pending").length} 个待确认 · ${items.length} 个已保存`;
+      const next = JSON.stringify([proposals, items, batches, reminders, pending.map(p => p.expires_at_unix_secs <= now)]);
       if (force || signature !== next) {
-        signature = next; pendingList.replaceChildren(); itemList.replaceChildren();
+        signature = next; pendingList.replaceChildren(); itemList.replaceChildren(); inbox.replaceChildren();
         if (!pending.length) pendingList.append(node("p", "暂无待确认提案。", "calendar-proposals-note"));
         for (const proposal of pending) {
           const card = node("article", undefined, "calendar-proposal-card");
@@ -177,6 +178,21 @@ window.UcaCalendarProposals = (() => {
           if (!expired) actions.append(writeButton("确认执行", () => command({kind: "confirm", id: proposal.id})));
           actions.append(writeButton("取消提案", () => command({kind: "cancel", id: proposal.id})));
           card.append(actions); pendingList.append(card);
+        }
+        for (const batch of batches.filter(b => b.status === "pending")) {
+          const card=node("article",undefined,"calendar-proposal-card");card.dataset.calendarBatchId=batch.id;
+          card.append(node("h4",`批量加入 ${batch.items.length} 个事项`));
+          for (const item of batch.items) card.append(node("p",describe(item)));
+          card.append(node("p","确认后全部保存，并在各事项时间投递站内提醒。","calendar-proposals-note"));
+          const actions=node("div",undefined,"calendar-proposals-actions");
+          if(batch.expires_at_unix_secs>now) actions.append(writeButton("确认全部加入",()=>auxiliary(`/api/v1/calendar/batches/${encodeURIComponent(batch.id)}/confirm`,"calendar-batch-confirm/v1")));
+          actions.append(writeButton("取消批量提案",()=>auxiliary(`/api/v1/calendar/batches/${encodeURIComponent(batch.id)}/cancel`,"calendar-batch-cancel/v1")));card.append(actions);pendingList.append(card);
+        }
+        const delivered=reminders.filter(r=>r.status==="delivered");
+        if(delivered.length) inbox.append(node("h3",`站内提醒 · ${delivered.filter(r=>r.read_at_unix_secs==null).length} 条未读`));
+        for(const reminder of delivered.slice().reverse()){
+          const card=node("article",undefined,"calendar-proposal-card");card.append(node("h4",reminder.title),node("p",absoluteTime(reminder.scheduled_for)),node("p",`站内投递时间：${absoluteTime(reminder.delivered_at_unix_secs*1000)}`,"calendar-proposals-note"));
+          if(reminder.read_at_unix_secs==null)card.append(writeButton("标为已读",()=>auxiliary(`/api/v1/calendar/reminders/${encodeURIComponent(reminder.id)}/read`,"calendar-reminder-read/v1")));else card.append(node("p","已读","calendar-proposals-note"));inbox.append(card);
         }
         if (!items.length) itemList.append(node("p", "暂无已保存事项。", "calendar-proposals-note"));
         for (const item of items) {
@@ -196,6 +212,13 @@ window.UcaCalendarProposals = (() => {
       }
       updateControls();
     }
+    async function auxiliary(path,schema){
+      if(busy||uncertain)return;busy=true;generation++;updateControls();
+      try{const {response}=await exchange(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({schema})});
+        announce(response.ok?"操作已保存，请核对服务端记录。":"操作未成功，请刷新核对；相同按钮可安全重试。");
+      }catch(_){announce("结果尚未核实，请刷新核对；重试相同事项按钮不会重复执行。");}
+      finally{busy=false;generation++;await refresh();}
+    }
     function reconcile() {
       if (!uncertain) return;
       const proposal = proposals.find(p => uncertain.kind === "create"
@@ -205,14 +228,14 @@ window.UcaCalendarProposals = (() => {
         if (!sameMutation(proposal.mutation, uncertain.mutation)) return;
         resetForm(); details.open = true;
         announce(proposal.status === "pending" ? "已核对：原提案已保存，尚未执行。请核对后确认。"
-          : proposal.status === "applied" ? "已核对：原提案已执行。提醒未启用。"
+          : proposal.status === "applied" ? "已核对：原提案已执行。定时事项的提醒记录可在日历中核对。"
           : "已核对：原提案已取消；不会撤销其他已执行操作。");
       } else {
         if (proposal.status === "pending" || !uncertain.expected
           || !sameProposalIdentity(proposal, uncertain.expected)) return;
         const expected = uncertain.kind === "confirm" ? "applied" : "cancelled";
         announce(proposal.status === expected
-          ? (expected === "applied" ? "已核对：原提案已执行。提醒未启用。" : "已核对：原提案已取消；不会撤销其他已执行操作。")
+          ? (expected === "applied" ? "已核对：原提案已执行。定时事项的提醒记录可在日历中核对。" : "已核对：原提案已取消；不会撤销其他已执行操作。")
           : "原提案已结束，但状态与这次操作不同，请核对已保存事项。");
       }
       uncertain = null;
@@ -233,7 +256,7 @@ window.UcaCalendarProposals = (() => {
             ? !sameMutation(candidate.mutation, uncertain.mutation)
             : !uncertain.expected || !sameProposalIdentity(candidate, uncertain.expected))) throw Error("read-back identity mismatch");
         }
-        proposals = value.proposals; items = value.items; now = value.now_unix_secs; known = true;
+        proposals = value.proposals; items = value.items; batches = Array.isArray(value.batches) ? value.batches : []; reminders = Array.isArray(value.reminders) ? value.reminders : []; now = value.now_unix_secs; known = true;
         if (uncertain) recoveryChecked = true;
         reconcile(); render();
         if (manual && !uncertain) announce("已从服务端刷新日历事项。");
@@ -290,7 +313,7 @@ window.UcaCalendarProposals = (() => {
         }
         if (operation.kind === "create") { resetForm(); manual.open = false; details.open = true; }
         announce(value.proposal.status === "pending" ? "提案已保存，尚未执行。请核对后确认。"
-          : value.proposal.status === "applied" ? "服务端已确认执行。请核对已保存事项；提醒未启用。"
+          : value.proposal.status === "applied" ? "服务端已确认执行。请核对已保存事项；定时事项的提醒记录可在日历中核对。"
           : "提案已取消，不会撤销其他已执行操作。");
       } catch (_) {
         if (disposed) return;
@@ -312,11 +335,13 @@ window.UcaCalendarProposals = (() => {
     const onFocus = () => { if (visible()) void refresh(); };
     const timer = setInterval(onFocus, 5000);
     window.addEventListener("focus", onFocus);
+    window.addEventListener("uca:calendar-changed",onFocus);
     document.addEventListener("visibilitychange", onFocus);
     details.addEventListener("toggle", () => { if (details.open) void refresh(); });
     const api = Object.freeze({refresh: () => refresh(true), destroy() {
       disposed = true; generation++; clearInterval(timer);
-      window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("uca:calendar-changed",onFocus); document.removeEventListener("visibilitychange", onFocus);
       root.replaceChildren(); mounted.delete(root);
     }});
     mounted.set(root, api); updateControls(); void refresh(); return api;

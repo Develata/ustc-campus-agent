@@ -419,3 +419,36 @@ pub fn decode_snapshot(bytes: &[u8]) -> Result<InMemoryGrantRepository, Snapshot
     )
     .map_err(|_| SnapshotCodecError::CorruptLedger)
 }
+
+/// A replayed update frame may be followed only by ordinary owner commands.
+/// Coupled package/grant update commands must be supplied by the update journal itself.
+pub(in crate::market) fn ordinary_extension(
+    before: &[u8],
+    after: &[u8],
+) -> Result<(), SnapshotCodecError> {
+    let before: serde_json::Value =
+        serde_json::from_slice(before).map_err(|_| SnapshotCodecError::InvalidJson)?;
+    let after: serde_json::Value =
+        serde_json::from_slice(after).map_err(|_| SnapshotCodecError::InvalidJson)?;
+    let before = before["records"]
+        .as_array()
+        .ok_or(SnapshotCodecError::CorruptLedger)?;
+    let after = after["records"]
+        .as_array()
+        .ok_or(SnapshotCodecError::CorruptLedger)?;
+    if !after.starts_with(before) {
+        return Err(SnapshotCodecError::CorruptLedger);
+    }
+    for record in &after[before.len()..] {
+        if matches!(
+            record["action"]["kind"].as_str(),
+            Some("PackageUpdated" | "PackageRolledBack")
+        ) || record["command_id"]
+            .as_str()
+            .is_some_and(|id| id.starts_with("grant-cmd:update-"))
+        {
+            return Err(SnapshotCodecError::CorruptLedger);
+        }
+    }
+    Ok(())
+}

@@ -1,14 +1,18 @@
 //! Minimal durable calendar-item store for the loopback MVP.
 //!
 //! This crate deliberately owns only bounded local item records. It does not
-//! schedule reminders, synchronize external calendars, interpret natural
+//! synchronize external calendars, interpret natural
 //! language, or perform network effects.
 
 #![forbid(unsafe_code)]
 
+mod batches;
 mod proposals;
+mod reminders;
 mod storage;
+pub use batches::{CalendarBatch, CalendarDraft};
 pub use proposals::{CalendarMutation, CalendarProposal, CalendarProposalStatus};
+pub use reminders::{CalendarReminder, ReminderStatus};
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -49,6 +53,8 @@ struct PersistedCalendar {
     item_revision: u64,
     next_proposal_id: u64,
     proposals: Vec<CalendarProposal>,
+    reminders: Vec<CalendarReminder>,
+    batches: Vec<CalendarBatch>,
 }
 
 impl Default for PersistedCalendar {
@@ -60,6 +66,8 @@ impl Default for PersistedCalendar {
             item_revision: 0,
             next_proposal_id: 1,
             proposals: Vec::new(),
+            reminders: Vec::new(),
+            batches: Vec::new(),
         }
     }
 }
@@ -407,7 +415,7 @@ fn validate_store_path(path: &Path) -> Result<(), CalendarError> {
 }
 
 fn validate_state(state: &PersistedCalendar) -> Result<(), CalendarError> {
-    if ![STORE_SCHEMA_VERSION, storage::V2].contains(&state.schema.as_str())
+    if ![STORE_SCHEMA_VERSION, storage::V2, storage::V3].contains(&state.schema.as_str())
         || state.next_id == 0
         || state.items.len() > MAX_ITEMS
     {
@@ -434,6 +442,11 @@ fn validate_state(state: &PersistedCalendar) -> Result<(), CalendarError> {
         return Err(CalendarError::InvalidStore);
     }
     proposals::validate_state(state)?;
+    reminders::validate(state)?;
+    batches::validate(state)?;
+    if state.schema != storage::V3 && (!state.reminders.is_empty() || !state.batches.is_empty()) {
+        return Err(CalendarError::InvalidStore);
+    }
     storage::encode_bounded(state).map_err(|_| CalendarError::InvalidStore)?;
     Ok(())
 }
@@ -682,3 +695,6 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[cfg(all(test, unix))]
+mod workspace_tests;

@@ -56,7 +56,7 @@ export async function checkCalendarProposals({evaluate, waitFor, navigate, click
   const confirmedDelete = await evaluate(`Array.from(document.querySelectorAll('${root} [data-calendar-proposal-id]')).find(e=>e.querySelector('h4').textContent==='删除事项'&&e.textContent.includes('${title}')).dataset.calendarProposalId`);
   await click(`${root} [data-calendar-proposal-id="${confirmedDelete}"] button`);
   await waitFor(`!document.querySelector(${JSON.stringify(itemCard)})`, 'delete applied');
-  assert.match(await evaluate(`document.querySelector('${root}').textContent`),/提醒未启用|未启用提醒/);
-  pass('CALENDAR-delete-confirms-exact-item-and-never-claims-reminder');
+  assert.match(await evaluate(`document.querySelector('${root}').textContent`),/站内提醒/);
+  pass('CALENDAR-delete-confirms-exact-item-and-explains-inbox-reminders');
   await cdp.send('Emulation.clearDeviceMetricsOverride',{},sessionId);
 }

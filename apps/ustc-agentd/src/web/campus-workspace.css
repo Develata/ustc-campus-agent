@@ -1,0 +1,12 @@
+.campus-workspace { margin: 1.5rem 0; padding: 1.25rem; border: 1px solid var(--border, #d8dde3); border-radius: 12px; }
+.campus-workspace p { white-space: pre-line; line-height: 1.6; }
+.campus-field { display: flex; flex-direction: column; gap: .4rem; margin: .9rem 0; font-size: .9rem; }
+.campus-field input, .campus-field textarea, .campus-workspace select { max-width: 100%; padding: .65rem; border: 1px solid var(--border, #d8dde3); border-radius: 6px; background: var(--panel, #fff); color: inherit; }
+.campus-field input[type=checkbox] { align-self: flex-start; }
+.campus-field textarea { min-height: 5rem; resize: vertical; }
+.campus-workspace details { margin: 1rem 0; padding: .8rem; border: 1px solid var(--border, #d8dde3); border-radius: 8px; }
+.campus-workspace summary { cursor: pointer; font-weight: 600; }
+.campus-workspace button { margin: .35rem .5rem .35rem 0; }
+.campus-workspace pre, .campus-workspace small { white-space: pre-wrap; overflow-wrap: anywhere; }
+.campus-result { padding: 1rem 0; border-top: 1px solid var(--border, #d8dde3); }
+.campus-result > a { display: block; margin: .5rem 0; }

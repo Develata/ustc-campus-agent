@@ -1,5 +1,7 @@
 //! Pure package-update U1 declarations, immutable plan, classifier, evidence and commands.
 
+pub mod application;
+
 use crate::identity::{TenantId, UserId};
 use crate::invocation::{
     CapabilityClass, CapabilityId, CatalogComponentRevision, CatalogPackageRevision,

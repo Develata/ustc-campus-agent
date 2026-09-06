@@ -14,6 +14,7 @@ pub mod session_port;
 pub mod source_registry;
 pub mod source_retrieval;
 pub mod source_revision;
+pub mod source_workspace;
 
 /// Human-facing product name.
 pub const PRODUCT_NAME: &str = "USTC Campus Agent";

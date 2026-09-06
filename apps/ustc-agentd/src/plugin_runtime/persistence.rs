@@ -10,8 +10,9 @@ use std::{
 use ustc_campus_agent_core::market::{
     grant::persistence as grants, installation::persistence as installations,
 };
-const MAGIC: &[u8] = b"uca-plugin-authority/v1\0";
-const MAX_BYTES: usize = 40 * 1024 * 1024 + 128;
+const LEGACY_MAGIC: &[u8] = b"uca-plugin-authority/v1\0";
+const MAGIC: &[u8] = b"uca-plugin-authority/v2\0";
+const MAX_BYTES: usize = 56 * 1024 * 1024 + 128;
 pub(super) struct Disk {
     path: PathBuf,
     _lock: File,
@@ -144,7 +145,13 @@ fn encode(state: &AuthorityState) -> Result<Vec<u8>, PluginError> {
     if runs.len() > 8 * 1024 * 1024 || state.runs.len() > 1024 {
         return Err(PluginError::Capacity);
     }
-    let size = MAGIC.len() + 24 + installation.len() + grant.len() + runs.len();
+    let updates = state.updates.encode().map_err(|error| match error {
+        ustc_campus_agent_core::market::update::application::UpdateApplicationError::Capacity => {
+            PluginError::Capacity
+        }
+        _ => PluginError::Unavailable,
+    })?;
+    let size = MAGIC.len() + 32 + installation.len() + grant.len() + runs.len() + updates.len();
     if size > MAX_BYTES {
         return Err(PluginError::Capacity);
     }
@@ -153,14 +160,17 @@ fn encode(state: &AuthorityState) -> Result<Vec<u8>, PluginError> {
     bytes.extend_from_slice(&(installation.len() as u64).to_be_bytes());
     bytes.extend_from_slice(&(grant.len() as u64).to_be_bytes());
     bytes.extend_from_slice(&(runs.len() as u64).to_be_bytes());
+    bytes.extend_from_slice(&(updates.len() as u64).to_be_bytes());
     bytes.extend_from_slice(&installation);
     bytes.extend_from_slice(&grant);
     bytes.extend_from_slice(&runs);
+    bytes.extend_from_slice(&updates);
     Ok(bytes)
 }
 fn decode(bytes: &[u8]) -> Result<AuthorityState, PluginError> {
-    let start = MAGIC.len() + 24;
-    if bytes.len() > MAX_BYTES || bytes.len() < start || !bytes.starts_with(MAGIC) {
+    let legacy = bytes.starts_with(LEGACY_MAGIC);
+    let start = MAGIC.len() + if legacy { 24 } else { 32 };
+    if bytes.len() > MAX_BYTES || bytes.len() < start || !(legacy || bytes.starts_with(MAGIC)) {
         return Err(PluginError::Unavailable);
     }
     let length = |part: &[u8]| -> Result<usize, PluginError> {
@@ -169,29 +179,57 @@ fn decode(bytes: &[u8]) -> Result<AuthorityState, PluginError> {
     };
     let installation_len = length(&bytes[MAGIC.len()..MAGIC.len() + 8])?;
     let grant_len = length(&bytes[MAGIC.len() + 8..MAGIC.len() + 16])?;
-    let runs_len = length(&bytes[MAGIC.len() + 16..start])?;
+    let runs_len = length(&bytes[MAGIC.len() + 16..MAGIC.len() + 24])?;
+    let updates_len = if legacy {
+        0
+    } else {
+        length(&bytes[MAGIC.len() + 24..start])?
+    };
     let split = start
         .checked_add(installation_len)
         .ok_or(PluginError::Unavailable)?;
     let grant_end = split
         .checked_add(grant_len)
         .ok_or(PluginError::Unavailable)?;
-    if grant_end.checked_add(runs_len) != Some(bytes.len()) || runs_len > 8 * 1024 * 1024 {
+    let runs_end = grant_end
+        .checked_add(runs_len)
+        .ok_or(PluginError::Unavailable)?;
+    if runs_end.checked_add(updates_len) != Some(bytes.len()) || runs_len > 8 * 1024 * 1024 {
         return Err(PluginError::Unavailable);
     }
     let runs: Vec<super::invocation::JournalRun> =
-        serde_json::from_slice(&bytes[grant_end..]).map_err(|_| PluginError::Unavailable)?;
+        serde_json::from_slice(&bytes[grant_end..runs_end])
+            .map_err(|_| PluginError::Unavailable)?;
     if runs.len() > 1024 {
         return Err(PluginError::Capacity);
     }
     for run in &runs {
         run.validate()?;
     }
+    let installations = installations::decode_snapshot(&bytes[start..split])
+        .map_err(|_| PluginError::Unavailable)?;
+    let grants =
+        grants::decode_snapshot(&bytes[split..grant_end]).map_err(|_| PluginError::Unavailable)?;
+    let updates = if legacy {
+        let empty = ustc_campus_agent_core::market::update::application::UpdateJournal::default();
+        ustc_campus_agent_core::market::update::application::UpdateJournal::decode(
+            &empty.encode().map_err(|_| PluginError::Unavailable)?,
+            &installations,
+            &grants,
+        )
+        .map_err(|_| PluginError::Unavailable)?
+    } else {
+        ustc_campus_agent_core::market::update::application::UpdateJournal::decode(
+            &bytes[runs_end..],
+            &installations,
+            &grants,
+        )
+        .map_err(|_| PluginError::Unavailable)?
+    };
     Ok(AuthorityState {
-        installations: installations::decode_snapshot(&bytes[start..split])
-            .map_err(|_| PluginError::Unavailable)?,
-        grants: grants::decode_snapshot(&bytes[split..grant_end])
-            .map_err(|_| PluginError::Unavailable)?,
+        installations,
+        grants,
         runs,
+        updates,
     })
 }

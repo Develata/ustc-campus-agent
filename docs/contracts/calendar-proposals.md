@@ -1,6 +1,6 @@
 # Calendar proposals (CALENDAR-PROPOSAL-001)
 
-- Status: implemented for the loopback owner-local profile; production ownership and reminders remain planned.
+- Status: implemented bounded local owner-private workspaces; external notification delivery and public deployment remain planned.
 - Owner: Simple Calendar owns item mutations, proposal state and effect receipts;
   the agentd application port supplies the admitted local subject and server clock.
 - Parent: [multi-user task C1](../tasks/multi-user-campus-agent.md),
@@ -19,8 +19,8 @@ The server persists the exact title, RFC3339 scheduled time (explicit UTC offset
 operation, target item snapshot, base item revision, creation/expiry times and
 admitted subject with a proposal ID. Campus default time is UTC+08:00; the model
 receives current campus time, and ambiguous dates must be clarified before proposing.
-The UI displays the full absolute date/time and offset before confirmation. A dated
-item is not a reminder. Update supplies the complete replacement title/time; null
+The UI displays the full absolute date/time and offset before confirmation. A newly confirmed dated item schedules a station-inbox reminder as specified
+in CALENDAR-WORKSPACE-001; existing dated records are not retroactively enrolled. Update supplies the complete replacement title/time; null
 scheduled time explicitly removes the date. Delete displays the existing item.
 
 ## State and persistence
@@ -36,11 +36,12 @@ Uncertain durability is reported honestly and blocks further mutation until exac
 read-back and synchronization succeed. Known pre-write failure preserves old state.
 
 The existing local file remains the sole item owner. Existing v1 files are read
-without rewriting; the first successful new mutation writes a versioned v2 store
-with revision/proposals. Older binaries must reject v2 rather than lose fields.
+without rewriting; the first successful new mutation writes the current v3 store with
+revision/proposals/batches/reminders. Older binaries must reject unknown versions.
 Legacy records are not relabelled as production-user data. Per-proposal subject
 binding prevents a confirmation from crossing the current admitted subject; it
-is not a production multi-user Calendar storage claim.
+does not by itself provide private storage; authenticated workspace isolation is
+specified by CALENDAR-WORKSPACE-001 below.
 
 The v2 file is at most 1 MiB, preserving the original 64 KiB item projection;
 at most 128 proposals are retained, with 4,096 bytes reserved per pending receipt.
@@ -71,5 +72,36 @@ restart; foreign subject and stale revision rejection; update/delete; cancellati
 expiry, capacity and uncertain persistence. Adapter: forged mutable confirm body and
 cross-origin rejection; real Chat tool produces pending only; HTTP confirm read-back.
 Browser: absolute time preview, confirm/cancel, refresh recovery, duplicate click,
-conflict guidance and no reminder-success claim. Bound this slice to CHAT-003/004
+conflict guidance and truthful station-inbox delivery status. Bound this slice to CHAT-003/004
 existing Calendar integration checks plus a targeted proposal suite before completion.
+
+## Calendar workspace extension (CALENDAR-WORKSPACE-001)
+
+The Calendar owner adds a v3 storage projection for bounded batch proposals and
+station-inbox reminders. Existing v1/v2 reads preserve their bytes until mutation;
+older programs reject v3. One batch contains 1–32 exact dated item drafts. Creating
+it changes no items; explicit confirmation atomically records all items and its
+receipt, or none. The subject, 30-minute expiry and base revision are immutable;
+exact retries return the original receipt. At most 32 batches are retained.
+
+New dated proposal confirmations schedule a station-inbox reminder at the item time.
+The preview states this effect. Existing dated records are not silently enrolled.
+A clock-driven dispatcher durably changes scheduled reminders to delivered, recording
+an immutable delivery ID and timestamp before exposing them to the browser. This is
+station inbox delivery, not OS push, email or SMS. Repeated ticks/restarts do not
+redeliver. Updating or deleting an item cancels its undelivered reminder; delivered
+receipts retain their original title/time. Capacity (512 reminder records) rejects
+before any item effect. A read acknowledgement is idempotent and has no external effect.
+
+Authenticated Calendar workspaces are selected only by admitted tenant/user IDs;
+public source state is shared and legacy demo Calendar data remains bound to its
+original demo composition. No complete per-user composition is created. Empty private
+workspaces never inherit demo records. The application owns workspace selection and
+clock dispatch; Calendar owns atomic item/proposal/reminder transitions.
+
+
+Private workspace creation durably synchronizes each parent directory before first
+acknowledgement. An existing owner directory with missing Calendar data fails closed;
+operators must restore its consistent backup, not delete the directory to retry.
+A retained writer lock excludes concurrent Calendar owners in different processes.
+One owner's unreadable store is isolated from other owners' scheduler ticks.

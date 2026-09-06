@@ -1,9 +1,9 @@
 # Multi-user campus Agent delivery task
 
-- `Status`: Approved direction; dependency slices planned, existing bounded MVP partial
-- `Last Review`: `2026-09-05`
+- `Status`: Approved direction; bounded local slices implemented with local integration evidence; external readiness remains open
+- `Last Review`: `2026-09-06`
 - `Owner`: Main; independent bounded contributors use disjoint owned files
-- `Scope`: local implementation and evidence; no remote deployment, push or publication grant
+- `Scope`: implementation, bounded real model tests, protected-main PR push and merge explicitly authorized by the user on 2026-09-06; no release, tag or public deployment grant
 - `Authority`: [product](../plan/02-product-positioning.md),
   [first-party Plugins](../plan/06-first-party-plugins.md),
   [permissions](../contracts/permissions.md),
@@ -46,12 +46,12 @@ the user's reference to another planned Plugin does not identify a new package.
 
 | Surface | Observable complete path | Current evidence boundary |
 |---|---|---|
-| Chat | Durable per-user conversations, continuing context, streamed responses, stop/retry, bounded tool progress and source-bearing results | Saved owner-scoped dialogue, reload/continuation and deduplicated turn submission have bounded local evidence; streaming and real multi-user runtime planned |
-| Official information | Ask a question; receive applicable procedure/notice with official link, observation/effective time and explicit uncertainty | Fixed reviewed demo procedure/changes; broader live sources planned |
-| Calendar | Propose dated action in Chat; confirm; create/read/change/delete own item; reliable duplicate suppression and reminders | Durable owner-local record/list/delete and dated create/update/delete proposals with exact confirmation; production tenant scope and reminder delivery planned |
-| Courses | Submit owned interests/completed courses/time constraints; compare grounded alternatives and reasons; confirm proposed calendar additions | Synthetic profile/catalog bounded planning; real course data and richer preferences planned |
-| Plugin Market | Inspect source/conditions; install pinned package; configure MCP/Skills; grant and enable; revoke/disable prevents new calls | Bounded single-component public-read packages have durable install/configure/probe/grant/enable/disable/revoke, real MCP/Skill execution and restart evidence; arbitrary imports, mixed-component packages and real authenticated ingress remain planned |
-| Accounts | Administrator configures users; local or verified SSO login; logout/revoke and restart preserve isolation | M00 ID/session kernels exist; real account and credential adapters planned |
+| Chat | Durable per-user conversations, continuing context, streamed responses, stop/retry, bounded tool progress and source-bearing results | Owner-scoped dialogue, actual provider SSE, stop, exact retry and durable completed-tool checkpoints are implemented locally; whole Harness and final multi-user/browser acceptance remain open |
+| Official information | Ask a question; receive applicable procedure/notice with official link, observation/effective time and explicit uncertainty | Reviewed demo procedure/changes plus manifest-bounded public-source fetch/import, search, local review and line differences; no canonical publication or production retrieval acceptance |
+| Calendar | Propose dated action in Chat; confirm; create/read/change/delete own item; reliable duplicate suppression and reminders | Authenticated owner workspaces, exact dated and atomic batch confirmation, durable station-inbox reminders and restart handling are implemented; external notification channels and production operations remain open |
+| Courses | Submit owned interests/completed courses/time constraints; compare grounded alternatives and reasons; confirm proposed calendar additions | Request-consented course evidence, prerequisite/time/credit constraints and explained alternatives produce Calendar batch suggestions requiring separate confirmation; supplied excerpts are not independently verified facts |
+| Plugin Market | Inspect source/conditions; install pinned package; configure MCP/Skills; grant and enable; revoke/disable prevents new calls | Reviewed public-read single/mixed packages reuse durable install/configure/probe/grant/enable/disable/revoke and real execution; inert import preview and disabled-only exact update/rollback are implemented; new pins require fresh authority |
+| Accounts | Administrator configures users; local or verified SSO login; logout/revoke and restart preserve isolation | Operator-configured Argon2 accounts, login/logout, current-configuration checks and owner admission are implemented for loopback use; live SSO and full ACCOUNT acceptance remain open |
 
 A stopped response is not proof a side effect was cancelled. Retry reads or continues
 server-owned run/receipt state and cannot repeat an acknowledged write. Tool progress
@@ -68,15 +68,15 @@ before treating a row as implemented. No row is complete merely because its UI e
 | Slice | Owner and output | Depends on | Status / exit evidence |
 |---|---|---|---|
 | P1 | M20 exact reviewed package/schema loading and browse projection | Existing catalog and configuration primitives | Partial: bounded catalog HTTP/browser, schema/pin consistency and reviewed configuration sidecar loading into one fixed bundle; full package artifact admission remains planned |
-| P2 | M20 install/configure/grant/enable/disable application ports with durable state | P1, controlled admitted context; A3 for real authenticated ingress | Partial: controlled-owner scope, durable commands, conflict/restart/revoke, frozen authority and browser lifecycle evidence (PLUGIN-001); real authenticated ingress remains A3 |
-| R1 | M30 durable conversation/run lifecycle and typed events/cancel/retry | Existing Harness plan and controlled admitted context; A3 for real ingress | Partial: saved dialogue, owner isolation, reservation/replay and interrupted recovery; full run events, stop/cancel and receipt reconciliation planned |
-| C1 | Calendar owner-scoped command/query and exact-effect confirmation | Owning Calendar contract update and controlled admitted context; A3 for real ingress | Partial: local dated proposals, explicit confirmation, version conflict and atomic receipt/restart evidence; production owner storage and reminders planned |
-| S1 | M60 reviewed source/revision pipeline into official-information and ChangeRadar flows | Source authority and permission evidence | Partial fixed fixtures; real-source before/after read-back planned |
-| O1 | M72 user preferences and course evidence projection | P2, approved source inputs and controlled admitted context; C1 for calendar composition; A3 for real ingress | Partial synthetic planning; explainable real constraints and confirmed calendar write planned |
+| P2 | M20 install/configure/grant/enable/disable application ports with durable state | P1, controlled admitted context; A3 for real authenticated ingress | Partial: durable owner-scoped lifecycle, mixed members, reviewed import preview and exact disabled-only B6 update/rollback with stale old grants (PLUGIN-001); authenticated assembly needs final integration evidence |
+| R1 | M30 durable conversation/run lifecycle and typed events/cancel/retry | Existing Harness plan and controlled admitted context; A3 for real ingress | Partial: owner-scoped history, actual SSE deltas, stop and completed-tool checkpoint recovery; exact retries never redispatch interrupted tools; full Harness acceptance remains planned |
+| C1 | Calendar owner-scoped command/query and exact-effect confirmation | Owning Calendar contract update and controlled admitted context; A3 for real ingress | Partial: admitted owner workspaces, dated and batch proposals, atomic confirmation receipts and station-inbox reminders; external delivery and production recovery remain planned |
+| S1 | M60 reviewed source/revision pipeline into official-information and ChangeRadar flows | Source authority and permission evidence | Partial: S1-LOCAL-OBS-001 manifest-bounded public HTTPS acquisition/import, immutable local observations, search and line differences; real-source permission/read-back evidence and original B3 exit remain required |
+| O1 | M72 user preferences and course evidence projection | P2, approved source inputs and controlled admitted context; C1 for calendar composition; A3 for real ingress | Partial: O1-PERSONAL-PLAN-001 request-local course evidence and deterministic constraints, explained alternatives and separately confirmed Calendar batch suggestions; no verified curriculum or iCourse ingestion claim |
 | X1 | M51 bounded reviewed MCP discovery/execution and Skill context loading | P2, owning component contracts | Partial: released Streamable HTTP JSON/SSE controlled-peer calls, bounded YAML/declared Skill reads, per-call authority and no business retries (MCP-019, SKILL-009, PLUGIN-001); executable Skills, stdio and private/write capabilities remain outside this profile |
-| A1 | M00 administrator-configured account/SSO association decisions, scoped subject and controlled credential ports | M00-ACCOUNT-001 | Planned support lane; ACCOUNT-001/002/003 controlled cases |
-| A2 | M00 services + M90 durable account, credential and session transaction adapters | A1, existing session kernel | Planned support lane; atomic configuration, credential verification, revoke and restart cases |
-| A3 | M10 typed backend user configuration/login/me/logout + M80 account UI; controlled SSO adapter until real inputs exist | A2 | Planned support lane; real two-browser local login and negative admission cases; live SSO separately gated |
+| A1 | M00 administrator-configured account/SSO association decisions, scoped subject and controlled credential ports | M00-ACCOUNT-001 | Partial: M00-ACCOUNT-LOCAL-001 local operator configuration and scoped admission; live SSO association remains planned |
+| A2 | M00 services + M90 durable account, credential and session transaction adapters | A1, existing session kernel | Partial: private Argon2 configuration, durable session transactions, current credentials/revocation and rollback fence; full recovery and ACCOUNT exits remain planned |
+| A3 | M10 typed backend user configuration/login/me/logout + M80 account UI; controlled SSO adapter until real inputs exist | A2 | Partial: loopback login/me/logout and subject-bound private ingress/UI; final two-browser isolation and stale-tab evidence required; live SSO separately gated |
 | I1 | M10 composition of complete campus task and contest demonstration | Required preceding real flows | Planned; exact-candidate end-to-end receipt and recording |
 
 Prioritize a usable campus Agent, the install/configure/authorize/use Plugin flow, and
@@ -104,9 +104,9 @@ missing curriculum/timetable facts cannot be invented from model knowledge.
 
 Before X1 implementation freezes transports, bind the supported standard MCP/Skill
 subset and actual controlled examples. Package governance must not be advertised as
-support for every transport or executable Skill resource. Arbitrary independent MCP
-URLs, host commands and standalone local Skill imports are outside this delivery path;
-any later import must preserve reviewed package provenance and permission boundaries.
+support for every transport or executable Skill resource. Direct execution of arbitrary MCP URLs, host commands or standalone Skills remains outside
+this path. Import preview emits inert candidate package files with provenance for review;
+only reviewed admission followed by the existing configure/grant/enable flow can run them.
 
 ## 4. Shared-state and recovery obligations
 
@@ -150,7 +150,36 @@ and I1, run appropriate Rust fmt/clippy/tests, contract checks and the bound acc
 commands against the same candidate. Review all changed and new files in the slice.
 `planned`, `partial`, `blocked` and `not-run` are reported explicitly.
 
-SSO, reminder delivery channels, broader live sources and any additional unnamed
+SSO, external reminder delivery channels, broader live sources and any additional unnamed
 Plugin retain explicit prerequisites. Local work can proceed on owned contracts and
 fakes while those are unresolved. No finished multi-user, real-source, MCP/Skill or
 school SSO claim is made until its actual user path has evidence.
+
+
+## 2026-09-06 implementation batch
+
+Owner: Main. Independent implementation lanes: accounts/session admission,
+M20/M51 mixed-package lifecycle, M60/M72 source/course workspace, and M30 execution
+stream/cancel/checkpoint. Calendar owner changes and M10 assembly remain Main-owned;
+independent review covers tenant isolation, Calendar effects and source acquisition.
+
+Contracts: CALENDAR-WORKSPACE-001, M00-ACCOUNT-LOCAL-001, S1-LOCAL-OBS-001,
+O1-PERSONAL-PLAN-001 and existing PLUGIN-001 / CHAT acceptance families. Targeted
+commands and exact bounded behavior are linked from [campus workflows](../guides/campus-workflows.md).
+Integration, real-provider/browser evidence and CI must be recorded before this batch
+is called complete. No whole-module production acceptance is inferred from these local slices.
+
+Bounded implementation is now present for the six surfaces above; this records code
+scope, not completion of I1 or any whole-module exit. The local account, source and
+course case IDs remain contract-level partial bindings until their full active
+acceptance registration and evidence are complete.
+
+Verification recorded for this lane: the focused mixed-package runtime command
+`cargo test --locked -p ustc-agentd --lib plugin_runtime::tests::mixed_import` passed
+3 tests on 2026-09-06, including actual MCP/Skill execution after exact component
+selection and rejection of aliased declaration paths. Final integration fmt/clippy,
+all-target tests, reviewed-source read-back, configured-provider/browser journeys
+and CI results are pending this batch's consolidated evidence; no pass is inferred
+from the command listings.
+
+本批实际检查与未运行边界见 [校园功能使用与本地集成证据](../guides/campus-workflows.md#2026-09-06-本地集成证据)。

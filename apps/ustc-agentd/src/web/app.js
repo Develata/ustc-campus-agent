@@ -123,6 +123,7 @@ const CHAT_ERROR_MESSAGES = Object.freeze({
   provider_rate_limited: "请求过于频繁。请稍后再试。",
   provider_timeout: "等待回答超时；服务器没有返回完成结果。请稍后重试。",
   provider_unavailable: "回答服务暂时不可用。请稍后重试。",
+  chat_cancelled: "已停止后续执行。此前已完成的操作不会回滚，请核对日历或工具回执。",
   provider_protocol_error: "回答服务返回了无法安全读取的结果。请稍后重试。",
   context_budget_exceeded: "这段对话超过当前模型的安全上下文预算。请新建对话或缩短问题后重试。",
   tool_call_rejected: "校园工具拒绝了这次调用。请换一种更具体的问法。",

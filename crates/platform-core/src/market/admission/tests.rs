@@ -303,18 +303,34 @@ fn missing_revoked_grant_owner_revision_and_configuration_drift_fail_closed() {
 }
 
 #[test]
-fn single_component_only_and_exact_artifact_readiness() {
+fn multiple_components_require_complete_exact_artifact_readiness() {
     let fixture = Fixture::new("SkillComponent", 2);
-    assert!(matches!(
+    assert!(
         MarketAdmissionService::new(
             &fixture.tenant,
             &fixture.user,
             &fixture.package,
             &fixture.configuration,
             &fixture.registry
-        ),
-        Err(AdmissionError::UnsupportedPackage)
-    ));
+        )
+        .is_ok()
+    );
+    let members: Vec<_> = fixture
+        .configuration
+        .bindings()
+        .values()
+        .map(|binding| {
+            ComponentReadiness::skill(
+                binding,
+                &fixture.values,
+                &Sha256Digest::from_bytes(b"reviewed artifact"),
+            )
+            .expect("member")
+        })
+        .collect();
+    assert!(ComponentReadiness::package(vec![members[0].clone()]).is_err());
+    assert!(ComponentReadiness::package(vec![members[0].clone(), members[0].clone()]).is_err());
+    assert!(ComponentReadiness::package(members).is_ok());
     let fixture = Fixture::new("SkillComponent", 1);
     assert_eq!(
         ComponentReadiness::skill(

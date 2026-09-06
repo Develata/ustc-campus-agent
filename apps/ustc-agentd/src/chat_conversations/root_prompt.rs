@@ -144,7 +144,7 @@ impl ConversationStore {
             }
             prompts.push(updated);
         }
-        next.version = 2;
+        next.version = next.version.max(2);
         inner.commit(next)?;
         Ok(result)
     }

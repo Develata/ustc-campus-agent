@@ -2,6 +2,7 @@
 use super::*;
 use proposals::{MAX_PROPOSALS, PENDING_RESERVE_BYTES};
 
+pub(super) const V3: &str = "ustc-simple-calendar-store/v3";
 pub(super) const V2: &str = "ustc-simple-calendar-store/v2";
 pub(super) const MAX_FILE_BYTES: u64 = 1024 * 1024;
 
@@ -21,6 +22,16 @@ enum Wire {
         next_proposal_id: u64,
         proposals: Vec<CalendarProposal>,
     },
+    #[serde(rename = "ustc-simple-calendar-store/v3")]
+    V3 {
+        next_id: u64,
+        items: Vec<CalendarItem>,
+        item_revision: u64,
+        next_proposal_id: u64,
+        proposals: Vec<CalendarProposal>,
+        reminders: Vec<CalendarReminder>,
+        batches: Vec<CalendarBatch>,
+    },
 }
 #[derive(Serialize)]
 struct ItemView<'a> {
@@ -36,6 +47,10 @@ struct V2View<'a> {
     item_revision: u64,
     next_proposal_id: u64,
     proposals: &'a [CalendarProposal],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reminders: Option<&'a [CalendarReminder]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    batches: Option<&'a [CalendarBatch]>,
 }
 pub(super) fn decode(bytes: &[u8]) -> Result<PersistedCalendar, CalendarError> {
     match serde_json::from_slice::<Wire>(bytes).map_err(|_| CalendarError::InvalidStore)? {
@@ -62,6 +77,26 @@ pub(super) fn decode(bytes: &[u8]) -> Result<PersistedCalendar, CalendarError> {
             item_revision,
             next_proposal_id,
             proposals,
+            reminders: vec![],
+            batches: vec![],
+        }),
+        Wire::V3 {
+            next_id,
+            items,
+            item_revision,
+            next_proposal_id,
+            proposals,
+            reminders,
+            batches,
+        } => Ok(PersistedCalendar {
+            schema: V3.to_owned(),
+            next_id,
+            items,
+            item_revision,
+            next_proposal_id,
+            proposals,
+            reminders,
+            batches,
         }),
     }
 }
@@ -84,16 +119,18 @@ pub(super) fn encode_bounded(state: &PersistedCalendar) -> Result<Vec<u8>, Calen
     if state.schema == STORE_SCHEMA_VERSION {
         return item_bytes(state);
     }
-    if state.schema != V2 || state.proposals.len() > MAX_PROPOSALS {
+    if (state.schema != V2 && state.schema != V3) || state.proposals.len() > MAX_PROPOSALS {
         return Err(CalendarError::ProposalLimitExceeded);
     }
     let bytes = serde_json::to_vec(&V2View {
-        schema: V2,
+        schema: if state.schema == V3 { V3 } else { V2 },
         next_id: state.next_id,
         items: &state.items,
         item_revision: state.item_revision,
         next_proposal_id: state.next_proposal_id,
         proposals: &state.proposals,
+        reminders: (state.schema == V3).then_some(state.reminders.as_slice()),
+        batches: (state.schema == V3).then_some(state.batches.as_slice()),
     })
     .map_err(|_| CalendarError::PersistenceUnavailable)?;
     let pending = state
@@ -103,7 +140,15 @@ pub(super) fn encode_bounded(state: &PersistedCalendar) -> Result<Vec<u8>, Calen
         .count();
     if bytes
         .len()
-        .checked_add(pending * PENDING_RESERVE_BYTES)
+        .checked_add(
+            pending * (PENDING_RESERVE_BYTES + 1024)
+                + state
+                    .batches
+                    .iter()
+                    .filter(|b| b.status == CalendarProposalStatus::Pending)
+                    .map(|b| b.items.len() * 5120)
+                    .sum::<usize>(),
+        )
         .is_none_or(|total| total as u64 > MAX_FILE_BYTES)
     {
         return Err(CalendarError::ProposalLimitExceeded);

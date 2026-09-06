@@ -77,6 +77,7 @@ pub struct PluginLifecycleDto {
     pub schema: &'static str,
     pub packages: Vec<PluginManagedPackageDto>,
     pub public_read_only: bool,
+    pub updates: Vec<PluginUpdateViewDto>,
 }
 #[derive(Serialize)]
 pub struct PluginManagedPackageDto {
@@ -141,4 +142,90 @@ fn unique_values<'de, D: serde::Deserializer<'de>>(
         }
     }
     deserializer.deserialize_map(Values)
+}
+
+/// Inert inputs for a review packet. This does not admit a catalog revision.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PluginImportPreviewDto {
+    pub schema: String,
+    pub package_id: String,
+    pub version: String,
+    pub display_name: String,
+    pub source: String,
+    pub skill: Option<String>,
+    pub mcp: Option<PluginImportMcpDto>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PluginImportMcpDto {
+    pub endpoint: String,
+    pub tools: BTreeMap<String, String>,
+}
+#[derive(Serialize)]
+pub struct PluginImportReviewDto {
+    pub schema: &'static str,
+    pub review_digest: String,
+    pub files: BTreeMap<String, String>,
+    pub configuration_values: BTreeMap<String, PluginValueDto>,
+    pub warnings: Vec<String>,
+    pub admitted: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PluginUpdateDto {
+    pub schema: String,
+    pub request_id: String,
+    pub intent: PluginUpdateIntentDto,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PluginUpdateIntentDto {
+    Preview {
+        installation_id: String,
+        expected_revision: String,
+        target_version: String,
+    },
+    Apply {
+        installation_id: String,
+        expected_revision: String,
+        target_version: String,
+        update_id: String,
+        plan_digest: String,
+        target_readiness: String,
+        rollback_readiness: String,
+    },
+    ReviewRollback {
+        installation_id: String,
+        expected_revision: String,
+        update_id: String,
+    },
+    Rollback {
+        installation_id: String,
+        expected_revision: String,
+        update_id: String,
+        rollback_readiness: String,
+    },
+    Confirm {
+        installation_id: String,
+        expected_revision: String,
+        update_id: String,
+    },
+}
+#[derive(Serialize)]
+pub struct PluginUpdateViewDto {
+    pub schema: &'static str,
+    pub update_id: String,
+    pub installation_id: String,
+    pub update_revision: String,
+    pub installation_revision: String,
+    pub state: String,
+    pub rollback_version: String,
+    pub target_version: String,
+    pub plan_digest: String,
+    pub change_class: String,
+    pub replayed: bool,
+    pub target_readiness: Option<String>,
+    pub rollback_readiness: Option<String>,
 }

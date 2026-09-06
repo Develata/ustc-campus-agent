@@ -46,3 +46,7 @@
 
 .plugin-manage-model-note { margin: 12px 0 18px; padding: 12px 14px; border-left: 2px solid var(--muted); color: var(--muted); background: var(--surface); font-size: 13px; line-height: 1.75; }
 .plugin-manage-model-note a { margin-left: 6px; color: var(--accent); }
+
+.plugin-import-review { margin-top: 1.5rem; padding: 1rem; border: 1px solid var(--border, #dbe3e8); border-radius: 12px; }
+.plugin-import-input { box-sizing: border-box; width: 100%; margin: .75rem 0; padding: .75rem; font: 13px/1.5 monospace; }
+.plugin-import-output pre { max-height: 28rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }

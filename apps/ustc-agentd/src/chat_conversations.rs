@@ -2,6 +2,7 @@
 mod automatic_title;
 mod management;
 mod organization;
+mod progress;
 use organization::ConversationOrganizationDto;
 mod persistence;
 mod root_prompt;
@@ -125,6 +126,8 @@ pub(crate) enum BeginTurn {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct StoredTurn {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    progress: Option<crate::chat_activity::ChatProgress>,
     view: ConversationTurnDto,
     digest: String,
     profile: Option<String>,
@@ -511,6 +514,7 @@ impl ConversationStore {
             conversation.title = title.title().to_owned();
         }
         conversation.turns.push(StoredTurn {
+            progress: None,
             view: ConversationTurnDto {
                 request_id: intent.request_id,
                 user: intent.message,
@@ -688,7 +692,7 @@ fn history(
 fn validate_state(state: &State) -> Result<(), ConversationError> {
     use std::collections::{BTreeMap, BTreeSet};
     root_prompt::validate(state)?;
-    if !matches!(state.version, 1 | 2)
+    if !matches!(state.version, 1..=3)
         || state.conversations.len() > 1000
         || state
             .conversations
@@ -730,7 +734,9 @@ fn validate_state(state: &State) -> Result<(), ConversationError> {
         let mut revision = 0;
         let mut management = management::Replay::new(c)?;
         for (index, t) in c.turns.iter().enumerate() {
-            if !valid_request_id(&t.view.request_id)
+            if (state.version < 3 && t.progress.is_some())
+                || t.progress.as_ref().is_some_and(|p| !p.valid())
+                || !valid_request_id(&t.view.request_id)
                 || !requests.insert(&t.view.request_id)
                 || t.view.user.trim().is_empty()
                 || t.view.user.len() > 4096
@@ -865,6 +871,7 @@ fn valid_error(error: &str, phase: TurnPhase) -> bool {
         return error == "conversation_interrupted";
     }
     [
+        ChatError::Cancelled,
         ChatError::InvalidChatRequest,
         ChatError::ProviderNotConfigured,
         ChatError::ProviderUnauthorized,

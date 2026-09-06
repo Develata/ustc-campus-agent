@@ -6,6 +6,7 @@
 
 pub mod mcp;
 pub mod skills;
+pub mod source_acquisition;
 
 use ustc_campus_agent_core::PRODUCT_NAME;
 

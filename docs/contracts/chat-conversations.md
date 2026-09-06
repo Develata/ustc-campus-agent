@@ -134,3 +134,13 @@ does not change in-flight requests or terminal replays. No prompt text is expose
 conversation DTOs. Existing v1 stores read without rewriting; first settings update
 writes v2, which old binaries must reject. Settings use the existing capacity and
 private-file failure rules, with a separate revision for stale-update protection.
+
+
+### Durable execution progress
+
+[STREAM-CANCEL-001](chat-activity.md#stream-cancel-001-extension) adds version-3
+private progress checkpoints and the terminal `chat_cancelled` error without
+changing turn DTO fields, revisions or exact retry identity. Restart retains
+completed tool-result envelopes and partial text, marks pending execution interrupted,
+and never redispatches tools. The running store reserve is now 512 KiB. Read-only
+activity renders recovery state; product receipts/stores remain effect authority.

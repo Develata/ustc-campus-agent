@@ -39,7 +39,9 @@ impl PluginRuntime {
             installation_id: id.as_str().to_owned(),
             revision: current.revision().as_str().to_owned(),
             readiness_digest: probe.readiness.digest().as_str().to_owned(),
-            kind: if probe.client.is_some() {
+            kind: if !probe.additional.is_empty() {
+                "mixed"
+            } else if probe.client.is_some() {
                 "mcp"
             } else {
                 "skill"
@@ -62,18 +64,58 @@ impl PluginRuntime {
         state.probes.insert(id, probe);
         Ok(view)
     }
-    async fn build_probe(
+    pub(super) async fn build_probe(
         &self,
         tenant: &TenantId,
         user: &UserId,
         current: &InstallationSnapshot,
         package: &RuntimePackage,
     ) -> Result<ProbedComponent, PluginError> {
+        let mut probes = Vec::new();
+        for (id, component) in package.components() {
+            match self
+                .build_component_probe(tenant, user, current, package, id, component)
+                .await
+            {
+                Ok(probe) => probes.push(probe),
+                Err(error) => {
+                    for probe in probes {
+                        retire::component(probe).await;
+                    }
+                    return Err(error);
+                }
+            }
+        }
+        let readiness =
+            ComponentReadiness::package(probes.iter().map(|p| p.readiness.clone()).collect())
+                .map_err(|_| PluginError::NotReady)?;
+        let mut first = probes.remove(0);
+        first.readiness = readiness;
+        for probe in probes {
+            first.tools.extend(probe.tools.clone());
+            first.wire_names.extend(probe.wire_names.clone());
+            first.tool_components.extend(probe.tool_components.clone());
+            first.additional.insert(probe.component_id.clone(), probe);
+        }
+        if first.tools.len() > MAX_PLUGIN_TOOLS {
+            retire::component(first).await;
+            return Err(PluginError::Capacity);
+        }
+        Ok(first)
+    }
+    #[allow(clippy::too_many_arguments)]
+    async fn build_component_probe(
+        &self,
+        tenant: &TenantId,
+        user: &UserId,
+        current: &InstallationSnapshot,
+        package: &RuntimePackage,
+        component_id: &ComponentId,
+        component: &RuntimeComponent,
+    ) -> Result<ProbedComponent, PluginError> {
         let binding = package
             .configuration
-            .bindings()
-            .values()
-            .next()
+            .binding(component_id)
             .ok_or(PluginError::Unsupported)?;
         binding
             .validate(current.package_pin(), current.configuration())
@@ -87,7 +129,7 @@ impl PluginRuntime {
             }
         }
         let id = current.installation_id();
-        match &package.component {
+        match component {
             RuntimeComponent::Skill { source } => {
                 let schema = super::skill_context::input_schema()?;
                 let capability = package
@@ -97,7 +139,7 @@ impl PluginRuntime {
                     .next()
                     .ok_or(PluginError::Unsupported)?
                     .clone();
-                let name = tool_name(id, "skill_read");
+                let name = component_tool_name(package, id, component_id, "skill_read");
                 let tool = CatalogToolDefinition {
                     id: ToolId::parse("tool:skill-read").map_err(|_| PluginError::Unavailable)?,
                     model_visible_name: name.clone(),
@@ -115,6 +157,9 @@ impl PluginRuntime {
                 )
                 .map_err(|_| PluginError::NotReady)?;
                 Ok(ProbedComponent {
+                    component_id: component_id.clone(),
+                    additional: BTreeMap::new(),
+                    tool_components: BTreeMap::from([(name.clone(), component_id.clone())]),
                     revision: current.revision().clone(),
                     readiness,
                     tools: vec![tool],
@@ -174,7 +219,7 @@ impl PluginRuntime {
                         if !package.manifest.capabilities().contains(&capability) {
                             return Err(PluginError::Denied);
                         }
-                        let name = tool_name(id, tool.name());
+                        let name = component_tool_name(package, id, component_id, tool.name());
                         // The immutable M51 inventory identity includes server/output schemas as well as inputs.
                         let tool_id = ToolId::parse(format!(
                             "tool:{}",
@@ -215,6 +260,12 @@ impl PluginRuntime {
                     }
                 };
                 Ok(ProbedComponent {
+                    component_id: component_id.clone(),
+                    additional: BTreeMap::new(),
+                    tool_components: definitions
+                        .iter()
+                        .map(|tool| (tool.model_visible_name.clone(), component_id.clone()))
+                        .collect(),
                     revision: current.revision().clone(),
                     readiness,
                     tools: definitions,
@@ -260,6 +311,11 @@ impl PluginRuntime {
                 }
                 let frozen = FrozenToolBinding {
                     installation_id: current.installation_id().clone(),
+                    component_id: probe
+                        .tool_components
+                        .get(&tool.model_visible_name)
+                        .ok_or(PluginError::NotReady)?
+                        .clone(),
                     installation_revision: current.revision().clone(),
                     readiness_digest: probe.readiness.digest().clone(),
                     grant_snapshot_id: grant.snapshot_id().clone(),
@@ -330,11 +386,7 @@ impl PluginRuntime {
         if probe.readiness.digest() != evidence.policy_admission_snapshot_digest() {
             return Err(PluginError::NotReady);
         }
-        if let (Some(client), Some(digest)) = (&mut probe.client, &probe.transport_digest) {
-            client
-                .activate_reviewed(digest)
-                .map_err(|_| PluginError::NotReady)?;
-        }
+        activate_probe(probe)?;
         Ok(())
     }
     pub(super) fn current_grant(
@@ -403,4 +455,32 @@ fn read_credential(path: &std::path::Path) -> Result<String, PluginError> {
         .read_to_string(&mut token)
         .map_err(|_| PluginError::Unavailable)?;
     Ok(token.trim_end_matches(['\r', '\n']).to_owned())
+}
+
+fn component_tool_name(
+    package: &RuntimePackage,
+    installation: &InstallationId,
+    component: &ComponentId,
+    wire: &str,
+) -> String {
+    if package.additional.is_empty() {
+        tool_name(installation, wire)
+    } else {
+        tool_name(installation, &stable_id(&[component.as_str(), wire]))
+    }
+}
+pub(super) fn activate_probe(probe: &mut ProbedComponent) -> Result<(), PluginError> {
+    if let (Some(client), Some(digest)) = (&mut probe.client, &probe.transport_digest) {
+        client
+            .activate_reviewed(digest)
+            .map_err(|_| PluginError::NotReady)?;
+    }
+    for child in probe.additional.values_mut() {
+        if let (Some(client), Some(digest)) = (&mut child.client, &child.transport_digest) {
+            client
+                .activate_reviewed(digest)
+                .map_err(|_| PluginError::NotReady)?;
+        }
+    }
+    Ok(())
 }

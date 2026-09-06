@@ -5,7 +5,7 @@ Its Plugin Market configures MCP tools and Skill guidance for the Agent. Models 
 
 [简体中文](README.md) · [Capabilities and scoring evidence](docs/features/06-mvp-core-capabilities.md) · [Demo walkthrough](docs/guides/competition-demo.md) · [Documentation](docs/README.md)
 
-A student competition project, not an official USTC service. The current runnable version is a loopback demo with fixed sources and a demo identity. Production multi-user hosting and university SSO are not integrated.
+A student competition project, not an official USTC service. The current version supports local/WSL use and administrator-configured accounts on a loopback service. University SSO and public deployment require separate integration and acceptance.
 
 <a id="overview"></a>
 <a id="features"></a>
@@ -15,15 +15,15 @@ A student competition project, not an official USTC service. The current runnabl
 | Task | Current result | Inputs and conditions |
 |---|---|---|
 | Transcript-certificate procedure | Conditions, steps, official links and an exportable personal checklist | Fixed reviewed procedure data |
-| Academic-calendar changes | Revision differences, sources and a change board | Fixed reviewed calendar examples |
-| Course comparison | Candidate plans and reasons from a demo profile | Explicit consent for the current request; data limits below |
-| Personal items | Record and list; preview/confirm dated additions, edits and deletion; retain after restart | Campus time shown explicitly; no reminder delivery |
-| Agent extensions | Install, configure, probe, grant, enable, disable and revoke packages | Reviewed single-component, public-read MCP or Skill packages |
+| Academic-calendar changes and official information | Reviewed examples plus searchable local source observations and line differences | Optional operator-reviewed exact public URLs; observations do not publish official facts |
+| Course comparison | Alternatives from supplied course evidence, prerequisites, interests and free time | Consent for this request; cites supplied excerpts; no iCourse rating collection |
+| Personal items | Confirm dated additions, edits, deletion and course batches; retain after restart | Beijing time displayed; newly confirmed dated items receive durable in-app reminders |
+| Agent extensions | Install, configure, grant, enable, update/roll back, disable and revoke | Reviewed public-read MCP, Skill or mixed packages; imports first produce files for review |
 
 Chat supports saved history, follow-up questions, pinning, groups and deletion. History uses date order; renaming preserves the `YYMMDD|` prefix.
 Personal Agent instructions can be saved in Settings and apply from the next message
 across saved conversations. See the [root prompt contract](docs/contracts/agent-root-prompt.md).
-The model selector sits beside the composer. Tool progress reflects actual execution, and administrator demo controls are secondary.
+The model selector sits beside the composer. Answers appear incrementally; runs can be stopped, and completed tool progress survives restart. Stopping does not undo committed effects. Administrator controls are secondary.
 
 <a id="quick-start"></a>
 
@@ -47,7 +47,7 @@ Open <http://127.0.0.1:8787>. These Chinese prompts exercise the deterministic d
 ```
 
 They query a transcript procedure, inspect calendar changes, record an item and list items.
-For course planning, create a demo profile first and consent to its use in the current Chat request.
+For course planning, enter course excerpts, preferences and free time in Plugins and consent to this request. The older demo-profile path remains in demo mode. See [campus workflows](docs/guides/campus-workflows.md) for configured accounts, source manifests and course-to-calendar confirmation.
 For packaged execution, see the [Docker Compose guide](deploy/mvp-compose/README.md).
 Current development sources and the historical R3.1 package have different feature scopes.
 Mock execution needs no key or model network; an initial build may still download dependencies and images.
@@ -95,10 +95,10 @@ Planned RAG, multi-agent workflows and production features are not presented as 
 
 ## Data and current limits
 
-- Procedures and calendar changes use fixed reviewed data, not live campus retrieval. The course catalog mixes synthetic course facts with an iCourse aggregate-rating snapshot; permission for the latter remains unresolved.
-- Profile use requires request-specific consent. Item writes require explicit intent or confirmation of a stored proposal. Dated proposals and edits are supported; batch writes, reminder delivery and streaming remain unimplemented.
+- Built-in procedure/change demos retain reviewed fixtures. Optional retrieval is limited to exact public USTC URLs in an operator-reviewed permission manifest; stored observations are not canonical publications. Personal course planning cites user-supplied evidence. The older demo catalog includes an iCourse rating snapshot whose permission remains unresolved; the new path does not collect those ratings.
+- Private course input requires request-specific consent. Calendar proposals and batches require separate confirmation; reminders are delivered to the in-app inbox only, without OS push, email or SMS. Restart retains completed tool evidence and never automatically redispatches interrupted tools.
 - The server binds to loopback. Model credentials come from private server files and never enter the page, repository or tool receipts.
-- Planned user entry is SSO or administrator-configured accounts, without self-registration. Production authentication, multi-user hosting and real university identity integration remain unfinished.
+- Local administrator-configured login/logout scopes private state to the admitted user; no self-registration is provided. University SSO, public HTTPS/proxy admission and distributed operation remain unfinished. Plugin support remains bounded: no stdio, executable Skills or private/write MCP capabilities.
 
 <a id="android"></a>
 

@@ -61,7 +61,7 @@ part of the admitted central-host profile.
 Tool inputs compile to the existing tool-input-schema/v0 owner: closed objects
 (`additionalProperties: false`), strings with optional string enums, integers,
 numbers, booleans and arrays of admitted nodes. Objects without the explicit closed
-property, references, unions and unsupported validation keywords are rejected, not
+property, remote/cyclic references, unions and unsupported validation keywords are rejected, not
 silently weakened. This is a bounded MCP interoperability profile, not a claim to
 implement every JSON Schema vocabulary used by all MCP servers.
 
@@ -91,4 +91,14 @@ Negative zero normalizes, contradictory ranges reject, and output range checks u
 exact integer-versus-binary64 comparisons. Bounds changing on rediscovery require
 review. Existing unconstrained schema encodings/digests remain unchanged. This is
 still a bounded numeric/schema profile, not arbitrary-precision JSON Schema support;
-exclusive bounds, pattern, multipleOf, references and unions remain unsupported.
+exclusive bounds, pattern, multipleOf and unions remain unsupported.
+
+Document-local `$ref` into `$defs` or `definitions` is expanded before compilation,
+with an eight-level recursion and 512-node expansion budget. Remote references,
+recursive expansion, missing targets and validation-keyword siblings reject.
+Definitions remain inert until referenced. Standard annotation keywords `default`,
+`examples`, `$comment`, `deprecated`, `readOnly` and `writeOnly` may be present;
+they never insert argument values, relax validation, or supply capability authority.
+All referenced validation semantics must remain expressible by the existing checked
+AST. The original inventory digest still binds raw schemas, so annotation/reference
+changes trigger rediscovery review even when the compiled schema is equivalent.

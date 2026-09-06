@@ -9,6 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+argon2 = "0.5.3"
 ustc-campus-agent-adapters = { path = "../../crates/adapters" }
 axum.workspace = true
 reqwest.workspace = true

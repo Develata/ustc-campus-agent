@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::agent_chat::CalendarMutationIntent;
+mod streaming;
 
 const DEFAULT_TIMEOUT_MS: u64 = 15_000;
 const MIN_TIMEOUT_MS: u64 = 1_000;
@@ -255,6 +256,18 @@ impl ChatProvider {
         match self {
             Self::DeterministicMock => deterministic_turn(request),
             Self::OpenAiCompatible(provider) => provider.complete(request).await,
+        }
+    }
+
+    pub(crate) async fn complete_observed(
+        &self,
+        request: &ProviderRequest,
+        observer: &mut (impl FnMut(&str) + Send),
+    ) -> Result<ProviderTurn, ProviderError> {
+        validate_provider_request(request)?;
+        match self {
+            Self::DeterministicMock => deterministic_turn(request),
+            Self::OpenAiCompatible(provider) => provider.complete_streamed(request, observer).await,
         }
     }
 

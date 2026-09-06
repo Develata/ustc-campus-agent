@@ -38,7 +38,10 @@ use super::chat_provider::ChatProvider;
 use super::conversation_application::ConversationApplication;
 use super::model_catalog::ModelCatalog;
 
+mod account_routes;
 mod calendar_routes;
+mod campus_routes;
+mod conversation_execution_routes;
 mod conversation_routes;
 use super::chat_tools::{CalendarAction, ChatToolExecution, ChatToolRequest};
 use super::market_catalog::{MarketCatalogError, MarketCatalogQuery};
@@ -51,6 +54,10 @@ mod plugin_routes;
 
 const INDEX_HTML: &str = include_str!("web/index.html");
 const APP_JS: &str = concat!(
+    include_str!("web/account.js"),
+    "\n",
+    include_str!("web/campus-workspace.js"),
+    "\n",
     include_str!("web/root-prompt-settings.js"),
     "\n;window.UcaRootPromptSettings.mount(document.querySelector(\"#root-prompt-settings\"));\n",
     include_str!("web/calendar-proposals.js"),
@@ -85,6 +92,10 @@ const APP_JS: &str = concat!(
     "\n;window.UcaPluginManagement.mount(document.querySelector(\"#plugin-management\"));\n",
 );
 const STYLES_CSS: &str = concat!(
+    include_str!("web/account.css"),
+    "\n",
+    include_str!("web/campus-workspace.css"),
+    "\n",
     include_str!("web/root-prompt-settings.css"),
     "\n",
     include_str!("web/calendar-proposals.css"),
@@ -119,10 +130,19 @@ const ADMINISTRATOR_DEMO_CONFIRMATION: &str = "confirm-v1";
 
 #[derive(Clone)]
 struct WebState {
+    accounts: Arc<Result<Option<crate::accounts::AccountService>, crate::accounts::AccountError>>,
+    calendars: Arc<Mutex<crate::calendar_workspace::CalendarWorkspaces>>,
+    execution_headers: Option<HeaderMap>,
+    course_consent: bool,
+    request_owner: Option<(
+        ustc_campus_agent_core::identity::TenantId,
+        ustc_campus_agent_core::identity::UserId,
+    )>,
     composition: Arc<Mutex<AffairsComposition>>,
     next_request: Arc<AtomicU64>,
     models: ModelCatalog,
     market_catalog: Arc<Result<MarketCatalogQuery, MarketCatalogError>>,
+    sources: Arc<crate::source_search::SourceSearchApplication>,
     conversations: Arc<Result<ConversationApplication, ConversationError>>,
     plugins: Arc<Result<crate::plugin_runtime::PluginRuntime, crate::plugin_runtime::PluginError>>,
 }
@@ -149,7 +169,31 @@ impl WebState {
                         .join("authority.bin"),
                 )
             });
+        let calendar_root = composition
+            .lock()
+            .expect("composition initialization")
+            .conversation_store_path
+            .with_extension("calendars");
         Self {
+            accounts: Arc::new(crate::accounts::AccountService::from_environment()),
+            calendars: Arc::new(Mutex::new(
+                crate::calendar_workspace::CalendarWorkspaces::new(calendar_root.clone()),
+            )),
+            request_owner: None,
+            execution_headers: None,
+            course_consent: false,
+            sources: Arc::new(crate::source_search::SourceSearchApplication::new(
+                calendar_root
+                    .with_extension("sources")
+                    .join("observations.json"),
+                std::env::var_os("USTC_SOURCE_REVIEW_MANIFEST")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| {
+                        calendar_root
+                            .with_extension("sources")
+                            .join("sources-reviewed.json")
+                    }),
+            )),
             plugins: Arc::new(plugins),
             composition,
             conversations: Arc::new(conversations),
@@ -159,6 +203,51 @@ impl WebState {
         }
     }
 
+    fn tool_owner(
+        &self,
+    ) -> Result<
+        (
+            ustc_campus_agent_core::identity::TenantId,
+            ustc_campus_agent_core::identity::UserId,
+        ),
+        CalendarError,
+    > {
+        if let Some(owner) = &self.request_owner {
+            return Ok(owner.clone());
+        }
+        if !matches!(self.accounts.as_ref(), Ok(None)) {
+            return Err(CalendarError::PersistenceUnavailable);
+        }
+        let c = self
+            .lock()
+            .map_err(|_| CalendarError::PersistenceUnavailable)?;
+        Ok((c.current_tenant_id.clone(), c.current_user_id.clone()))
+    }
+    fn with_calendar<T>(
+        &self,
+        owner: &(
+            ustc_campus_agent_core::identity::TenantId,
+            ustc_campus_agent_core::identity::UserId,
+        ),
+        operation: impl FnOnce(
+            &mut ustc_campus_agent_simple_calendar::CalendarStore,
+        ) -> Result<T, CalendarError>,
+    ) -> Result<T, CalendarError> {
+        match self.accounts.as_ref() {
+            Ok(Some(_)) => self
+                .calendars
+                .lock()
+                .map_err(|_| CalendarError::PersistenceUnavailable)?
+                .with(owner, operation),
+            Ok(None) => operation(
+                &mut self
+                    .lock()
+                    .map_err(|_| CalendarError::PersistenceUnavailable)?
+                    .calendar,
+            ),
+            Err(_) => Err(CalendarError::PersistenceUnavailable),
+        }
+    }
     fn next_chat_run_id(&self) -> Result<String, WebRequestError> {
         let sequence = self
             .next_request
@@ -745,8 +834,53 @@ fn web_router_with_models(
     composition: Arc<Mutex<AffairsComposition>>,
     models: ModelCatalog,
 ) -> Router {
+    let state = WebState::new(composition, models);
+    // Only weak handles survive the router: dropping the service stops its clock.
+    if tokio::runtime::Handle::try_current().is_ok() {
+        let weak = Arc::downgrade(&state.composition);
+        let calendar_weak = Arc::downgrade(&state.calendars);
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(5));
+            loop {
+                tick.tick().await;
+                let (Some(composition), Some(calendars)) =
+                    (weak.upgrade(), calendar_weak.upgrade())
+                else {
+                    break;
+                };
+                if let Ok(now) = crate::calendar_application::now() {
+                    if let Ok(mut workspaces) = calendars.lock() {
+                        let _ = workspaces.tick(now);
+                    }
+                    if let Ok(mut composition) = composition.lock() {
+                        let _ = composition.calendar.dispatch_reminders(now);
+                    }
+                }
+            }
+        });
+    }
     Router::new()
         .route("/", get(index))
+        .route(
+            "/api/v1/calendar/batches",
+            post(calendar_routes::propose_batch),
+        )
+        .route(
+            "/api/v1/calendar/batches/{id}/confirm",
+            post(calendar_routes::confirm_batch),
+        )
+        .route(
+            "/api/v1/calendar/batches/{id}/cancel",
+            post(calendar_routes::cancel_batch),
+        )
+        .route(
+            "/api/v1/calendar/reminders/{id}/read",
+            post(calendar_routes::read_reminder),
+        )
+        .route("/api/v1/account/mode", get(account_routes::mode))
+        .route("/api/v1/account/login", post(account_routes::login))
+        .route("/api/v1/account/me", get(account_routes::me))
+        .route("/api/v1/account/logout", post(account_routes::logout))
         .route("/assets/app.js", get(app_js))
         .route("/assets/styles.css", get(styles_css))
         .route("/healthz", get(healthz))
@@ -791,6 +925,22 @@ fn web_router_with_models(
             "/api/v1/agent/conversations/{id}/manage",
             post(conversation_routes::manage),
         )
+        .route(
+            "/api/v1/agent/conversations/{id}/cancel",
+            post(conversation_execution_routes::cancel),
+        )
+        .route("/api/v1/sources", get(campus_routes::sources))
+        .route("/api/v1/sources/search", post(campus_routes::search))
+        .route("/api/v1/sources/{id}/history", get(campus_routes::history))
+        .route("/api/v1/sources/{id}/fetch", post(campus_routes::fetch))
+        .route("/api/v1/sources/{id}/import", post(campus_routes::import))
+        .route("/api/v1/sources/review", post(campus_routes::review))
+        .route("/api/v1/courses/plan", post(campus_routes::courses))
+        .route("/api/v1/plugins/updates", post(plugin_routes::update))
+        .route(
+            "/api/v1/plugins/import-preview",
+            post(plugin_routes::preview_import),
+        )
         .route("/api/v1/plugins", get(plugin_routes::list))
         .route("/api/v1/plugins/commands", post(plugin_routes::command))
         .route("/api/v1/plugins/probe", post(plugin_routes::probe))
@@ -825,7 +975,11 @@ fn web_router_with_models(
         )
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(middleware::from_fn(admit_loopback_request))
-        .with_state(WebState::new(composition, models))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            account_routes::admit_request,
+        ))
+        .with_state(state)
 }
 
 impl AffairsComposition {
@@ -1007,7 +1161,7 @@ fn has_application_json_content_type(headers: &HeaderMap) -> bool {
 }
 
 async fn agent_chat(
-    State(state): State<WebState>,
+    State(mut state): State<WebState>,
     headers: HeaderMap,
     body: Result<Json<ChatRequestDto>, JsonRejection>,
 ) -> Response {
@@ -1040,13 +1194,21 @@ async fn agent_chat(
         Ok(provider) => provider,
         Err(error) => return chat_error_response(error),
     };
-    let mut executor =
-        match plugin_routes::WebChatExecutor::new(state.clone(), provider.tool_calling_enabled())
-            .await
-        {
-            Ok(executor) => executor,
-            Err(error) => return chat_error_response(error),
-        };
+    state.course_consent = opportunity_confirmed;
+    state.execution_headers = Some(headers.clone());
+    let mut executor = match plugin_routes::WebChatExecutor::new(
+        state.clone(),
+        provider.tool_calling_enabled(),
+        match account_routes::owner(&state, &headers) {
+            Ok(owner) => owner,
+            Err(response) => return response,
+        },
+    )
+    .await
+    {
+        Ok(executor) => executor,
+        Err(error) => return chat_error_response(error),
+    };
     match run_bounded_chat(
         run_id,
         request,
@@ -1085,14 +1247,26 @@ fn change_chat_outcome_succeeded(outcome: &M70ChangeFeedOutcomeDto) -> bool {
 fn execute_chat_tool(state: &WebState, request: ChatToolRequest) -> ChatToolExecution {
     match request {
         ChatToolRequest::CalendarPropose { mutation } => {
-            let Ok(mut application) = state.lock() else {
-                return ChatToolExecution::failed(json!({"code":"calendar_store_unavailable"}));
+            let owner = match state.tool_owner() {
+                Ok(owner) => owner,
+                Err(e) => return calendar_error_execution(e),
             };
-            match application.propose_calendar_from_agent(mutation) {
-                Ok(proposal) => ChatToolExecution::succeeded(json!({
-                    "schema":"calendar-proposal-result/v1", "proposal":proposal,
-                    "message":"Proposal saved for explicit user confirmation in the Calendar panel. No item has been changed. This is not a reminder."
-                })),
+            let subject = format!("{}/{}", owner.0.as_str(), owner.1.as_str());
+            let request = match state.next_chat_run_id() {
+                Ok(id) => id,
+                Err(_) => {
+                    return ChatToolExecution::failed(json!({"code":"calendar_store_unavailable"}));
+                }
+            };
+            let outcome = crate::calendar_application::now().and_then(|now| {
+                state.with_calendar(&owner, |store| {
+                    store.propose(&subject, &request, mutation, now)
+                })
+            });
+            match outcome {
+                Ok(proposal) => ChatToolExecution::succeeded(
+                    json!({"schema":"calendar-proposal-result/v1","proposal":proposal,"message":"Proposal saved for explicit user confirmation. No item changed. Confirming a dated item schedules station-inbox delivery at its time; not mobile push."}),
+                ),
                 Err(error) => calendar_error_execution(error),
             }
         }
@@ -1140,6 +1314,11 @@ fn execute_chat_tool(state: &WebState, request: ChatToolRequest) -> ChatToolExec
             max_results,
             beam_width,
         } => {
+            if matches!(state.accounts.as_ref(), Ok(Some(_))) {
+                return ChatToolExecution::denied(
+                    json!({"code":"demo_profile_unavailable_for_accounts","message":"Use plugin_course_plan with user-provided course facts and explicit per-request consent."}),
+                );
+            }
             let profile_snapshot_id = match checked_text(profile_snapshot_id) {
                 Ok(value) => value,
                 Err(_) => {
@@ -1171,43 +1350,37 @@ fn execute_calendar_chat_tool(
     title: Option<String>,
     item_id: Option<String>,
 ) -> ChatToolExecution {
-    let mut composition = match state.lock() {
-        Ok(composition) => composition,
-        Err(_) => {
-            return ChatToolExecution::failed(json!({"code": "calendar_store_unavailable"}));
-        }
+    let owner = match state.tool_owner() {
+        Ok(owner) => owner,
+        Err(e) => return calendar_error_execution(e),
     };
     match action {
-        CalendarAction::List => match composition.calendar_items() {
-            Ok(items) => calendar_chat::list_result(&items),
-            Err(error) => calendar_error_execution(error),
-        },
+        CalendarAction::List => {
+            match state.with_calendar(&owner, |store| Ok(store.items()?.to_vec())) {
+                Ok(items) => calendar_chat::list_result(&items),
+                Err(e) => calendar_error_execution(e),
+            }
+        }
         CalendarAction::Record => {
             let Some(title) = title else {
-                return ChatToolExecution::denied(json!({"code": "invalid_calendar_item"}));
+                return ChatToolExecution::denied(json!({"code":"invalid_calendar_item"}));
             };
-            match composition.record_calendar_item(&title, None) {
-                Ok(item) => ChatToolExecution::succeeded(json!({
-                    "schema": "ustc-simple-calendar-result/v1",
-                    "package_id": "ustc.simple-calendar",
-                    "action": "record",
-                    "item": item,
-                })),
-                Err(error) => calendar_error_execution(error),
+            match state.with_calendar(&owner, |store| store.record(&title, None)) {
+                Ok(item) => ChatToolExecution::succeeded(
+                    json!({"schema":"ustc-simple-calendar-result/v1","package_id":"ustc.simple-calendar","action":"record","item":item}),
+                ),
+                Err(e) => calendar_error_execution(e),
             }
         }
         CalendarAction::Delete => {
-            let Some(item_id) = item_id else {
-                return ChatToolExecution::denied(json!({"code": "invalid_calendar_item"}));
+            let Some(id) = item_id else {
+                return ChatToolExecution::denied(json!({"code":"invalid_calendar_item"}));
             };
-            match composition.delete_calendar_item(&item_id) {
-                Ok(item) => ChatToolExecution::succeeded(json!({
-                    "schema": "ustc-simple-calendar-result/v1",
-                    "package_id": "ustc.simple-calendar",
-                    "action": "delete",
-                    "item": item,
-                })),
-                Err(error) => calendar_error_execution(error),
+            match state.with_calendar(&owner, |store| store.delete(&id)) {
+                Ok(item) => ChatToolExecution::succeeded(
+                    json!({"schema":"ustc-simple-calendar-result/v1","package_id":"ustc.simple-calendar","action":"delete","item":item}),
+                ),
+                Err(e) => calendar_error_execution(e),
             }
         }
     }
@@ -1284,6 +1457,7 @@ fn project_chat_tool_response(
 
 fn chat_error_response(error: ChatError) -> Response {
     let status = match error {
+        ChatError::Cancelled => StatusCode::CONFLICT,
         ChatError::InvalidChatRequest => StatusCode::BAD_REQUEST,
         ChatError::ProviderNotConfigured
         | ChatError::ProviderUnavailable

@@ -12,7 +12,7 @@ use ustc_campus_agent_adapters::{
     skills::{DeclaredTextResource, ParsedSkill, load_declared_text_resource},
 };
 use ustc_campus_agent_core::{
-    invocation::{CapabilityId, CatalogRevision, ComponentKind, Sha256Digest},
+    invocation::{CapabilityId, CatalogRevision, ComponentId, ComponentKind, Sha256Digest},
     market::{
         ValidatedPackageManifest,
         configuration_catalog::{ValidatedPackageConfiguration, load_package_configuration},
@@ -49,9 +49,12 @@ impl std::error::Error for RuntimeRegistryError {}
 
 #[derive(Clone)]
 pub(crate) struct RuntimePackage {
+    pub manifest_source: Vec<u8>,
+    pub configuration_source: Vec<u8>,
     pub manifest: ValidatedPackageManifest,
     pub configuration: ValidatedPackageConfiguration,
     pub component: RuntimeComponent,
+    pub additional: BTreeMap<ComponentId, RuntimeComponent>,
 }
 #[derive(Clone)]
 pub(crate) enum RuntimeComponent {
@@ -132,6 +135,20 @@ impl SkillSource {
 }
 
 impl RuntimePackage {
+    pub(crate) fn components(&self) -> Vec<(&ComponentId, &RuntimeComponent)> {
+        let mut components = vec![(
+            self.configuration.package_pin().components()[0].component_id(),
+            &self.component,
+        )];
+        components.extend(self.additional.iter());
+        components
+    }
+    pub(crate) fn component(&self, id: &ComponentId) -> Option<&RuntimeComponent> {
+        self.components()
+            .into_iter()
+            .find(|(candidate, _)| *candidate == id)
+            .map(|(_, component)| component)
+    }
     pub(crate) fn bundled_skill() -> Result<Self, RuntimeRegistryError> {
         Self::from_sources(
             BUNDLED_MANIFEST,
@@ -163,11 +180,13 @@ impl RuntimePackage {
         {
             return Err(RuntimeRegistryError::Capacity);
         }
+        let manifest_source = manifest.to_vec();
+        let configuration_source = configuration.to_vec();
         let manifest = load_package_manifest(manifest)
             .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
-        let [declaration] = manifest.components() else {
+        if manifest.components().is_empty() || manifest.components().len() > 16 {
             return Err(RuntimeRegistryError::UnsupportedPackage);
-        };
+        }
         let mut revision_bytes = b"plugin-runtime-reviewed-sources/v1\0".to_vec();
         for bytes in [
             manifest.package_digest().as_str().as_bytes(),
@@ -184,184 +203,267 @@ impl RuntimePackage {
         .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
         let configuration = load_package_configuration(configuration, &manifest, &revision)
             .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
-        let raw: RawRuntime = serde_json::from_slice(runtime)
+        let envelope: serde_json::Value = serde_json::from_slice(runtime)
             .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
-        if raw.schema_version != "plugin-runtime/v1" {
+        let entries = if envelope.get("schemaVersion").and_then(|v| v.as_str())
+            == Some("plugin-runtime/v2")
+        {
+            let raw: RawPackageRuntime = serde_json::from_slice(runtime)
+                .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
+            if raw.schema_version != "plugin-runtime/v2" {
+                return Err(RuntimeRegistryError::InvalidDeclaration);
+            }
+            raw.components
+        } else {
+            if manifest.components().len() != 1 {
+                return Err(RuntimeRegistryError::UnsupportedPackage);
+            }
+            vec![RawRuntimeMember {
+                component_id: configuration.package_pin().components()[0]
+                    .component_id()
+                    .as_str()
+                    .to_owned(),
+                runtime: serde_json::from_slice(runtime)
+                    .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?,
+            }]
+        };
+        if entries.len() != manifest.components().len() {
             return Err(RuntimeRegistryError::InvalidDeclaration);
         }
-        let pin = &configuration.package_pin().components()[0];
-        let component = match raw.kind {
-            RawKind::Skill => {
-                if declaration.kind() != ComponentKind::SkillComponent
-                    || raw.endpoint_key.is_some()
-                    || raw.tools.is_some()
-                    || raw.endpoint_policy.is_some()
-                    || raw.bearer_file.is_some()
-                    || raw.credential_endpoint.is_some()
-                {
-                    return Err(RuntimeRegistryError::InvalidDeclaration);
-                }
-                let path = raw
-                    .skill_path
-                    .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
-                if declaration.path() != path {
-                    return Err(RuntimeRegistryError::InvalidDeclaration);
-                }
-                let directory = skill_directory(&path)?;
-                let resources = raw
-                    .resources
-                    .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
-                if resources.is_empty() || resources.len() > 256 {
-                    return Err(RuntimeRegistryError::Capacity);
-                }
-                let mut names = BTreeSet::new();
-                let declarations = resources
-                    .into_iter()
-                    .map(|resource| {
-                        if !names.insert(resource.path.clone()) {
-                            return Err(RuntimeRegistryError::InvalidDeclaration);
-                        }
-                        DeclaredTextResource::new(
-                            &resource.path,
-                            Sha256Digest::parse(resource.sha256)
-                                .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?,
-                        )
-                        .map_err(|_| RuntimeRegistryError::InvalidDeclaration)
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                let artifact = declarations
-                    .iter()
-                    .find(|resource| resource.path() == path)
-                    .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
-                if artifact.digest() != pin.digest() {
-                    return Err(RuntimeRegistryError::ArtifactMismatch);
-                }
-                if matches!(storage, SkillStorage::Bundled) && declarations.len() != 1 {
-                    return Err(RuntimeRegistryError::UnsupportedPackage);
-                }
-                let mut source = SkillSource {
-                    storage,
-                    skill_path: path.clone(),
-                    declarations,
-                    metadata: SkillMetadata {
-                        name: String::new(),
-                        description: String::new(),
-                    },
-                };
-                let text = source.read(&path)?;
-                let parsed = ParsedSkill::parse(directory, text.as_bytes())
-                    .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
-                source.metadata = SkillMetadata {
-                    name: parsed.name().to_owned(),
-                    description: parsed.description().to_owned(),
-                };
-                RuntimeComponent::Skill { source }
-            }
-            RawKind::Mcp => {
-                if declaration.kind() != ComponentKind::McpServerComponent
-                    || declaration.path() != "runtime.json"
-                    || raw.skill_path.is_some()
-                    || raw.resources.is_some()
-                {
-                    return Err(RuntimeRegistryError::InvalidDeclaration);
-                }
-                if pin.digest() != &Sha256Digest::from_bytes(runtime) {
-                    return Err(RuntimeRegistryError::ArtifactMismatch);
-                }
-                let endpoint_key = ConfigurationKey::parse(
-                    raw.endpoint_key
-                        .ok_or(RuntimeRegistryError::InvalidDeclaration)?,
-                )
+        let first_schema = configuration
+            .bindings()
+            .values()
+            .next()
+            .ok_or(RuntimeRegistryError::InvalidDeclaration)?
+            .schema();
+        if configuration
+            .bindings()
+            .values()
+            .any(|binding| binding.schema() != first_schema)
+        {
+            return Err(RuntimeRegistryError::UnsupportedPackage);
+        }
+        // The checked sidecar owns the component ID to declared path relationship.
+        // Digest equality alone cannot substitute a sibling declaration.
+        let configuration_document: serde_json::Value =
+            serde_json::from_slice(&configuration_source)
                 .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
-                let binding = configuration
-                    .binding(pin.component_id())
-                    .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
-                let field = binding
-                    .schema()
-                    .fields()
-                    .get(&endpoint_key)
-                    .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
-                if field.kind() != ConfigurationFieldKind::Text
-                    || !field.required()
-                    || field.max_utf8_bytes().is_none_or(|limit| limit > 2048)
-                {
-                    return Err(RuntimeRegistryError::InvalidDeclaration);
-                }
-                let entries = raw.tools.ok_or(RuntimeRegistryError::InvalidDeclaration)?;
-                if entries.is_empty() || entries.len() > 64 {
-                    return Err(RuntimeRegistryError::Capacity);
-                }
-                let mut tools = BTreeMap::new();
-                for entry in entries {
-                    if entry.name.is_empty()
-                        || entry.name.len() > 128
-                        || !entry.name.bytes().all(|byte| {
-                            byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.')
-                        })
-                    {
-                        return Err(RuntimeRegistryError::InvalidDeclaration);
-                    }
-                    let capability = CapabilityId::parse(entry.capability_id)
-                        .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
-                    if !manifest.capabilities().contains(&capability)
-                        || tools.insert(entry.name, capability).is_some()
-                    {
-                        return Err(RuntimeRegistryError::InvalidDeclaration);
-                    }
-                }
-                let endpoint_policy = match raw
-                    .endpoint_policy
-                    .unwrap_or(RawEndpointPolicy::PublicHttps)
-                {
-                    RawEndpointPolicy::PublicHttps => EndpointPolicy::PublicHttps,
-                    RawEndpointPolicy::LoopbackDevelopment => EndpointPolicy::LoopbackDevelopment,
-                };
-                if raw.bearer_file.is_some() != raw.credential_endpoint.is_some() {
-                    return Err(RuntimeRegistryError::InvalidDeclaration);
-                }
-                let credential_endpoint = raw
-                    .credential_endpoint
-                    .map(|endpoint| {
-                        let url = reqwest::Url::parse(&endpoint)
-                            .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
-                        if endpoint.len() > 2048
-                            || endpoint.chars().any(char::is_whitespace)
-                            || !matches!(url.scheme(), "http" | "https")
-                            || url.host_str().is_none()
-                            || !url.username().is_empty()
-                            || url.password().is_some()
-                            || url.fragment().is_some()
-                        {
-                            return Err(RuntimeRegistryError::InvalidDeclaration);
-                        }
-                        Ok(endpoint)
-                    })
-                    .transpose()?;
-                let bearer_file = raw
-                    .bearer_file
-                    .map(|path| {
-                        if path.len() > 1024
-                            || path.chars().any(char::is_control)
-                            || !Path::new(&path).is_absolute()
-                        {
-                            return Err(RuntimeRegistryError::InvalidDeclaration);
-                        }
-                        Ok(PathBuf::from(path))
-                    })
-                    .transpose()?;
-                RuntimeComponent::Mcp {
-                    endpoint_key,
-                    tools,
-                    endpoint_policy,
-                    bearer_file,
-                    credential_endpoint,
-                }
+        let mut components = BTreeMap::new();
+        for entry in entries {
+            let id = ComponentId::parse(entry.component_id)
+                .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
+            let pin = configuration
+                .package_pin()
+                .components()
+                .iter()
+                .find(|pin| pin.component_id() == &id)
+                .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
+            let raw = entry.runtime;
+            if raw.schema_version != "plugin-runtime/v1" {
+                return Err(RuntimeRegistryError::InvalidDeclaration);
             }
-        };
+            let expected_path = configuration_document["components"]
+                .as_array()
+                .and_then(|members| {
+                    members
+                        .iter()
+                        .find(|member| member["componentId"].as_str() == Some(id.as_str()))
+                })
+                .and_then(|member| member["path"].as_str())
+                .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
+            let declaration = manifest
+                .components()
+                .iter()
+                .find(|declaration| declaration.path() == expected_path)
+                .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
+            if declaration.kind() != pin.kind() {
+                return Err(RuntimeRegistryError::InvalidDeclaration);
+            }
+            let component = match raw.kind {
+                RawKind::Skill => {
+                    if declaration.kind() != ComponentKind::SkillComponent
+                        || raw.endpoint_key.is_some()
+                        || raw.tools.is_some()
+                        || raw.endpoint_policy.is_some()
+                        || raw.bearer_file.is_some()
+                        || raw.credential_endpoint.is_some()
+                    {
+                        return Err(RuntimeRegistryError::InvalidDeclaration);
+                    }
+                    let path = raw
+                        .skill_path
+                        .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
+                    if declaration.path() != path {
+                        return Err(RuntimeRegistryError::InvalidDeclaration);
+                    }
+                    let directory = skill_directory(&path)?;
+                    let resources = raw
+                        .resources
+                        .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
+                    if resources.is_empty() || resources.len() > 256 {
+                        return Err(RuntimeRegistryError::Capacity);
+                    }
+                    let mut names = BTreeSet::new();
+                    let declarations = resources
+                        .into_iter()
+                        .map(|resource| {
+                            if !names.insert(resource.path.clone()) {
+                                return Err(RuntimeRegistryError::InvalidDeclaration);
+                            }
+                            DeclaredTextResource::new(
+                                &resource.path,
+                                Sha256Digest::parse(resource.sha256)
+                                    .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?,
+                            )
+                            .map_err(|_| RuntimeRegistryError::InvalidDeclaration)
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let artifact = declarations
+                        .iter()
+                        .find(|resource| resource.path() == path)
+                        .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
+                    if artifact.digest() != pin.digest() {
+                        return Err(RuntimeRegistryError::ArtifactMismatch);
+                    }
+                    if matches!(storage, SkillStorage::Bundled) && declarations.len() != 1 {
+                        return Err(RuntimeRegistryError::UnsupportedPackage);
+                    }
+                    let mut source = SkillSource {
+                        storage: storage.clone(),
+                        skill_path: path.clone(),
+                        declarations,
+                        metadata: SkillMetadata {
+                            name: String::new(),
+                            description: String::new(),
+                        },
+                    };
+                    let text = source.read(&path)?;
+                    let parsed = ParsedSkill::parse(directory, text.as_bytes())
+                        .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
+                    source.metadata = SkillMetadata {
+                        name: parsed.name().to_owned(),
+                        description: parsed.description().to_owned(),
+                    };
+                    RuntimeComponent::Skill { source }
+                }
+                RawKind::Mcp => {
+                    if declaration.kind() != ComponentKind::McpServerComponent
+                        || declaration.path() != "runtime.json"
+                        || raw.skill_path.is_some()
+                        || raw.resources.is_some()
+                    {
+                        return Err(RuntimeRegistryError::InvalidDeclaration);
+                    }
+                    if pin.digest() != &Sha256Digest::from_bytes(runtime) {
+                        return Err(RuntimeRegistryError::ArtifactMismatch);
+                    }
+                    let endpoint_key = ConfigurationKey::parse(
+                        raw.endpoint_key
+                            .ok_or(RuntimeRegistryError::InvalidDeclaration)?,
+                    )
+                    .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
+                    let binding = configuration
+                        .binding(pin.component_id())
+                        .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
+                    let field = binding
+                        .schema()
+                        .fields()
+                        .get(&endpoint_key)
+                        .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
+                    if field.kind() != ConfigurationFieldKind::Text
+                        || !field.required()
+                        || field.max_utf8_bytes().is_none_or(|limit| limit > 2048)
+                    {
+                        return Err(RuntimeRegistryError::InvalidDeclaration);
+                    }
+                    let entries = raw.tools.ok_or(RuntimeRegistryError::InvalidDeclaration)?;
+                    if entries.is_empty() || entries.len() > 64 {
+                        return Err(RuntimeRegistryError::Capacity);
+                    }
+                    let mut tools = BTreeMap::new();
+                    for entry in entries {
+                        if entry.name.is_empty()
+                            || entry.name.len() > 128
+                            || !entry.name.bytes().all(|byte| {
+                                byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.')
+                            })
+                        {
+                            return Err(RuntimeRegistryError::InvalidDeclaration);
+                        }
+                        let capability = CapabilityId::parse(entry.capability_id)
+                            .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
+                        if !manifest.capabilities().contains(&capability)
+                            || tools.insert(entry.name, capability).is_some()
+                        {
+                            return Err(RuntimeRegistryError::InvalidDeclaration);
+                        }
+                    }
+                    let endpoint_policy = match raw
+                        .endpoint_policy
+                        .unwrap_or(RawEndpointPolicy::PublicHttps)
+                    {
+                        RawEndpointPolicy::PublicHttps => EndpointPolicy::PublicHttps,
+                        RawEndpointPolicy::LoopbackDevelopment => {
+                            EndpointPolicy::LoopbackDevelopment
+                        }
+                    };
+                    if raw.bearer_file.is_some() != raw.credential_endpoint.is_some() {
+                        return Err(RuntimeRegistryError::InvalidDeclaration);
+                    }
+                    let credential_endpoint = raw
+                        .credential_endpoint
+                        .map(|endpoint| {
+                            let url = reqwest::Url::parse(&endpoint)
+                                .map_err(|_| RuntimeRegistryError::InvalidDeclaration)?;
+                            if endpoint.len() > 2048
+                                || endpoint.chars().any(char::is_whitespace)
+                                || !matches!(url.scheme(), "http" | "https")
+                                || url.host_str().is_none()
+                                || !url.username().is_empty()
+                                || url.password().is_some()
+                                || url.fragment().is_some()
+                            {
+                                return Err(RuntimeRegistryError::InvalidDeclaration);
+                            }
+                            Ok(endpoint)
+                        })
+                        .transpose()?;
+                    let bearer_file = raw
+                        .bearer_file
+                        .map(|path| {
+                            if path.len() > 1024
+                                || path.chars().any(char::is_control)
+                                || !Path::new(&path).is_absolute()
+                            {
+                                return Err(RuntimeRegistryError::InvalidDeclaration);
+                            }
+                            Ok(PathBuf::from(path))
+                        })
+                        .transpose()?;
+                    RuntimeComponent::Mcp {
+                        endpoint_key,
+                        tools,
+                        endpoint_policy,
+                        bearer_file,
+                        credential_endpoint,
+                    }
+                }
+            };
+            if components.insert(id, component).is_some() {
+                return Err(RuntimeRegistryError::InvalidDeclaration);
+            }
+        }
+        let first = configuration.package_pin().components()[0].component_id();
+        let component = components
+            .remove(first)
+            .ok_or(RuntimeRegistryError::InvalidDeclaration)?;
         Ok(Self {
+            manifest_source,
+            configuration_source,
             manifest,
             configuration,
             component,
+            additional: components,
         })
     }
 }
@@ -378,6 +480,18 @@ fn skill_directory(path: &str) -> Result<&str, RuntimeRegistryError> {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RawPackageRuntime {
+    schema_version: String,
+    components: Vec<RawRuntimeMember>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct RawRuntimeMember {
+    component_id: String,
+    runtime: RawRuntime,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct RawRuntime {
     schema_version: String,
     kind: RawKind,
@@ -389,7 +503,7 @@ struct RawRuntime {
     bearer_file: Option<String>,
     credential_endpoint: Option<String>,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum RawKind {
     Skill,

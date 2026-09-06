@@ -8,7 +8,8 @@ use ustc_campus_agent_core::invocation::{
 };
 
 pub(super) fn compile_schema(value: &Value) -> Result<ValidatedToolInputSchemaV0, McpError> {
-    let root = schema_node(value, 0)?;
+    let expanded = expand_local_references(value, value, 0, &mut 512)?;
+    let root = schema_node(&expanded, 0)?;
     if !matches!(root, UnvalidatedSchemaNodeV0::Object { .. }) {
         return Err(McpError::InvalidSchema);
     }
@@ -17,6 +18,59 @@ pub(super) fn compile_schema(value: &Value) -> Result<ValidatedToolInputSchemaV0
         root,
     })
     .map_err(|_| McpError::InvalidSchema)
+}
+
+// Resolve only document-local definitions. No network references, cycles or validation-keyword siblings.
+fn expand_local_references(
+    value: &Value,
+    root: &Value,
+    depth: usize,
+    remaining: &mut usize,
+) -> Result<Value, McpError> {
+    if depth > 8 || *remaining == 0 {
+        return Err(McpError::InvalidSchema);
+    }
+    *remaining -= 1;
+    let mut object = value.as_object().ok_or(McpError::InvalidSchema)?.clone();
+    if let Some(reference) = object.remove("$ref") {
+        let reference = reference.as_str().ok_or(McpError::InvalidSchema)?;
+        if !(reference.starts_with("#/$defs/") || reference.starts_with("#/definitions/"))
+            || object.keys().any(|key| {
+                !matches!(
+                    key.as_str(),
+                    "title" | "description" | "default" | "examples" | "$comment"
+                )
+            })
+        {
+            return Err(McpError::InvalidSchema);
+        }
+        let target = root
+            .pointer(&reference[1..])
+            .ok_or(McpError::InvalidSchema)?;
+        return expand_local_references(target, root, depth + 1, remaining);
+    }
+    // Definitions are inert until referenced; validation cannot depend on silently dropped keywords.
+    for key in ["$defs", "definitions"] {
+        if object
+            .remove(key)
+            .is_some_and(|definitions| !definitions.is_object())
+        {
+            return Err(McpError::InvalidSchema);
+        }
+    }
+    if let Some(properties) = object.get_mut("properties") {
+        let properties = properties.as_object_mut().ok_or(McpError::InvalidSchema)?;
+        if properties.len() > 64 {
+            return Err(McpError::InvalidSchema);
+        }
+        for schema in properties.values_mut() {
+            *schema = expand_local_references(schema, root, depth + 1, remaining)?;
+        }
+    }
+    if let Some(items) = object.get_mut("items") {
+        *items = expand_local_references(items, root, depth + 1, remaining)?;
+    }
+    Ok(Value::Object(object))
 }
 
 fn schema_node(value: &Value, depth: usize) -> Result<UnvalidatedSchemaNodeV0, McpError> {
@@ -31,7 +85,10 @@ fn schema_node(value: &Value, depth: usize) -> Result<UnvalidatedSchemaNodeV0, M
     for (key, value) in object {
         let admitted = match key.as_str() {
             "type" => true,
-            "title" | "description" => value.is_string(),
+            "title" | "description" | "$comment" => value.is_string(),
+            "default" => true,
+            "examples" => value.is_array(),
+            "deprecated" | "readOnly" | "writeOnly" => value.is_boolean(),
             "$schema" => value.as_str() == Some("https://json-schema.org/draft/2020-12/schema"),
             "properties" | "required" | "additionalProperties" => kind == "object",
             "items" => kind == "array",
@@ -247,5 +304,38 @@ fn output_matches(schema: &ValidatedSchemaNodeV0, value: &Value) -> bool {
                 })
         }
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod compatibility_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn local_defs_and_annotations_preserve_validation() {
+        let schema = compile_schema(&json!({"type":"object","additionalProperties":false,
+            "$defs":{"Count":{"type":"integer","minimum":1,"maximum":3,"default":2}},
+            "properties":{"count":{"$ref":"#/$defs/Count"}},"required":["count"]}))
+        .expect("local definition");
+        assert!(validate_arguments(&schema, &json!({"count":2})).is_ok());
+        for value in [
+            json!({"count":0}),
+            json!({"count":4}),
+            json!({"count":"2"}),
+            json!({}),
+        ] {
+            assert!(validate_arguments(&schema, &value).is_err());
+        }
+    }
+    #[test]
+    fn remote_recursive_and_constraint_sibling_refs_reject() {
+        for value in [
+            json!({"$ref":"https://example.test/schema"}),
+            json!({"$defs":{"Loop":{"$ref":"#/$defs/Loop"}},"$ref":"#/$defs/Loop"}),
+            json!({"$defs":{"Count":{"type":"integer"}},"type":"object","additionalProperties":false,
+                "properties":{"count":{"$ref":"#/$defs/Count","minimum":2}}}),
+        ] {
+            assert!(compile_schema(&value).is_err());
+        }
     }
 }

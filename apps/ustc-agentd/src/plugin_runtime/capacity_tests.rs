@@ -79,6 +79,9 @@ fn package(count: usize) -> RuntimePackage {
     )
     .expect("valid capacity fixture");
     RuntimePackage {
+        manifest_source: Vec::new(),
+        configuration_source: Vec::new(),
+        additional: BTreeMap::new(),
         manifest,
         configuration,
         component: RuntimeComponent::Mcp {
@@ -154,6 +157,17 @@ async fn prepare(
         state.probes.insert(
             id.clone(),
             ProbedComponent {
+                component_id: binding.component_id().clone(),
+                additional: BTreeMap::new(),
+                tool_components: definitions
+                    .iter()
+                    .map(|tool| {
+                        (
+                            tool.model_visible_name.clone(),
+                            binding.component_id().clone(),
+                        )
+                    })
+                    .collect(),
                 revision: current.revision().clone(),
                 readiness,
                 tools: definitions,

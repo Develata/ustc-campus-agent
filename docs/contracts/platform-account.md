@@ -4,7 +4,7 @@
 
 - `Contract ID`: `M00-ACCOUNT-001`
 - `Version`: `platform-account/v0`
-- `Status`: Approved product direction; construction contract; implementation planned
+- `Status`: Approved product direction; bounded local adapter implemented; full account acceptance planned
 - `Last Review`: `2026-09-05`
 - `Owner`: M00 Platform Control and Identity
 - `Owning Blueprint`: [M00](../plan/modules/10-platform-control-identity.md)
@@ -236,6 +236,11 @@ reviewable import receipt without rewriting source receipts or grants.
 
 All cases below are **planned**. IDs are proposed bindings until registered in the
 active acceptance matrix; this document does not claim tests or service readiness.
+
+The [local configured-account adapter](platform-account-local.md) now binds one
+operator-configured loopback profile, pinned Argon2id credentials, canonical session
+transactions and login/me/logout transport. Its bounded tests and pending integration
+evidence do not promote these complete ACCOUNT cases or public service readiness.
 
 | Case | Required observable evidence |
 |---|---|

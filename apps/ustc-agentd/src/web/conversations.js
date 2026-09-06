@@ -210,6 +210,8 @@ window.UcaConversations = (() => {
         const detail = validateDetail(await request(`${BASE}/${encodeURIComponent(id)}`));
         if (detail.id !== id) throw fail("invalid_response");
         observe(detail); callbacks.selected?.();
+        const last=detail.turns.at(-1);
+        if(last && last.phase!=="completed")callbacks.activityStarted?.(detail.id,last.request_id);
       } catch (error) { callbacks.error(error.code); }
       finally { setBusy(false); }
     }

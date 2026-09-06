@@ -119,7 +119,10 @@ impl CalendarStore {
         // Admission proves the item mutation fits before saving a confirmable proposal.
         // No item revision or item is changed by this disposable capacity preview.
         let mut preview = self.state.clone();
-        apply(&mut preview, &mutation, expires_at_unix_secs)?;
+        let preview_item = apply(&mut preview, &mutation, expires_at_unix_secs)?;
+        if !matches!(mutation, CalendarMutation::Delete { .. }) {
+            reminders::schedule(&mut preview, &preview_item)?;
+        }
         storage::check_items(&preview)?;
         let mut next = self.state.clone();
         let id = next.next_proposal_id;
@@ -136,7 +139,9 @@ impl CalendarStore {
             status: CalendarProposalStatus::Pending,
             result: None,
         };
-        next.schema = storage::V2.to_owned();
+        if next.schema != storage::V3 {
+            next.schema = storage::V2.to_owned();
+        }
         next.proposals.push(proposal.clone());
         self.commit(next)?;
         Ok(proposal)
@@ -180,6 +185,10 @@ impl CalendarStore {
         }
         let mut next = self.state.clone();
         let result = apply(&mut next, &proposal.mutation, now)?;
+        match &proposal.mutation {
+            CalendarMutation::Delete { item_id } => reminders::cancel(&mut next, item_id),
+            _ => reminders::schedule(&mut next, &result)?,
+        }
         advance_revision(&mut next)?;
         next.proposals[index].status = CalendarProposalStatus::Applied;
         next.proposals[index].result = Some(result);
@@ -232,14 +241,14 @@ impl CalendarStore {
         Ok(item)
     }
 }
-fn checked_key(value: &str) -> Result<(), CalendarError> {
+pub(super) fn checked_key(value: &str) -> Result<(), CalendarError> {
     if value.is_empty() || value.len() > 256 || !value.bytes().all(|b| (0x21..=0x7e).contains(&b)) {
         Err(CalendarError::InvalidProposal)
     } else {
         Ok(())
     }
 }
-fn item_sequence(id: &str) -> Result<u64, CalendarError> {
+pub(super) fn item_sequence(id: &str) -> Result<u64, CalendarError> {
     let value = id
         .strip_prefix(ITEM_ID_PREFIX)
         .and_then(|v| v.parse::<u64>().ok())
@@ -266,20 +275,25 @@ fn before(
         })
         .transpose()
 }
-fn advance_revision(state: &mut PersistedCalendar) -> Result<(), CalendarError> {
+pub(super) fn advance_revision(state: &mut PersistedCalendar) -> Result<(), CalendarError> {
     state.item_revision = state
         .item_revision
         .checked_add(1)
         .ok_or(CalendarError::CounterExhausted)?;
-    state.schema = storage::V2.to_owned();
+    if state.schema != storage::V3 {
+        state.schema = storage::V2.to_owned();
+    }
     Ok(())
 }
-fn apply(
+pub(super) fn apply(
     state: &mut PersistedCalendar,
     mutation: &CalendarMutation,
     now: u64,
 ) -> Result<CalendarItem, CalendarError> {
     mutation.validate()?;
+    if let Some(id) = mutation.target() {
+        reminders::cancel(state, id);
+    }
     let result = match mutation {
         CalendarMutation::Record {
             title,
@@ -334,6 +348,8 @@ pub(super) fn validate_state(state: &PersistedCalendar) -> Result<(), CalendarEr
         return if state.item_revision == 0
             && state.next_proposal_id == 1
             && state.proposals.is_empty()
+            && state.reminders.is_empty()
+            && state.batches.is_empty()
         {
             Ok(())
         } else {
@@ -429,7 +445,7 @@ pub(super) fn validate_state(state: &PersistedCalendar) -> Result<(), CalendarEr
     }
     Ok(())
 }
-fn validate_item(item: &CalendarItem, next_id: u64) -> Result<(), CalendarError> {
+pub(super) fn validate_item(item: &CalendarItem, next_id: u64) -> Result<(), CalendarError> {
     if item_sequence(&item.id).map_err(|_| CalendarError::InvalidStore)? >= next_id
         || validate_title(&item.title).map_err(|_| CalendarError::InvalidStore)? != item.title
     {

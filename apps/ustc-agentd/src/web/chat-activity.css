@@ -11,3 +11,7 @@
 .chat-activity-details li[data-status="running"] { color: var(--ink); }
 @keyframes activity-pulse { 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .chat-activity[data-state="running"] .chat-activity-status::before { animation: none; } }
+
+.chat-activity-answer { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; margin-block: .7rem; }
+.chat-activity-stop { margin-block: .35rem; padding: .35rem .8rem; border: 1px solid currentColor; border-radius: .5rem; background: transparent; color: inherit; cursor: pointer; }
+.chat-activity-stop:disabled { opacity: .6; cursor: wait; }

@@ -20,7 +20,7 @@
   function packageValid(pkg) {
     const fields = pkg?.fields;
     return typeof pkg?.available === "boolean" && nonempty(pkg?.package_id) && nonempty(pkg.version,128) && nonempty(pkg.name,256) && text(pkg.description) &&
-      nonempty(pkg.catalog_revision) && /^sha256:[a-f0-9]{64}$/.test(pkg.package_digest) && ["skill","mcp"].includes(pkg.kind) &&
+      nonempty(pkg.catalog_revision) && /^sha256:[a-f0-9]{64}$/.test(pkg.package_digest) && ["skill","mcp","mixed"].includes(pkg.kind) &&
       Array.isArray(pkg.capabilities) && pkg.capabilities.length <= 64 && pkg.capabilities.every(value => nonempty(value,128)) &&
       new Set(pkg.capabilities).size === pkg.capabilities.length && Array.isArray(fields) && fields.length <= 128 &&
       fields.every(field => nonempty(field.key,64) && ["text","integer","boolean"].includes(field.kind) && typeof field.required === "boolean" &&
@@ -59,7 +59,7 @@
   }
   function mount(root) {
     if (!root || mounted.has(root)) return mounted.get(root);
-    let packages = [], probes = new Map(), pending = null, busy = false, alive = true, sequence = 0, recoveryBlocked = false;
+    let packages = [], updates = [], versionReviews = new Map(), probes = new Map(), pending = null, busy = false, alive = true, sequence = 0, recoveryBlocked = false;
     const title = node("h2","","已接入的插件");
     const intro = node("p","plugin-manage-intro","按需安装校园指南或管理员已接入的 MCP。每项权限由你确认，启用后才可在对话中使用。");
     const modelNote = node("p","plugin-manage-model-note"); modelNote.setAttribute("role","status");
@@ -79,11 +79,39 @@
     const refresh = button("刷新状态",()=>load(),"refresh");
     const note = node("p","plugin-manage-note","当前支持只读 Skill 上下文和公开读取 MCP。修改配置或停用后，需要重新检查与审核权限。");
     root.classList.add("plugin-management"); root.replaceChildren(title,intro,modelNote,refresh,status,pendingBox,cards,note);
+    const importer = node("details","plugin-import-review");
+    importer.append(node("summary","","准备 MCP / Skill 导入包"),node("p","","填写候选描述后生成可审阅文件。生成不会安装、联网或执行代码；审阅通过后由管理员接入，再完成安装与授权。"));
+    const input = node("textarea", "plugin-import-input"); input.rows=12;
+    input.setAttribute("aria-label","导入候选 JSON");
+    input.value = JSON.stringify({schema:"plugin-import-preview/v1",package_id:"community.my-guide",version:"0.1.0",display_name:"我的指南",source:"请填写来源与使用条件",skill:"---\nname: my-guide\ndescription: 我的任务指南\n---\n请填写需要审阅的内容。\n",mcp:null},null,2);
+    const output = node("div","plugin-import-output"); output.setAttribute("role","status");
+    const generate = button("生成审阅包",async()=>{
+      generate.disabled=true; output.replaceChildren();
+      try {
+        if (input.value.length > 100000) throw Error("capacity");
+        const body=JSON.stringify(JSON.parse(input.value));
+        const result=await request("/api/v1/plugins/import-preview",body);
+        if(result.schema!=="plugin-import-review/v1" || result.admitted!==false || !/^sha256:[a-f0-9]{64}$/.test(result.review_digest) || !result.files || typeof result.files!=="object") throw Error("response");
+        output.append(node("p","",`待审阅 · ${result.review_digest}`));
+        for(const warning of result.warnings || []) output.append(node("p","",String(warning)));
+        for(const [path,content] of Object.entries(result.files)) {
+          if(!text(path,256)||!text(content,100000)) throw Error("response");
+          const section=node("details","");section.append(node("summary","",path),node("pre","",content));output.append(section);
+        }
+        output.append(button("下载审阅包 JSON",()=>{
+          const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:"application/json"}));
+          const link=node("a","");link.href=url;link.download="plugin-import-review.json";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+        }));
+      } catch (_) {output.replaceChildren(node("p","","候选格式或能力不受支持。检查 JSON、Skill 名称、HTTPS 地址和公开读取能力映射。"));}
+      finally {generate.disabled=false;}
+    });
+    importer.append(input,generate,output);root.append(importer);
+
     try {
       const saved = sessionStorage.getItem(PENDING_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.schema !== "plugin-command/v1" || !nonempty(parsed.request_id,80) || !parsed.intent || !["install","configure","grant","enable","disable","revoke"].includes(parsed.intent.action)) throw Error("pending");
+        if (!["plugin-command/v1","plugin-update/v1"].includes(parsed.schema) || !nonempty(parsed.request_id,80) || !parsed.intent || !(parsed.schema === "plugin-update/v1" ? ["apply","rollback","confirm"] : ["install","configure","grant","enable","disable","revoke"]).includes(parsed.intent.action)) throw Error("pending");
         pending = saved;
       }
     } catch (_) { recoveryBlocked = true; status.textContent = "无法恢复上次操作记录。为避免重复提交，当前暂不允许修改。"; }
@@ -107,14 +135,16 @@
         if (data.schema !== "plugin-lifecycle/v1" || !Array.isArray(data.packages) || data.packages.length > 64 || !data.packages.every(packageValid) || new Set(data.packages.map(pkg=>JSON.stringify([pkg.package_id,pkg.version,pkg.catalog_revision,pkg.installation?.id ?? null]))).size !== data.packages.length) throw Error("response");
         if (!alive || token !== sequence) return;
         packages = data.packages;
+        updates = Array.isArray(data.updates) ? data.updates : [];
+        for (const [id,review] of versionReviews) if (!packages.some(pkg=>pkg.installation?.id === id && pkg.installation.revision === review.installation_revision)) versionReviews.delete(id);
         for (const [id,probe] of probes) if (!packages.some(pkg=>pkg.installation?.id === id && pkg.installation.revision === probe.revision)) probes.delete(id);
         render(); if (!pending && !recoveryBlocked) status.textContent = packages.length ? "状态已更新。安装和授权会保存在当前服务端。" : "当前没有已接入的插件包。";
       } catch (_) { if (alive && token === sequence) { packages = []; cards.replaceChildren(); status.textContent = "暂时无法读取插件状态，请确认本机服务可用后刷新。"; } }
       finally { if (alive && token === sequence) { busy = false; showPending(); } }
     }
-    async function command(intent) {
+    async function command(intent, schema = "plugin-command/v1") {
       if (busy || pending || recoveryBlocked) return;
-      const body = JSON.stringify({schema:"plugin-command/v1",request_id:crypto.randomUUID(),intent});
+      const body = JSON.stringify({schema,request_id:crypto.randomUUID(),intent});
       try { sessionStorage.setItem(PENDING_KEY,body); pending = body; }
       catch (_) { recoveryBlocked = true; status.textContent = "无法保存操作编号，本次未提交。"; locks(); return; }
       await sendPending();
@@ -124,8 +154,12 @@
       const original = pending; busy = true; showPending(); status.textContent = "正在确认操作结果…";
       let known = false, message = "";
       try {
-        const result = await request("/api/v1/plugins/commands",original);
-        if (result.schema !== "plugin-command-result/v1" || typeof result.accepted !== "boolean" || typeof result.replayed !== "boolean" || !nonempty(result.installation_id) || result.revision !== null && !nonempty(result.revision)) throw Error("response");
+        const updateCommand = JSON.parse(original).schema === "plugin-update/v1";
+        const result = await request(updateCommand ? "/api/v1/plugins/updates" : "/api/v1/plugins/commands",original);
+        if (updateCommand) {
+          if (result.schema !== "plugin-update-view/v1" || !nonempty(result.update_id) || !nonempty(result.installation_revision)) throw Error("response");
+          result.accepted=true; versionReviews.clear();probes.clear();
+        } else if (result.schema !== "plugin-command-result/v1" || typeof result.accepted !== "boolean" || typeof result.replayed !== "boolean" || !nonempty(result.installation_id) || result.revision !== null && !nonempty(result.revision)) throw Error("response");
         known = true;
         const action = JSON.parse(original).intent.action;
         if (["configure","disable","revoke"].includes(action)) probes.clear();
@@ -162,7 +196,7 @@
         const card = node("article","plugin-manage-card"); card.dataset.packageId = pkg.package_id; card.dataset.available = String(pkg.available !== false); if (pkg.installation) card.dataset.installationId = pkg.installation.id;
         const heading = node("div","plugin-manage-heading");
         heading.append(node("h3","",pkg.name),node("span","plugin-manage-state",pkg.installation ? STATES[pkg.installation.state] : "未安装"));
-        card.append(heading,node("p","plugin-manage-description",pkg.package_id === "ustc.campus-guide" ? "帮助 Agent 核对校园信息的来源，组织选课问题和日历任务。" : pkg.description),node("p","plugin-manage-meta",`${pkg.kind === "skill" ? "Skill 使用指南" : "MCP 只读工具"} · v${pkg.version}`));
+        card.append(heading,node("p","plugin-manage-description",pkg.package_id === "ustc.campus-guide" ? "帮助 Agent 核对校园信息的来源，组织选课问题和日历任务。" : pkg.description),node("p","plugin-manage-meta",`${pkg.kind === "mixed" ? "Skill + MCP 组合包" : pkg.kind === "skill" ? "Skill 使用指南" : "MCP 只读工具"} · v${pkg.version}`));
         if (pkg.available === false) card.append(node("p","plugin-manage-unavailable","包来源暂不可用。保留历史安装状态，可停用或撤销；无法配置、检查或启用。"));
         if (!pkg.installation && pkg.available !== false) card.append(button("安装",()=>command({action:"install",package_id:pkg.package_id,version:pkg.version,catalog_revision:pkg.catalog_revision,package_digest:pkg.package_digest}),"install"));
         else if (!pkg.installation) { /* Missing sources never create an install intent. */ }
@@ -180,6 +214,7 @@
             if (checked) review(card,pkg,checked);
             else card.append(node("p","plugin-manage-note","检查组件后，可查看待启用的工具清单。"));
           }
+          if (pkg.available !== false) versionControls(card,pkg);
           const advanced = node("details","plugin-manage-advanced"); advanced.append(node("summary","","安装详情与撤销"),node("p","plugin-manage-meta",pkg.package_id));
           const confirm = node("div","plugin-manage-revoke"); confirm.hidden = true;
           confirm.append(node("p","","确认撤销此安装？后续读取和调用将被拒绝，历史记录保留。"),button("确认撤销",()=>command(bound(pkg,"revoke")),"confirm-revoke"));
@@ -188,6 +223,48 @@
         cards.append(card);
       }
       locks();
+    }
+    async function reviewVersion(pkg, intent) {
+      if (busy || pending || recoveryBlocked) return;
+      busy=true;locks();status.textContent="正在核对两个版本的组件、配置与权限变化…";
+      try {
+        const result=await request("/api/v1/plugins/updates",JSON.stringify({schema:"plugin-update/v1",request_id:crypto.randomUUID(),intent}));
+        if(result.schema!=="plugin-update-view/v1" || result.installation_id!==pkg.installation.id || result.installation_revision!==pkg.installation.revision || !nonempty(result.plan_digest))throw Error("response");
+        result.review_action=intent.action;versionReviews.set(pkg.installation.id,result);render();status.textContent="检查完成。请核对目标版本、权限和来源变化后确认。";
+      } catch (_) {status.textContent="版本检查未通过。请先停用，确认当前配置同时适用于两个版本，并保证来源可用。";}
+      finally {busy=false;locks();}
+    }
+    function versionControls(card,pkg) {
+      const panel=node("details","plugin-manage-versions");panel.append(node("summary","","版本更新与回滚"));
+      if(pkg.installation.state==="enabled") {panel.append(node("p","","请先停用插件，再检查和切换版本。"));card.append(panel);return;}
+      const active=updates.find(update=>update.installation_id===pkg.installation.id && update.state==="appliedpendingconfirmation");
+      if(active) {
+        panel.append(node("p","",`已切换 ${active.rollback_version} → ${active.target_version}。旧授权已失效；重新检查和授权后才能启用。`));
+        panel.append(button(`检查回滚到 ${active.rollback_version}`,()=>reviewVersion(pkg,bound(pkg,"review_rollback",{update_id:active.update_id})),"review-rollback"));
+        const retain=node("div","");retain.hidden=true;
+        retain.append(node("p","","确认保留当前版本并结束本次回滚窗口？"),button("确认保留当前版本",()=>command(bound(pkg,"confirm",{update_id:active.update_id}),"plugin-update/v1"),"confirm-version"));
+        panel.append(button("保留当前版本",()=>{retain.hidden=false;},"retain-version"),retain);
+      } else {
+        const versions=packages.filter(candidate=>candidate.available && candidate.package_id===pkg.package_id && candidate.version!==pkg.version);
+        if(!versions.length) panel.append(node("p","","当前目录没有其他已审阅版本。"));
+        for(const target of versions) panel.append(button(`检查版本 ${target.version}`,()=>reviewVersion(pkg,bound(pkg,"preview",{target_version:target.version})),"preview-version"));
+      }
+      const review=versionReviews.get(pkg.installation.id);
+      if(review) {
+        const rollback=review.review_action==="review_rollback";
+        panel.append(node("p","",rollback ? `将回滚到 ${review.rollback_version}，当前授权将失效。` : `版本 ${review.rollback_version} → ${review.target_version}；权限/来源分类：${review.change_class}。旧授权失效，新版本保持停用。`));
+        const target=packages.find(candidate=>candidate.package_id===pkg.package_id && candidate.version===(rollback?review.rollback_version:review.target_version));
+        if(target) panel.append(node("p","",`目标能力：${target.capabilities.join("、")}。${target.description}`));
+        panel.append(node("code","",review.plan_digest));
+        const label=node("label","plugin-manage-confirm");const checkbox=node("input","");checkbox.type="checkbox";label.append(checkbox,document.createTextNode("我已核对该版本和能力变化，同意切换并重新授权。"));
+        const apply=button(rollback?"确认回滚":"确认更新",()=>{
+          if(!checkbox.checked)return;
+          const extra=rollback?{update_id:review.update_id,rollback_readiness:review.rollback_readiness}:{update_id:review.update_id,target_version:review.target_version,plan_digest:review.plan_digest,target_readiness:review.target_readiness,rollback_readiness:review.rollback_readiness};
+          command(bound(pkg,rollback?"rollback":"apply",extra),"plugin-update/v1");
+        },rollback?"rollback-version":"apply-version");
+        apply.dataset.fixedDisabled="true";checkbox.addEventListener("change",()=>{apply.dataset.fixedDisabled=String(!checkbox.checked);locks();});panel.append(label,apply);
+      }
+      card.append(panel);
     }
     function configurationForm(card,pkg) {
       if (!pkg.fields.length) { card.append(node("p","plugin-manage-note","此指南无需额外配置。")); return; }

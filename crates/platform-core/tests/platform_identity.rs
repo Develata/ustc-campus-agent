@@ -1830,6 +1830,7 @@ fn assert_public_surface_is_frozen() {
                 "source_registry",
                 "source_retrieval",
                 "source_revision",
+                "source_workspace",
             ] as &[&str],
             &ADMITTED_LIB_ITEMS as &[&str],
             &[] as &[&str],
@@ -4369,7 +4370,7 @@ const ADMITTED_MARKET_ITEMS: [&str; 16] = [
     "type Value = UniqueStringMap;",
 ];
 
-const ADMITTED_LIB_ITEMS: [&str; 12] = [
+const ADMITTED_LIB_ITEMS: [&str; 13] = [
     "pub mod control_evidence;",
     "pub mod identity;",
     "pub mod invocation;",
@@ -4380,6 +4381,7 @@ const ADMITTED_LIB_ITEMS: [&str; 12] = [
     "pub mod source_registry;",
     "pub mod source_retrieval;",
     "pub mod source_revision;",
+    "pub mod source_workspace;",
     "#[cfg(test)] mod tests",
     "use super::*;",
 ];
@@ -5165,7 +5167,7 @@ const ADMITTED_INSTALLATION_PERSISTENCE_IMPLS: [&str; 2] = [
     "impl fmt::Display for SnapshotCodecError",
 ];
 
-const ADMITTED_INSTALLATION_PERSISTENCE_MACRO_INVOCATIONS: [&str; 1] = ["format"];
+const ADMITTED_INSTALLATION_PERSISTENCE_MACRO_INVOCATIONS: [&str; 2] = ["format", "matches"];
 
 const GRANT_PERSISTENCE_SOURCE: &str = include_str!("../src/market/grant/persistence.rs");
 
@@ -5180,4 +5182,4 @@ const ADMITTED_GRANT_PERSISTENCE_IMPLS: [&str; 2] = [
     "impl fmt::Display for SnapshotCodecError",
 ];
 
-const ADMITTED_GRANT_PERSISTENCE_MACRO_INVOCATIONS: [&str; 2] = ["format", "vec"];
+const ADMITTED_GRANT_PERSISTENCE_MACRO_INVOCATIONS: [&str; 3] = ["format", "matches", "vec"];

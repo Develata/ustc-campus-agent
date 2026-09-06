@@ -2,13 +2,13 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::agent_chat::{ChatActivityEvent, ChatActivityObserver, ChatActivityTool};
 use crate::chat_conversations::{ConversationTurnDto, TurnPhase};
 use crate::chat_tools::ChatToolStatus;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum ActivityPhase {
     Idle,
@@ -17,15 +17,16 @@ pub(crate) enum ActivityPhase {
     Failed,
     Interrupted,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum ActivityKind {
     Model,
     Tool,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum ActivityStatus {
+    Interrupted,
     Running,
     Succeeded,
     Denied,
@@ -40,7 +41,8 @@ impl From<ChatToolStatus> for ActivityStatus {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ActivityStepDto {
     pub(crate) id: String,
     pub(crate) kind: ActivityKind,
@@ -55,12 +57,63 @@ pub(crate) struct ChatActivityDto {
     pub(crate) phase: ActivityPhase,
     pub(crate) sequence: u32,
     pub(crate) steps: Vec<ActivityStepDto>,
+    pub(crate) partial_answer: String,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ChatProgress {
+    pub(crate) tool_results: Vec<serde_json::Value>,
+    pub(crate) steps: Vec<ActivityStepDto>,
+    pub(crate) partial_answer: String,
+}
+impl ChatProgress {
+    pub(crate) fn valid(&self) -> bool {
+        self.tool_results.len() <= 4
+            && self.tool_results.iter().enumerate().all(|(index, v)| {
+                v.as_object().is_some_and(|o| {
+                    o.len() == 4
+                        && ["schema", "trust", "status", "data"]
+                            .iter()
+                            .all(|k| o.contains_key(*k))
+                }) && v["schema"] == "ustc-agent-chat-tool-result/v1"
+                    && v["trust"] == "untrusted_data"
+                    && matches!(
+                        v["status"].as_str(),
+                        Some("succeeded" | "denied" | "failed")
+                    )
+                    && self.steps.iter().any(|s| {
+                        s.id == format!("call-{}", index + 1)
+                            && s.kind == ActivityKind::Tool
+                            && s.status != ActivityStatus::Running
+                    })
+                    && serde_json::to_vec(v).is_ok_and(|v| v.len() <= 64 * 1024)
+            })
+            && self.partial_answer.len() <= 16 * 1024
+            && !self.partial_answer.contains('\0')
+            && self.steps.len() <= 7
+            && self.steps.iter().enumerate().all(|(i, step)| {
+                !self.steps[..i].iter().any(|old| old.id == step.id)
+                    && match step.kind {
+                        ActivityKind::Model => {
+                            step.tool.is_none()
+                                && (1..=3).any(|n| step.id == format!("model-{n}"))
+                                && step.status != ActivityStatus::Denied
+                        }
+                        ActivityKind::Tool => {
+                            step.tool.is_some() && (1..=4).any(|n| step.id == format!("call-{n}"))
+                        }
+                    }
+            })
+    }
 }
 #[derive(Default)]
 struct Observation {
     request_id: String,
     sequence: u32,
     steps: Vec<ActivityStepDto>,
+    partial_answer: String,
+    tool_results: Vec<serde_json::Value>,
+    cancellation: Option<tokio::sync::watch::Sender<bool>>,
 }
 #[derive(Default)]
 pub(crate) struct ActivityRegistry {
@@ -68,7 +121,9 @@ pub(crate) struct ActivityRegistry {
 }
 impl ActivityRegistry {
     pub(crate) fn register(self: &Arc<Self>, id: &str, request_id: &str) -> ActivityGuard {
+        let (cancellation, _) = tokio::sync::watch::channel(false);
         let observation = Arc::new(Mutex::new(Observation {
+            cancellation: Some(cancellation),
             request_id: request_id.to_owned(),
             ..Observation::default()
         }));
@@ -81,18 +136,33 @@ impl ActivityRegistry {
             registry: Arc::clone(self),
             id: id.to_owned(),
             observation,
+            checkpoint: None,
         }
+    }
+
+    pub(crate) fn cancel(&self, id: &str, request_id: &str) -> bool {
+        if let Ok(active) = self.active.lock()
+            && let Some(observation) = active.get(id)
+            && let Ok(observation) = observation.lock()
+            && observation.request_id == request_id
+            && let Some(sender) = &observation.cancellation
+        {
+            sender.send_replace(true);
+            return true;
+        }
+        false
     }
 
     /// Caller must first obtain this exact turn through an owner-admitted store query.
     pub(crate) fn project(&self, id: &str, turn: Option<&ConversationTurnDto>) -> ChatActivityDto {
         let mut dto = ChatActivityDto {
-            schema: "chat-conversation-activity/v1",
+            schema: "chat-conversation-activity/v2",
             conversation_id: id.to_owned(),
             request_id: turn.map(|t| t.request_id.clone()),
             phase: ActivityPhase::Idle,
             sequence: 0,
             steps: Vec::new(),
+            partial_answer: String::new(),
         };
         let Some(turn) = turn else {
             return dto;
@@ -111,9 +181,10 @@ impl ActivityRegistry {
             {
                 dto.sequence = observation.sequence;
                 dto.steps.clone_from(&observation.steps);
+                dto.partial_answer.clone_from(&observation.partial_answer);
             }
         } else {
-            dto.sequence = 15;
+            dto.sequence = u32::MAX;
             // Rebuild only allowlisted fields of the canonical final trace. Do not
             // recover model phases or project arbitrary persisted JSON strings.
             if let Some(trace) = turn
@@ -148,13 +219,83 @@ impl ActivityRegistry {
         dto
     }
 }
+type CheckpointSink = Box<dyn Fn(&ChatProgress) -> Result<(), crate::agent_chat::ChatError> + Send>;
 pub(crate) struct ActivityGuard {
     registry: Arc<ActivityRegistry>,
     id: String,
     observation: Arc<Mutex<Observation>>,
+    checkpoint: Option<CheckpointSink>,
+}
+impl ActivityGuard {
+    pub(crate) fn cancellation(&self) -> tokio::sync::watch::Receiver<bool> {
+        self.observation
+            .lock()
+            .expect("activity lock")
+            .cancellation
+            .as_ref()
+            .expect("cancellation")
+            .subscribe()
+    }
+    pub(crate) fn on_checkpoint(
+        &mut self,
+        checkpoint: impl Fn(&ChatProgress) -> Result<(), crate::agent_chat::ChatError> + Send + 'static,
+    ) {
+        self.checkpoint = Some(Box::new(checkpoint));
+    }
+    pub(crate) fn snapshot(&self) -> ChatProgress {
+        self.observation
+            .lock()
+            .map(|o| ChatProgress {
+                steps: o.steps.clone(),
+                partial_answer: o.partial_answer.clone(),
+                tool_results: o.tool_results.clone(),
+            })
+            .unwrap_or_default()
+    }
 }
 impl ChatActivityObserver for ActivityGuard {
+    fn check_cancelled(&self) -> Result<(), crate::agent_chat::ChatError> {
+        if self
+            .observation
+            .lock()
+            .map_err(|_| crate::agent_chat::ChatError::Internal)?
+            .cancellation
+            .as_ref()
+            .is_some_and(|s| *s.borrow())
+        {
+            return Err(crate::agent_chat::ChatError::Cancelled);
+        }
+        Ok(())
+    }
+    fn tool_result(&mut self, call: u8, result: &str) {
+        if let Ok(mut o) = self.observation.lock()
+            && usize::from(call) == o.tool_results.len() + 1
+            && result.len() <= 64 * 1024
+            && let Ok(value) = serde_json::from_str(result)
+        {
+            o.tool_results.push(value);
+        }
+    }
+    fn text_delta(&mut self, text: &str) {
+        if let Ok(mut o) = self.observation.lock()
+            && o.partial_answer.len() + text.len() <= 16 * 1024
+        {
+            o.partial_answer.push_str(text);
+            o.sequence = o.sequence.saturating_add(1).min(u32::MAX - 1);
+        }
+    }
+    fn checkpoint(&mut self) -> Result<(), crate::agent_chat::ChatError> {
+        if let Some(checkpoint) = &self.checkpoint {
+            checkpoint(&self.snapshot())?;
+        }
+        Ok(())
+    }
     fn observe(&mut self, event: ChatActivityEvent) {
+        if matches!(event, ChatActivityEvent::ModelStarted { .. })
+            && let Ok(mut observation) = self.observation.lock()
+        {
+            observation.partial_answer.clear();
+        }
         let (id, kind, tool, status) = match event {
             ChatActivityEvent::ModelStarted { turn } if (1..=3).contains(&turn) => (
                 format!("model-{turn}"),
@@ -203,7 +344,7 @@ impl ChatActivityObserver for ActivityGuard {
             } else {
                 return;
             }
-            observation.sequence = observation.sequence.saturating_add(1).min(14);
+            observation.sequence = observation.sequence.saturating_add(1).min(u32::MAX - 1);
         }
     }
 }
@@ -298,7 +439,7 @@ mod tests {
         ]}));
         let dto = registry.project("conversation", Some(&saved));
         assert_eq!(dto.phase, ActivityPhase::Completed);
-        assert_eq!(dto.sequence, 15);
+        assert_eq!(dto.sequence, u32::MAX);
         assert_eq!(dto.steps.len(), 2);
         assert_eq!(dto.steps[0].id, "call-1");
         assert_eq!(dto.steps[0].tool, Some(ChatActivityTool::CalendarItems));

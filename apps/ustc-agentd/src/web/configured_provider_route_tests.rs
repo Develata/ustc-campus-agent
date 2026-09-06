@@ -131,10 +131,10 @@ fn spawn_provider_peer(expected_key: String) -> (String, thread::JoinHandle<()>)
         );
         let wire: Value = serde_json::from_slice(&request[end..]).expect("decode provider request");
         assert_eq!(wire["model"], "configured-route-model");
-        assert_eq!(wire["stream"], false);
+        assert_eq!(wire["stream"], true);
         assert_eq!(wire["parallel_tool_calls"], false);
         assert_eq!(wire["tool_choice"], "auto");
-        assert_eq!(wire["tools"].as_array().expect("tool definitions").len(), 3);
+        assert_eq!(wire["tools"].as_array().expect("tool definitions").len(), 7);
         assert_eq!(
             wire["messages"]
                 .as_array()
@@ -508,7 +508,7 @@ async fn saved_conversation_activity_observes_admitted_tools_without_reexecuting
         let activity: Value = serde_json::from_str(&body).unwrap();
         assert_eq!(
             activity,
-            json!({"schema":"chat-conversation-activity/v1", "conversation_id":id,
+            json!({"schema":"chat-conversation-activity/v2", "partial_answer":"", "conversation_id":id,
             "request_id":"activity-turn", "phase":"running", "sequence":5, "steps":expected_steps})
         );
         assert_eq!(turns.load(Ordering::SeqCst), 2);
@@ -543,8 +543,8 @@ async fn saved_conversation_activity_observes_admitted_tools_without_reexecuting
         .unwrap();
     assert_eq!(
         terminal,
-        json!({"schema":"chat-conversation-activity/v1", "conversation_id":id,
-        "request_id":"activity-turn", "phase":"completed", "sequence":15, "steps":[
+        json!({"schema":"chat-conversation-activity/v2", "partial_answer":"", "conversation_id":id,
+        "request_id":"activity-turn", "phase":"completed", "sequence":4294967295u32, "steps":[
             {"id":"call-1", "kind":"tool", "tool":"simple_calendar_items", "status":"succeeded"}
         ]})
     );

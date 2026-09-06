@@ -53,3 +53,5 @@
 [模块地图](plan/modules/00-module-map.md)及相关契约。
 [覆盖矩阵](coverage-matrix.md)连接各层文档，[文档约定](AGENTS.md)规定归属；
 指南与设计包不替代契约。项目自有文档采用 [MIT License](../LICENSE.md)。
+
+- [校园任务与多人试用](guides/campus-workflows.md)：日历提醒、官方资料、课程到日历和后台配置账号。

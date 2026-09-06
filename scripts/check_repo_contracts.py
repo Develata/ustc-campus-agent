@@ -217,6 +217,8 @@ SECRET_PATTERNS = [
     re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
 ]
 KEY_FILES = [
+    "docs/contracts/platform-account-local.md",
+    "docs/contracts/campus-source-workspace.md",
     "docs/contracts/usable-demo-enhancements.md",
     "README.md",
     "AGENTS.md",
@@ -4205,7 +4207,7 @@ PLATFORM_INSTALLATION_ADMITTED_ATTRIBUTE_COUNTS = (((False, 'allow', 'allow(clip
  ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq)'), 8),
  ((False, 'derive', 'derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)'), 1),
  ((False, 'derive', 'derive(Debug, Default, Clone)'), 1),
- ((False, 'must_use', 'must_use'), 62),
+ ((False, 'must_use', 'must_use'), 63),
  ((False, 'test', 'test'), 12))
 PLATFORM_UPDATE_TEST_FUNCTIONS = ('checked_public_update_values_and_stage_surface_are_deterministic',
  'empty_public_repository_and_replay_are_non_authoritative',
@@ -9602,7 +9604,7 @@ M60_B2_OFFLINE_IMPLEMENTATION_SHA256 = (
     "19fb0e7696ffd298e34da0c52507f3b186fa50d9ee9ccc4b68657ec65cb1026e"
 )
 M60_B2_FROZEN_EXECUTABLE_SHA256 = {
-    "crates/platform-core/src/lib.rs": "576943ba5914913fe925f0333712b83f7a429d14f04289fc3f34352f6f90759b",
+    "crates/platform-core/src/lib.rs": "ab8320165f2b272f84351be54e2cdb41194ab9cfed2890beb542c2a967022c7e",
     "crates/platform-core/src/source_registry.rs": "3504fe9c470e123cf87af894fab37bb1095f33ba753b01818b9d16d9238e0a64",
     "crates/platform-core/tests/source_registry.rs": "167510be70ff1a0ff019efeb7f6ab2b98ac815ffa15ab0ac4004f0f42d8393f2",
     "crates/platform-core/src/source_retrieval.rs": "6cbbcd5277fcfe99389735dd1b97879b77267710cef5421894df80d9ee93b5e8",
@@ -9762,7 +9764,7 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         M60_B2_PROPOSAL_PATH: "4ca56b96e4b93c9e94579c4e602ce867fadacf4ff98949562bb2cffaec617f25",
         M60_B2_OFFLINE_IMPLEMENTATION_TASK_PATH: "e6e4e7ecacc70d446eab6947f8a28e55b2d78a74a72523908a1bb8a46dd9e88c",
         "docs/acceptance/platform-baseline.md": "db0dbb32448b1c8819a9fe118f888dc4f858c72ba414a79e0f9da9f0b69aad63",
-        "docs/acceptance/matrix.tsv": "00261c707111f037975afd32d470248d2c621f9aeb0570374a3ae9e320729b7b",
+        "docs/acceptance/matrix.tsv": "5978e18092e6d4ae2208ebc6a171aeef00dab0fa0d2060599b700eb9f47dfbc5",
         "docs/contracts/source-import.md": "0e5991ad59093f42fb52d3a2d83cfe4bfaefffa6c861e2145221aa4daaa7047f",
         "docs/contracts/source-retrieval.md": "ec2ab8f675fe40d1a0d3695af71b7bdb34dcedaa6bae726585d3ae21c65e97d8",
         "docs/contracts/module-boundaries.md": "8c663d411613713ca41502c894590976aa77009da181a4a07da333f7a1b11538",
@@ -9770,10 +9772,10 @@ def check_m60_b2_offline_implementation(issues: list[str]) -> None:
         "docs/features/02-ustc-change-radar.md": "27be5c7f4bebdd6bb2dc6938ecffa185b4d0cd53aeb050b031b46bf698478153",
         "docs/plan/05-campus-trust-kernel.md": "26ebed21efb3cfcf09a08864ec890fd75dea7322d296433d120557b1614e26db",
         "docs/plan/modules/00-module-map.md": "9c3cf28317ebf2665fcf7a1109e55a18ff527134b173ffa53d2c3f0ff4165d2a",
-        "docs/plan/modules/70-campus-trust-source-pipeline.md": "6d88e0776172dee60caa27fab8f061453b9e1b698ec6375eecbb4b3b90f4723f",
+        "docs/plan/modules/70-campus-trust-source-pipeline.md": "3bda9e7ae8ec4de8462433b1b02b6932c92c0bc010fa2327bd0cbef06833bacb",
         "docs/tasks/01-execution-roadmap.md": "5b93155d140267dfe9aeff3e77a0a72f8e6134e79547838d9eecad66ba45b262",
         "docs/tasks/m60-b1-v1-lifecycle.md": "abe00dcd18bdfbe2ee7c04adbaf2f9a0786d2ecd0cc1f869e49a3482ddffa9f0",
-        "docs/coverage-matrix.md": "67785b7a8f3a4a86696344e7617c2b137478db2bb9ef053516c1b76cf256acea",
+        "docs/coverage-matrix.md": "ad85c28000af78b2d9e1fdf96694bbfd35a5722987549503e6e58ebae1c3906d",
     }
     if tuple(frozen_projection_sha256) != declared_projection_paths:
         fail(
@@ -10908,6 +10910,7 @@ P1_SOURCE_REGISTRY_IDENTITY_MODULE_EXPECTATION = """&[
                 "source_registry",
                 "source_retrieval",
                 "source_revision",
+                "source_workspace",
             ] as &[&str],"""
 P1_SOURCE_REGISTRY_IDENTITY_ITEM_EXPECTATION = '    "pub mod source_registry;",'
 
@@ -13830,7 +13833,7 @@ SOURCE_SENSITIVE_GUARD_REGISTRY: dict[str, dict[str, str]] = {
     "check_external_agent_access_contract": {"digest": "79f9018c01d3d49e5acab08d053ae010cd451feb4f83eb1281d382c54bb30e45", "status": "active"},
     "check_invocation_fixtures": {"digest": "8aecb5e13723a1eac615e534f5fad317a5cf7b7d4fe29c406d7272be5e0cc454", "status": "active"},
     "check_key_files_present_and_nonempty": {"digest": "556c93bd959c3dbc31fa6e3b8f25a1ac3ff8a66ae1909110ad87690a224b4157", "status": "active"},
-    "check_m60_b2_offline_implementation": {"digest": "4a5b66a11089e247f3dab9bdfb33b1abba2eef290cc850d27e2a8c3bc64ea00a", "status": "active"},
+    "check_m60_b2_offline_implementation": {"digest": "60f5a4c9b6bf758aaa452d1a1974226d92bf3393fe3d3e153d1b87ff27dd0e47", "status": "active"},
     "check_m60_b2_packet_digest": {"digest": "eb0e11c0b609edfb0f2c016010119a7a821e078b547bdd0cf91ad477802a6bd4", "status": "active"},
     "check_markdown_links": {"digest": "8094c14c99d77223442ef4ea92d214dd31860aa3744b2c35960b36383db473b7", "status": "active"},
     "check_module_registry": {"digest": "d35ade46455588776b2d380a78f411c30621830f3fdeb8139f8a49153cadd4d3", "status": "active"},
@@ -13999,6 +14002,109 @@ def main() -> int:
     print("contract-check: PASS")
     return 0
 
+
+# Reviewed 2026-09-06 local source workspace and B6 application extensions.
+# These are exact static surfaces; the existing splice/identity/authority guards remain active.
+PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS.update({'lib.rs': ('control_evidence',
+            'identity',
+            'invocation',
+            'market',
+            'request_context',
+            'session',
+            'session_port',
+            'source_registry',
+            'source_retrieval',
+            'source_revision',
+            'source_workspace'),
+ 'market/update.rs': ('application',),
+ 'market/update/application.rs': (),
+ 'source_workspace.rs': ()})
+PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS.update({'lib.rs': ('pub mod control_evidence;',
+            'pub mod identity;',
+            'pub mod invocation;',
+            'pub mod market;',
+            'pub mod request_context;',
+            'pub mod session;',
+            'pub mod session_port;',
+            'pub mod source_registry;',
+            'pub mod source_retrieval;',
+            'pub mod source_revision;',
+            'pub mod source_workspace;',
+            '#[cfg(test)] mod tests',
+            'use super::*;'),
+ 'market/update.rs': ('pub mod application;',
+                      'use crate::identity::{TenantId, UserId};',
+                      'use crate::invocation::{ CapabilityClass, CapabilityId, '
+                      'CatalogComponentRevision, CatalogPackageRevision, CatalogRevision, '
+                      'ComponentId, ComponentKind, ExecutionIdentity, GrantSnapshotId, GrantState, '
+                      'GrantVersion, InstallationId, InstallationRevision, '
+                      'InvocationPolicySnapshot, Sha256Digest, SourcePolicyIdentity, };',
+                      'use crate::market::capability::{ CapabilityDefinition, '
+                      'CapabilityPolicyChange, CapabilityRegistry, CapabilityRegistryRevision, '
+                      'CapabilityStatus, ScopeKind, compare_capability_definitions, };',
+                      'use crate::market::grant::{ CurrentInstallationGrantSet, GrantCommand, '
+                      'GrantCommandId, GrantCommandOutcome, GrantCommandReceipt, GrantEvent, '
+                      'GrantEventKind, GrantEventSequence, GrantInvalidationReason, '
+                      'GrantReplayError, GrantRepository, GrantRepositoryError, GrantSnapshot, '
+                      'InMemoryGrantRepository, replay as grant_replay, };',
+                      'use crate::market::installation::{ ConfigurationRevision, '
+                      'InMemoryInstallationRepository, InstallationCommand, InstallationCommandId, '
+                      'InstallationCommandOutcome, InstallationCommandReceipt, InstallationEvent, '
+                      'InstallationEventKind, InstallationEventSequence, InstallationPackagePin, '
+                      'InstallationReplayError, InstallationRepository, '
+                      'InstallationRepositoryError, InstallationSnapshot, '
+                      'ManagedInstallationState, replay as installation_replay, };',
+                      'use crate::market::{ CatalogReadModel, ComponentDeclaration, PackageTier, '
+                      'ValidatedPackageManifest, };',
+                      'use std::collections::{BTreeMap, BTreeSet};',
+                      'use std::error::Error;',
+                      'use std::fmt;',
+                      'pub type PackageUpdateSnapshot = PackageUpdateAggregate;',
+                      'type InstallationCouplingKey = (String, u64, u8, String);',
+                      'type GrantCouplingKey = (String, u64, String);',
+                      'type PolicyBindingKey = (String, String, String, String);',
+                      '#[cfg(test)] mod tests',
+                      'use super::*;',
+                      'use crate::invocation::{ ComponentVersion, ConfirmationPolicy, '
+                      'PolicyRevision, PolicySnapshotId, SourcePolicyId, SourcePolicyIdentity, };',
+                      'use crate::market::grant::{ GrantAdmissionEvidence, GrantApprovalId, '
+                      'GrantRepository, GrantScope, InMemoryGrantRepository, };',
+                      'use crate::market::installation::{ ConfigurationKey, '
+                      'EnablePreconditionEvidence, InstallationCommand, InstallationCommandId, '
+                      'InstallationConfiguration, InstalledComponentPin, NonSecretText, decide as '
+                      'installation_decide, evolve as installation_evolve, };',
+                      'use crate::market::load_package_manifest;'),
+ 'market/update/application.rs': ('use super::*;',
+                                  'use crate::invocation::{PolicyRevision, PolicySnapshotId, '
+                                  'SourcePolicyId};',
+                                  'use crate::market::{ admission::ComponentReadiness, '
+                                  'capability::load_capability_registry, '
+                                  'configuration_catalog::{ValidatedPackageConfiguration, '
+                                  'load_package_configuration}, grant::persistence as gp, '
+                                  'installation::persistence as ip, load_package_manifest, };',
+                                  'use serde::{Deserialize, Serialize};',
+                                  'type Result<T> = std::result::Result<T, '
+                                  'UpdateApplicationError>;'),
+ 'source_workspace.rs': ('use crate::source_registry::{SourceId, SourceUrl};',
+                         'use serde::{Deserialize, Serialize};',
+                         'use sha2::{Digest, Sha256};',
+                         'use std::collections::BTreeSet;',
+                         '#[cfg(test)] mod tests',
+                         'use super::*;')})
+PLATFORM_CORE_ADMITTED_SIBLING_MACROS.update({'market/update/application.rs': (), 'source_workspace.rs': ()})
+PLATFORM_CORE_ADMITTED_MACRO_INVOCATIONS.update({'market/grant/persistence.rs': ('format', 'matches', 'vec'),
+ 'market/installation/persistence.rs': ('format', 'matches'),
+ 'market/update/application.rs': ('format', 'matches', 'vec'),
+ 'source_workspace.rs': ('assert', 'assert_eq', 'format', 'matches', 'vec')})
+PLATFORM_CORE_ADMITTED_SIBLING_IMPLS.update({'market/update/application.rs': ('impl ReviewedUpdatePackage', 'impl UpdateJournal'),
+ 'source_workspace.rs': ('impl ReviewedSource', 'impl SourceWorkspace')})
+PLATFORM_CORE_SOURCE_FILES += ('src/source_workspace.rs', 'src/market/update/application.rs')
+PLATFORM_UPDATE_ADMITTED_PUBLIC_DECLARATIONS += ('pub mod application',)
+
+PLATFORM_CORE_ADMITTED_ATTRIBUTE_NAMES.update({'market/update/application.rs': ('allow', 'derive', 'serde'),
+ 'source_workspace.rs': ('allow', 'cfg', 'derive', 'serde', 'test')})
+
+PLATFORM_INSTALLATION_ADMITTED_PUBLIC_DECLARATIONS += ('pub fn to_resolver_snapshot_for_component',)
 
 if __name__ == "__main__":
     raise SystemExit(main())

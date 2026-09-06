@@ -1335,3 +1335,7 @@ mod skill_recovery;
 
 #[path = "tests/mcp_recovery.rs"]
 mod mcp_recovery;
+
+mod mixed_import;
+
+mod update_lifecycle;

@@ -86,6 +86,16 @@ enum RawAction {
     Uninstall {
         revision: String,
     },
+    PackageUpdated {
+        revision: String,
+        plan_digest: String,
+        pin: RawPin,
+    },
+    PackageRolledBack {
+        revision: String,
+        plan_digest: String,
+        pin: RawPin,
+    },
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -314,10 +324,24 @@ fn raw_action(command: &InstallationCommand) -> Result<RawAction, SnapshotCodecE
         InstallationCommandAction::Uninstall { expected_revision } => RawAction::Uninstall {
             revision: expected_revision.as_str().to_owned(),
         },
-        InstallationCommandAction::PackageUpdated { .. }
-        | InstallationCommandAction::PackageRolledBack { .. } => {
-            return Err(SnapshotCodecError::UnsupportedAction);
-        }
+        InstallationCommandAction::PackageUpdated {
+            expected_revision,
+            plan_digest,
+            next_package_pin,
+        } => RawAction::PackageUpdated {
+            revision: expected_revision.as_str().to_owned(),
+            plan_digest: plan_digest.as_str().to_owned(),
+            pin: raw_pin(next_package_pin)?,
+        },
+        InstallationCommandAction::PackageRolledBack {
+            expected_revision,
+            plan_digest,
+            rollback_package_pin,
+        } => RawAction::PackageRolledBack {
+            revision: expected_revision.as_str().to_owned(),
+            plan_digest: plan_digest.as_str().to_owned(),
+            pin: raw_pin(rollback_package_pin)?,
+        },
     })
 }
 fn command(
@@ -365,6 +389,28 @@ fn command(
             id,
             installation,
             checked(InstallationRevision::parse(revision))?,
+        ),
+        RawAction::PackageUpdated {
+            revision,
+            plan_digest,
+            pin: raw,
+        } => InstallationCommand::package_updated(
+            id,
+            installation,
+            checked(InstallationRevision::parse(revision))?,
+            checked(Sha256Digest::parse(plan_digest))?,
+            pin(raw)?,
+        ),
+        RawAction::PackageRolledBack {
+            revision,
+            plan_digest,
+            pin: raw,
+        } => InstallationCommand::package_rolled_back(
+            id,
+            installation,
+            checked(InstallationRevision::parse(revision))?,
+            checked(Sha256Digest::parse(plan_digest))?,
+            pin(raw)?,
         ),
         RawAction::Uninstall { revision } => InstallationCommand::uninstall(
             id,
@@ -491,4 +537,37 @@ pub fn decode_snapshot(bytes: &[u8]) -> Result<InMemoryInstallationRepository, S
         receipts,
     )
     .map_err(|_| SnapshotCodecError::CorruptLedger)
+}
+
+/// A replayed update frame may be followed only by ordinary owner commands.
+/// Coupled package/grant update commands must be supplied by the update journal itself.
+pub(in crate::market) fn ordinary_extension(
+    before: &[u8],
+    after: &[u8],
+) -> Result<(), SnapshotCodecError> {
+    let before: serde_json::Value =
+        serde_json::from_slice(before).map_err(|_| SnapshotCodecError::InvalidJson)?;
+    let after: serde_json::Value =
+        serde_json::from_slice(after).map_err(|_| SnapshotCodecError::InvalidJson)?;
+    let before = before["records"]
+        .as_array()
+        .ok_or(SnapshotCodecError::CorruptLedger)?;
+    let after = after["records"]
+        .as_array()
+        .ok_or(SnapshotCodecError::CorruptLedger)?;
+    if !after.starts_with(before) {
+        return Err(SnapshotCodecError::CorruptLedger);
+    }
+    for record in &after[before.len()..] {
+        if matches!(
+            record["action"]["kind"].as_str(),
+            Some("PackageUpdated" | "PackageRolledBack")
+        ) || record["command_id"]
+            .as_str()
+            .is_some_and(|id| id.starts_with("grant-cmd:update-"))
+        {
+            return Err(SnapshotCodecError::CorruptLedger);
+        }
+    }
+    Ok(())
 }

@@ -4,6 +4,8 @@
 //! enrollment side effects. It turns a validated, provenance-bearing fixture into
 //! bounded candidate plans whose hard constraints are recomputed before output.
 
+pub mod personal;
+
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;

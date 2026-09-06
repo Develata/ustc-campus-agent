@@ -1215,6 +1215,17 @@ impl InstallationAggregate {
     /// Pure deny-side projection into the legacy resolver snapshot. No grants are implied.
     #[must_use]
     pub fn to_resolver_snapshot(&self) -> Option<PluginInstallationSnapshot> {
+        let component = self.package_pin.components().first()?.component_id();
+        self.to_resolver_snapshot_for_component(component)
+    }
+
+    /// Select only a member of the currently installed exact package pin.
+    /// A mixed-package invocation must use its frozen component identity.
+    #[must_use]
+    pub fn to_resolver_snapshot_for_component(
+        &self,
+        component_id: &ComponentId,
+    ) -> Option<PluginInstallationSnapshot> {
         let state = match self.state {
             ManagedInstallationState::InstalledDisabled | ManagedInstallationState::Disabled => {
                 ResolverInstallationState::Disabled
@@ -1226,7 +1237,8 @@ impl InstallationAggregate {
         let component = self
             .package_pin
             .components()
-            .first()?
+            .iter()
+            .find(|component| component.component_id() == component_id)?
             .to_installed_identity();
         Some(PluginInstallationSnapshot {
             id: self.installation_id.clone(),
@@ -3501,7 +3513,7 @@ mod tests {
         );
     }
     #[test]
-    fn snapshot_codec_roundtrips_configuration_and_terminal_actions_and_rejects_update() {
+    fn snapshot_codec_roundtrips_configuration_terminal_actions_and_package_changes() {
         for uninstall in [false, true] {
             let mut repository = InMemoryInstallationRepository::new();
             repository
@@ -3564,10 +3576,59 @@ mod tests {
             target_package_pin(),
         )
         .unwrap();
-        repository.execute(update).unwrap();
+        let update_receipt = repository.execute(update.clone()).unwrap();
+        assert!(matches!(
+            update_receipt.outcome(),
+            InstallationCommandOutcome::Accepted { .. }
+        ));
+        let updated = persistence::encode_snapshot(&repository).unwrap();
+        let mut restored = persistence::decode_snapshot(&updated).unwrap();
+        assert_eq!(restored.execute(update.clone()).unwrap(), update_receipt);
+        assert_eq!(persistence::encode_snapshot(&restored).unwrap(), updated);
+        let snapshot = restored.load_exact(&installation_id()).unwrap().unwrap();
+        assert_eq!(snapshot.package_pin(), &target_package_pin());
+        assert_eq!(snapshot.revision(), &revision(2));
         assert_eq!(
-            persistence::encode_snapshot(&repository),
-            Err(persistence::SnapshotCodecError::UnsupportedAction)
+            snapshot.state(),
+            ManagedInstallationState::InstalledDisabled
+        );
+        assert_eq!(
+            restored.event_history(&installation_id()).unwrap(),
+            repository.event_history(&installation_id()).unwrap()
+        );
+
+        let rollback = InstallationCommand::package_rolled_back(
+            command_id("codec-rollback"),
+            installation_id(),
+            revision(2),
+            digest('a'),
+            package_pin(),
+        )
+        .unwrap();
+        let rollback_receipt = restored.execute(rollback.clone()).unwrap();
+        assert!(matches!(
+            rollback_receipt.outcome(),
+            InstallationCommandOutcome::Accepted { .. }
+        ));
+        let rolled_back = persistence::encode_snapshot(&restored).unwrap();
+        let mut reopened = persistence::decode_snapshot(&rolled_back).unwrap();
+        // Both historical retries preserve the rollback and append no new event.
+        assert_eq!(reopened.execute(update).unwrap(), update_receipt);
+        assert_eq!(reopened.execute(rollback).unwrap(), rollback_receipt);
+        assert_eq!(
+            persistence::encode_snapshot(&reopened).unwrap(),
+            rolled_back
+        );
+        let snapshot = reopened.load_exact(&installation_id()).unwrap().unwrap();
+        assert_eq!(snapshot.package_pin(), &package_pin());
+        assert_eq!(snapshot.revision(), &revision(3));
+        assert_eq!(
+            snapshot.state(),
+            ManagedInstallationState::InstalledDisabled
+        );
+        assert_eq!(
+            reopened.event_history(&installation_id()).unwrap(),
+            restored.event_history(&installation_id()).unwrap()
         );
         let empty = persistence::encode_snapshot(&InMemoryInstallationRepository::new()).unwrap();
         let mut raw: serde_json::Value = serde_json::from_slice(&empty).unwrap();
