@@ -127,3 +127,111 @@ readiness requires review, while a transport or business failure on an active bi
 remains execution-unavailable. Each admitted failure still records its M30 receipt
 without automatically retrying the business call. Explicit undeclared Skill resource paths are argument errors; they do not
 invalidate a previously reviewed installation or permit a filesystem fallback.
+
+## Mixed components and inert import review (PLUGIN-001)
+
+The local profile also admits `plugin-runtime/v2`: a closed `{schemaVersion,
+components}` object whose members contain exact `componentId` and one existing
+`plugin-runtime/v1` declaration under `runtime`. Every declared package component
+must occur exactly once (at most 16). The current MCP artifact remains `runtime.json`,
+so a package admits one MCP member plus declared Skill members; it does not admit
+independent component installation. All members share one exact package configuration
+schema. This explicit profile preserves full-object validation and rejects conflicting
+per-component schemas instead of dropping fields. Every MCP artifact pin hashes the
+complete runtime envelope. Skill resources retain exact declared content digests.
+
+Probe validates every member and returns one complete package readiness digest.
+Enable requires all package capabilities and exact member readiness. Each model tool
+is namespaced by installation and component and freezes the component ID for resolver
+admission and execution. A partial failed probe retires every opened member session;
+package disable/revoke retires every member. Restart must reproduce the whole package
+readiness before either MCP calls or Skill reads become usable. Single-component v1
+readiness and tool identities remain compatible.
+
+`POST /api/v1/plugins/import-preview` accepts `plugin-import-preview/v1`: package ID,
+version, display name, source description, optional literal Skill text and optional
+MCP HTTPS endpoint with explicit tool-to-public-read-capability mapping. Unknown
+fields (including executable commands), raw endpoint credentials, endpoint queries,
+private/write capabilities and invalid Skill names reject. It returns
+`plugin-import-review/v1` with deterministic file-map digest, package/runtime/configuration
+files, separate proposed non-secret configuration values, warnings and `admitted:false`.
+The tier in a candidate manifest is a proposed post-review classification, never proof
+that review has occurred. The response neither persists nor publishes a catalog entry,
+contacts an endpoint, reads a filesystem path, grants a capability, installs a package,
+nor executes a resource. Text remains untrusted content.
+The import-preview route has a local 1 MiB JSON wire limit, including JSON syntax,
+whitespace and escaping. Literal Skill text retains the existing 64 KiB decoded
+UTF-8 resource limit and 16 KiB YAML frontmatter limit; an oversized decoded Skill
+still rejects. This wire allowance accommodates maximum-size Skill text even with
+six-byte JSON escapes, and never grants admission or installation. Together with
+[source text import and personal course planning](campus-source-workspace.md#http-request-budgets),
+it is an explicit exception to the service's 16 KiB default; other routes retain
+that default. The real HTTP suite `campus_routes::body_limit_tests` checks complete
+reviewable files with `admitted:false`, unchanged catalog/installations, and both
+wire and decoded-domain over-limit rejection.
+
+The UI exposes the complete candidate files and JSON download. Operator review and
+explicit package-directory admission remain necessary; the resulting package then
+uses the existing install/configure/probe/grant/enable path. Automatic catalog promotion,
+URLs that fetch arbitrary packages, archive extraction, OAuth/stdio and executable
+Skill resources are outside this profile. Mixed-package/import evidence is separate from the B6 update evidence below.
+
+## Exact version update, rollback and recovery (PLUGIN-001)
+
+`POST /api/v1/plugins/updates` accepts a closed `plugin-update/v1` carrier with one
+request ID and typed `preview`, `apply`, `review_rollback`, `rollback` or `confirm`
+intent. Requests bind the admitted owner, exact installation and expected revision.
+Preview accepts one other currently reviewed version of the same package. It runs
+bounded member readiness checks for both versions using the existing configuration;
+a target requiring an incompatible configuration rejects before a version change.
+No automatic configuration migration or permission expansion is inferred.
+
+Preview returns the B6 exact plan digest, change class, old/target versions and both
+complete readiness digests. The UI shows the target capability list and requires an
+explicit version-change confirmation. Apply rediscovers both versions and rejects a
+changed digest before mutation. The public M20 trusted application port constructs
+B6 Stage, RecordApproval and Apply under one atomic application transaction, while
+reusing the original installation/grant repositories. It never modifies a package
+pin directly. Installation identity stays fixed. The result is Disabled and
+AppliedPendingConfirmation; every active old grant becomes stale, including grants
+already bound to an earlier installation revision after disable. A fresh complete
+probe and explicit grants are required before enabling the new version.
+
+Rollback review rechecks the retained exact old package against current configuration.
+Rollback requires Disabled state, the reviewed rollback digest and an explicit user
+confirmation; it invokes the existing B6 Rollback transition and again invalidates
+active grants. Confirm explicitly retains the applied version and closes that B6
+rollback window. Missing/changed reviewed package inputs, unavailable artifacts,
+conflicting installation revisions, another active B6 update or a separately existing
+target-version installation fail closed. Rollback never restores old grants.
+
+Update request identity and the complete typed-intent digest are retained. A same-ID,
+same-intent retry returns the original B6 result before consulting current package
+availability or revision. A changed intent conflicts. This applies after restart and
+after later rollback/confirmation. Readiness probes perform no business-tool call.
+
+The private `uca-plugin-authority/v2` container atomically stores the original
+installation/grant ledgers, M30 execution journals and the M20 update application
+journal; v1 files remain readable. A successful subsequent write uses v2. Older
+servers do not understand v2, so binary downgrade requires a compatible reader or an
+operator-controlled restore of a complete pre-update authority snapshot; copying only
+one ledger or silently resetting state is forbidden. No automatic destructive file
+migration is performed.
+
+The M20 update journal is a bounded replay carrier (`market-update-application/v1`):
+at most 64 mutation frames and 16 MiB. Each frame pins its prior installation/grant
+ledger, exact archived catalog/configuration declarations, observed readiness and B6
+result event digest. Recovery replays B6 commands, verifies original owner/revision
+and exact event results, and proves later ordinary-ledger records extend the previous
+result. New coupled package/grant update records are rejected unless generated by the
+replayed B6 frame. Missing, reordered, substituted or orphaned update frames cannot
+restore authority. Empty/legacy journals reject coupled update events. Uncertain disk
+commit poisons mutation; known encoding-capacity rejection leaves prior state usable.
+The total container ceiling is 56 MiB plus its bounded header, with the original
+installation/grant and execution-journal sublimits unchanged.
+
+This is a local, reviewed-directory application profile. It does not claim distributed
+rollout, remote artifact download/promotion, automatic configuration migration,
+concurrent multi-server operation, security-revoke distribution or production backup
+qualification. Bound targeted cases are `plugin_runtime::tests::update_lifecycle`,
+`plugin_runtime::tests::mixed_import`, the existing B6 domain suite and PLUGIN-001.

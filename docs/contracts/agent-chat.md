@@ -142,7 +142,7 @@ The packaged launchers require `.env` itself to be a readable regular non-symlin
 
 The key file is UTF-8, nonblank after outer-whitespace trim and at most 4096 bytes. On Unix, the opened key file must have no group/world permission bits (`mode & 077 == 0`). Because local Compose file-backed secrets preserve host ownership, Compose first drops every capability and then grants the root-only initialization phase exactly `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETGID`, `SETPCAP` and `SETUID`: the entrypoint can read the explicitly mounted owner-only source, copy it into an ephemeral mode-0600 tmpfs file owned by UID/GID 65532, and then re-exec itself through `setpriv` as UID/GID 65532 with cleared groups, no-new-privileges and an empty effective/bounding capability set before the daemon or proxy starts. The packaged Unix launcher enforces the same permission rule on the host source before Docker runs, while direct Compose use remains operator-responsible because the projected container secret cannot prove the host file's original mode. Both launchers, the container entrypoint and the authoritative Rust key reader reject the bundled mock placeholder after the same outer-whitespace normalization in `openai-compatible` mode. The normal runtime accepts no raw key through argv, HTTP, browser storage, checked-in environment or logs. Invalid OpenAI-compatible configuration fails startup without fallback to mock, another origin or another model.
 
-The adapter sends non-streaming Chat Completions with the exact configured model, ordered complete messages, complete current tool definitions, `tool_choice: auto`, `parallel_tool_calls: false`, `stream: false` and an 8192-token output ceiling. For request v2, the immutable server system policy remains the first message and the separately labelled untrusted preference follows it without changing the tool set. A retained test exercises this adapter through the complete loopback `POST /api/v1/agent/chat` route against a bounded local provider peer, including provider identity, usage and hardened-response projection. The response path accepts only exactly one `assistant` choice, requires `finish_reason: stop` for final text or `finish_reason: tool_calls` for a complete tool batch, and rejects truncated, content-filtered or mismatched termination before any tool execution. It follows no redirects, uses one absolute timeout and accepts at most 256 KiB of response bytes. The normal `openai-compatible` configuration requires HTTPS; plain HTTP is admitted only by the test constructor or the separately selected numeric-loopback `local-chat` profile (§4.1). The deterministic mock is network-free and routes only product-qualified transcript, academic-calendar, course-planning and Calendar terms. Academic-calendar wording alone does not select the personal Calendar tool, but a mixed request with an explicit personal-calendar list clause retains both read-only tools. For each known successful tool shape it projects only bounded user-facing fields into a server-owned Chinese summary: procedure steps and official entry points, semantic changed fields and source link, course candidates/rationale/iCourse link-outs, or Calendar mutation/list details. Known-tool shape drift yields an explicit summary-contract notice instead of a raw JSON dump. Fair per-result output budgets ensure one large result cannot erase later successful tools; denied and failed statuses remain explicit non-success answers, and a mixed request whose Opportunity tool is unavailable retains an explicit unexecuted-consent notice beside any successful public-tool summary.
+The legacy complete/title adapter sends non-streaming Chat Completions with the exact configured model, ordered complete messages, complete current tool definitions, `tool_choice: auto`, `parallel_tool_calls: false`, `stream: false` and an 8192-token output ceiling. For request v2, the immutable server system policy remains the first message and the separately labelled untrusted preference follows it without changing the tool set. A retained test exercises this adapter through the complete loopback `POST /api/v1/agent/chat` route against a bounded local provider peer, including provider identity, usage and hardened-response projection. The response path accepts only exactly one `assistant` choice, requires `finish_reason: stop` for final text or `finish_reason: tool_calls` for a complete tool batch, and rejects truncated, content-filtered or mismatched termination before any tool execution. It follows no redirects, uses one absolute timeout and accepts at most 256 KiB of response bytes. The normal `openai-compatible` configuration requires HTTPS; plain HTTP is admitted only by the test constructor or the separately selected numeric-loopback `local-chat` profile (§4.1). The deterministic mock is network-free and routes only product-qualified transcript, academic-calendar, course-planning and Calendar terms. Academic-calendar wording alone does not select the personal Calendar tool, but a mixed request with an explicit personal-calendar list clause retains both read-only tools. For each known successful tool shape it projects only bounded user-facing fields into a server-owned Chinese summary: procedure steps and official entry points, semantic changed fields and source link, course candidates/rationale/iCourse link-outs, or Calendar mutation/list details. Known-tool shape drift yields an explicit summary-contract notice instead of a raw JSON dump. Fair per-result output budgets ensure one large result cannot erase later successful tools; denied and failed statuses remain explicit non-success answers, and a mixed request whose Opportunity tool is unavailable retains an explicit unexecuted-consent notice beside any successful public-tool summary.
 
 Before network I/O the adapter serializes the complete wire request and applies `T(q) + O + S ≤ floor(L × 0.9)`, where `T(q)` is conservatively upper-bounded by serialized UTF-8 bytes, `O=8192`, `S=2048`, and `L=UCA_AGENT_CONTEXT_TOKENS`. Oversize input fails locally as `context_budget_exceeded`; no provider/profile context limit means no OpenAI-compatible call.
 
@@ -185,7 +185,7 @@ Input is exactly `{"board_id":"board:ustc:academic-calendar"}`. The bridge invok
 
 ### `simple_calendar_items`
 
-Input is a closed object with exact `action = record | list | delete`. `record` requires only a nonblank title of at most 256 UTF-8 bytes; `scheduled_for` is absent from this slice and any supplied field is rejected. `list` accepts no other field and remains read-only. `delete` requires one stable `calendar:item:N` ID. Rust revalidates the complete action-specific shape before execution.
+Input is a closed object with exact `action = record | list | delete | propose`. `record` requires only a nonblank title of at most 256 UTF-8 bytes; top-level `scheduled_for` remains rejected for legacy record. `propose` requires only a nested closed `mutation` object as specified by [Calendar proposals](calendar-proposals.md), which can carry an explicit-offset scheduled time and cannot execute an effect. `list` accepts no other field and remains read-only. `delete` requires one stable `calendar:item:N` ID. Rust revalidates the complete action-specific shape before execution.
 
 The `list` tool result projects every item as its exact `id`, `title` and optional
 non-null `scheduled_for`. It omits creation timestamps and null scheduling fields,
@@ -280,3 +280,29 @@ unchanged. A partial resource read must be described honestly, including its
 next_offset for deliberate continuation; unread content must not be claimed as
 read. This does not add a turn, a tool call, an automatic continuation or a grant.
 Unexpected tool calls beyond the budget still reject under the existing error codes.
+
+## Calendar proposal extension
+
+[CALENDAR-PROPOSAL-001](calendar-proposals.md) adds `action=propose` with a closed
+mutation object to the existing Calendar tool; it does not add model-confirm authority.
+Legacy exact record/delete intents and the four-tool baseline retain their meaning.
+Calendar list supplies a server clock and explicit campus timezone. The proposal result
+is labelled pending, distinct from item execution and reminder delivery.
+
+
+### Personal root prompt extension
+
+[ROOT-PROMPT-001](agent-root-prompt.md) adds a separate server-persisted personal
+instruction for new saved-conversation turns. The request-only preference described
+above stays request-only. Personal instructions precede it and do not replace platform
+system policy, tool admission or explicit effect confirmation. This supersedes the
+historical “no persisted prompt profiles” exclusion only for this bounded setting.
+
+
+### Streaming and execution stop extension
+
+[STREAM-CANCEL-001](chat-activity.md#stream-cancel-001-extension) supersedes the historical
+streaming/cancellation exclusion for saved bounded Chat runs. Runs request SSE and
+emit actual content deltas; complete JSON remains compatible. Tool argument deltas
+cannot bypass complete-batch validation. Stop is an owner-admitted application
+command, never a model tool or a model-authored confirmation.

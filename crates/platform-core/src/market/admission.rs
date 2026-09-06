@@ -1,4 +1,4 @@
-//! LC017 trusted-composition admission for one-component reviewed packages.
+//! Trusted-composition admission for exact reviewed package components.
 //!
 //! Callers supply authenticated identities and reviewed catalog/registry inputs, and
 //! serialize repository reads and writes under their existing lifecycle transaction.
@@ -52,6 +52,7 @@ pub struct ComponentReadiness {
     configuration_digest: Sha256Digest,
     capabilities: BTreeSet<CapabilityId>,
     digest: Sha256Digest,
+    members: Vec<ComponentReadiness>,
 }
 impl fmt::Debug for ComponentReadiness {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -76,6 +77,7 @@ impl ComponentReadiness {
             configuration_digest: configuration.digest().clone(),
             capabilities: BTreeSet::new(),
             digest: Sha256Digest::from_bytes(&bytes),
+            members: Vec::new(),
         })
     }
     pub fn mcp(
@@ -96,7 +98,58 @@ impl ComponentReadiness {
                 .map(|tool| tool.capability_id.clone())
                 .collect(),
             digest,
+            members: Vec::new(),
         })
+    }
+    /// Complete, duplicate-free readiness for one package; singleton digests stay compatible.
+    pub fn package(mut members: Vec<Self>) -> Result<Self, AdmissionError> {
+        if members.is_empty() || members.len() > 16 || members.iter().any(|m| !m.members.is_empty())
+        {
+            return Err(AdmissionError::InvalidReadiness);
+        }
+        members.sort_by(|a, b| a.binding.component_id().cmp(b.binding.component_id()));
+        let first = members[0].clone();
+        let pin = first.binding.package_pin();
+        if members.len() != pin.components().len() {
+            return Err(AdmissionError::InvalidReadiness);
+        }
+        let mut seen = BTreeSet::new();
+        for member in &members {
+            if member.binding.package_pin() != pin
+                || member.configuration_digest != first.configuration_digest
+                || !seen.insert(member.binding.component_id().clone())
+            {
+                return Err(AdmissionError::InvalidReadiness);
+            }
+        }
+        if members.len() == 1 {
+            return Ok(first);
+        }
+        let mut bytes = b"market-package-readiness/v1\0".to_vec();
+        for member in &members {
+            encode(member.digest().as_str(), &mut bytes);
+        }
+        Ok(Self {
+            digest: Sha256Digest::from_bytes(&bytes),
+            members,
+            ..first
+        })
+    }
+    pub(in crate::market) fn matches_package(
+        &self,
+        configuration: &ValidatedPackageConfiguration,
+        values: &InstallationConfiguration,
+    ) -> bool {
+        let members = if self.members.is_empty() {
+            std::slice::from_ref(self)
+        } else {
+            &self.members
+        };
+        members.len() == configuration.bindings().len()
+            && members.iter().all(|member| {
+                configuration.binding(member.binding.component_id()) == Some(&member.binding)
+                    && member.configuration_digest == *values.digest()
+            })
     }
     #[must_use]
     pub fn digest(&self) -> &Sha256Digest {
@@ -157,9 +210,12 @@ fn single_component<'a>(
     binding: &'a ComponentConfigurationBinding,
     configuration: &InstallationConfiguration,
 ) -> Result<&'a InstalledComponentPin, AdmissionError> {
-    let [component] = binding.package_pin().components() else {
-        return Err(AdmissionError::UnsupportedPackage);
-    };
+    let component = binding
+        .package_pin()
+        .components()
+        .iter()
+        .find(|component| component.component_id() == binding.component_id())
+        .ok_or(AdmissionError::UnsupportedPackage)?;
     binding
         .validate(binding.package_pin(), configuration)
         .map_err(|_| AdmissionError::InvalidConfiguration)?;
@@ -234,9 +290,10 @@ impl<'a> MarketAdmissionService<'a> {
         registry: &'a CapabilityRegistry,
     ) -> Result<Self, AdmissionError> {
         let pin = configuration.package_pin();
-        if package.components().len() != 1
-            || pin.components().len() != 1
-            || configuration.bindings().len() != 1
+        if package.components().is_empty()
+            || package.components().len() > 16
+            || pin.components().len() != package.components().len()
+            || configuration.bindings().len() != package.components().len()
         {
             return Err(AdmissionError::UnsupportedPackage);
         }
@@ -309,19 +366,29 @@ impl<'a> MarketAdmissionService<'a> {
         ) {
             return Err(AdmissionError::InvalidState);
         }
-        let binding = self
-            .configuration
-            .bindings()
-            .values()
-            .next()
-            .ok_or(AdmissionError::UnsupportedPackage)?;
-        if &readiness.binding != binding
-            || readiness.configuration_digest != *installation.configuration().digest()
-        {
+        let members = if readiness.members.is_empty() {
+            std::slice::from_ref(readiness)
+        } else {
+            &readiness.members
+        };
+        if members.len() != self.configuration.bindings().len() {
             return Err(AdmissionError::InvalidReadiness);
         }
-        for capability in &readiness.capabilities {
-            self.scope(capability)?;
+        let mut seen = BTreeSet::new();
+        for member in members {
+            let binding = self
+                .configuration
+                .binding(member.binding.component_id())
+                .ok_or(AdmissionError::InvalidReadiness)?;
+            if &member.binding != binding
+                || member.configuration_digest != *installation.configuration().digest()
+                || !seen.insert(binding.component_id())
+            {
+                return Err(AdmissionError::InvalidReadiness);
+            }
+            for capability in &member.capabilities {
+                self.scope(capability)?;
+            }
         }
         let set = grants
             .load_current_for_installation(

@@ -26,7 +26,7 @@ List uses `chat-conversation-list/v1` and summaries `{id,title,revision,turn_cou
 
 ## Ordering, failure and recovery
 
-Begin validates the existing Chat contract before atomically persisting a running turn and incrementing revision. Only then may the composition invoke the bounded provider/tools. Finish persists completed or failed state and increments revision before acknowledging its terminal result. A failed turn does not assert that no tool effect occurred. Any uncertain persistence error poisons mutations until operator recovery/restart. A process-lifetime exclusive file lock rejects a second writer. Its durable presence is also the initialization fence: a missing state file after initialization fails closed instead of recreating an empty store. On open, all persisted running turns become interrupted durably; they never auto-resume or auto-retry. An interrupted turn explicitly means execution outcome is uncertain. New turns require deliberate new user intent.
+Begin validates the existing Chat contract before atomically persisting a running turn and incrementing revision. Only then may the composition invoke the bounded provider/tools. Finish persists completed or failed state and increments revision before acknowledging its terminal result. A failed turn does not assert that no tool effect occurred. Any uncertain persistence error poisons mutations until operator recovery/restart. An exclusive file lock held for the store owner’s lifetime rejects a second writer. Dropping that owner explicitly unlocks it, so an unrelated child’s briefly inherited descriptor cannot retain ownership across reopen. Its durable presence is also the initialization fence: a missing state file after initialization fails closed instead of recreating an empty store. On open, all persisted running turns become interrupted durably; they never auto-resume or auto-retry. An interrupted turn explicitly means execution outcome is uncertain. New turns require deliberate new user intent.
 
 State is one versioned bounded private file under a separate current-owner 0700 directory, using the existing secure-path checks, owner-only regular files, no symlinks/hardlinks, same-directory atomic rename and file/directory fsync. Invalid/corrupt state fails closed; no empty-store fallback. Existing demo files are not migrated or reassigned. The original transcript slice has no physical purge API. [Conversation management](conversation-management.md) adds owner-scoped rename and logical deletion while retaining original private transcripts and idempotency/effect evidence. Bounded retention still rejects new work at physical capacity.
 
@@ -124,3 +124,23 @@ Local smoke with the configured `hy-mt2-7b` generated the synthetic title
 and exact HTTP retry returned the original result. The browser rendered that
 server title. Eight existing conversation browser journeys passed with the dated
 title assertion, including stale reads, reload and uncertain-request recovery.
+
+
+## Personal Agent instructions
+
+[ROOT-PROMPT-001](agent-root-prompt.md) adds an owner-scoped root-prompt setting to
+this store. New turn reservation snapshots the setting atomically; changing settings
+does not change in-flight requests or terminal replays. No prompt text is exposed in
+conversation DTOs. Existing v1 stores read without rewriting; first settings update
+writes v2, which old binaries must reject. Settings use the existing capacity and
+private-file failure rules, with a separate revision for stale-update protection.
+
+
+### Durable execution progress
+
+[STREAM-CANCEL-001](chat-activity.md#stream-cancel-001-extension) adds version-3
+private progress checkpoints and the terminal `chat_cancelled` error without
+changing turn DTO fields, revisions or exact retry identity. Restart retains
+completed tool-result envelopes and partial text, marks pending execution interrupted,
+and never redispatches tools. The running store reserve is now 512 KiB. Read-only
+activity renders recovery state; product receipts/stores remain effect authority.

@@ -8,20 +8,29 @@ window.UcaChatActivity = (() => {
     simple_calendar_items: "处理日历事项",
     plugin_tool: "使用插件能力"
   });
-  const states = Object.freeze({ running: "进行中", succeeded: "已完成", denied: "未获准", failed: "未完成" });
+  const states = Object.freeze({ running: "进行中", succeeded: "已完成", denied: "未获准", failed: "未完成", interrupted: "结果待核对" });
   const phases = ["idle", "running", "completed", "failed", "interrupted"];
   const bytes = value => typeof value === "string" ? new TextEncoder().encode(value).length : Infinity;
   const identifier = value => bytes(value) > 0 && bytes(value) <= 256;
   const closed = (value, keys) => value && typeof value === "object" && !Array.isArray(value) &&
     Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
   function validate(value) {
-    if (!closed(value, ["schema", "conversation_id", "request_id", "phase", "sequence", "steps"]) ||
-        value.schema !== "chat-conversation-activity/v1" || !identifier(value.conversation_id) ||
+    // Retained fixtures/older servers use the original bounded sequence domain.
+    if (value?.schema === "chat-conversation-activity/v1") {
+      if (!closed(value, ["schema", "conversation_id", "request_id", "phase", "sequence", "steps"]) ||
+          !Number.isSafeInteger(value.sequence) || value.sequence < 0 || value.sequence > 15 ||
+          (value.phase === "running" && value.sequence > 14) ||
+          (["completed", "failed", "interrupted"].includes(value.phase) && value.sequence !== 15)) throw Error("invalid_activity");
+      value = { ...value, schema: "chat-conversation-activity/v2", partial_answer: "",
+        sequence: value.sequence === 15 ? 4294967295 : value.sequence };
+    }
+    if (!closed(value, ["schema", "conversation_id", "request_id", "phase", "sequence", "steps", "partial_answer"]) ||
+        value.schema !== "chat-conversation-activity/v2" || !identifier(value.conversation_id) ||
         !(value.request_id === null || identifier(value.request_id)) || !phases.includes(value.phase) ||
-        !Number.isSafeInteger(value.sequence) || value.sequence < 0 || value.sequence > 15 ||
+        !Number.isSafeInteger(value.sequence) || value.sequence < 0 || value.sequence > 4294967295 ||
         (value.phase === "idle" && value.sequence !== 0) ||
-        (value.phase === "running" && value.sequence > 14) ||
-        (["completed", "failed", "interrupted"].includes(value.phase) && value.sequence !== 15) || !Array.isArray(value.steps) || value.steps.length > 7 ||
+        (value.phase === "running" && value.sequence >= 4294967295) ||
+        (["completed", "failed", "interrupted"].includes(value.phase) && value.sequence !== 4294967295) || bytes(value.partial_answer) > 16384 || value.partial_answer.includes("\0") || !Array.isArray(value.steps) || value.steps.length > 7 ||
         (value.phase === "idle" && (value.request_id !== null || value.steps.length)) ||
         (value.phase !== "idle" && value.request_id === null)) throw Error("invalid_activity");
     const ids = new Set();
@@ -49,15 +58,37 @@ window.UcaChatActivity = (() => {
     });
   }
   function mount(root) {
-    let generation = 0, timer = null, controller = null, latest = null;
+    let generation = 0, timer = null, controller = null, latest = null, bound = null;
     const status = document.createElement("p"); status.className = "chat-activity-status";
     status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); status.setAttribute("aria-atomic", "true");
     const details = document.createElement("details"); details.className = "chat-activity-details";
     const summary = document.createElement("summary"); summary.textContent = "查看执行步骤";
     const list = document.createElement("ol"); details.append(summary, list);
-    root.replaceChildren(status, details); root.hidden = true;
+    const partial = document.createElement("div"); partial.className = "chat-activity-answer";
+    const stopButton = document.createElement("button"); stopButton.type = "button";
+    stopButton.className = "chat-activity-stop"; stopButton.textContent = "停止";
+    stopButton.hidden = true;
+    stopButton.addEventListener("click", async () => {
+      const frozen = bound;
+      if (!frozen || stopButton.disabled) return;
+      stopButton.disabled = true; stopButton.textContent = "正在停止…";
+      try {
+        const response = await fetch(`/api/v1/agent/conversations/${encodeURIComponent(frozen.conversationId)}/cancel`, {
+          method: "POST", headers: { "Content-Type": "application/json", "X-USTC-Client-Protocol-Major": "1" },
+          body: JSON.stringify({ schema: "chat-conversation-cancel/v1", request_id: frozen.requestId })
+        });
+        if (!response.ok) throw Error("cancel_unconfirmed");
+        const value = validate(await response.json());
+        if (bound !== frozen) return;
+        if (value.request_id !== frozen.requestId || value.conversation_id !== frozen.conversationId) throw Error("cancel_mismatch");
+        status.textContent = "已提交停止请求；已完成的操作不会回滚，请核对执行记录。";
+      } catch (_) {
+        if (bound === frozen) { stopButton.disabled = false; stopButton.textContent = "重试停止"; status.textContent = "尚未确认停止，执行可能仍在继续。"; }
+      }
+    });
+    root.replaceChildren(status, partial, stopButton, details); root.hidden = true;
     function cancel() { generation++; clearTimeout(timer); timer = null; controller?.abort(); controller = null; }
-    function clear() { cancel(); latest = null; root.hidden = true; root.removeAttribute("data-state"); list.replaceChildren(); }
+    function clear() { cancel(); bound = null; partial.textContent = ""; stopButton.hidden = true; latest = null; root.hidden = true; root.removeAttribute("data-state"); list.replaceChildren(); }
     function unavailable() {
       root.hidden = false; root.dataset.state = "unknown";
       status.textContent = "暂时无法读取执行状态；最终结果仍以服务器回复为准。";
@@ -72,6 +103,9 @@ window.UcaChatActivity = (() => {
       const scroll = root.parentElement;
       const follow = scroll && scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
       root.hidden = false; root.dataset.state = value.phase;
+      partial.textContent = value.partial_answer;
+      partial.hidden = !value.partial_answer;
+      stopButton.hidden = value.phase !== "running";
       const active = value.steps.findLast(step => step.status === "running");
       const phaseLabels = { idle: "请求已发送，等待状态", running: "服务器正在处理请求", completed: "执行已完成，等待回答记录", failed: "本次执行未完成，等待结果记录", interrupted: "执行已中断，请检查结果" };
       status.textContent = value.phase === "running" && active ?
@@ -90,6 +124,8 @@ window.UcaChatActivity = (() => {
     function start(conversationId, requestId) {
       clear();
       if (!identifier(conversationId) || !identifier(requestId)) return;
+      bound = Object.freeze({ conversationId, requestId });
+      stopButton.disabled = false; stopButton.textContent = "停止";
       const ticket = generation;
       root.hidden = false; root.dataset.state = "waiting"; details.hidden = true; details.open = false;
       status.textContent = "请求已发送，等待状态";
@@ -104,7 +140,7 @@ window.UcaChatActivity = (() => {
               });
               if (!response.ok) throw Error("activity_unavailable");
               const body = await response.text();
-              if (bytes(body) > 8192) throw Error("invalid_activity");
+              if (bytes(body) > 131072) throw Error("invalid_activity");
               return validate(JSON.parse(body));
             })(),
             new Promise((_, reject) => { timeout = setTimeout(() => { abort.abort(); reject(Error("activity_timeout")); }, 5000); })

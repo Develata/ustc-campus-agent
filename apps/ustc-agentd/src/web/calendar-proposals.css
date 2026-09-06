@@ -1,0 +1,33 @@
+.calendar-proposals { width: min(100%, 860px); min-width: 0; margin: 12px auto; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink); text-align: left; }
+.calendar-proposals summary { min-height: 44px; padding: 12px 16px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.calendar-proposals-content { padding: 0 16px 16px; max-height: min(65dvh, 640px); overflow-y: auto; overscroll-behavior: contain; }
+.calendar-proposals h3 { margin: 18px 0 10px; font-size: 15px; }
+.calendar-proposals h4 { margin: 0 0 8px; font-size: 14px; }
+.calendar-proposals p { margin: 7px 0; line-height: 1.65; font-size: 13px; overflow-wrap: anywhere; }
+.calendar-proposals-note { color: var(--muted); }
+.calendar-proposals-status { min-height: 1.65em; }
+.calendar-proposals-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
+.calendar-proposals button { min-height: 44px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.calendar-proposals button:disabled { opacity: .55; cursor: default; }
+.calendar-proposals button:hover:not(:disabled) { border-color: var(--muted); }
+.calendar-proposals button[type=submit] { background: var(--ink); color: var(--bg); }
+.calendar-proposals-form { display: grid; gap: 10px; padding: 0 0 16px; border-bottom: 1px solid var(--line); }
+.calendar-proposals-form label { display: grid; gap: 6px; min-width: 0; font-size: 13px; }
+.calendar-proposals input:not([type=checkbox]) { min-height: 44px; width: 100%; min-width: 0; box-sizing: border-box; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; }
+.calendar-proposals input:disabled { opacity: .6; }
+.calendar-proposals-form .calendar-proposals-checkbox { display: flex; align-items: center; min-height: 44px; gap: 10px; }
+.calendar-proposals-checkbox input { width: 20px; height: 20px; accent-color: var(--ink); }
+.calendar-proposals-list { display: grid; gap: 10px; }
+.calendar-proposal-card { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); overflow-wrap: anywhere; }
+.calendar-proposals :is(button,input,summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.calendar-proposals [hidden] { display: none !important; }
+@media (max-width: 560px) {
+  .calendar-proposals { margin: 8px auto; }
+  .calendar-proposals summary { padding: 12px; }
+  .calendar-proposals-content { padding: 0 12px 12px; max-height: 42dvh; }
+  .calendar-proposals-actions > button { flex: 1 1 auto; }
+}
+
+.calendar-proposals-manual { margin-top: 14px; border-top: 1px solid var(--line); }
+.calendar-proposals-manual > summary { border: 0; font-size: 13px; }
+.calendar-proposals-manual .calendar-proposals-form { padding: 12px 0; border-bottom: 0; }

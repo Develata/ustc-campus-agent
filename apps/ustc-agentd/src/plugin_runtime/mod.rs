@@ -5,6 +5,7 @@ mod capacity_tests;
 mod commands;
 #[cfg(test)]
 mod guard_tests;
+mod import_review;
 mod invocation;
 mod persistence;
 mod probe;
@@ -15,6 +16,7 @@ mod skill_context;
 mod skill_context_tests;
 #[cfg(test)]
 mod tests;
+mod updates;
 
 use crate::chat_tools::ChatDynamicToolDefinition;
 use registry::{RuntimeComponent, RuntimePackage};
@@ -51,6 +53,7 @@ struct AuthorityState {
     installations: InMemoryInstallationRepository,
     grants: InMemoryGrantRepository,
     runs: Vec<invocation::JournalRun>,
+    updates: ustc_campus_agent_core::market::update::application::UpdateJournal,
 }
 impl Default for AuthorityState {
     fn default() -> Self {
@@ -58,6 +61,7 @@ impl Default for AuthorityState {
             installations: InMemoryInstallationRepository::new(),
             grants: InMemoryGrantRepository::new(),
             runs: Vec::new(),
+            updates: Default::default(),
         }
     }
 }
@@ -68,6 +72,9 @@ struct RuntimeState {
     probes: BTreeMap<InstallationId, ProbedComponent>,
 }
 struct ProbedComponent {
+    component_id: ComponentId,
+    additional: BTreeMap<ComponentId, ProbedComponent>,
+    tool_components: BTreeMap<String, ComponentId>,
     revision: InstallationRevision,
     readiness: ComponentReadiness,
     tools: Vec<CatalogToolDefinition>,
@@ -87,6 +94,7 @@ pub(crate) struct PluginToolSession {
 #[derive(Clone)]
 struct FrozenToolBinding {
     installation_id: InstallationId,
+    component_id: ComponentId,
     installation_revision: InstallationRevision,
     readiness_digest: Sha256Digest,
     grant_snapshot_id: GrantSnapshotId,
@@ -194,9 +202,13 @@ impl PluginRuntime {
                 description: package.manifest.description().unwrap_or("").to_owned(),
                 catalog_revision: pin.catalog_revision().as_str().to_owned(),
                 package_digest: pin.package_digest().as_str().to_owned(),
-                kind: match &package.component {
-                    RuntimeComponent::Skill { .. } => "skill",
-                    RuntimeComponent::Mcp { .. } => "mcp",
+                kind: if !package.additional.is_empty() {
+                    "mixed"
+                } else {
+                    match &package.component {
+                        RuntimeComponent::Skill { .. } => "skill",
+                        RuntimeComponent::Mcp { .. } => "mcp",
+                    }
                 }
                 .to_owned(),
                 capabilities: package
@@ -241,6 +253,19 @@ impl PluginRuntime {
             schema: "plugin-lifecycle/v1",
             packages,
             public_read_only: true,
+            updates: state
+                .authority
+                .updates
+                .list(
+                    &state.authority.installations,
+                    &state.authority.grants,
+                    tenant,
+                    user,
+                )
+                .map_err(updates::error)?
+                .into_iter()
+                .map(updates::view)
+                .collect(),
         })
     }
 }

@@ -79,6 +79,19 @@ pub enum UnvalidatedSchemaNodeV0 {
     },
     Integer,
     Number,
+    BoundedString {
+        enum_values: Option<Vec<String>>,
+        min_length: Option<u64>,
+        max_length: Option<u64>,
+    },
+    BoundedInteger {
+        minimum: Option<i64>,
+        maximum: Option<i64>,
+    },
+    BoundedNumber {
+        minimum: Option<f64>,
+        maximum: Option<f64>,
+    },
     Boolean,
     Array {
         items: Box<UnvalidatedSchemaNodeV0>,
@@ -104,6 +117,19 @@ pub enum ValidatedSchemaNodeV0 {
     },
     Integer,
     Number,
+    BoundedString {
+        enum_values: Option<BTreeSet<String>>,
+        min_length: Option<u64>,
+        max_length: Option<u64>,
+    },
+    BoundedInteger {
+        minimum: Option<i64>,
+        maximum: Option<i64>,
+    },
+    BoundedNumber {
+        minimum_bits: Option<u64>,
+        maximum_bits: Option<u64>,
+    },
     Boolean,
     Array {
         items: Box<ValidatedSchemaNodeV0>,
@@ -224,32 +250,81 @@ fn validate_schema_node(
             })
         }
         UnvalidatedSchemaNodeV0::String { enum_values } => {
-            let enum_values = match enum_values {
-                None => None,
-                Some(values) => {
-                    if values.is_empty() || values.len() > 64 {
-                        return Err(SchemaConstructionError::SchemaLimitExceeded);
-                    }
-                    let mut unique = BTreeSet::new();
-                    for value in values {
-                        if value.is_empty() || value.len() > 256 {
-                            return Err(SchemaConstructionError::SchemaLimitExceeded);
-                        }
-                        if !unique.insert(value) {
-                            return Err(SchemaConstructionError::SchemaMalformed);
-                        }
-                    }
-                    Some(unique)
-                }
-            };
+            let enum_values = validate_string_enum(enum_values)?;
             Ok(ValidatedSchemaNodeV0::String { enum_values })
         }
         UnvalidatedSchemaNodeV0::Integer => Ok(ValidatedSchemaNodeV0::Integer),
         UnvalidatedSchemaNodeV0::Number => Ok(ValidatedSchemaNodeV0::Number),
+        UnvalidatedSchemaNodeV0::BoundedString {
+            enum_values,
+            min_length,
+            max_length,
+        } => {
+            validate_range(min_length, max_length)?;
+            let enum_values = validate_string_enum(enum_values)?;
+            Ok(ValidatedSchemaNodeV0::BoundedString {
+                enum_values,
+                min_length,
+                max_length,
+            })
+        }
+        UnvalidatedSchemaNodeV0::BoundedInteger { minimum, maximum } => {
+            validate_range(minimum, maximum)?;
+            Ok(ValidatedSchemaNodeV0::BoundedInteger { minimum, maximum })
+        }
+        UnvalidatedSchemaNodeV0::BoundedNumber { minimum, maximum } => {
+            if minimum
+                .into_iter()
+                .chain(maximum)
+                .any(|value| !value.is_finite())
+            {
+                return Err(SchemaConstructionError::SchemaMalformed);
+            }
+            validate_range(minimum, maximum)?;
+            let bits = |value: f64| if value == 0.0 { 0 } else { value.to_bits() };
+            Ok(ValidatedSchemaNodeV0::BoundedNumber {
+                minimum_bits: minimum.map(bits),
+                maximum_bits: maximum.map(bits),
+            })
+        }
         UnvalidatedSchemaNodeV0::Boolean => Ok(ValidatedSchemaNodeV0::Boolean),
         UnvalidatedSchemaNodeV0::Array { items } => Ok(ValidatedSchemaNodeV0::Array {
             items: Box::new(validate_schema_node(*items, depth + 1, nodes)?),
         }),
+    }
+}
+
+fn validate_string_enum(
+    values: Option<Vec<String>>,
+) -> Result<Option<BTreeSet<String>>, SchemaConstructionError> {
+    let Some(values) = values else {
+        return Ok(None);
+    };
+    if values.is_empty() || values.len() > 64 {
+        return Err(SchemaConstructionError::SchemaLimitExceeded);
+    }
+    let mut unique = BTreeSet::new();
+    for value in values {
+        if value.is_empty() || value.len() > 256 {
+            return Err(SchemaConstructionError::SchemaLimitExceeded);
+        }
+        if !unique.insert(value) {
+            return Err(SchemaConstructionError::SchemaMalformed);
+        }
+    }
+    Ok(Some(unique))
+}
+
+fn validate_range<T: PartialOrd>(
+    minimum: Option<T>,
+    maximum: Option<T>,
+) -> Result<(), SchemaConstructionError> {
+    if (minimum.is_none() && maximum.is_none())
+        || matches!((minimum, maximum), (Some(min), Some(max)) if min > max)
+    {
+        Err(SchemaConstructionError::SchemaMalformed)
+    } else {
+        Ok(())
     }
 }
 
@@ -272,23 +347,60 @@ fn encode_schema_node(node: &ValidatedSchemaNodeV0, output: &mut Vec<u8>) {
         }
         ValidatedSchemaNodeV0::String { enum_values } => {
             output.push(0x02);
-            match enum_values {
-                None => output.push(0),
-                Some(values) => {
-                    output.push(1);
-                    encode_count(values.len(), output);
-                    for value in values {
-                        encode_string(value, output);
-                    }
-                }
-            }
+            encode_string_enum(enum_values, output);
         }
         ValidatedSchemaNodeV0::Integer => output.push(0x03),
         ValidatedSchemaNodeV0::Number => output.push(0x04),
+        ValidatedSchemaNodeV0::BoundedString {
+            enum_values,
+            min_length,
+            max_length,
+        } => {
+            output.push(0x07);
+            encode_string_enum(enum_values, output);
+            encode_bound(min_length.map(u64::to_be_bytes), output);
+            encode_bound(max_length.map(u64::to_be_bytes), output);
+        }
+        ValidatedSchemaNodeV0::BoundedInteger { minimum, maximum } => {
+            output.push(0x08);
+            encode_bound(minimum.map(i64::to_be_bytes), output);
+            encode_bound(maximum.map(i64::to_be_bytes), output);
+        }
+        ValidatedSchemaNodeV0::BoundedNumber {
+            minimum_bits,
+            maximum_bits,
+        } => {
+            output.push(0x09);
+            encode_bound(minimum_bits.map(u64::to_be_bytes), output);
+            encode_bound(maximum_bits.map(u64::to_be_bytes), output);
+        }
         ValidatedSchemaNodeV0::Boolean => output.push(0x05),
         ValidatedSchemaNodeV0::Array { items } => {
             output.push(0x06);
             encode_schema_node(items, output);
+        }
+    }
+}
+
+fn encode_string_enum(values: &Option<BTreeSet<String>>, output: &mut Vec<u8>) {
+    match values {
+        None => output.push(0),
+        Some(values) => {
+            output.push(1);
+            encode_count(values.len(), output);
+            for value in values {
+                encode_string(value, output);
+            }
+        }
+    }
+}
+
+fn encode_bound(value: Option<[u8; 8]>, output: &mut Vec<u8>) {
+    match value {
+        None => output.push(0),
+        Some(bytes) => {
+            output.push(1);
+            output.extend_from_slice(&bytes);
         }
     }
 }
@@ -508,10 +620,12 @@ fn arguments_match_schema(
     schema: &ValidatedSchemaNodeV0,
 ) -> bool {
     match (argument, schema) {
-        (CanonicalArgumentNodeV0::String(value), ValidatedSchemaNodeV0::String { enum_values }) => {
-            enum_values
-                .as_ref()
-                .is_none_or(|values| values.contains(value))
+        (CanonicalArgumentNodeV0::String(value), _) => schema.accepts_string_value(value),
+        (CanonicalArgumentNodeV0::Integer(value), ValidatedSchemaNodeV0::BoundedInteger { .. }) => {
+            schema.accepts_output_integer(i128::from(*value))
+        }
+        (CanonicalArgumentNodeV0::Number(bits), ValidatedSchemaNodeV0::BoundedNumber { .. }) => {
+            schema.accepts_output_number(f64::from_bits(*bits))
         }
         (CanonicalArgumentNodeV0::Integer(_), ValidatedSchemaNodeV0::Integer)
         | (CanonicalArgumentNodeV0::Number(_), ValidatedSchemaNodeV0::Number)
@@ -536,6 +650,111 @@ fn arguments_match_schema(
         }
         _ => false,
     }
+}
+
+impl ValidatedSchemaNodeV0 {
+    /// Scalar string membership shared by exact input and JSON Schema output checks.
+    #[must_use]
+    pub fn accepts_string_value(&self, value: &str) -> bool {
+        let (choices, min, max) = match self {
+            Self::String { enum_values } => (enum_values, None, None),
+            Self::BoundedString {
+                enum_values,
+                min_length,
+                max_length,
+            } => (enum_values, *min_length, *max_length),
+            _ => return false,
+        };
+        let length = value.chars().count() as u64;
+        choices
+            .as_ref()
+            .is_none_or(|choices| choices.contains(value))
+            && min.is_none_or(|min| length >= min)
+            && max.is_none_or(|max| length <= max)
+    }
+
+    /// JSON Schema output numeric membership. i128 preserves both i64 and u64 JSON tokens.
+    /// This does not coerce the distinct canonical input Integer/Number tags.
+    #[must_use]
+    pub fn accepts_output_integer(&self, value: i128) -> bool {
+        use std::cmp::Ordering;
+        match self {
+            Self::Integer | Self::Number => true,
+            Self::BoundedInteger { minimum, maximum } => {
+                minimum.is_none_or(|min| value >= i128::from(min))
+                    && maximum.is_none_or(|max| value <= i128::from(max))
+            }
+            Self::BoundedNumber {
+                minimum_bits,
+                maximum_bits,
+            } => {
+                minimum_bits.is_none_or(|min| {
+                    compare_integer_number(value, f64::from_bits(min))
+                        .is_some_and(|order| order != Ordering::Less)
+                }) && maximum_bits.is_none_or(|max| {
+                    compare_integer_number(value, f64::from_bits(max))
+                        .is_some_and(|order| order != Ordering::Greater)
+                })
+            }
+            _ => false,
+        }
+    }
+
+    /// Finite binary64 output membership, including integral decimal integer outputs.
+    #[must_use]
+    pub fn accepts_output_number(&self, value: f64) -> bool {
+        use std::cmp::Ordering;
+        if !value.is_finite() {
+            return false;
+        }
+        match self {
+            Self::Number => true,
+            Self::Integer => value.fract() == 0.0,
+            Self::BoundedInteger { minimum, maximum } => {
+                value.fract() == 0.0
+                    && minimum.is_none_or(|min| {
+                        compare_integer_number(i128::from(min), value)
+                            .is_some_and(|order| order != Ordering::Greater)
+                    })
+                    && maximum.is_none_or(|max| {
+                        compare_integer_number(i128::from(max), value)
+                            .is_some_and(|order| order != Ordering::Less)
+                    })
+            }
+            Self::BoundedNumber {
+                minimum_bits,
+                maximum_bits,
+            } => {
+                minimum_bits.is_none_or(|min| value >= f64::from_bits(min))
+                    && maximum_bits.is_none_or(|max| value <= f64::from_bits(max))
+            }
+            _ => false,
+        }
+    }
+}
+
+// Compare without rounding the integer to binary64. The cast below is in range;
+// truncation plus the fractional sign distinguishes both sides of every boundary.
+fn compare_integer_number(integer: i128, number: f64) -> Option<std::cmp::Ordering> {
+    use std::cmp::Ordering;
+    if !number.is_finite() {
+        return None;
+    }
+    if number >= -(i128::MIN as f64) {
+        return Some(Ordering::Less);
+    }
+    if number < i128::MIN as f64 {
+        return Some(Ordering::Greater);
+    }
+    Some(integer.cmp(&(number as i128)).then_with(|| {
+        if number.fract() > 0.0 {
+            Ordering::Less
+        } else if number.fract() < 0.0 {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }))
 }
 
 #[cfg(test)]
@@ -597,3 +816,6 @@ mod schema_membership_tests {
         ])));
     }
 }
+
+#[cfg(test)]
+mod constraint_tests;

@@ -13,14 +13,17 @@ pub(super) struct AutomaticTitle {
     generated: Option<String>,
 }
 impl AutomaticTitle {
-    pub(super) fn first_message(message: &str) -> Self {
-        let date = current_date();
+    pub(super) fn first_message(message: &str, retained_date: Option<String>) -> Self {
+        let date = retained_date.unwrap_or_else(current_date);
         let fallback = dated_title(&date, message);
         Self {
             date,
             fallback,
             generated: None,
         }
+    }
+    pub(super) fn date(&self) -> &str {
+        &self.date
     }
     pub(super) fn title(&self) -> &str {
         self.generated.as_deref().unwrap_or(&self.fallback)

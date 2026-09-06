@@ -4,6 +4,16 @@ use serde_json::{Value, json};
 use ustc_campus_agent_simple_calendar::CalendarItem;
 
 pub(super) fn list_result(items: &[CalendarItem]) -> ChatToolExecution {
+    let clock = time::OffsetDateTime::now_utc();
+    let server_now = format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        clock.year(),
+        u8::from(clock.month()),
+        clock.day(),
+        clock.hour(),
+        clock.minute(),
+        clock.second()
+    );
     let items: Vec<Value> = items
         .iter()
         .map(|item| {
@@ -18,6 +28,9 @@ pub(super) fn list_result(items: &[CalendarItem]) -> ChatToolExecution {
         "schema":"ustc-simple-calendar-result/v1",
         "package_id":"ustc.simple-calendar",
         "action":"list",
+        "server_now": server_now,
+        "timezone":"UTC+08:00",
+        "reminder_delivery":false,
         "items":items,
     }))
 }

@@ -1,6 +1,6 @@
 # Market browse, install and control
 
-- `Status`: Partial user journey: bundled browsing and durable single-component public-read MCP/Skill lifecycle are implemented in the loopback application; authenticated multi-client delivery, package updates and artifact switching remain planned
+- `Status`: Partial user journey: bundled browsing, bounded public-read MCP/Skill package lifecycle and reviewed-directory update/rollback are implemented in the local application; production multi-client delivery and general artifact rollout remain planned
 - `Owning plan`: `docs/plan/04-market-and-plugin-lifecycle.md`
 - `Contracts`: `docs/contracts/market-catalog-query.md`, `docs/contracts/plugin-package.md`, `docs/contracts/market-lifecycle.md`, `docs/contracts/agent-plugin-boundary.md`, `docs/contracts/permissions.md`, `docs/contracts/invocation-resolution.md`
 - `Acceptance`: `MARKET-*`, `PKG-019/020`, `AGENT-002`, `AGENT-017/018`, `FP-006`, `FP-015`, `FP-007`
@@ -68,18 +68,20 @@ Package installation or update never updates the Agent framework. The Agent cons
 
 Core evidence covers package/catalog identities, capability and installation/grant
 rules, bounded transaction-current authority-assembly evidence and update/rollback
-decisions. Update
-and rollback retain domain/semantic-fake evidence; they do not switch live artifacts.
+decisions. The bounded local application additionally switches exact reviewed-directory
+package pins through the original B6 transitions; general remote artifact rollout
+and production qualification remain outside that evidence.
 
 The [application profile](../contracts/plugin-management.md) adds durable
 install/configure/grant/enable/disable/revoke commands, original-receipt replay,
-restart recovery, frozen tool projections and M30 call journals for single-component
-public-read MCP/Skill packages. `PLUGIN-001` binds the bounded application/browser
+restart recovery, frozen tool projections and M30 call journals for public-read
+MCP/Skill packages, including the bounded mixed-component profile below. `PLUGIN-001` binds the bounded application/browser
 path; it does not complete the full Market module.
 
 For the full authenticated target, `MARKET-001` through `MARKET-004`, `MARKET-007`, `PKG-020` and the user journey remain planned.
-Production authentication, general package composition, durable update/rollback
-and artifact switching remain outside this implemented profile.
+Production authentication, general package composition and distributed artifact
+rollout remain outside this bounded implementation. Local durable exact-version
+update/rollback is specified by the application contract below.
 
 ## Package component configuration
 
@@ -114,10 +116,25 @@ loading a sidecar alone neither installs nor authorizes a component.
 
 ## Supported MCP / Skill package flow
 
-The plugin page now links to **管理 MCP 与 Skills**. The supported single-component
+The plugin page now links to **管理 MCP 与 Skills**. The supported package
 profile follows install → typed configuration → check components → review individual
 permissions → review the discovered tools/resources and enable. Disabling stops new
 Agent calls. Removed package sources retain historical disable/revoke controls.
 The embedded campus guide is an optional Skill; operator-reviewed MCP packages can
 join the same flow. Broader package classes and private/write approval remain planned.
 Use [the setup guide](../guides/mcp-skills.md) for exact supported formats and limits.
+
+## Local mixed-package and version management projection
+
+The bounded package-management page supports one reviewed package containing Skill
+context and an MCP server, inert import-file review/download, and exact-version
+preview/update/rollback/retain controls. Install/configure/grant/enable remain distinct.
+Version switching keeps the installation identity, disables access, invalidates old
+grants and requires fresh readiness and explicit grants. Import preview is not catalog
+admission. The existing configuration must validate for both versions; stdio, executable
+Skills, private/write capability execution and arbitrary artifact fetching are outside
+this profile. The [application contract](../contracts/plugin-management.md) owns the
+exact typed intents, digest bindings, persistence compatibility and failure rules.
+Targeted evidence is bound to PLUGIN-001 and the update/mixed-import application tests;
+its actual execution result is reported by the integration check, not inferred from
+this feature description.

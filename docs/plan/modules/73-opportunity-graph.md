@@ -219,3 +219,7 @@ encryption, backup-erasure and production SSO remain separate gates.
 ## 14. Exit gate
 
 `M72` is standalone-ready when public/private separation, tenant denial, consent/deletion, stale/conflict, deterministic planning and explanation consistency pass against fakes. It is accepted when one installed-plugin journey uses reviewed source facts and a tenant-owned profile to produce a zero-hard-violation result with provenance, then marks it stale on revision change and deletes private payload under the contract.
+
+## Request-local personal course input
+
+The user-authorized O1 request-local course path is governed by [campus-source-workspace](../../contracts/campus-source-workspace.md). It accepts explicit user-supplied evidence and time/interest constraints, without making those inputs an official catalog or persistent profile. Deterministic alternatives expose exact Calendar suggestions; composition submits them to the existing separately confirmed batch port. Original reviewed-public-fact, consent and publication semantics remain unchanged.

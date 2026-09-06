@@ -1,10 +1,18 @@
 //! Minimal durable calendar-item store for the loopback MVP.
 //!
 //! This crate deliberately owns only bounded local item records. It does not
-//! schedule reminders, synchronize external calendars, interpret natural
+//! synchronize external calendars, interpret natural
 //! language, or perform network effects.
 
 #![forbid(unsafe_code)]
+
+mod batches;
+mod proposals;
+mod reminders;
+mod storage;
+pub use batches::{CalendarBatch, CalendarDraft};
+pub use proposals::{CalendarMutation, CalendarProposal, CalendarProposalStatus};
+pub use reminders::{CalendarReminder, ReminderStatus};
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -37,12 +45,16 @@ pub struct CalendarItem {
     pub created_at_unix_secs: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct PersistedCalendar {
     schema: String,
     next_id: u64,
     items: Vec<CalendarItem>,
+    item_revision: u64,
+    next_proposal_id: u64,
+    proposals: Vec<CalendarProposal>,
+    reminders: Vec<CalendarReminder>,
+    batches: Vec<CalendarBatch>,
 }
 
 impl Default for PersistedCalendar {
@@ -51,6 +63,11 @@ impl Default for PersistedCalendar {
             schema: STORE_SCHEMA_VERSION.to_owned(),
             next_id: 1,
             items: Vec::new(),
+            item_revision: 0,
+            next_proposal_id: 1,
+            proposals: Vec::new(),
+            reminders: Vec::new(),
+            batches: Vec::new(),
         }
     }
 }
@@ -67,6 +84,11 @@ pub enum CalendarError {
     ClockUnavailable,
     CounterExhausted,
     PersistenceUnavailable,
+    InvalidProposal,
+    ProposalNotFound,
+    ProposalConflict,
+    ProposalExpired,
+    ProposalLimitExceeded,
 }
 
 impl fmt::Display for CalendarError {
@@ -102,8 +124,7 @@ impl CalendarStore {
         let path = path.as_ref();
         validate_store_path(path)?;
         let state = match read_existing(path)? {
-            Some(bytes) => serde_json::from_slice::<PersistedCalendar>(&bytes)
-                .map_err(|_| CalendarError::InvalidStore)?,
+            Some(bytes) => storage::decode(&bytes)?,
             None => PersistedCalendar::default(),
         };
         validate_state(&state)?;
@@ -166,58 +187,37 @@ impl CalendarStore {
         title: &str,
         scheduled_for: Option<&str>,
     ) -> Result<CalendarItem, CalendarError> {
-        self.resolve_uncertain_durability()?;
-        if self.state.items.len() >= MAX_ITEMS {
-            return Err(CalendarError::ItemLimitExceeded);
-        }
-        let title = validate_title(title)?.to_owned();
-        let scheduled_for = validate_scheduled_for(scheduled_for)?;
-        let sequence = self.state.next_id;
-        let next_id = sequence
-            .checked_add(1)
-            .ok_or(CalendarError::CounterExhausted)?;
-        let created_at_unix_secs = SystemTime::now()
+        let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| CalendarError::ClockUnavailable)?
             .as_secs();
-        let item = CalendarItem {
-            id: format!("{ITEM_ID_PREFIX}{sequence}"),
-            title,
-            scheduled_for,
-            created_at_unix_secs,
-        };
-        let previous = self.state.clone();
-        self.state.next_id = next_id;
-        self.state.items.push(item.clone());
-        self.state
-            .items
-            .sort_by(|left, right| left.id.cmp(&right.id));
-        match self.persist() {
-            Ok(PersistOutcome::Durable) => Ok(item),
-            Ok(PersistOutcome::RenamedParentSyncUncertainExact)
-            | Ok(PersistOutcome::RenamedParentSyncUncertainUnknown) => {
-                self.durability_uncertain = true;
-                Err(CalendarError::PersistenceUnavailable)
-            }
-            Err(error) => {
-                self.state = previous;
-                Err(error)
-            }
-        }
+        self.mutate_legacy(
+            CalendarMutation::Record {
+                title: title.to_owned(),
+                scheduled_for: scheduled_for.map(str::to_owned),
+            },
+            now,
+        )
     }
 
     /// Deletes one exact item id and durably commits the removal.
     pub fn delete(&mut self, item_id: &str) -> Result<CalendarItem, CalendarError> {
-        self.resolve_uncertain_durability()?;
-        let Some(index) = self.state.items.iter().position(|item| item.id == item_id) else {
-            return Err(CalendarError::ItemNotFound);
-        };
-        let previous = self.state.clone();
-        let removed = self.state.items.remove(index);
+        self.mutate_legacy(
+            CalendarMutation::Delete {
+                item_id: item_id.to_owned(),
+            },
+            0,
+        )
+    }
+
+    fn commit(&mut self, next: PersistedCalendar) -> Result<(), CalendarError> {
+        let previous = std::mem::replace(&mut self.state, next);
         match self.persist() {
-            Ok(PersistOutcome::Durable) => Ok(removed),
-            Ok(PersistOutcome::RenamedParentSyncUncertainExact)
-            | Ok(PersistOutcome::RenamedParentSyncUncertainUnknown) => {
+            Ok(PersistOutcome::Durable) => Ok(()),
+            Ok(
+                PersistOutcome::RenamedParentSyncUncertainExact
+                | PersistOutcome::RenamedParentSyncUncertainUnknown,
+            ) => {
                 self.durability_uncertain = true;
                 Err(CalendarError::PersistenceUnavailable)
             }
@@ -229,11 +229,7 @@ impl CalendarStore {
     }
 
     fn persist(&mut self) -> Result<PersistOutcome, CalendarError> {
-        let bytes =
-            serde_json::to_vec(&self.state).map_err(|_| CalendarError::PersistenceUnavailable)?;
-        if bytes.len() as u64 > MAX_STORE_BYTES {
-            return Err(CalendarError::ItemLimitExceeded);
-        }
+        let bytes = storage::encode_bounded(&self.state)?;
         let parent = self
             .path
             .parent()
@@ -291,8 +287,7 @@ impl CalendarStore {
         if !self.durability_uncertain {
             return Ok(());
         }
-        let expected =
-            serde_json::to_vec(&self.state).map_err(|_| CalendarError::PersistenceUnavailable)?;
+        let expected = storage::encode_bounded(&self.state)?;
         if !matches!(read_existing(&self.path), Ok(Some(actual)) if actual == expected) {
             return Err(CalendarError::InvalidStore);
         }
@@ -369,10 +364,10 @@ fn read_existing(path: &Path) -> Result<Option<Vec<u8>>, CalendarError> {
 
     let mut bytes = Vec::new();
     Read::by_ref(&mut file)
-        .take(MAX_STORE_BYTES + 1)
+        .take(storage::MAX_FILE_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| CalendarError::InvalidStore)?;
-    if bytes.len() as u64 > MAX_STORE_BYTES {
+    if bytes.len() as u64 > storage::MAX_FILE_BYTES {
         return Err(CalendarError::InvalidStore);
     }
     Ok(Some(bytes))
@@ -387,7 +382,7 @@ fn validate_existing_destination(path: &Path) -> Result<(), CalendarError> {
 }
 
 fn validate_primary_metadata(metadata: &fs::Metadata) -> Result<(), CalendarError> {
-    if !metadata.file_type().is_file() || metadata.len() > MAX_STORE_BYTES {
+    if !metadata.file_type().is_file() || metadata.len() > storage::MAX_FILE_BYTES {
         return Err(CalendarError::InvalidStore);
     }
     #[cfg(unix)]
@@ -420,7 +415,10 @@ fn validate_store_path(path: &Path) -> Result<(), CalendarError> {
 }
 
 fn validate_state(state: &PersistedCalendar) -> Result<(), CalendarError> {
-    if state.schema != STORE_SCHEMA_VERSION || state.next_id == 0 || state.items.len() > MAX_ITEMS {
+    if ![STORE_SCHEMA_VERSION, storage::V2, storage::V3].contains(&state.schema.as_str())
+        || state.next_id == 0
+        || state.items.len() > MAX_ITEMS
+    {
         return Err(CalendarError::InvalidStore);
     }
     let mut ids = BTreeSet::new();
@@ -443,6 +441,13 @@ fn validate_state(state: &PersistedCalendar) -> Result<(), CalendarError> {
     if state.next_id <= maximum_sequence {
         return Err(CalendarError::InvalidStore);
     }
+    proposals::validate_state(state)?;
+    reminders::validate(state)?;
+    batches::validate(state)?;
+    if state.schema != storage::V3 && (!state.reminders.is_empty() || !state.batches.is_empty()) {
+        return Err(CalendarError::InvalidStore);
+    }
+    storage::encode_bounded(state).map_err(|_| CalendarError::InvalidStore)?;
     Ok(())
 }
 
@@ -690,3 +695,6 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[cfg(all(test, unix))]
+mod workspace_tests;

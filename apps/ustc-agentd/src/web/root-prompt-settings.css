@@ -1,0 +1,17 @@
+.root-prompt-settings { min-width: 0; }
+.root-prompt-settings .root-prompt-description { margin: 0 0 14px; }
+.root-prompt-settings textarea { display: block; width: 100%; min-height: 160px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--surface-strong); color: var(--ink); font: inherit; font-size: 14px; line-height: 1.8; }
+.root-prompt-settings textarea::placeholder { color: var(--muted); opacity: .85; }
+.root-prompt-settings textarea:focus-visible, .root-prompt-settings button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.root-prompt-settings textarea:disabled { opacity: .7; }
+.root-prompt-meta { display: flex; justify-content: space-between; gap: 12px; margin: 8px 0 14px; color: var(--muted); font-size: 12px; }
+.root-prompt-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.root-prompt-settings button { min-height: 44px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--surface-strong); font: inherit; font-size: 13px; cursor: pointer; }
+.root-prompt-settings .root-prompt-save { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.root-prompt-settings button:disabled { opacity: .5; cursor: default; }
+.root-prompt-settings .root-prompt-status { margin: 10px 0 0; min-height: 24px; font-size: 12px; overflow-wrap: anywhere; }
+.root-prompt-settings .root-prompt-error, .root-prompt-over-limit { color: var(--danger); }
+.root-prompt-settings .setting-footnote { margin-bottom: 0; }
+.root-prompt-conflict { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.root-prompt-conflict pre { max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); font: inherit; font-size: 13px; }
+@media (max-width: 480px) { .root-prompt-settings textarea { padding: 12px; font-size: 16px; } .root-prompt-actions button { flex: 1 1 auto; } }

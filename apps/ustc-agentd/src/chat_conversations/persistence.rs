@@ -6,10 +6,17 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 const MAX_STORE_BYTES: usize = 32 * 1024 * 1024;
 // 16 KiB answer at worst six JSON bytes per input byte plus bounded traces/identity.
-const RUNNING_RESERVE_BYTES: usize = 128 * 1024;
+const RUNNING_RESERVE_BYTES: usize = 512 * 1024;
 pub(super) struct Disk {
     path: PathBuf,
     _lock: File,
+}
+impl Drop for Disk {
+    fn drop(&mut self) {
+        // Release at the owner's lifetime boundary: an unrelated fork may still
+        // hold this open file description until exec closes inherited handles.
+        let _ = self._lock.unlock();
+    }
 }
 impl Disk {
     pub(super) fn open(path: PathBuf) -> Result<(Self, State), ConversationError> {
@@ -73,6 +80,7 @@ impl Disk {
                 let state = State {
                     version: 1,
                     conversations: Vec::new(),
+                    root_prompts: None,
                 };
                 disk.save(&state)?;
                 state
@@ -83,8 +91,30 @@ impl Disk {
     }
     pub(super) fn save(&self, state: &State) -> Result<(), ConversationError> {
         let bytes = serde_json::to_vec(state).map_err(|_| ConversationError::Unavailable)?;
+        let consumed = state
+            .conversations
+            .iter()
+            .flat_map(|c| &c.turns)
+            .filter(|t| t.view.phase == super::TurnPhase::Running)
+            .try_fold(0usize, |total, turn| {
+                let growth = match &turn.progress {
+                    Some(progress) => serde_json::to_vec(progress)
+                        .map_err(|_| ConversationError::Unavailable)?
+                        .len()
+                        .saturating_add(12),
+                    None => 0,
+                };
+                total
+                    .checked_add(growth.min(RUNNING_RESERVE_BYTES - 128 * 1024))
+                    .ok_or(ConversationError::Capacity)
+            })?;
+        // Progress consumes its admission reservation. Keep 128 KiB unconsumed for
+        // the largest escaped final answer, trace and result metadata.
         check_capacity(
-            bytes.len(),
+            bytes
+                .len()
+                .checked_sub(consumed)
+                .ok_or(ConversationError::Unavailable)?,
             state
                 .conversations
                 .iter()
@@ -170,6 +200,43 @@ fn check_capacity(bytes: usize, running: usize) -> Result<(), ConversationError>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn dropped_owner_releases_lock_even_with_an_inherited_descriptor() {
+        let directory = std::env::temp_dir().join(format!(
+            "uca-conversation-lock-{}",
+            random_id().expect("random directory")
+        ));
+        fs::create_dir(&directory).expect("create directory");
+        fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))
+            .expect("private directory");
+        let path = directory.join("conversations.json");
+        let (disk, _) = Disk::open(path.clone()).expect("first writer");
+        // dup and fork retain the same open file description. Holding this clone
+        // models the window before an unrelated child closes its inherited fd.
+        let inherited = disk._lock.try_clone().expect("inherited descriptor");
+        assert!(matches!(
+            Disk::open(path.clone()),
+            Err(ConversationError::Unavailable)
+        ));
+        drop(disk);
+        let replacement = Disk::open(path.clone());
+        let reopened = replacement.is_ok();
+        drop(inherited);
+        let competitor = Disk::open(path);
+        let exclusive = matches!(&competitor, Err(ConversationError::Unavailable));
+        drop(competitor);
+        drop(replacement);
+        fs::remove_dir_all(directory).expect("cleanup");
+        assert!(
+            reopened,
+            "a dropped owner must not leave its lock in a child"
+        );
+        assert!(
+            exclusive,
+            "the replacement must remain the exclusive writer"
+        );
+    }
+
     #[test]
     fn running_reservations_leave_room_for_terminal_response() {
         assert_eq!(

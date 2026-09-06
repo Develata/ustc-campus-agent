@@ -76,6 +76,15 @@ future user-task `HarnessRun` phase machine.
 
 The app-private Chat MVP provides a second bounded M30 orchestration slice: a closed three-turn/four-call coordinator sends complete request projections through M50, validates exact tool proposals, executes tools sequentially and produces a typed final response. Its confirmed Opportunity tool may invoke the separately owned static M72 planning use case; M72 consent/profile/planning semantics remain M72 evidence, not M30/M40 implementation.
 
+### Personal prompt context
+
+The approved [personal root prompt](../../contracts/agent-root-prompt.md) is a
+user-owned instruction stored by the bounded conversation service. New turn admission
+freezes it into the provider projection, below immutable platform policy. It never
+changes tool grants or canonical history, and settings edits do not mutate running
+turns or terminal replay. The setting shares the existing owner admission and private
+persistence boundary; it is not a new runtime or authority layer.
+
 ### Bounded durable conversation extension
 
 The approved functional follow-up adds server-owned dialogue storage around the

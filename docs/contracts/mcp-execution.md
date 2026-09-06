@@ -61,7 +61,7 @@ part of the admitted central-host profile.
 Tool inputs compile to the existing tool-input-schema/v0 owner: closed objects
 (`additionalProperties: false`), strings with optional string enums, integers,
 numbers, booleans and arrays of admitted nodes. Objects without the explicit closed
-property, references, unions and unsupported validation keywords are rejected, not
+property, remote/cyclic references, unions and unsupported validation keywords are rejected, not
 silently weakened. This is a bounded MCP interoperability profile, not a claim to
 implement every JSON Schema vocabulary used by all MCP servers.
 
@@ -75,3 +75,30 @@ argument or grant semantics. MCP output validation uses the same admitted schema
 structure and value bounds but JSON Schema numeric membership: numbers include
 integers, and integer outputs may use an integral decimal representation. Invalid
 outputs still fail closed and quarantine the binding.
+
+The scalar constraint extension additionally admits inclusive `minimum`/`maximum`
+on integer/number and `minLength`/`maxLength` on strings. These enter the shared
+checked AST, canonical schema digest, gateway membership check and model-visible
+schema; no keyword is accepted merely as an ignored annotation. String length counts
+Unicode scalar values and intersects enums; the existing UTF-8 byte cap remains.
+Length bounds must be nonnegative u64 JSON integer tokens. Integer numeric bounds
+must be i64 JSON integer tokens; decimal integer thresholds are explicitly unsupported.
+Number bounds use finite binary64 within [-2^53, 2^53], including existing decimal
+rounding semantics. The magnitude limit also rejects oversized raw integer tokens
+that serde_json may have converted to floating point before schema compilation;
+integer-token thresholds that cannot be represented exactly as binary64 reject.
+Negative zero normalizes, contradictory ranges reject, and output range checks use
+exact integer-versus-binary64 comparisons. Bounds changing on rediscovery require
+review. Existing unconstrained schema encodings/digests remain unchanged. This is
+still a bounded numeric/schema profile, not arbitrary-precision JSON Schema support;
+exclusive bounds, pattern, multipleOf and unions remain unsupported.
+
+Document-local `$ref` into `$defs` or `definitions` is expanded before compilation,
+with an eight-level recursion and 512-node expansion budget. Remote references,
+recursive expansion, missing targets and validation-keyword siblings reject.
+Definitions remain inert until referenced. Standard annotation keywords `default`,
+`examples`, `$comment`, `deprecated`, `readOnly` and `writeOnly` may be present;
+they never insert argument values, relax validation, or supply capability authority.
+All referenced validation semantics must remain expressible by the existing checked
+AST. The original inventory digest still binds raw schemas, so annotation/reference
+changes trigger rediscovery review even when the compiled schema is equivalent.

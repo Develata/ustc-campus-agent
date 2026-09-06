@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use ustc_campus_agent_core::identity::{TenantId, UserId};
 
-use crate::agent_chat::ChatError;
 use crate::agent_chat::run_bounded_chat_with_observer;
+use crate::agent_chat::{ChatActivityObserver, ChatError};
 use crate::chat_activity::{ActivityRegistry, ChatActivityDto};
 use crate::chat_conversations::{
     BeginTurn, ConversationDto, ConversationError, ConversationListDto,
@@ -36,6 +36,23 @@ impl ConversationApplication {
             models: models.into(),
             activity: Arc::new(ActivityRegistry::default()),
         })
+    }
+
+    pub(crate) fn root_prompt(
+        &self,
+        tenant: &TenantId,
+        user: &UserId,
+    ) -> Result<crate::chat_conversations::RootPromptDto, ConversationError> {
+        self.store.root_prompt(tenant, user)
+    }
+
+    pub(crate) fn update_root_prompt(
+        &self,
+        tenant: &TenantId,
+        user: &UserId,
+        intent: crate::chat_conversations::RootPromptUpdateDto,
+    ) -> Result<crate::chat_conversations::RootPromptDto, ConversationError> {
+        self.store.update_root_prompt(tenant, user, intent)
     }
 
     pub(crate) fn list(
@@ -81,7 +98,47 @@ impl ConversationApplication {
         id: &str,
     ) -> Result<ChatActivityDto, ConversationError> {
         let turn = self.store.current_turn(tenant, user, id)?;
-        Ok(self.activity.project(id, turn.as_ref()))
+        let mut dto = self.activity.project(id, turn.as_ref());
+        if (dto.steps.is_empty()
+            || !matches!(dto.phase, crate::chat_activity::ActivityPhase::Running))
+            && let Some(turn) = &turn
+            && let Some(progress) = self.store.progress(tenant, user, id, &turn.request_id)?
+        {
+            if dto.steps.is_empty() {
+                dto.steps = progress.steps;
+            }
+            dto.partial_answer = progress.partial_answer;
+            if !matches!(dto.phase, crate::chat_activity::ActivityPhase::Running) {
+                for step in &mut dto.steps {
+                    if step.status == crate::chat_activity::ActivityStatus::Running {
+                        step.status = crate::chat_activity::ActivityStatus::Interrupted;
+                    }
+                }
+            }
+        }
+        Ok(dto)
+    }
+
+    pub(crate) fn cancel(
+        &self,
+        tenant: &TenantId,
+        user: &UserId,
+        id: &str,
+        request_id: &str,
+    ) -> Result<ChatActivityDto, ConversationError> {
+        let turn = self
+            .store
+            .current_turn(tenant, user, id)?
+            .ok_or(ConversationError::NotFound)?;
+        if turn.request_id != request_id {
+            return Err(ConversationError::RequestConflict);
+        }
+        if turn.phase == crate::chat_conversations::TurnPhase::Running
+            && !self.activity.cancel(id, request_id)
+        {
+            return Err(ConversationError::InProgress);
+        }
+        self.activity(tenant, user, id)
     }
 
     #[cfg(test)]
@@ -142,41 +199,72 @@ impl ConversationApplication {
                     title_request,
                 } => {
                     let mut observer = application.activity.register(&id, &request_id);
-                    let outcome = match (
-                        selected.as_ref(),
-                        make_executor(
-                            selected
-                                .as_ref()
-                                .is_some_and(|provider| provider.tool_calling_enabled()),
-                        )
-                        .await,
-                    ) {
-                        (Some(provider), Ok(mut executor)) => {
-                            run_bounded_chat_with_observer(
-                                run_id,
-                                request,
-                                confirmed,
-                                provider,
-                                &mut executor,
-                                &mut observer,
+                    let store = Arc::clone(&application.store);
+                    let checkpoint_owner = (tenant.clone(), user.clone());
+                    let checkpoint_id = id.clone();
+                    let checkpoint_request = request_id.clone();
+                    observer.on_checkpoint(move |progress| {
+                        store
+                            .checkpoint(
+                                &checkpoint_owner.0,
+                                &checkpoint_owner.1,
+                                &checkpoint_id,
+                                &checkpoint_request,
+                                progress,
                             )
-                            .await
-                        }
-                        (_, Err(error)) => Err(error),
-                        (None, _) => Err(ChatError::Internal),
-                    };
-                    let generated_title = if outcome.is_ok() {
-                        match (selected.as_ref(), title_request.as_deref()) {
-                            (Some(provider), Some(message)) => {
-                                crate::conversation_title::provider::generate(provider, message)
-                                    .await
+                            .map_err(|_| ChatError::Internal)
+                    });
+                    let mut cancellation = observer.cancellation();
+                    let work = async {
+                        let outcome = match (
+                            selected.as_ref(),
+                            make_executor(
+                                selected
+                                    .as_ref()
+                                    .is_some_and(|provider| provider.tool_calling_enabled()),
+                            )
+                            .await,
+                        ) {
+                            (Some(provider), Ok(mut executor)) => {
+                                run_bounded_chat_with_observer(
+                                    run_id,
+                                    request,
+                                    confirmed,
+                                    provider,
+                                    &mut executor,
+                                    &mut observer,
+                                )
+                                .await
                             }
-                            _ => None,
-                        }
-                    } else {
-                        None
+                            (_, Err(error)) => Err(error),
+                            (None, _) => Err(ChatError::Internal),
+                        };
+                        let generated_title = if outcome.is_ok() {
+                            match (selected.as_ref(), title_request.as_deref()) {
+                                (Some(provider), Some(message)) => {
+                                    crate::conversation_title::provider::generate(provider, message)
+                                        .await
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
+                        // Factory failure is also terminal evidence, never a stranded reservation.
+                        (outcome, generated_title)
                     };
-                    // Factory failure is also terminal evidence, never a stranded reservation.
+                    let (mut outcome, generated_title) = tokio::select! {
+                        biased;
+                        _ = async {
+                            if !*cancellation.borrow_and_update() {
+                                let _ = cancellation.changed().await;
+                            }
+                        } => (Err(ChatError::Cancelled), None),
+                        result = work => result,
+                    };
+                    if let Err(error) = observer.checkpoint() {
+                        outcome = Err(error);
+                    }
                     application.store.finish_with_title(
                         &tenant,
                         &user,
@@ -261,7 +349,7 @@ mod tests {
             .activity(&tenant, &user, &conversation.id)
             .expect("valid activity test fixture");
         assert_eq!(dto.phase, ActivityPhase::Completed);
-        assert_eq!(dto.sequence, 15);
+        assert_eq!(dto.sequence, u32::MAX);
         assert_eq!(dto.steps.len(), 1);
         assert_eq!(dto.steps[0].status, ActivityStatus::Succeeded);
         assert_eq!(
@@ -420,6 +508,91 @@ mod automatic_title_tests {
     }
 
     #[tokio::test]
+    async fn root_prompt_reaches_controlled_provider_frozen_and_never_title_or_replay() {
+        use crate::chat_conversations::RootPromptUpdateDto;
+        let peer = Peer::start(vec![
+            Some((200, answer("first reply"))),
+            Some((200, answer("Test title"))),
+            Some((200, answer("second reply"))),
+        ]);
+        let app = application(&peer);
+        let owner = owner();
+        let conversation = app.create(&owner.0, &owner.1, "create").expect("create");
+        app.update_root_prompt(
+            &owner.0,
+            &owner.1,
+            RootPromptUpdateDto {
+                schema: "agent-root-prompt-update/v1".to_owned(),
+                expected_revision: 0,
+                text: "saved-root-old-marker".to_owned(),
+            },
+        )
+        .expect("save original");
+        let first = intent("first", 0, "hello");
+        let changing_app = app.clone();
+        let changing_owner = owner.clone();
+        let result = app
+            .submit_with_executor_factory(
+                owner.clone(),
+                conversation.id.clone(),
+                first.clone(),
+                false,
+                move |_| async move {
+                    changing_app
+                        .update_root_prompt(
+                            &changing_owner.0,
+                            &changing_owner.1,
+                            RootPromptUpdateDto {
+                                schema: "agent-root-prompt-update/v1".to_owned(),
+                                expected_revision: 1,
+                                text: "saved-root-new-marker".to_owned(),
+                            },
+                        )
+                        .expect("change after reservation");
+                    Ok(no_tools as fn(ChatToolRequest) -> ChatToolExecution)
+                },
+            )
+            .await
+            .expect("first result");
+        assert_eq!(result.turn.phase, TurnPhase::Completed);
+        {
+            let wire = peer.requests.lock().expect("requests");
+            assert!(wire[0].to_string().contains("saved-root-old-marker"));
+            assert!(!wire[0].to_string().contains("saved-root-new-marker"));
+            assert!(
+                !wire[1].to_string().contains("saved-root-"),
+                "title excludes private instruction"
+            );
+        }
+        app.submit(
+            owner.clone(),
+            conversation.id.clone(),
+            intent("second", result.revision, "next"),
+            false,
+            no_tools,
+        )
+        .await
+        .expect("second");
+        {
+            let wire = peer.requests.lock().expect("requests");
+            assert!(wire[2].to_string().contains("saved-root-new-marker"));
+            assert!(!wire[2].to_string().contains("saved-root-old-marker"));
+        }
+        assert!(
+            !serde_json::to_string(
+                &app.get(&owner.0, &owner.1, &conversation.id)
+                    .expect("public")
+            )
+            .expect("json")
+            .contains("saved-root-")
+        );
+        app.submit(owner, conversation.id, first, false, no_tools)
+            .await
+            .expect("replay");
+        assert_eq!(peer.count(), 3);
+    }
+
+    #[tokio::test]
     async fn automatic_title_uses_first_selected_provider_without_tools_and_replay_never_regenerates()
      {
         let peer = Peer::start(vec![
@@ -570,3 +743,7 @@ mod automatic_title_tests {
         );
     }
 }
+
+#[cfg(all(test, unix))]
+#[path = "conversation_execution_tests.rs"]
+mod execution_tests;

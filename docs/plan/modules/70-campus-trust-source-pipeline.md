@@ -185,3 +185,7 @@ The accepted `source-import/v1` and `source-retrieval/v0` contracts (R11 two-lay
 ## 14. Exit gate
 
 `M60` is standalone-ready when a reviewed historical fixture replays deterministically and every fetch/snapshot/parse/evidence/concurrency failure leaves the accepted baseline unchanged. The bounded lifecycle prerequisite (operational `Suspended`/`Revoked` with monotone `SourceAuthorityRevision`) is implemented, but no live retrieval adapter exists. M60 is accepted only when one real approved public source feeds a first-party product candidate with complete provenance and no arbitrary URL path.
+
+## Local observation profile
+
+The user-authorized S1 local read/import path is governed by [campus-source-workspace](../../contracts/campus-source-workspace.md). M60 owns its immutable observations and separate local review metadata; M90 performs bounded HTTPS acquisition. This profile does not promote the original B3 lease/journal gates, production SourceRevision acceptance or PublishedCanonical. Existing M60 source-import/retrieval contracts retain authority over those production profiles.

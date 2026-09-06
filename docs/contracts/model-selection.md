@@ -14,3 +14,9 @@ Case: MODEL-001. Owner: bounded M50 provider catalog; M30 pins one selection per
 ## Verification
 
 Bounded configuration/secret redaction tests; actual HTTP provider peers proving selected wire model and distinct endpoints; legacy/default compatibility; unknown and old-schema rejection with zero provider IO; interleaved selections and exact saved replay/conflicting IDs across restart; browser selection, persistence, capability text, pending request freeze, keyboard/mobile layout and existing conversation regression.
+
+
+The composer keeps the compact model selector immediately left of Send on one
+non-wrapping row at desktop and mobile widths. Long display names truncate instead
+of moving above Send; both controls retain a 44px target. Layout does not change
+model selection or the selected-model snapshot of an in-flight request.

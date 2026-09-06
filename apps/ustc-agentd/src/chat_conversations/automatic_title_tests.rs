@@ -34,6 +34,7 @@ fn conversation_title_date_is_reserved_and_generation_finishes_atomically_once()
     {
         let mut inner = store.inner.lock().expect("state");
         let mut value = serde_json::to_value(&inner.state).expect("state");
+        value["conversations"][0]["created_date"] = json!("240229");
         value["conversations"][0]["turns"][0]["automatic_title"]["date"] = json!("240229");
         value["conversations"][0]["turns"][0]["automatic_title"]["fallback"] =
             json!(dated_title("240229", &first.message));

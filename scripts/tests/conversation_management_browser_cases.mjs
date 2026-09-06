@@ -19,36 +19,38 @@ export async function checkConversationManagement({evaluate,waitFor,cdp,sessionI
   const shot=async name=>{if(!process.env.UCA_SHELL_SCREENSHOTS)return;await mkdir(process.env.UCA_SHELL_SCREENSHOTS,{recursive:true});const data=await cdp.send('Page.captureScreenshot',{format:'png'},sessionId);await writeFile(join(process.env.UCA_SHELL_SCREENSHOTS,`${name}.png`),Buffer.from(data.data,'base64'));};
   await navigate('chat');await ready();
   const first=await create(),second=await create();
+  const firstDate=(await evaluate(`document.querySelector(${JSON.stringify(row(first))}).textContent`)).slice(0,7);
+  const secondDate=(await evaluate(`document.querySelector(${JSON.stringify(row(second))}).textContent`)).slice(0,7);
   await evaluate(`(()=>{window.__manageFetch=window.fetch;window.__manageWrites=[];window.__manageTrackedFetch=(url,options={})=>{if(String(url).endsWith('/manage'))window.__manageWrites.push(options.body);return window.__manageFetch(url,options);};window.fetch=window.__manageTrackedFetch;})()`);
   try {
     await draft('保留第二段对话的草稿');
     await click(row(first),'right');await waitFor("!document.querySelector('.conversation-menu').hidden",'right-click menu');
-    await key('ArrowDown','ArrowDown',40);assert.equal(await evaluate('document.activeElement.dataset.conversationMenu'),'delete');
+    await key('End','End',35);assert.equal(await evaluate('document.activeElement.dataset.conversationMenu'),'delete');
     await key('Escape','Escape',27);assert.equal(await evaluate('document.activeElement.dataset.conversationMenuId'),first);
     await evaluate(`document.querySelector(${JSON.stringify(row(first))}).focus()`);await key('F10','F10',121,8);
     await click('[data-conversation-menu="rename"]');
-    assert.equal(await evaluate("document.querySelector('#conversation-rename-title').value"),await evaluate(`document.querySelector(${JSON.stringify(row(first))}).textContent`));
+    assert.equal(await evaluate("document.querySelector('#conversation-rename-title').value"),(await evaluate(`document.querySelector(${JSON.stringify(row(first))}).textContent`)).slice(7));
     await shot('conversation-management-desktop');await click('[data-manage-dialog="cancel"]');assert.equal(await evaluate('window.__manageWrites.length'),0);
     await choose(first,'rename',true);await evaluate("document.querySelector('#conversation-rename-title').value='学'.repeat(65)");await click('[data-manage-dialog="confirm"]');
     assert.equal(await evaluate("document.querySelector('.conversation-manage-dialog').open"),true);assert.equal(await evaluate('window.__manageWrites.length'),0);await click('[data-manage-dialog="cancel"]');
     await rename(first,'  学期安排 <script>  ');await ready();
-    assert.equal(await evaluate(`document.querySelector(${JSON.stringify(row(first))}).textContent`),'学期安排 <script>');
+    assert.equal(await evaluate(`document.querySelector(${JSON.stringify(row(first))}).textContent`),firstDate+'学期安排 <script>');
     assert.equal(await evaluate("document.querySelector('#chat-input').value"),'保留第二段对话的草稿');assert.equal(await evaluate("document.querySelector('.conversation-open[aria-current=true]').dataset.conversationId"),second);
-    const initial=JSON.parse(await evaluate('window.__manageWrites[0]'));assert.equal(initial.schema,'chat-conversation-manage/v1');assert.equal(initial.action.title,'  学期安排 <script>  ');
+    const initial=JSON.parse(await evaluate('window.__manageWrites[0]'));assert.equal(initial.schema,'chat-conversation-manage/v2');assert.equal(initial.action.title,'  学期安排 <script>  ');
     pass('MANAGE-right-click-keyboard-dialog-cancel-title-validation-and-other-draft');
 
     // Hold an actual old list snapshot across an accepted rename.
     await evaluate(`window.__manageHold=true;window.fetch=async(url,options={})=>{const response=await window.__manageTrackedFetch(url,options);if(String(url)==='/api/v1/agent/conversations'&&(!options.method||options.method==='GET')&&window.__manageHold){window.__manageHold=false;await new Promise(resolve=>{window.__manageReleaseList=resolve;});}return response;};`);
     await click('#conversation-refresh');await waitFor("typeof window.__manageReleaseList==='function'",'old list held');
     await rename(second,'当前对话的新名称');await ready();await evaluate('window.__manageReleaseList()');await evaluate('new Promise(resolve=>setTimeout(resolve,0))');
-    assert.equal(await evaluate(`document.querySelector(${JSON.stringify(row(second))}).textContent`),'当前对话的新名称');assert.equal(await evaluate("document.querySelector('#chat-input').value"),'保留第二段对话的草稿');
+    assert.equal(await evaluate(`document.querySelector(${JSON.stringify(row(second))}).textContent`),secondDate+'当前对话的新名称');assert.equal(await evaluate("document.querySelector('#chat-input').value"),'保留第二段对话的草稿');
     await evaluate('window.fetch=window.__manageTrackedFetch');pass('MANAGE-current-rename-preserves-draft-stale-list-cannot-rollback');
 
     await evaluate(`window.fetch=async(url,options={})=>{const response=await window.__manageTrackedFetch(url,options);if(String(url).endsWith('/manage'))throw Error('controlled committed manage response lost');return response;};`);
     await rename(first,'网络恢复后的名称');await waitFor("document.querySelector('#conversation-retry-manage')&&!document.querySelector('#conversation-retry-manage').disabled",'uncertain management');
     assert.equal(await evaluate("document.querySelector('#chat-send').disabled&&document.querySelector('#chat-model-select').disabled&&[...document.querySelectorAll('.conversation-menu-trigger')].every(el=>el.disabled)"),true);
     const lost=await evaluate('window.__manageWrites.at(-1)');await evaluate('window.fetch=window.__manageTrackedFetch');await click('#conversation-retry-manage');await ready();
-    assert.equal(await evaluate('window.__manageWrites.at(-1)'),lost);assert.equal(await evaluate(`document.querySelector(${JSON.stringify(row(first))}).textContent`),'网络恢复后的名称');
+    assert.equal(await evaluate('window.__manageWrites.at(-1)'),lost);assert.equal(await evaluate(`document.querySelector(${JSON.stringify(row(first))}).textContent`),firstDate+'网络恢复后的名称');
     pass('MANAGE-unknown-outcome-locks-writes-exact-explicit-retry');
 
     // A second client deletes after the lost rename; replayed historical rename must not resurrect it.
@@ -83,7 +85,7 @@ export async function checkConversationManagement({evaluate,waitFor,cdp,sessionI
     assert.equal(await evaluate(`document.querySelector(${JSON.stringify(row(third))})===null`),true);assert.equal(await evaluate("document.querySelector('#chat-input').value"),'删除其他对话后仍保留');
     await choose(second,'delete');await click('[data-manage-dialog="confirm"]');await ready();
     assert.equal(await evaluate("document.querySelector('#chat-input').value"),'');assert.equal(await evaluate("document.querySelectorAll('.chat-message').length"),0);
-    await evaluate('window.__manageReload=true');await cdp.send('Page.reload',{},sessionId);await waitFor("window.__manageReload===undefined&&!document.querySelector('#chat-send').disabled",'reload management persistence');
+    await evaluate('window.__manageReload=true');await cdp.send('Page.reload',{},sessionId);await waitFor("window.__manageReload===undefined&&document.querySelector('#conversation-history-status')&&!document.querySelector('#chat-send').disabled",'reload management persistence');
     for(const id of [first,second,third])assert.equal(await evaluate(`document.querySelector(${JSON.stringify(row(id))})===null`),true);
     pass('MANAGE-delete-cancel-other-preserves-draft-current-clears-and-reload');
 

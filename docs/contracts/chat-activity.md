@@ -3,7 +3,7 @@
 - Contract: `CHAT-ACTIVITY-001 / chat-conversation-activity/v1`.
 - Owner: M30 observer and application projection; M10 transports, browser renders.
 - Scope: observable provider/tool lifecycle for the existing saved conversation;
-  no model-token stream, hidden reasoning, cancellation or durable Harness claim.
+  answer-token streaming and explicit cancellation under the extension below; no hidden reasoning or durable Harness claim.
 - Acceptance: `CHAT-005`, targeted observer, HTTP and browser cases.
 
 ## Authority and reference
@@ -94,3 +94,59 @@ The closed safe tool category also includes `plugin_tool` for actual package-bac
 MCP execution or Skill context reads. The exact private model-visible name stays
 in the application/tool transcript; public activity and saved traces use the fixed
 category. Existing sequence, owner, result and non-retry rules apply unchanged.
+
+
+## STREAM-CANCEL-001 extension
+
+This extension supersedes the v1 sequence/cache-only/absent-stop descriptions above.
+The saved-dialogue activity endpoint now returns `chat-conversation-activity/v2`:
+the existing fields plus `partial_answer` (at most 16 KiB UTF-8). Running sequence
+is monotonic below 4294967295; terminal sequence is 4294967295. Tool/model steps
+interrupted while pending project `status=interrupted`, meaning their effect outcome
+must be checked, never that a write was rolled back. Owner authentication is the
+same as the saved conversation.
+
+The provider adapter requests true Chat Completions SSE for bounded chat runs,
+consumes complete SSE frames across arbitrary network chunk boundaries, and exposes
+only content deltas. It requires a valid assistant role, single index-zero choice,
+complete stop/tool_calls termination and DONE sentinel. Accumulated tool fragments
+pass the original complete-message parser and complete-batch argument validation
+before any executor. Response bytes, text, calls, arguments, context and absolute
+HTTP timeout remain bounded. Complete JSON responses remain supported for compatible
+peers without synthesizing token animation; title generation keeps its JSON path.
+
+`POST /api/v1/agent/conversations/{id}/cancel` accepts only
+`{schema:"chat-conversation-cancel/v1",request_id}`, with the existing ASCII request ID,
+JSON, protocol-major, Host/Origin and authenticated owner admission. A mismatched
+current request gives conflict; it cannot cancel the next turn. An accepted stop
+returns the current activity snapshot, not a claim that effects were rolled back.
+A terminal turn returns its snapshot without another effect. An admission-to-tracker
+gap returns in-progress for deliberate retry. Cancellation drops the pending
+factory/provider/tool/title future, checks before every new provider/tool call,
+and persists the terminal error `chat_cancelled`. Disconnection alone still does
+not stop a run. Already committed local/remote effects must be checked independently.
+
+After each completed tool and at termination, the application saves a bounded private
+checkpoint containing observed steps, accumulated answer text, and up to four exact
+validated tool-result envelopes (64 KiB each), including any product receipt IDs.
+These envelopes are retained for evidence; they are never replayed as new writes,
+new grants, or new prompt authority. Activity exposes only safe step categories and
+answer text. Tool outputs are not sent through activity. Every token is memory-only;
+a crash may lose text since the last bounded checkpoint. Checkpoint failure stops
+further work and fails closed without claiming prior effects were absent.
+
+Conversation store version 3 adds an optional closed private progress field. Version
+1/2 stores are accepted with absent progress; the first checkpoint upgrades to 3.
+Root-prompt changes never downgrade a version-3 store. Version/progress shape,
+bounds, tool-result envelope, step IDs and closed enums are revalidated on open.
+The running capacity reserve is 512 KiB for terminal text plus bounded checkpoints.
+Restart converts running turns to interrupted and preserves checkpoints; it performs
+zero provider/tool redispatch. Browser refresh may reattach read-only polling to the
+saved exact request. A later user request is new intent, not automatic write replay.
+
+Verification: `cargo test --locked -p ustc-agentd --lib streaming`,
+`cargo test --locked -p ustc-agentd --lib execution_tests`, and the existing
+activity/conversation tests. The local HTTP SSE peer withholds its final frame until
+the client acknowledges the first delta; cancellation tests prove a pending tool
+future is dropped, wrong-owner/stale requests cannot cancel, terminal retries do not
+execute, and restart retains completed results.

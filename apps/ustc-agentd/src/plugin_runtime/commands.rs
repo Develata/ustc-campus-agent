@@ -24,6 +24,9 @@ impl PluginRuntime {
             .map_err(|_| PluginError::InvalidRequest)?;
         let mut state = self.state.lock().await;
         state.check()?;
+        if state.authority.updates.contains_request(&identity) {
+            return Err(PluginError::Conflict);
+        }
         let grant_id = GrantCommandId::parse(format!("grant-cmd:{identity}"))
             .map_err(|_| PluginError::InvalidRequest)?;
         if matches!(&request.intent, PluginIntentDto::Grant { .. }) {
@@ -82,6 +85,24 @@ impl PluginRuntime {
                 let pin = package.configuration.package_pin();
                 if pin.catalog_revision().as_str() != catalog_revision
                     || pin.package_digest().as_str() != package_digest
+                {
+                    return Err(PluginError::Conflict);
+                }
+                // Updating retains installation identity, so version-derived IDs alone
+                // cannot establish uniqueness of the currently installed exact pin.
+                if state
+                    .authority
+                    .installations
+                    .list_owned(tenant, user)
+                    .iter()
+                    .any(|existing| {
+                        existing.package_pin() == pin
+                            && !matches!(
+                                existing.state(),
+                                ManagedInstallationState::Revoked
+                                    | ManagedInstallationState::Uninstalled
+                            )
+                    })
                 {
                     return Err(PluginError::Conflict);
                 }
@@ -201,11 +222,9 @@ impl PluginRuntime {
                         // Transport activation is rebuildable. A failure keeps execution denied.
                         if view.accepted
                             && let Some(probe) = state.probes.get_mut(&id)
-                            && let (Some(client), Some(digest)) =
-                                (&mut probe.client, &probe.transport_digest)
                         {
                             // Cache failure cannot turn the accepted durable receipt into a rejection.
-                            let _ = client.activate_reviewed(digest);
+                            let _ = probe::activate_probe(probe);
                         }
                         return Ok(view);
                     }
@@ -236,9 +255,15 @@ impl PluginRuntime {
         candidate: &InstallationId,
         package: &RuntimePackage,
     ) -> Result<(), PluginError> {
-        let tool_count = |package: &RuntimePackage| match &package.component {
-            RuntimeComponent::Skill { .. } => 1,
-            RuntimeComponent::Mcp { tools, .. } => tools.len(),
+        let tool_count = |package: &RuntimePackage| {
+            package
+                .components()
+                .iter()
+                .map(|(_, component)| match component {
+                    RuntimeComponent::Skill { .. } => 1,
+                    RuntimeComponent::Mcp { tools, .. } => tools.len(),
+                })
+                .sum::<usize>()
         };
         let mut total = tool_count(package);
         for installation in state.installations.list_owned(tenant, user) {

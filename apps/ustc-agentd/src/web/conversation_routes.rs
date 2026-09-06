@@ -10,13 +10,21 @@ pub(super) struct CreateIntent {
     request_id: String,
 }
 
-fn owner(state: &WebState) -> Result<(TenantId, UserId), ConversationError> {
-    let composition = state.lock().map_err(|_| ConversationError::Unavailable)?;
-    // Explicit demo composition identity. No client field/header can select a peer.
-    Ok((
-        composition.current_tenant_id.clone(),
-        composition.current_user_id.clone(),
-    ))
+// Preserve one already-built HTTP rejection at this thin adapter boundary.
+#[allow(clippy::result_large_err)]
+fn owner(state: &WebState, headers: &HeaderMap) -> Result<(TenantId, UserId), Response> {
+    account_routes::owner(state, headers)
+}
+
+fn owned(
+    state: &WebState,
+    headers: &HeaderMap,
+    operation: impl FnOnce(TenantId, UserId) -> Response,
+) -> Response {
+    match owner(state, headers) {
+        Ok((tenant, user)) => operation(tenant, user),
+        Err(response) => response,
+    }
 }
 
 fn application(state: &WebState) -> Result<&ConversationApplication, ConversationError> {
@@ -59,7 +67,9 @@ pub(super) async fn list(State(state): State<WebState>, headers: HeaderMap) -> R
     {
         return compatibility_response(compatibility);
     }
-    respond(owner(&state).and_then(|(tenant, user)| application(&state)?.list(&tenant, &user)))
+    owned(&state, &headers, |tenant, user| {
+        respond(application(&state).and_then(|app| app.list(&tenant, &user)))
+    })
 }
 
 pub(super) async fn create(
@@ -80,11 +90,9 @@ pub(super) async fn create(
     {
         return failure(ConversationError::InvalidIntent);
     }
-    respond(
-        owner(&state).and_then(|(tenant, user)| {
-            application(&state)?.create(&tenant, &user, &intent.request_id)
-        }),
-    )
+    owned(&state, &headers, |tenant, user| {
+        respond(application(&state).and_then(|app| app.create(&tenant, &user, &intent.request_id)))
+    })
 }
 
 pub(super) async fn get_one(
@@ -100,7 +108,9 @@ pub(super) async fn get_one(
     let Ok(AxumPath(id)) = path else {
         return failure(ConversationError::InvalidIntent);
     };
-    respond(owner(&state).and_then(|(tenant, user)| application(&state)?.get(&tenant, &user, &id)))
+    owned(&state, &headers, |tenant, user| {
+        respond(application(&state).and_then(|app| app.get(&tenant, &user, &id)))
+    })
 }
 
 pub(super) async fn submit(
@@ -120,9 +130,9 @@ pub(super) async fn submit(
     if !has_application_json_content_type(&headers) {
         return failure(ConversationError::InvalidIntent);
     }
-    let owner = match owner(&state) {
+    let owner = match owner(&state, &headers) {
         Ok(owner) => owner,
-        Err(error) => return failure(error),
+        Err(response) => return response,
     };
     let application = match application(&state) {
         Ok(application) => application,
@@ -132,7 +142,10 @@ pub(super) async fn submit(
         opportunity_confirmation(&headers),
         OpportunityConfirmationDto::Confirmed
     );
-    let executor_state = state.clone();
+    let mut executor_state = state.clone();
+    executor_state.course_consent = confirmed;
+    executor_state.execution_headers = Some(headers.clone());
+    let executor_owner = owner.clone();
     respond(
         application
             .submit_with_executor_factory(
@@ -141,7 +154,12 @@ pub(super) async fn submit(
                 intent,
                 confirmed,
                 move |tool_calling| async move {
-                    plugin_routes::WebChatExecutor::new(executor_state, tool_calling).await
+                    plugin_routes::WebChatExecutor::new(
+                        executor_state,
+                        tool_calling,
+                        executor_owner,
+                    )
+                    .await
                 },
             )
             .await,
@@ -161,9 +179,9 @@ pub(super) async fn activity(
     let Ok(AxumPath(id)) = path else {
         return failure(ConversationError::InvalidIntent);
     };
-    respond(
-        owner(&state).and_then(|(tenant, user)| application(&state)?.activity(&tenant, &user, &id)),
-    )
+    owned(&state, &headers, |tenant, user| {
+        respond(application(&state).and_then(|app| app.activity(&tenant, &user, &id)))
+    })
 }
 
 pub(super) async fn manage(
@@ -183,8 +201,39 @@ pub(super) async fn manage(
     if !has_application_json_content_type(&headers) {
         return failure(ConversationError::InvalidIntent);
     }
-    respond(
-        owner(&state)
-            .and_then(|(tenant, user)| application(&state)?.manage(&tenant, &user, &id, intent)),
-    )
+    owned(&state, &headers, |tenant, user| {
+        respond(application(&state).and_then(|app| app.manage(&tenant, &user, &id, intent)))
+    })
+}
+
+pub(super) async fn root_prompt(State(state): State<WebState>, headers: HeaderMap) -> Response {
+    if let Err(compatibility) =
+        dispatch_with_protocol_major(presented_protocol_major(&headers), || ())
+    {
+        return compatibility_response(compatibility);
+    }
+    owned(&state, &headers, |tenant, user| {
+        respond(application(&state).and_then(|app| app.root_prompt(&tenant, &user)))
+    })
+}
+
+pub(super) async fn update_root_prompt(
+    State(state): State<WebState>,
+    headers: HeaderMap,
+    body: Result<Json<crate::chat_conversations::RootPromptUpdateDto>, JsonRejection>,
+) -> Response {
+    if let Err(compatibility) =
+        dispatch_with_protocol_major(presented_protocol_major(&headers), || ())
+    {
+        return compatibility_response(compatibility);
+    }
+    let Ok(Json(intent)) = body else {
+        return failure(ConversationError::InvalidIntent);
+    };
+    if !has_application_json_content_type(&headers) {
+        return failure(ConversationError::InvalidIntent);
+    }
+    owned(&state, &headers, |tenant, user| {
+        respond(application(&state).and_then(|app| app.update_root_prompt(&tenant, &user, intent)))
+    })
 }

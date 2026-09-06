@@ -1,8 +1,13 @@
 //! Owner-scoped durable transcripts around the bounded Chat application loop.
 mod automatic_title;
 mod management;
+mod organization;
+mod progress;
+use organization::ConversationOrganizationDto;
 mod persistence;
+mod root_prompt;
 pub(crate) use management::{ConversationManageIntentDto, ConversationManageResultDto};
+pub(crate) use root_prompt::{RootPromptDto, RootPromptUpdateDto};
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -70,6 +75,7 @@ pub(crate) struct ConversationSummaryDto {
     pub(crate) title: String,
     pub(crate) revision: u64,
     pub(crate) turn_count: usize,
+    pub(crate) organization: ConversationOrganizationDto,
 }
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct ConversationListDto {
@@ -83,6 +89,7 @@ pub(crate) struct ConversationDto {
     pub(crate) title: String,
     pub(crate) revision: u64,
     pub(crate) turns: Vec<ConversationTurnDto>,
+    pub(crate) organization: ConversationOrganizationDto,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -119,6 +126,8 @@ pub(crate) enum BeginTurn {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct StoredTurn {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    progress: Option<crate::chat_activity::ChatProgress>,
     view: ConversationTurnDto,
     digest: String,
     profile: Option<String>,
@@ -142,6 +151,10 @@ struct StoredConversation {
     deleted: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     explicit_title: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    created_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    organization: Option<ConversationOrganizationDto>,
 }
 fn is_false(value: &bool) -> bool {
     !value
@@ -157,6 +170,7 @@ impl StoredConversation {
             title: self.title.clone(),
             revision: self.revision,
             turns: self.turns.iter().map(|turn| turn.view.clone()).collect(),
+            organization: self.organization_view(),
         }
     }
     fn result(&self, turn: &StoredTurn) -> ConversationTurnResultDto {
@@ -173,6 +187,8 @@ impl StoredConversation {
 struct State {
     version: u32,
     conversations: Vec<StoredConversation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    root_prompts: Option<Vec<root_prompt::StoredRootPrompt>>,
 }
 struct Inner {
     state: State,
@@ -224,23 +240,33 @@ impl ConversationStore {
         if inner.poisoned {
             return Err(ConversationError::Unavailable);
         }
+        let mut conversations: Vec<_> = inner
+            .state
+            .conversations
+            .iter()
+            .filter(|c| c.owned_by(tenant, user) && !c.deleted)
+            .rev()
+            .map(|c| ConversationSummaryDto {
+                id: c.id.clone(),
+                title: c.title.clone(),
+                revision: c.revision,
+                turn_count: c.turns.len(),
+                organization: c.organization_view(),
+            })
+            .collect();
+        // Stable sort retains the original reverse creation order for same-day ties.
+        conversations.sort_by(|a, b| {
+            b.organization
+                .pinned
+                .cmp(&a.organization.pinned)
+                .then_with(|| b.organization.date.cmp(&a.organization.date))
+        });
         Ok(ConversationListDto {
             schema: "chat-conversation-list/v1",
-            conversations: inner
-                .state
-                .conversations
-                .iter()
-                .filter(|c| c.owned_by(tenant, user) && !c.deleted)
-                .rev()
-                .map(|c| ConversationSummaryDto {
-                    id: c.id.clone(),
-                    title: c.title.clone(),
-                    revision: c.revision,
-                    turn_count: c.turns.len(),
-                })
-                .collect(),
+            conversations,
         })
     }
+
     pub(crate) fn get(
         &self,
         tenant: &TenantId,
@@ -334,6 +360,8 @@ impl ConversationStore {
             management: Vec::new(),
             deleted: false,
             explicit_title: false,
+            created_date: Some(crate::conversation_title::current_date()),
+            organization: None,
         };
         let view = conversation.view();
         let mut next = inner.state.clone();
@@ -372,6 +400,7 @@ impl ConversationStore {
             return Err(ConversationError::InvalidIntent);
         }
         let mut request = ChatRequestDto {
+            saved_root_prompt: None,
             schema: if explicit_model {
                 CHAT_REQUEST_SCHEMA_V3
             } else {
@@ -459,6 +488,9 @@ impl ConversationStore {
             return Err(ConversationError::Capacity);
         }
         request.messages = history(current, &intent.message, profile.as_deref());
+        request.saved_root_prompt = root_prompt::find(&inner.state, tenant, user)
+            .filter(|prompt| !prompt.text.is_empty())
+            .map(|prompt| prompt.text.clone());
         validate_chat_request(request.clone(), confirmed)
             .map_err(ConversationError::InvalidChat)?;
         // Exact terminal replay has already returned; model availability gates only new effects.
@@ -472,13 +504,17 @@ impl ConversationStore {
             .ok_or(ConversationError::Capacity)?;
         let title_request = (conversation.turns.is_empty() && !conversation.explicit_title)
             .then(|| intent.message.clone());
-        let automatic_title = title_request
-            .as_deref()
-            .map(automatic_title::AutomaticTitle::first_message);
+        let automatic_title = title_request.as_deref().map(|message| {
+            automatic_title::AutomaticTitle::first_message(
+                message,
+                conversation.organization_view().date,
+            )
+        });
         if let Some(title) = &automatic_title {
             conversation.title = title.title().to_owned();
         }
         conversation.turns.push(StoredTurn {
+            progress: None,
             view: ConversationTurnDto {
                 request_id: intent.request_id,
                 user: intent.message,
@@ -655,7 +691,8 @@ fn history(
 }
 fn validate_state(state: &State) -> Result<(), ConversationError> {
     use std::collections::{BTreeMap, BTreeSet};
-    if state.version != 1
+    root_prompt::validate(state)?;
+    if !matches!(state.version, 1..=3)
         || state.conversations.len() > 1000
         || state
             .conversations
@@ -678,7 +715,10 @@ fn validate_state(state: &State) -> Result<(), ConversationError> {
             || !ids.insert(&c.id)
             || !valid_request_id(&c.create_request)
             || !creates.insert((&c.tenant, &c.user, &c.create_request))
-            || c.title.len() > 192
+            || c.title.len() > 199
+            || c.created_date
+                .as_deref()
+                .is_some_and(|d| !crate::conversation_title::valid_date(d))
             || c.turns.len() > MAX_TURNS
         {
             return Err(ConversationError::Unavailable);
@@ -694,7 +734,9 @@ fn validate_state(state: &State) -> Result<(), ConversationError> {
         let mut revision = 0;
         let mut management = management::Replay::new(c)?;
         for (index, t) in c.turns.iter().enumerate() {
-            if !valid_request_id(&t.view.request_id)
+            if (state.version < 3 && t.progress.is_some())
+                || t.progress.as_ref().is_some_and(|p| !p.valid())
+                || !valid_request_id(&t.view.request_id)
                 || !requests.insert(&t.view.request_id)
                 || t.view.user.trim().is_empty()
                 || t.view.user.len() > 4096
@@ -829,6 +871,7 @@ fn valid_error(error: &str, phase: TurnPhase) -> bool {
         return error == "conversation_interrupted";
     }
     [
+        ChatError::Cancelled,
         ChatError::InvalidChatRequest,
         ChatError::ProviderNotConfigured,
         ChatError::ProviderUnauthorized,

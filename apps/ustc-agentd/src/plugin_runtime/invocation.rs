@@ -108,7 +108,14 @@ impl PluginRuntime {
         )?;
         let argument =
             canonical_arguments(&arguments.to_string()).map_err(|_| PluginError::InvalidRequest)?;
-        let (mut run, mut record, intent) = prepare(&current, &grant, package, tool, argument)?;
+        let (mut run, mut record, intent) = prepare(
+            &current,
+            &grant,
+            package,
+            &frozen.component_id,
+            tool,
+            argument,
+        )?;
         if state.authority.runs.len() >= 1024 {
             return Err(PluginError::Capacity);
         }
@@ -116,13 +123,24 @@ impl PluginRuntime {
         next.runs.push(record.clone());
         state.commit(next)?;
         // This mutex is the owner transaction: disable/revoke linearizes before or after this admitted call.
-        let outcome = match &package.component {
+        let outcome = match package
+            .component(&frozen.component_id)
+            .ok_or(PluginError::Denied)?
+        {
             RuntimeComponent::Skill { source } => super::skill_context::read(source, &arguments),
             RuntimeComponent::Mcp { .. } => {
                 let probe = state
                     .probes
                     .get_mut(current.installation_id())
                     .ok_or(PluginError::NotReady)?;
+                let probe = if probe.component_id == frozen.component_id {
+                    probe
+                } else {
+                    probe
+                        .additional
+                        .get_mut(&frozen.component_id)
+                        .ok_or(PluginError::NotReady)?
+                };
                 let wire = probe
                     .wire_names
                     .get(name)
@@ -209,11 +227,16 @@ fn prepare(
     current: &InstallationSnapshot,
     grant: &GrantSnapshot,
     package: &RuntimePackage,
+    component_id: &ComponentId,
     tool: &CatalogToolDefinition,
     arguments: CanonicalArgumentValueV0,
 ) -> Result<(AgentRun, JournalRun, EffectIntent), PluginError> {
     let pin = current.package_pin();
-    let component = pin.components().first().ok_or(PluginError::Unsupported)?;
+    let component = pin
+        .components()
+        .iter()
+        .find(|component| component.component_id() == component_id)
+        .ok_or(PluginError::Unsupported)?;
     let source = SourcePolicyIdentity {
         id: SourcePolicyId::parse("source-policy:reviewed-package")
             .map_err(|_| PluginError::Unavailable)?,
@@ -247,7 +270,9 @@ fn prepare(
             tool: Some(tool.clone()),
         }),
     };
-    let installation = current.to_resolver_snapshot().ok_or(PluginError::Denied)?;
+    let installation = current
+        .to_resolver_snapshot_for_component(component_id)
+        .ok_or(PluginError::Denied)?;
     let grant = grant.to_resolver_snapshot();
     let policy = InvocationPolicySnapshot {
         snapshot_id: PolicySnapshotId::parse("policy-snapshot:package-public-read-v1")

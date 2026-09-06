@@ -8,11 +8,14 @@
 
 #![forbid(unsafe_code)]
 
+mod accounts;
 mod affairs_fixture;
 mod affairs_invocation;
 mod affairs_persistence;
 mod affairs_publication;
 mod agent_chat;
+mod calendar_application;
+mod calendar_workspace;
 mod change_fixture;
 mod change_invocation;
 mod change_persistence;
@@ -33,6 +36,7 @@ mod opportunity_authority;
 mod opportunity_fixture;
 mod opportunity_persistence;
 mod opportunity_use_case;
+pub mod source_search;
 mod web;
 
 pub use web::web_router;
@@ -71,7 +75,9 @@ use ustc_campus_agent_core::request_context::{
     ActorReference, CapabilityDisposition, ClientProvenance, IdempotencyKey,
 };
 use ustc_campus_agent_core::session_port::{SessionHistoryReadPort, SessionRepositoryError};
-use ustc_campus_agent_simple_calendar::{CalendarError, CalendarItem, CalendarStore};
+use ustc_campus_agent_simple_calendar::CalendarStore;
+#[cfg(test)]
+use ustc_campus_agent_simple_calendar::{CalendarError, CalendarItem};
 
 const FRAMED_CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -504,23 +510,9 @@ impl AffairsComposition {
         m10.submit(request, &mut ports, now_ms)
     }
 
+    #[cfg(test)]
     pub(crate) fn calendar_items(&mut self) -> Result<Vec<CalendarItem>, CalendarError> {
         Ok(self.calendar.items()?.to_vec())
-    }
-
-    pub(crate) fn record_calendar_item(
-        &mut self,
-        title: &str,
-        scheduled_for: Option<&str>,
-    ) -> Result<CalendarItem, CalendarError> {
-        self.calendar.record(title, scheduled_for)
-    }
-
-    pub(crate) fn delete_calendar_item(
-        &mut self,
-        item_id: &str,
-    ) -> Result<CalendarItem, CalendarError> {
-        self.calendar.delete(item_id)
     }
 
     /// Publishes the reviewed demo procedure through M10 admission, durable

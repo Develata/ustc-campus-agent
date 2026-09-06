@@ -1,19 +1,21 @@
-.composer-controls { display: flex; align-items: center; gap: 8px; min-width: 0; justify-content: flex-end; }
-.chat-model-picker { position: relative; min-width: 0; max-width: 280px; }
-.chat-model-picker select { display: block; width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 8px 26px 8px 10px; appearance: none; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 500; text-overflow: ellipsis; cursor: pointer; }
+.composer-controls { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; max-width: calc(100% - 56px); margin-inline-start: auto; justify-content: flex-end; }
+.chat-model-picker { position: relative; flex: 0 1 auto; min-width: 44px; max-width: 240px; }
+.chat-model-picker select { display: block; width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 8px 26px 8px 10px; appearance: none; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; text-align: right; text-align-last: right; cursor: pointer; }
 .chat-model-picker select:hover:not(:disabled) { background: var(--surface); }
 .chat-model-picker select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .chat-model-picker select:disabled { opacity: .6; cursor: default; }
 .chat-model-picker option { background: var(--surface-strong); color: var(--ink); }
 .model-chevron { position: absolute; right: 8px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); pointer-events: none; color: var(--muted); }
+.composer-toolbar { flex-wrap: nowrap; }
 .composer-toolbar #chat-options-toggle { flex-shrink: 0; }
+.composer-controls #chat-send { flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
 .chat-model-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .chat-model-feedback p:not(.visually-hidden) { flex: 1 1 180px; margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .chat-model-feedback button { flex-shrink: 0; color: var(--accent); }
 @media (max-width: 600px) {
   .composer-toolbar { gap: 8px; }
-  .composer-controls { flex: 1; gap: 4px; }
-  .chat-model-picker { max-width: min(280px, calc(100% - 48px)); }
+  .composer-controls { flex: 0 1 auto; gap: 6px; }
+  .chat-model-picker { max-width: min(240px, calc(100% - 50px)); }
   .composer-toolbar #chat-options-toggle { position: relative; width: 44px; justify-content: center; padding: 8px; }
   .composer-toolbar #chat-options-toggle > span:not(#options-indicator) { display: none; }
   .composer-toolbar #options-indicator { position: absolute; right: 2px; top: 0; font-size: 9px; }
