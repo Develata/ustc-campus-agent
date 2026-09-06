@@ -6,6 +6,26 @@ export async function checkCalendarProposals({evaluate, waitFor, navigate, click
   const root = '#calendar-proposals';
   await waitFor(`document.querySelector('${root} summary').textContent.includes('已保存')`, 'calendar loaded');
   await evaluate(`document.querySelector('${root} > details').open = true`);
+  // Month selection is read-only, Gregorian and independent of the browser timezone.
+  for (const [month, days] of [['2024-02',29],['2025-02',28],['2026-04',30],['2026-12',31]]) {
+    await field(`${root} input[type=month]`, month);
+    await evaluate(`document.querySelector('${root} input[type=month]').dispatchEvent(new Event('change',{bubbles:true}))`);
+    assert.equal(await evaluate(`document.querySelectorAll('${root} [data-calendar-day^="${month}"]').length`), days);
+  }
+  await click(`${root} [aria-label="下个月"]`);
+  assert.equal(await evaluate(`document.querySelector('${root} input[type=month]').value`), '2027-01');
+  await click(`${root} [data-calendar-day="2027-01-15"]`);
+  await click(`${root} .calendar-agenda-heading button`);
+  assert.equal(await evaluate(`document.querySelector('${root} input[name=calendar-time]').value`), '2027-01-15T09:00');
+  await field(`${root} input[name=calendar-title]`, '保留草稿');
+  await evaluate(`window.UcaCalendarProposals.mount(document.querySelector('${root}')).refresh()`);
+  assert.equal(await evaluate(`document.querySelector('${root} input[type=month]').value`), '2027-01');
+  assert.equal(await evaluate(`document.querySelector('${root} input[name=calendar-title]').value`), '保留草稿');
+  assert.equal(await evaluate(`window.UcaCalendarMonth.dayKey('2026-09-08T20:00:00Z')`), '2026-09-09');
+  await click(`${root} [aria-label="查看无日期事项"]`);
+  await click(`${root} .calendar-agenda-heading button`);
+  assert.equal(await evaluate(`document.querySelector('${root} input[type=checkbox]').checked`), true);
+  pass('CALENDAR-month-length-leap-year-year-boundary-draft-and-date-prefill');
   await evaluate(`document.querySelector('${root} .calendar-proposals-manual').open = true`);
   const title = '日期提案浏览器验收';
   await field(`${root} input[name=calendar-title]`, title);
@@ -19,14 +39,24 @@ export async function checkCalendarProposals({evaluate, waitFor, navigate, click
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('${root} [data-calendar-item-id]')).some(e=>e.textContent.includes('${title}'))`), false);
   pass('CALENDAR-proposal-previews-date-without-effect');
   // Simulate the response disappearing after the real confirmation committed.
-  await evaluate(`(() => {const original=window.fetch.bind(window);window.__calendarFetch=original;window.__calendarConfirmPosts=0;window.fetch=async(url,options={})=>{const confirm=String(url).endsWith('/confirm')&&options.method==='POST';if(confirm)window.__calendarConfirmPosts++;const response=await original(url,options);if(confirm&&!window.__calendarLost){window.__calendarLost=true;await response.arrayBuffer();throw Error('test lost durable reply');}return response;};})()`);
+  await evaluate(`(() => {const original=window.fetch.bind(window);window.__calendarFetch=original;window.__calendarConfirmPosts=0;window.fetch=async(url,options={})=>{if(window.__calendarBlockReads&&String(url)==='/api/v1/calendar/proposals'&&options.method!=='POST')throw Error('test unavailable readback');const confirm=String(url).endsWith('/confirm')&&options.method==='POST';if(confirm)window.__calendarConfirmPosts++;const response=await original(url,options);if(confirm&&!window.__calendarLost){window.__calendarLost=true;window.__calendarBlockReads=true;await response.arrayBuffer();throw Error('test lost durable reply');}return response;};})()`);
   await evaluate(`(() => {const button=document.querySelector(${JSON.stringify(card+' button')});button.click();button.click();})()`);
+  await waitFor(`window.__calendarBlockReads===true && document.querySelector('${root}').getAttribute('aria-busy')==='false'`, 'unknown confirmation result');
+  assert.equal(await evaluate(`window.UcaCalendarProposals.mount(document.querySelector('${root}')).destroy()`), false);
+  await navigate('plugins/calendar');
+  assert.equal(await evaluate(`document.querySelector('#calendar-page .calendar-agenda-heading button').disabled`), true);
+  assert.equal(await evaluate(`document.querySelector('#calendar-page button[type=submit]').disabled`), true);
+  await evaluate('window.__calendarBlockReads=false');
+  await navigate('chat');
+  await evaluate(`window.UcaCalendarProposals.mount(document.querySelector('${root}')).refresh()`);
   await waitFor(`Array.from(document.querySelectorAll('${root} [data-calendar-item-id]')).some(e=>e.textContent.includes('${title}'))`, 'confirmed readback');
   assert.equal(await evaluate('window.__calendarConfirmPosts'), 1);
   await evaluate('window.fetch=window.__calendarFetch');
+  assert.equal(await evaluate(`document.querySelector('#calendar-page .calendar-agenda-heading button').disabled`), false);
+  assert.equal(await evaluate(`document.querySelector('#calendar-page button[type=submit]').disabled`), false);
   const item = await evaluate(`Array.from(document.querySelectorAll('${root} [data-calendar-item-id]')).find(e=>e.textContent.includes('${title}')).dataset.calendarItemId`);
   const itemCard = `${root} [data-calendar-item-id="${item}"]`;
-  pass('CALENDAR-lost-confirmation-recovers-without-duplicate-write');
+  pass('CALENDAR-lost-confirmation-locks-both-views-and-recovers-without-duplicate-write');
   await click(`${itemCard} button`);
   await field(`${root} input[name=calendar-title]`, title+'已修改');
   await field(`${root} input[name=calendar-time]`, '2026-09-09T16:00');
@@ -35,6 +65,7 @@ export async function checkCalendarProposals({evaluate, waitFor, navigate, click
   const edited = await evaluate(`Array.from(document.querySelectorAll('${root} [data-calendar-proposal-id]')).find(e=>e.textContent.includes('${title}已修改')).dataset.calendarProposalId`);
   await click(`${root} [data-calendar-proposal-id="${edited}"] button`);
   await waitFor(`document.querySelector(${JSON.stringify(itemCard)}).textContent.includes('16:00:00')`, 'edit applied');
+  assert.equal(await evaluate(`document.querySelector('${root} [data-calendar-day="2026-09-09"]').getAttribute('aria-pressed')`), 'true');
   pass('CALENDAR-update-retains-item-identity');
   await cdp.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true},sessionId);
   await evaluate(`document.querySelector('${root} > details').open = true`);
@@ -58,5 +89,11 @@ export async function checkCalendarProposals({evaluate, waitFor, navigate, click
   await waitFor(`!document.querySelector(${JSON.stringify(itemCard)})`, 'delete applied');
   assert.match(await evaluate(`document.querySelector('${root}').textContent`),/站内提醒/);
   pass('CALENDAR-delete-confirms-exact-item-and-explains-inbox-reminders');
+  await navigate('plugins/calendar');
+  await waitFor(`document.querySelector('#calendar-page [data-calendar-day]') !== null`, 'expanded month loaded');
+  assert.equal(await evaluate(`document.querySelector('#calendar-page > details').open`), true);
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('#calendar-page [data-calendar-day]')).every(e=>e.getBoundingClientRect().height>=44)`), true);
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), true);
+  pass('CALENDAR-expanded-mobile-month-grid');
   await cdp.send('Emulation.clearDeviceMetricsOverride',{},sessionId);
 }

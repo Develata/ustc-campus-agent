@@ -5,7 +5,7 @@
   the agentd application port supplies the admitted local subject and server clock.
 - Parent: [multi-user task C1](../tasks/multi-user-campus-agent.md),
   [Agent Chat](agent-chat.md). This slice retains the loopback owner-local profile;
-  production identity, owner migration, reminders and delivery are not claimed.
+  public deployment, owner migration and external notification delivery remain unclaimed.
 
 ## Authority and flow
 
@@ -105,3 +105,26 @@ acknowledgement. An existing owner directory with missing Calendar data fails cl
 operators must restore its consistent backup, not delete the directory to retry.
 A retained writer lock excludes concurrent Calendar owners in different processes.
 One owner's unreadable store is isolated from other owners' scheduler ticks.
+
+## Month presentation (CALENDAR-MONTH-001; CHAT-004)
+
+The month table is a rebuildable client projection of confirmed items, grouped by
+Asia/Shanghai date regardless of browser timezone or each item's stored offset.
+Monday starts the week; month length, leap years, year transitions and adjacent
+month cells follow the Gregorian calendar. Undated items remain separately reachable.
+The initial month/today marker follows the admitted server clock. Month navigation,
+date selection and keyboard movement have no backend effect. Polling preserves
+selection and unsent form edits. Selecting a date and adding an item only prefills
+an editable 09:00 Beijing-time draft; the existing propose/confirm flow still owns
+all effects. Pending proposals/batches remain distinct from confirmed day entries.
+A successful dated confirmation selects its saved date; an undated one selects the
+undated list; batch confirmation selects the first saved item. Failed/unknown
+requests retain the existing exact-retry lock across both page entry points.
+
+The Chat disclosure and expanded plugin calendar reuse the same presentation and
+command controller. Desktop shows bounded title previews per day; narrow screens
+show date/count with full titles and actions in the selected-day agenda. Keyboard
+arrows move dates, PageUp/PageDown move months; controls have accessible names and
+visible focus. The existing CHAT-004 Calendar browser gate additionally verifies
+leap/year boundaries, timezone grouping, month navigation without writes, date
+prefill without effects, pending/confirmed separation and mobile layout.
