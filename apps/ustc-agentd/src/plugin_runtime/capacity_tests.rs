@@ -509,3 +509,57 @@ async fn legacy_overcapacity_reports_capacity_but_ungranted_tools_do_not_count()
         "a denied trailing tool must not hide the admitted 28"
     );
 }
+
+#[tokio::test]
+async fn retained_journal_capacity_is_explicit_and_never_discards_receipts() {
+    let f = Fixture::new();
+    let packages = vec![RuntimePackage::bundled_skill().expect("fixture package")];
+    let runtime = PluginRuntime::with_packages(f.state(), packages.clone()).expect("fixture");
+    let owned = owner("retained-journals");
+    let (view, probe) = prepare(&runtime, &owned, 0).await;
+    assert!(
+        command(&runtime, &owned, "enable", enable_intent(&view, &probe))
+            .await
+            .expect("enable")
+            .accepted
+    );
+    let session = runtime.session(&owned.0, &owned.1).await.expect("session");
+    let name = session.bindings.keys().next().expect("tool").clone();
+    assert_eq!(
+        runtime
+            .execute_frozen(
+                &session,
+                &name,
+                json!({"resource":"skills/campus-guide/SKILL.md"})
+            )
+            .await
+            .status(),
+        crate::chat_tools::ChatToolStatus::Succeeded
+    );
+    {
+        let mut state = runtime.state.lock().await;
+        let mut saturated = state.authority.clone();
+        saturated.runs = vec![saturated.runs[0].clone(); 1024];
+        state
+            .commit(saturated)
+            .expect("synthetic journal capacity fixture");
+    }
+    let before = fs::read(f.state()).expect("retained bytes");
+    // An undeclared resource would be an argument error if the adapter were reached.
+    let result = runtime
+        .execute_frozen(&session, &name, json!({"resource":"undeclared.md"}))
+        .await;
+    let value: Value =
+        serde_json::from_str(&result.serialize_for_provider().expect("result")).expect("JSON");
+    assert_eq!(value["data"]["code"], "plugin_capacity_exceeded");
+    assert_eq!(fs::read(f.state()).expect("unchanged bytes"), before);
+    assert_eq!(runtime.state.lock().await.authority.runs.len(), 1024);
+    drop(runtime);
+    let reopened = PluginRuntime::with_packages(f.state(), packages).expect("reopen");
+    assert_eq!(reopened.state.lock().await.authority.runs.len(), 1024);
+    assert_eq!(
+        fs::read(f.state()).expect("unchanged after restart"),
+        before
+    );
+    assert!(reopened.list(&owned.0, &owned.1).await.is_ok());
+}

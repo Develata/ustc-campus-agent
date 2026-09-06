@@ -215,3 +215,42 @@ fn credentials_require_an_exact_operator_url_and_file_pair() {
         matches!(package.component, RuntimeComponent::Mcp { credential_endpoint: Some(ref endpoint), .. } if endpoint == "https://mcp.example.test/rpc?tenant=one")
     );
 }
+
+#[test]
+fn runtime_authority_duplicates_reject_even_with_matching_artifact_binding() {
+    let mut raw = runtime();
+    raw["endpointPolicy"] = json!("public_https");
+    raw["credentialEndpoint"] = json!("https://campus.invalid/mcp");
+    raw["bearerFile"] = json!("/reviewed/operator/token");
+    let (manifest, configuration, runtime) = mcp_sources(raw.clone());
+    RuntimePackage::from_sources(&manifest, &configuration, &runtime, SkillStorage::Bundled)
+        .expect("valid controlled declaration");
+    for field in [
+        "schemaVersion",
+        "kind",
+        "endpointPolicy",
+        "credentialEndpoint",
+        "tools",
+    ] {
+        let duplicate = String::from_utf8(runtime.clone()).expect("UTF-8").replacen(
+            '{',
+            &format!("{{\"{field}\":{},", raw[field]),
+            1,
+        );
+        let mut bound: Value = serde_json::from_slice(&configuration).expect("configuration");
+        bound["components"][0]["componentDigest"] =
+            json!(Sha256Digest::from_bytes(duplicate.as_bytes()).as_str());
+        assert!(
+            matches!(
+                RuntimePackage::from_sources(
+                    &manifest,
+                    &serde_json::to_vec(&bound).expect("configuration bytes"),
+                    duplicate.as_bytes(),
+                    SkillStorage::Bundled
+                ),
+                Err(RuntimeRegistryError::InvalidDeclaration)
+            ),
+            "duplicate {field}"
+        );
+    }
+}

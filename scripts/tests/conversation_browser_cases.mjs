@@ -27,6 +27,13 @@ export async function checkConversations({evaluate, waitFor, cdp, sessionId, nav
     window.fetch=(url,options={})=>{if(String(url).startsWith('/api/v1/agent/'))window.__conversationRequests.push({url:String(url),method:options.method||'GET',body:options.body||null});return window.__conversationFetch(url,options);};
     window.__conversationTrackedFetch=window.fetch;
   })()`);
+  await navigate('settings');
+  const storageNotice = await evaluate("document.querySelector('#settings-view').textContent");
+  assert.match(storageNotice, /对话保存在当前服务端，刷新后可从历史对话恢复/);
+  assert.match(storageNotice, /新对话不会删除旧对话/);
+  assert.match(storageNotice, /删除只从历史列表移除，后台仍保留记录/);
+  assert.match(storageNotice, /不会撤销已执行的日历操作/);
+  assert.doesNotMatch(storageNotice, /对话仅保留在当前页面|刷新会清除聊天内容/);
   await navigate('chat'); await ready(); await click('#chat-clear'); await track();
   // Hold an older real list response across the first send. It must not erase the new row.
   await evaluate(`(() => {
@@ -128,9 +135,11 @@ export async function checkConversations({evaluate, waitFor, cdp, sessionId, nav
   pass('CHAT-conversation-revision-conflict-preserves-draft');
 
   // A terminal capacity rejection must not trap the user in a full conversation.
-  await evaluate(`window.fetch=(url,options={})=>String(url).endsWith('/turns')?Promise.resolve(new Response(JSON.stringify({schema:'chat-conversation-error/v1',error:'conversation_turn_limit_reached'}),{status:429,headers:{'Content-Type':'application/json'}})):window.__conversationTrackedFetch(url,options);`);
+  await evaluate(`window.fetch=(url,options={})=>String(url).endsWith('/turns')?Promise.resolve(new Response(JSON.stringify({schema:'chat-conversation-error/v1',error:'conversation_capacity_exceeded'}),{status:429,headers:{'Content-Type':'application/json'}})):window.__conversationTrackedFetch(url,options);`);
   await send('保留这条草稿');
   await waitFor("!document.querySelector('#conversation-recovery').hidden && !document.querySelector('#conversation-check-result').disabled",'capacity rejection');
+  assert.equal(await evaluate("document.querySelector('#chat-error-code').textContent"),'conversation_capacity_exceeded');
+  assert.match(await evaluate("document.querySelector('#chat-error-message').textContent"),/容量上限.*未被接纳.*保留草稿/);
   assert.equal(await evaluate("Boolean(document.querySelector('#conversation-cancel-send'))"),false,'rejection still checks durable absence before abandon');
   await click('#conversation-check-result');
   await waitFor("document.querySelector('#conversation-cancel-send') && !document.querySelector('#conversation-cancel-send').disabled",'known rejection can be abandoned');

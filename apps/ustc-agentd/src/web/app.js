@@ -138,6 +138,7 @@ const CHAT_ERROR_MESSAGES = Object.freeze({
   conversation_in_progress: "这次请求尚未确定完成。请先检查结果，不要重复发送。",
   conversation_revision_conflict: "这段对话已在其他页面更新。已读取最新记录，你输入的草稿仍保留，请核对后再发送。",
   conversation_request_conflict: "原请求与已保存记录不一致。请检查结果，核对已执行内容。",
+  conversation_capacity_exceeded: "对话服务已达到当前容量上限，本次请求未被接纳。请保留草稿，检查已保存状态后再继续。",
   conversation_limit_reached: "保存的对话已达到当前上限。请继续已有对话。",
   conversation_turn_limit_reached: "这段对话已达到当前上限，请新建对话继续。",
   request_failed: "服务器拒绝了这次请求，但没有返回可识别的恢复信息。",

@@ -236,6 +236,105 @@ fn history_is_server_owned_and_stops_at_profile_or_size_boundary() {
     assert_eq!(request.messages.len(), 1);
 }
 #[test]
+fn history_requires_exact_profile_binding_in_both_directions() {
+    for (previous, current) in [
+        (None, Some("profile:alice")),
+        (Some("profile:alice"), None),
+        (Some("profile:alice"), Some("profile:bob")),
+        (Some("profile:alice"), Some("profile:alice")),
+        (None, None),
+    ] {
+        let f = Fixture::new();
+        let store = f.store();
+        let c = f.create(&store);
+        let mut first = intent("one", 0, "first");
+        first.opportunity_context = previous.map(|id| OpportunityContextDto {
+            profile_snapshot_id: id.to_owned(),
+        });
+        store
+            .begin(&f.tenant, &f.user, &c.id, first, previous.is_some())
+            .expect("first turn");
+        store
+            .finish(&f.tenant, &f.user, &c.id, "one", Ok(response("answer")))
+            .expect("finish");
+        let mut next = intent("two", 2, "next");
+        next.opportunity_context = current.map(|id| OpportunityContextDto {
+            profile_snapshot_id: id.to_owned(),
+        });
+        let BeginTurn::New { request, .. } = store
+            .begin(&f.tenant, &f.user, &c.id, next, current.is_some())
+            .expect("next turn")
+        else {
+            panic!("new turn")
+        };
+        let expected = if previous == current {
+            vec!["first", "answer", "next"]
+        } else {
+            vec!["next"]
+        };
+        assert_eq!(
+            request
+                .messages
+                .iter()
+                .map(|m| m.content.as_str())
+                .collect::<Vec<_>>(),
+            expected,
+            "profile transition: {previous:?} -> {current:?}"
+        );
+    }
+}
+#[test]
+fn history_keeps_only_contiguous_matching_profile_pairs() {
+    let f = Fixture::new();
+    let store = f.store();
+    let c = f.create(&store);
+    for (index, profile) in [
+        Some("profile:alice"),
+        None,
+        Some("profile:alice"),
+        Some("profile:alice"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let id = format!("turn-{index}");
+        let mut turn = intent(&id, index as u64 * 2, &format!("question-{index}"));
+        turn.opportunity_context = profile.map(|id| OpportunityContextDto {
+            profile_snapshot_id: id.to_owned(),
+        });
+        store
+            .begin(&f.tenant, &f.user, &c.id, turn, profile.is_some())
+            .expect("begin");
+        store
+            .finish(
+                &f.tenant,
+                &f.user,
+                &c.id,
+                &id,
+                Ok(response(&format!("answer-{index}"))),
+            )
+            .expect("finish");
+    }
+    let mut next = intent("next", 8, "next");
+    next.opportunity_context = Some(OpportunityContextDto {
+        profile_snapshot_id: "profile:alice".to_owned(),
+    });
+    let BeginTurn::New { request, .. } = store
+        .begin(&f.tenant, &f.user, &c.id, next, true)
+        .expect("next turn")
+    else {
+        panic!("new turn")
+    };
+    assert_eq!(
+        request
+            .messages
+            .iter()
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>(),
+        vec!["question-2", "answer-2", "question-3", "answer-3", "next"]
+    );
+}
+#[test]
 fn continuation_keeps_pairs_without_replaying_preferences() {
     let f = Fixture::new();
     let store = f.store();

@@ -85,6 +85,16 @@ operator commands retain their existing platform support.
 
 ## Capacity and recovery (PLUGIN-001)
 
+This bounded local profile retains at most 1,024 execution journals and 8 MiB of
+serialized journal data per runtime. Reaching either bound rejects further writes;
+it does not evict acknowledged receipts. A full journal count rejects a new call
+before adapter execution or a new effect intent. Tool results report
+`plugin_capacity_exceeded`, so capacity cannot masquerade as a transient transport
+failure. Restart, disable and revoke do not release retained evidence. Durable
+archival, retention administration and production per-tenant quotas remain planned;
+this profile must not be presented as an unlimited multi-user service. Operators
+must preserve evidence rather than clear state to conceal exhaustion.
+
 The application reserves at most 28 dynamic tools per owner (four Chat tools retain
 their existing slots). Enable checks the sum of current exact-package enabled
 installations and the candidate before committing; Skill counts as one tool and MCP

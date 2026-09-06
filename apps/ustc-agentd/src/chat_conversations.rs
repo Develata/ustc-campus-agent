@@ -621,9 +621,7 @@ fn history(
     }];
     let mut bytes = message.len();
     for turn in conversation.turns.iter().rev() {
-        if turn.view.phase != TurnPhase::Completed
-            || (turn.profile.is_some() && turn.profile.as_deref() != profile)
-        {
+        if turn.view.phase != TurnPhase::Completed || turn.profile.as_deref() != profile {
             break;
         }
         let Some(answer) = turn

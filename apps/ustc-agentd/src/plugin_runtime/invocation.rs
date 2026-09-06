@@ -54,6 +54,10 @@ impl PluginRuntime {
             Err(PluginError::NotReady) => {
                 ChatToolExecution::denied(json!({"code":"plugin_review_required"}))
             }
+            Err(PluginError::Capacity) => ChatToolExecution::failed(json!({
+                "code":"plugin_capacity_exceeded",
+                "message":"The plugin runtime reached a configured capacity limit. Do not automatically retry. Ask the operator to inspect capacity and retained execution records; restarting does not release retained evidence."
+            })),
             Err(PluginError::InvalidRequest) => ChatToolExecution::failed(json!({
                 "code":"plugin_invalid_arguments",
                 "message":"Check the tool schema and description, then correct the arguments within the remaining tool budget. This error does not require a new permission grant."
