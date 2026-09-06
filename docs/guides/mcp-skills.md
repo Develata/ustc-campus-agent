@@ -124,7 +124,7 @@ Skill 资源按页读取：首次可用 `{}` 读取该包声明的 Skill 入口�
 | 项目 | 当前范围 |
 | --- | --- |
 | MCP 协议 | 2025-11-25 Streamable HTTP，JSON/SSE，分页发现、调用和会话关闭 |
-| 包与权限 | 每个安装一个 MCP 或 Skill 组件；应用只执行 `public-read`（公开读取）能力 |
+| 包与权限 | 每个安装一个 MCP、Skill 或两者组合包；应用只执行 `public-read`（公开读取）能力 |
 | 工具数量 | 每个 owner 的已启用动态工具合计最多 28 个；每个 Skill 占一个 |
 | MCP 输入 | 闭合对象须有 `additionalProperties: false`；支持字符串／字符串枚举、整数、数字、布尔值和数组 |
 | 未支持范围 | 远程或循环 `$ref`、联合类型、其他未支持约束、中心主机 stdio、可执行 Skill、OAuth、生产 SSO、自动配置迁移 |

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="570" viewBox="0 0 1000 570">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#61758d"/></marker></defs>
+<style>text{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;fill:#172c44;font-size:18px;text-anchor:middle}.sub{font-size:14px;fill:#5c6c7f}.box{fill:#f4f7fa;stroke:#c7d2df;stroke-width:1.5;rx:12}.core{fill:#e7eef7;stroke:#819bb7;stroke-width:1.5;rx:12}.line{fill:none;stroke:#61758d;stroke-width:1.8;marker-end:url(#arrow)}</style>
+<rect x="240" y="18" width="240" height="62" class="box"/><text x="360" y="45">Web</text><text x="360" y="66" class="sub">Chat · 日历 · 插件 · 设置</text>
+<rect x="520" y="18" width="240" height="62" class="box"/><text x="640" y="45">Android 客户端</text><text x="640" y="66" class="sub">薄交互入口</text>
+<path d="M360 80V101H640V80" fill="none" stroke="#61758d" stroke-width="1.8"/><path d="M500 101V120" class="line"/>
+<rect x="350" y="120" width="300" height="64" class="core"/><text x="500" y="147">Rust 应用入口</text><text x="500" y="170" class="sub">逐请求认证 · 版本化命令与查询</text>
+<path d="M500 184V220" class="line"/>
+<rect x="350" y="220" width="300" height="68" class="core"/><text x="500" y="247">有限轮次 Agent</text><text x="500" y="271" class="sub">上下文 · 预算 · 工具提议 · 进度</text>
+<rect x="724" y="220" width="240" height="68" class="box"/><text x="844" y="247">模型适配器</text><text x="844" y="271" class="sub">Chat Completions · SSE</text>
+<path d="M650 254H724" class="line" marker-start="url(#arrow)"/>
+<path d="M500 288V330" class="line"/>
+<rect x="350" y="330" width="300" height="68" class="core"/><text x="500" y="357">Rust 调用与操作校验</text><text x="500" y="381" class="sub">参数 · 当前授权 · 提案与确认</text>
+<rect x="35" y="330" width="250" height="68" class="box"/><text x="160" y="357">Plugin Market</text><text x="160" y="381" class="sub">目录 · 配置 · 检查 · 授权</text>
+<path d="M285 364H350" class="line"/>
+<path d="M500 398V421H285V442M500 421H720V442" class="line"/>
+<rect x="125" y="442" width="320" height="62" class="box"/><text x="285" y="469">校园领域工具</text><text x="285" y="492" class="sub">办事 · 校历 · 课程 · 个人事项</text>
+<rect x="560" y="442" width="320" height="62" class="box"/><text x="720" y="469">插件执行适配器</text><text x="720" y="492" class="sub">公开只读 MCP · 按需 Skill</text>
+<text x="500" y="548" class="sub">持久状态、来源观察与执行回执由各领域拥有；客户端与模型只读取投影</text>
+</svg>

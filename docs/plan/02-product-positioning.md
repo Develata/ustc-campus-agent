@@ -5,7 +5,7 @@
 - `Layer`: Product foundation
 - `Status`: Accepted
 - `Version`: `0.4.1`
-- `Last Review`: `2026-09-04`
+- `Last Review`: `2026-09-06`
 - `Authority Owns`: product scope, formal first-party identities, non-goals and naming
 - `Authority Defers To`: chapters 03–08 for engineering mechanisms and typed contracts for exact fields
 - `Counterpart Features`: `docs/features/00-market-browse-install.md`, `docs/features/01-ustc-affairs-navigator.md`, `docs/features/02-ustc-change-radar.md`, `docs/features/03-campus-opportunity-graph.md`, `docs/features/05-headless-client-and-agent-integration.md`
@@ -119,8 +119,8 @@ Course Planning now has a bounded deterministic Rust planner plus consent-bound 
 
 The product target is a campus Agent service with Chat as the main entry and Plugin
 Market as its capability/configuration entry. The current loopback demo remains a
-bounded implementation, not multi-user deployment evidence. Independent accounts
-with invitation registration precede school SSO; M00's [account contract](../contracts/platform-account.md)
+bounded implementation, not multi-user deployment evidence. Operator-configured accounts
+precede school SSO, with no self-service or invitation registration; M00's [account contract](../contracts/platform-account.md)
 owns identity, while M20 owns each user's installations and grants. Administrators
 provide a default model and public catalog; user configuration and credentials stay
 private. [The delivery task](../tasks/multi-user-campus-agent.md) records concrete
