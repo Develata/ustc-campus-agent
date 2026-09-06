@@ -3,7 +3,7 @@
 通过对话查询校园办事流程、查看校历变化、规划课程并管理个人事项。
 Plugin Market 提供可配置的 MCP 工具与 Skill 指南，模型提出调用，Rust 校验权限并执行。
 
-[English](README.en.md) · [功能与评分证据](docs/features/06-mvp-core-capabilities.md) · [四分钟演示](docs/guides/competition-demo.md) · [文档导航](docs/README.md)
+[English](README.en.md) · [设计文档](docs/guides/competition-design.md) · [作品简介](docs/guides/competition-introduction.md) · [五分钟演示](docs/guides/competition-demo.md) · [文档导航](docs/README.md)
 
 学生竞赛项目，非中国科学技术大学官方服务。当前支持本机／WSL 演示与后台配置的多账号服务；学校 SSO 和公网部署仍需单独配置与验收。
 
