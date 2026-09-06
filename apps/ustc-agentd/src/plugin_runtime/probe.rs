@@ -132,13 +132,8 @@ impl PluginRuntime {
         match component {
             RuntimeComponent::Skill { source } => {
                 let schema = super::skill_context::input_schema()?;
-                let capability = package
-                    .manifest
-                    .capabilities()
-                    .iter()
-                    .next()
-                    .ok_or(PluginError::Unsupported)?
-                    .clone();
+                let capability = registry::skill_read_capability(&package.manifest)
+                    .map_err(|_| PluginError::Unsupported)?;
                 let name = component_tool_name(package, id, component_id, "skill_read");
                 let tool = CatalogToolDefinition {
                     id: ToolId::parse("tool:skill-read").map_err(|_| PluginError::Unavailable)?,

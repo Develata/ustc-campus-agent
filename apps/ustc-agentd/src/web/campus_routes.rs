@@ -1,6 +1,10 @@
 //! Thin source observation and request-local course planning adapters.
 use super::*;
 use ustc_campus_agent_course_planning::personal::{PersonalCourseRequest, plan_personal};
+// Wire budgets include JSON escaping; the owning domain validates decoded
+// text, vector cardinality and each course field independently.
+pub(super) const SOURCE_IMPORT_BODY_LIMIT: usize = 1024 * 1024;
+pub(super) const COURSE_PLAN_BODY_LIMIT: usize = 8 * 1024 * 1024;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct SearchIntent {
@@ -154,3 +158,7 @@ pub(super) async fn courses(body: Result<Json<PersonalCourseRequest>, JsonReject
     };
     respond(plan_personal(&intent))
 }
+
+#[cfg(all(test, unix))]
+#[path = "campus_body_limit_tests.rs"]
+mod body_limit_tests;

@@ -159,6 +159,16 @@ The tier in a candidate manifest is a proposed post-review classification, never
 that review has occurred. The response neither persists nor publishes a catalog entry,
 contacts an endpoint, reads a filesystem path, grants a capability, installs a package,
 nor executes a resource. Text remains untrusted content.
+The import-preview route has a local 1 MiB JSON wire limit, including JSON syntax,
+whitespace and escaping. Literal Skill text retains the existing 64 KiB decoded
+UTF-8 resource limit and 16 KiB YAML frontmatter limit; an oversized decoded Skill
+still rejects. This wire allowance accommodates maximum-size Skill text even with
+six-byte JSON escapes, and never grants admission or installation. Together with
+[source text import and personal course planning](campus-source-workspace.md#http-request-budgets),
+it is an explicit exception to the service's 16 KiB default; other routes retain
+that default. The real HTTP suite `campus_routes::body_limit_tests` checks complete
+reviewable files with `admitted:false`, unchanged catalog/installations, and both
+wire and decoded-domain over-limit rejection.
 
 The UI exposes the complete candidate files and JSON download. Operator review and
 explicit package-directory admission remain necessary; the resulting package then

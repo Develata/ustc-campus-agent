@@ -1,4 +1,5 @@
 use super::*;
+use crate::plugin_runtime::registry::RuntimeRegistryError;
 fn candidate() -> PluginImportPreviewDto {
     serde_json::from_value(json!({"schema":"plugin-import-preview/v1","package_id":"community.review-example",
         "version":"0.1.0","display_name":"Mixed review example","source":"Synthetic controlled source; no personal data",
@@ -247,4 +248,195 @@ async fn equal_skill_digests_cannot_alias_or_swap_component_declaration_paths() 
         RuntimePackage::load(&directory).is_err(),
         "matching digests cannot swap declaration identity"
     );
+}
+
+fn mixed_distinct_capability_package(temp: &TempRoot, capabilities: &[&str]) -> PathBuf {
+    let runtime = skill_runtime(temp.0.join("preview/authority.bin"));
+    let mut request = candidate();
+    request
+        .mcp
+        .as_mut()
+        .expect("mcp")
+        .tools
+        .insert("campus_read".into(), "campus.public_changes.read".into());
+    let packet = runtime.preview_import(request).expect("review packet");
+    let mut manifest: Value =
+        serde_json::from_str(&packet.files["package.json"]).expect("manifest");
+    manifest["capabilities"] = json!(capabilities);
+    let manifest_bytes = serde_json::to_vec(&manifest).expect("manifest bytes");
+    let checked =
+        ustc_campus_agent_core::market::load_package_manifest(&manifest_bytes).expect("manifest");
+    let mut runtime_doc: Value =
+        serde_json::from_str(&packet.files["runtime.json"]).expect("runtime");
+    for member in runtime_doc["components"].as_array_mut().expect("members") {
+        if member["runtime"]["kind"] == "mcp" {
+            member["runtime"]["endpointPolicy"] = json!("loopback_development");
+        }
+    }
+    let runtime_bytes = serde_json::to_vec(&runtime_doc).expect("runtime bytes");
+    let mut configuration: Value =
+        serde_json::from_str(&packet.files["configuration.json"]).expect("configuration");
+    configuration["packageDigest"] = json!(checked.package_digest().as_str());
+    configuration["capabilityManifestDigest"] =
+        json!(checked.capability_manifest_digest().as_str());
+    for binding in configuration["components"]
+        .as_array_mut()
+        .expect("bindings")
+    {
+        if binding["type"] == "McpServerComponent" {
+            binding["componentDigest"] = json!(Sha256Digest::from_bytes(&runtime_bytes).as_str());
+        }
+    }
+    let directory = temp.0.join("distinct-capabilities");
+    fs::create_dir(&directory).expect("directory");
+    for (path, text) in packet.files {
+        let target = directory.join(path);
+        fs::create_dir_all(target.parent().expect("parent")).expect("parent directory");
+        fs::write(target, text).expect("reviewed file");
+    }
+    fs::write(directory.join("package.json"), manifest_bytes).expect("manifest");
+    fs::write(directory.join("runtime.json"), runtime_bytes).expect("runtime");
+    fs::write(
+        directory.join("configuration.json"),
+        serde_json::to_vec(&configuration).expect("config bytes"),
+    )
+    .expect("configuration");
+    directory
+}
+
+#[tokio::test]
+async fn mixed_skill_capability_is_exact_in_both_manifest_orders_and_current_grants() {
+    const RULES: &str = "campus.public_rules.read";
+    const CHANGES: &str = "campus.public_changes.read";
+    for capabilities in [[CHANGES, RULES], [RULES, CHANGES]] {
+        let temp = TempRoot::new();
+        let directory = mixed_distinct_capability_package(&temp, &capabilities);
+        let package = RuntimePackage::load(&directory).expect("mixed package");
+        let peer = McpPeer::start(temp.state());
+        let runtime = PluginRuntime::with_packages(temp.state(), vec![package]).expect("runtime");
+        let owned = owner("distinct");
+        assert!(install(&runtime, &owned).await.accepted);
+        let installed = configure(&runtime, &owned, json!({"endpoint":peer.endpoint})).await;
+        let discovered = probe(&runtime, &owned, &installed).await.expect("probe");
+        assert_eq!(
+            discovered
+                .tools
+                .iter()
+                .find(|t| t.name == "skill_read")
+                .expect("Skill")
+                .capability,
+            RULES
+        );
+        assert_eq!(
+            discovered
+                .tools
+                .iter()
+                .find(|t| t.name == "campus_read")
+                .expect("MCP")
+                .capability,
+            CHANGES
+        );
+        assert!(command(&runtime,&owned,"grant-changes",json!({"action":"grant","installation_id":installed.id,"expected_revision":installed.revision,"capability":CHANGES})).await.expect("grant changes").accepted);
+        let enabled = grant_enable(&runtime, &owned, &installed, &discovered).await;
+        let frozen = runtime
+            .session(&owned.0, &owned.1)
+            .await
+            .expect("both authorized");
+        let skill = frozen
+            .bindings
+            .iter()
+            .find(|(_, b)| b.component_id.as_str() == "component:skill")
+            .expect("Skill binding")
+            .0
+            .clone();
+        let mcp = frozen
+            .bindings
+            .iter()
+            .find(|(_, b)| b.component_id.as_str() == "component:mcp")
+            .expect("MCP binding")
+            .0
+            .clone();
+        for (name, arguments, expected) in [
+            (&skill, json!({}), RULES),
+            (&mcp, json!({"query":"synthetic"}), CHANGES),
+        ] {
+            assert_eq!(
+                runtime
+                    .execute_frozen(&frozen, name, arguments)
+                    .await
+                    .status(),
+                ChatToolStatus::Succeeded
+            );
+            let state = runtime.state.lock().await;
+            let run = serde_json::to_value(state.authority.runs.last().expect("journal"))
+                .expect("journal JSON");
+            let intent = run["events"]
+                .as_array()
+                .expect("events")
+                .iter()
+                .find(|event| event["kind"]["type"] == "effect_intent_persisted")
+                .expect("intent");
+            assert_eq!(intent["kind"]["intent"]["capability_id"], expected);
+        }
+        assert_journal(&runtime, 2).await;
+        // Revoke only Skill's exact authority; the retained MCP grant must not substitute it.
+        {
+            let mut state = runtime.state.lock().await;
+            let id = InstallationId::parse(enabled.id).expect("id");
+            let capability = CapabilityId::parse(RULES).expect("capability");
+            let scope = GrantScope::campus_public().expect("scope");
+            let grant = state
+                .authority
+                .grants
+                .load_current_for_authority(&owned.0, &owned.1, &id, &capability, &scope)
+                .expect("grant read")
+                .expect("grant");
+            let revoke = GrantCommand::revoke(
+                GrantCommandId::parse("grant-cmd:revoke-only-skill").expect("command"),
+                grant.snapshot_id().clone(),
+                grant.version().clone(),
+            )
+            .expect("revoke");
+            let mut next = state.authority.clone();
+            assert!(matches!(
+                next.grants.execute(revoke).expect("revoke").outcome(),
+                GrantCommandOutcome::Accepted { .. }
+            ));
+            state.commit(next).expect("durable revoke");
+        }
+        assert_eq!(
+            runtime
+                .execute_frozen(&frozen, &skill, json!({}))
+                .await
+                .status(),
+            ChatToolStatus::Denied
+        );
+        assert_journal(&runtime, 2).await;
+        assert_eq!(peer.control.calls.load(Ordering::SeqCst), 1);
+        let current = runtime
+            .session(&owned.0, &owned.1)
+            .await
+            .expect("current grants");
+        assert!(!current.bindings.contains_key(&skill));
+        assert!(current.bindings.contains_key(&mcp));
+        assert_eq!(
+            runtime
+                .execute_frozen(&frozen, &mcp, json!({"query":"still allowed"}))
+                .await
+                .status(),
+            ChatToolStatus::Succeeded
+        );
+        assert_journal(&runtime, 3).await;
+        assert_eq!(peer.control.calls.load(Ordering::SeqCst), 2);
+    }
+}
+
+#[test]
+fn mixed_skill_without_exact_rules_capability_is_rejected_at_admission() {
+    let temp = TempRoot::new();
+    let directory = mixed_distinct_capability_package(&temp, &["campus.public_changes.read"]);
+    assert!(matches!(
+        RuntimePackage::load(&directory),
+        Err(RuntimeRegistryError::InvalidDeclaration)
+    ));
 }

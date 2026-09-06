@@ -100,7 +100,15 @@ resolution. An `X-UCA-Account-Subject` header, when present, is a JSON pair of t
 page's expected tenant/user and must match admitted identity; it grants no authority.
 The browser installs its account fetch adapter before other clients, awaits initial
 identity, and attaches this expectation to prevent an old tab's pending mutation
-from running under a newly logged-in user's cookie. Account changes clear legacy
+from running under a newly logged-in user's cookie. The account client's logout
+request also carries the page's captured subject, even though it uses its private
+fetch adapter; a missing browser subject prevents submission. A stale tab must not
+revoke the current cookie's different account, even with missing or delayed
+BroadcastChannel delivery. If logout returns `unauthenticated`, the browser clears
+old private projections and reloads current identity; it must not retry a revoke
+against the replacement account. Existing non-browser cookie-only logout remains admitted
+under the same-origin transport profile; supplying a subject expectation always
+requires an exact match. Account changes clear legacy
 pending operations/profile hints and reload every notified tab. No token or password
 is stored in localStorage/sessionStorage. Legacy demo Opportunity/admin HTTP paths
 are unavailable in configured-account mode until they enforce their owning subject.
@@ -115,3 +123,25 @@ These cover only portions of ACCOUNT-003/004/005/006/007; parent ACCOUNT rows re
 planned until registered full evidence exists. Real browser login/logout, two-user
 calendar/dialogue/plugin isolation and stale-tab denial are required integration
 evidence, not inferred from these account unit cases.
+
+The targeted shared-cookie browser regression uses two dedicated disposable test
+accounts in an isolated loopback preview. Its private credential JSON contains an
+`accounts` array of `{login_name, password}` objects and must not be committed.
+Supply all environment-specific locations explicitly; the test prints no credential
+values and does not call model endpoints or restart the backend:
+
+```bash
+node apps/ustc-agentd/tests/account_logout_browser.cjs \
+  --base "$TEST_PREVIEW_URL" --credentials-file "$PRIVATE_TEST_ACCOUNTS" \
+  --playwright-core "$PLAYWRIGHT_CORE" --chrome-path "$CHROME"
+```
+
+The default checks the currently served application: with BroadcastChannel disabled,
+an old A tab cannot revoke B after a shared-cookie account switch; A's own valid
+logout still succeeds, and rejected stale logout clears/reloads the old view to B.
+`--inject-local` may substitute local account handlers for a bounded pre-build check.
+`--reproduce-old-preview` is a separate opt-in diagnostic for a retained vulnerable
+preview, normally paired with `--inject-local` to record before/after evidence. It
+is never required by the normal regression or CI. Results default to private local
+`dist/account-browser-smoke/logout-subject-result.json`; `--result` selects another
+private artifact path. This check does not add a CI workflow.

@@ -42,7 +42,14 @@ window.UcaAccount = (() => {
   }
   function changed() { clearPending(); channel?.postMessage("changed"); location.reload(); }
   async function request(endpoint, body) {
-    const response = await rawFetch(`/api/v1/account/${endpoint}`, { method: body ? "POST" : "GET", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" }, ...(body ? {body: JSON.stringify(body)} : {}) });
+    const headers = { "Content-Type": "application/json" };
+    // rawFetch bypasses the general client wrapper. Bind logout to this page's
+    // admitted subject so a delayed old tab cannot revoke another account's cookie.
+    if (endpoint === "logout") {
+      if (!subject) throw new Error("unauthenticated");
+      headers["X-UCA-Account-Subject"] = JSON.stringify([subject.tenant_id, subject.user_id]);
+    }
+    const response = await rawFetch(`/api/v1/account/${endpoint}`, { method: body ? "POST" : "GET", credentials: "same-origin", cache: "no-store", headers, ...(body ? {body: JSON.stringify(body)} : {}) });
     const value = await response.json();
     if (!response.ok) throw new Error(value.error || "unavailable");
     return value;
@@ -71,7 +78,7 @@ window.UcaAccount = (() => {
       } catch (_) { clearPending(); throw new Error("private_storage_unavailable"); }
       const name = document.createElement("span"); name.textContent = subject.login_name;
       const logout = document.createElement("button"); logout.textContent = "退出登录"; logout.type = "button";
-      logout.addEventListener("click", async () => { logout.disabled = true; try { await request("logout", {schema:"platform-account-logout/v1"}); changed(); } catch (_) { logout.disabled = false; logout.textContent = "退出失败，重试"; } });
+      logout.addEventListener("click", async () => { logout.disabled = true; try { await request("logout", {schema:"platform-account-logout/v1"}); changed(); } catch (error) { if (error.message === "unauthenticated") { changed(); return; } logout.disabled = false; logout.textContent = "退出失败，重试"; } });
       badge.append(name, logout);
     } catch (_) { enabled = true; clearPending(); requireLogin(); }
   })();

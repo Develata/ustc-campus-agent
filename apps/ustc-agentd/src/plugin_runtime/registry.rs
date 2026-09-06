@@ -47,6 +47,19 @@ impl fmt::Display for RuntimeRegistryError {
 }
 impl std::error::Error for RuntimeRegistryError {}
 
+// This read-only Skill profile has one exact authority, independent of sibling MCP tools.
+// Admission and probe share the binding so no package-wide ordering selects permission.
+pub(super) fn skill_read_capability(
+    manifest: &ValidatedPackageManifest,
+) -> Result<CapabilityId, RuntimeRegistryError> {
+    manifest
+        .capabilities()
+        .iter()
+        .find(|capability| capability.as_str() == "campus.public_rules.read")
+        .cloned()
+        .ok_or(RuntimeRegistryError::InvalidDeclaration)
+}
+
 #[derive(Clone)]
 pub(crate) struct RuntimePackage {
     pub manifest_source: Vec<u8>,
@@ -281,6 +294,7 @@ impl RuntimePackage {
             }
             let component = match raw.kind {
                 RawKind::Skill => {
+                    skill_read_capability(&manifest)?;
                     if declaration.kind() != ComponentKind::SkillComponent
                         || raw.endpoint_key.is_some()
                         || raw.tools.is_some()

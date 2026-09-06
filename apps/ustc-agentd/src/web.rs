@@ -933,13 +933,24 @@ fn web_router_with_models(
         .route("/api/v1/sources/search", post(campus_routes::search))
         .route("/api/v1/sources/{id}/history", get(campus_routes::history))
         .route("/api/v1/sources/{id}/fetch", post(campus_routes::fetch))
-        .route("/api/v1/sources/{id}/import", post(campus_routes::import))
+        .route(
+            "/api/v1/sources/{id}/import",
+            post(campus_routes::import).layer(DefaultBodyLimit::max(
+                campus_routes::SOURCE_IMPORT_BODY_LIMIT,
+            )),
+        )
         .route("/api/v1/sources/review", post(campus_routes::review))
-        .route("/api/v1/courses/plan", post(campus_routes::courses))
+        .route(
+            "/api/v1/courses/plan",
+            post(campus_routes::courses)
+                .layer(DefaultBodyLimit::max(campus_routes::COURSE_PLAN_BODY_LIMIT)),
+        )
         .route("/api/v1/plugins/updates", post(plugin_routes::update))
         .route(
             "/api/v1/plugins/import-preview",
-            post(plugin_routes::preview_import),
+            post(plugin_routes::preview_import).layer(DefaultBodyLimit::max(
+                plugin_routes::IMPORT_PREVIEW_BODY_LIMIT,
+            )),
         )
         .route("/api/v1/plugins", get(plugin_routes::list))
         .route("/api/v1/plugins/commands", post(plugin_routes::command))

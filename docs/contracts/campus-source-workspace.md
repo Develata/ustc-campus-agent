@@ -63,6 +63,31 @@ no Chat tool can edit the manifest, review an observation or publish a campus fa
 All returned text remains untrusted data; model/tool context is bounded and truncation
 is explicit. No results means no matching current observation, not no campus rule.
 
+## HTTP request budgets
+
+`POST /api/v1/sources/{id}/import`, `POST /api/v1/courses/plan`, and
+[Plugin import preview](plugin-management.md) override the service's default
+16 KiB request-body limit. Source text imports have an explicit 1 MiB JSON wire budget: the 128 KiB decoded-text ceiling fits even
+when each input byte uses a six-byte JSON Unicode escape, with envelope headroom.
+Course planning has an 8 MiB JSON wire budget to accommodate 64 courses with
+8 KiB excerpts, the bounded prerequisite/tag/URL fields and JSON escaping.
+These are finite wire budgets, including JSON syntax and whitespace; they do not
+promise acceptance of arbitrarily padded JSON or oversized date representations.
+
+Decoded domain limits remain authoritative and unchanged: source text above
+128 KiB or any course excerpt above 8 KiB still fails validation. Plugin import
+preview separately has a 1 MiB wire budget and retains its 64 KiB decoded Skill
+limit. Routes outside these three exceptions retain their existing 16 KiB default.
+Body extraction failures retain the current
+route-specific invalid-request response; larger local wire budgets do not relax
+administrator admission, source review or per-request course consent.
+
+`web::campus_routes::body_limit_tests` runs the production router over real HTTP.
+It verifies a maximum-size escaped source import, 64 maximum-size escaped course
+excerpts, an inert 64 KiB Skill preview, transport over-limit rejection, unchanged
+decoded domain limits and an unrelated route's retained 16 KiB limit. Targeted command:
+`cargo test -p ustc-agentd --lib campus_routes::body_limit_tests`.
+
 ## Personal course planning
 
 `course-planning::personal` owns request-local deterministic planning. HTTP

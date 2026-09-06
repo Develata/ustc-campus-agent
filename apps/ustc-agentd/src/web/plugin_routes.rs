@@ -3,6 +3,8 @@ use super::*;
 use crate::plugin_runtime::{PluginError, PluginRuntime};
 use ustc_campus_agent_client_protocol::plugins::{PluginCommandDto, PluginProbeDto};
 use ustc_campus_agent_core::identity::{TenantId, UserId};
+// Accommodate a 64 KiB decoded Skill plus JSON escapes and the review envelope.
+pub(super) const IMPORT_PREVIEW_BODY_LIMIT: usize = 1024 * 1024;
 fn application(state: &WebState) -> Result<&PluginRuntime, PluginError> {
     state
         .plugins
