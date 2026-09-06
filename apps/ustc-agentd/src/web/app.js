@@ -565,7 +565,7 @@ async function requestChat(body, headers) {
 
 async function submitChat() {
   if (!conversationCanSend) return;
-  if (!window.UcaModelSelection?.readiness) { document.querySelector("#chat-model-select").focus(); return; }
+  if (!window.UcaModelSelection?.readiness) { document.querySelector("#chat-model-trigger").focus(); return; }
   if (chatPending) {
     return;
   }

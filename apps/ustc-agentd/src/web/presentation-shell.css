@@ -19,7 +19,6 @@
 .chat-composer #chat-input { font-size:16px; min-height:54px; line-height:1.65; }
 .chat-composer #chat-send { width:44px; height:44px; min-width:44px; min-height:44px; }
 .composer-toolbar { gap:8px; }
-.chat-model-picker select { font-size:12px; }
 #calendar-proposals { border:0; background:transparent; margin:0 0 6px; }
 #calendar-proposals > details > summary { color:var(--muted); font-size:12px; font-weight:400; padding:10px 12px; }
 #calendar-proposals > details[open] { background:var(--bg); border:1px solid var(--line); border-radius:16px; margin-bottom:8px; }
