@@ -119,12 +119,16 @@ an editable 09:00 Beijing-time draft; the existing propose/confirm flow still ow
 all effects. Pending proposals/batches remain distinct from confirmed day entries.
 A successful dated confirmation selects its saved date; an undated one selects the
 undated list; batch confirmation selects the first saved item. Failed/unknown
-requests retain the existing exact-retry lock across both page entry points.
+requests retain the existing exact-retry lock across both page entry points, including
+batch confirmation/cancellation and reminder-read receipts. Recovery compares the
+original identity and requested terminal state; an opposite terminal state is
+reported explicitly. An unresolved controller cannot be destroyed.
 
 The Chat disclosure and expanded plugin calendar reuse the same presentation and
 command controller. Desktop shows bounded title previews per day; narrow screens
 show date/count with full titles and actions in the selected-day agenda. Keyboard
 arrows move dates, PageUp/PageDown move months; controls have accessible names and
-visible focus. The existing CHAT-004 Calendar browser gate additionally verifies
+visible focus. Route changes refresh after the destination is rendered. The
+CHAT-004 conversations suite also runs the Calendar browser cases, which verify
 leap/year boundaries, timezone grouping, month navigation without writes, date
 prefill without effects, pending/confirmed separation and mobile layout.
