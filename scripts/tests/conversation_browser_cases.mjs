@@ -6,7 +6,10 @@ import {join} from 'node:path';
 export async function checkConversations({evaluate, waitFor, cdp, sessionId, navigate, pass}) {
   await cdp.send('Emulation.setDeviceMetricsOverride', {width:1440,height:900,deviceScaleFactor:1,mobile:false}, sessionId);
   const click = async selector => {
-    const point = await evaluate(`(() => { const el=document.querySelector(${JSON.stringify(selector)}); el.scrollIntoView({block:'center'}); const r=el.getBoundingClientRect(); const x=r.x+r.width/2,y=r.y+r.height/2; if(!r.width||!r.height||!el.contains(document.elementFromPoint(x,y))) throw Error('conversation control unreachable'); return {x,y}; })()`);
+    const actionablePoint = `(() => { const el=document.querySelector(${JSON.stringify(selector)}); if(!el || el.disabled) return null; el.scrollIntoView({block:'center',behavior:'instant'}); const r=el.getBoundingClientRect(); const x=r.x+r.width/2,y=r.y+r.height/2; return r.width && r.height && el.contains(document.elementFromPoint(x,y)) ? {x,y} : null; })()`;
+    await waitFor(`Boolean(${actionablePoint})`, `conversation control reachable: ${selector}`);
+    const point = await evaluate(actionablePoint);
+    assert.ok(point, `conversation control remained reachable: ${selector}`);
     await cdp.send('Input.dispatchMouseEvent', {type:'mousePressed',...point,button:'left',clickCount:1}, sessionId);
     await cdp.send('Input.dispatchMouseEvent', {type:'mouseReleased',...point,button:'left',clickCount:1}, sessionId);
   };

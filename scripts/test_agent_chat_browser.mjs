@@ -340,9 +340,12 @@ try {
   }, sessionId);
   await waitFor("document.querySelector('#chat-surface').getAttribute('aria-busy') === 'true'", "Affairs chat busy");
   assert.equal(await evaluate("document.querySelector('#chat-send').disabled"), true);
-  assert.equal(await evaluate("document.querySelector('#chat-progress').hidden"), false);
   await waitFor("typeof window.__ucaReleaseDelayedChat === 'function'", "conversation created and turn delivery delayed");
   assert.equal(await evaluate("typeof window.__ucaReleaseDelayedChat"), "function");
+  assert.equal(await evaluate("document.querySelector('#chat-progress').hidden"), true);
+  assert.equal(await evaluate("document.querySelector('#chat-activity').hidden"), false);
+  assert.equal(await evaluate("document.querySelector('#chat-activity').dataset.state"), "waiting");
+  assert.equal(await evaluate("document.querySelector('.chat-activity-status').textContent"), "请求已发送，等待状态");
   await evaluate("window.__ucaReleaseDelayedChat()");
   await cdp.send("Input.dispatchKeyEvent", {
     type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13
@@ -363,7 +366,8 @@ try {
   assert.doesNotMatch(affairsAnswer, /ordered_steps|command_id/);
   assert.equal(await evaluate("document.activeElement === document.querySelector('#chat-input')"), true);
   const emptyPreferenceRequest = await evaluate("window.__ucaChatRequests.at(-1)");
-  assert.equal(emptyPreferenceRequest.schema, "chat-conversation-turn/v1");
+  assert.equal(emptyPreferenceRequest.schema, "chat-conversation-turn/v2");
+  assert.equal(emptyPreferenceRequest.model_id, "default");
   assert.equal(Object.hasOwn(emptyPreferenceRequest, "prompt_customization"), false);
 
   await evaluate(`(() => {
@@ -383,7 +387,8 @@ try {
     "  failure-retained-preference  "
   );
   const rejectedPreferenceRequest = await evaluate("window.__ucaChatRequests.at(-1)");
-  assert.equal(rejectedPreferenceRequest.schema, "chat-conversation-turn/v1");
+  assert.equal(rejectedPreferenceRequest.schema, "chat-conversation-turn/v2");
+  assert.equal(rejectedPreferenceRequest.model_id, "default");
   assert.deepEqual(rejectedPreferenceRequest.prompt_customization, {text: "failure-retained-preference"});
 
   await evaluate("document.querySelector('#conversation-check-result').click()");
@@ -391,7 +396,8 @@ try {
   await evaluate("document.querySelector('#conversation-cancel-send').click()");
   await submitWithEnter("校历最近有什么变更？", false, "  请用简洁的要点回答。  ");
   const customizedRequest = await evaluate("window.__ucaChatRequests.at(-1)");
-  assert.equal(customizedRequest.schema, "chat-conversation-turn/v1");
+  assert.equal(customizedRequest.schema, "chat-conversation-turn/v2");
+  assert.equal(customizedRequest.model_id, "default");
   assert.deepEqual(customizedRequest.prompt_customization, {text: "请用简洁的要点回答。"});
   assert.equal(await evaluate("document.querySelector('#chat-prompt-customization').value"), "");
   assert.equal(await evaluate("document.querySelector('#chat-prompt-customization-counter').textContent"), "0 / 2048 UTF-8 bytes");
@@ -417,7 +423,8 @@ try {
 
   await submitWithEnter("记录事项：提交开题报告");
   const laterRequest = await evaluate("window.__ucaChatRequests.at(-1)");
-  assert.equal(laterRequest.schema, "chat-conversation-turn/v1");
+  assert.equal(laterRequest.schema, "chat-conversation-turn/v2");
+  assert.equal(laterRequest.model_id, "default");
   assert.equal(Object.hasOwn(laterRequest, "prompt_customization"), false);
   assert.match(
     await evaluate("document.querySelector('.chat-message[data-role=assistant]:last-of-type .chat-tool-trace')?.textContent"),
