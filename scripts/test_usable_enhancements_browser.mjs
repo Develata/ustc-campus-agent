@@ -13,6 +13,7 @@ import { checkConversationManagement } from "./tests/conversation_management_bro
 import { checkModelSelection } from "./tests/model_selection_browser_cases.mjs";
 import { checkPluginManagement } from "./tests/plugin_management_browser_cases.mjs";
 import { checkChatActivity } from "./tests/chat_activity_browser_cases.mjs";
+import { checkCalendarProposals } from "./tests/calendar_proposals_browser_cases.mjs";
 import { checkConversations } from "./tests/conversation_browser_cases.mjs";
 
 const repo = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -260,7 +261,7 @@ try {
       return response;
     };
   })()`);
-  if (!["market", "plugins", "models", "management", "conversations", "shell", "activity"].includes(process.env.UCA_BROWSER_SUITE)) {
+  if (!["market", "plugins", "models", "management", "conversations", "shell", "activity", "calendar"].includes(process.env.UCA_BROWSER_SUITE)) {
   for (const scene of ['affairs','radar','planning','calendar']) {
     await navigate(`plugins/${scene}`);
     await field('#chat-input','');
@@ -398,11 +399,12 @@ try {
   await checkAdminControls({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   }
   if (process.env.UCA_BROWSER_SUITE === "shell") await checkChatShell({ evaluate, waitFor, cdp, sessionId, navigate, click, field, pass });
-  if (!["plugins", "models", "management", "conversations", "shell", "activity"].includes(process.env.UCA_BROWSER_SUITE)) await checkMarketCatalog({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  if (!["plugins", "models", "management", "conversations", "shell", "activity", "calendar"].includes(process.env.UCA_BROWSER_SUITE)) await checkMarketCatalog({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   if (process.env.UCA_BROWSER_SUITE === "management") await checkConversationManagement({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   if (process.env.UCA_BROWSER_SUITE === "models") await checkModelSelection({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   if (process.env.UCA_BROWSER_SUITE === "plugins") await checkPluginManagement({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   if (process.env.UCA_BROWSER_SUITE === "conversations") await checkConversations({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  if (!process.env.UCA_BROWSER_SUITE || process.env.UCA_BROWSER_SUITE === "calendar") await checkCalendarProposals({ evaluate, waitFor, navigate, click, field, pass, cdp, sessionId });
   if (process.env.UCA_BROWSER_SUITE === "activity") await checkChatActivity({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   assert.deepEqual(cdp.events.filter(e=>e.method==='Runtime.exceptionThrown'),[]);
   if (process.env.UCA_TEST_SCREENSHOT) {

@@ -36,6 +36,8 @@ fn schema_node(value: &Value, depth: usize) -> Result<UnvalidatedSchemaNodeV0, M
             "properties" | "required" | "additionalProperties" => kind == "object",
             "items" => kind == "array",
             "enum" => kind == "string",
+            "minLength" | "maxLength" => kind == "string",
+            "minimum" | "maximum" => matches!(kind, "integer" | "number"),
             _ => false,
         };
         if !admitted {
@@ -79,10 +81,36 @@ fn schema_node(value: &Value, depth: usize) -> Result<UnvalidatedSchemaNodeV0, M
                 ),
                 _ => return Err(McpError::InvalidSchema),
             };
-            UnvalidatedSchemaNodeV0::String { enum_values }
+            let min_length = optional_bound(object, "minLength", Value::as_u64)?;
+            let max_length = optional_bound(object, "maxLength", Value::as_u64)?;
+            if min_length.is_some() || max_length.is_some() {
+                UnvalidatedSchemaNodeV0::BoundedString {
+                    enum_values,
+                    min_length,
+                    max_length,
+                }
+            } else {
+                UnvalidatedSchemaNodeV0::String { enum_values }
+            }
         }
-        "integer" => UnvalidatedSchemaNodeV0::Integer,
-        "number" => UnvalidatedSchemaNodeV0::Number,
+        "integer" => {
+            let minimum = optional_bound(object, "minimum", Value::as_i64)?;
+            let maximum = optional_bound(object, "maximum", Value::as_i64)?;
+            if minimum.is_some() || maximum.is_some() {
+                UnvalidatedSchemaNodeV0::BoundedInteger { minimum, maximum }
+            } else {
+                UnvalidatedSchemaNodeV0::Integer
+            }
+        }
+        "number" => {
+            let minimum = optional_bound(object, "minimum", number_bound)?;
+            let maximum = optional_bound(object, "maximum", number_bound)?;
+            if minimum.is_some() || maximum.is_some() {
+                UnvalidatedSchemaNodeV0::BoundedNumber { minimum, maximum }
+            } else {
+                UnvalidatedSchemaNodeV0::Number
+            }
+        }
         "boolean" => UnvalidatedSchemaNodeV0::Boolean,
         "array" => UnvalidatedSchemaNodeV0::Array {
             items: Box::new(schema_node(
@@ -92,6 +120,35 @@ fn schema_node(value: &Value, depth: usize) -> Result<UnvalidatedSchemaNodeV0, M
         },
         _ => return Err(McpError::InvalidSchema),
     })
+}
+
+fn optional_bound<T>(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    parse: impl FnOnce(&Value) -> Option<T>,
+) -> Result<Option<T>, McpError> {
+    object
+        .get(key)
+        .map(|value| parse(value).ok_or(McpError::InvalidSchema))
+        .transpose()
+}
+
+fn number_bound(value: &Value) -> Option<f64> {
+    let number = value.as_f64().filter(|number| number.is_finite())?;
+    let integer = value
+        .as_i64()
+        .map(i128::from)
+        .or_else(|| value.as_u64().map(i128::from));
+    // An integer threshold must not silently shift through a lossy f64 conversion.
+    // Keep thresholds inside the exact-integer binary64 range. Larger raw integer
+    // tokens may already have rounded through serde_json::Value before this adapter.
+    if number.abs() > 9_007_199_254_740_992.0 {
+        return None;
+    }
+    if integer.is_some_and(|integer| number as i128 != integer) {
+        return None;
+    }
+    Some(number)
 }
 
 pub(super) fn validate_arguments(
@@ -159,20 +216,19 @@ pub(super) fn validate_output(schema: &Value, value: &Value) -> Result<(), McpEr
 
 fn output_matches(schema: &ValidatedSchemaNodeV0, value: &Value) -> bool {
     match (schema, value) {
-        (ValidatedSchemaNodeV0::Number, Value::Number(number)) => {
-            number.as_f64().is_some_and(f64::is_finite)
-        }
-        (ValidatedSchemaNodeV0::Integer, Value::Number(number)) => {
-            number.is_i64()
-                || number.is_u64()
-                || number
+        (_, Value::Number(number)) => {
+            if let Some(integer) = number.as_i64() {
+                schema.accepts_output_integer(i128::from(integer))
+            } else if let Some(integer) = number.as_u64() {
+                schema.accepts_output_integer(i128::from(integer))
+            } else {
+                number
                     .as_f64()
-                    .is_some_and(|n| n.is_finite() && n.fract() == 0.0)
+                    .is_some_and(|number| schema.accepts_output_number(number))
+            }
         }
         (ValidatedSchemaNodeV0::Boolean, Value::Bool(_)) => true,
-        (ValidatedSchemaNodeV0::String { enum_values }, Value::String(value)) => enum_values
-            .as_ref()
-            .is_none_or(|choices| choices.contains(value)),
+        (_, Value::String(value)) => schema.accepts_string_value(value),
         (ValidatedSchemaNodeV0::Array { items }, Value::Array(values)) => {
             values.iter().all(|value| output_matches(items, value))
         }

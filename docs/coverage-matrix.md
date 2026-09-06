@@ -116,3 +116,13 @@ to `contracts/model-selection.md`, `guides/model-selection.md` and the chat feat
 
 `active:CONVERSATION-MANAGE-001` maps the M30 conversation metadata lifecycle to
 `contracts/conversation-management.md`, the chat feature, and the history menu UI.
+
+## Calendar proposal extension
+
+[Calendar proposals](contracts/calendar-proposals.md) extends the owner-local
+Calendar companion under active:CHAT-003 and active:CHAT-004. Its focused core and
+real HTTP/controlled-provider tests run under the existing Rust gate; browser
+proposal checks bind through the existing usability runner. Pending proposals do
+not mutate items; explicit confirmation atomically saves the effect and receipt.
+C1 remains partial for reminders and production tenant storage; no module readiness
+or existing acceptance-row status is promoted by this extension.

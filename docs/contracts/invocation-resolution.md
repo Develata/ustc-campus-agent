@@ -78,7 +78,9 @@ P0a does not accept arbitrary JSON Schema. A future catalog/provider adapter own
 
 P0a owns `ValidatedToolInputSchemaV0::try_from(unvalidated)`. The unvalidated value carries an exact dialect string plus ordered property/required/enum sequences so duplicate declarations remain observable. The constructor accepts only dialect `tool-input-schema/v0`, requires an object root, rejects duplicate or invalid names and validates every structural limit before sorting into the validated AST. Its disjoint errors are `SchemaDialectUnsupported`, `SchemaMalformed` and `SchemaLimitExceeded`.
 
-The validated AST has exactly six variants and tags:
+The validated AST retains the six original variants and tags, with three additive
+bounded-scalar variants. Original node encodings and existing golden vectors remain
+byte-for-byte unchanged:
 
 | Tag | Variant | Canonical payload after the tag |
 |---|---|---|
@@ -88,6 +90,27 @@ The validated AST has exactly six variants and tags:
 | `0x04` | finite number | none |
 | `0x05` | boolean | none |
 | `0x06` | homogeneous array | one child item node |
+| `0x07` | bounded string | original string enum payload; optional minLength; optional maxLength |
+| `0x08` | bounded integer | optional inclusive minimum; optional inclusive maximum |
+| `0x09` | bounded finite number | optional inclusive minimum; optional inclusive maximum |
+
+Each optional bound uses one presence byte (0 or 1), followed when present by eight
+big-endian bytes: unsigned u64 character counts for strings, two's-complement i64
+for integers, and finite binary64 bits for numbers. Number negative zero normalizes
+to positive zero. Bounded variants require at least one bound; absent bounds retain
+the original variants. Contradictory ranges and non-finite number bounds reject.
+Bounds participate in schema, definition and projection digests, so a changed bound
+cannot reuse an old reviewed tool definition. No existing fixture digest is replaced.
+
+String bounds count Unicode scalar values (not UTF-8 bytes or UTF-16 code units),
+intersect with any enum, and do not relax the independent argument byte ceiling.
+Integer bounds are i64 and compare without floating-point conversion; number bounds
+use the existing finite binary64 profile. Input membership retains distinct Integer
+and Number tags. A protocol-owned scalar helper also checks MCP output membership,
+where number includes integers and integer includes integral decimal values; mixed
+comparisons preserve integer precision instead of rounding large integers to f64.
+This additive subset admits only minimum/maximum and minLength/maxLength. Exclusive
+bounds, patterns and other unsupported keywords remain adapter rejections.
 
 A count is `u64` big-endian. A string is `u64` big-endian byte length followed by its exact UTF-8 bytes; no Unicode normalization is performed. Property names match `^[A-Za-z_][A-Za-z0-9_.-]{0,63}$`. Required names are unique and must name declared properties. A present string enum has `1..=64` unique values, each `1..=256` UTF-8 bytes. The root counts as depth `1`; maximum depth is `8`, maximum total nodes `256`, maximum properties per object `64`, and maximum canonical schema bytes `65_536`. Objects are always closed: `additional_properties = false` is implicit and emits no byte.
 

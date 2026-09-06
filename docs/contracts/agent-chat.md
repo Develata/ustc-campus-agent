@@ -185,7 +185,7 @@ Input is exactly `{"board_id":"board:ustc:academic-calendar"}`. The bridge invok
 
 ### `simple_calendar_items`
 
-Input is a closed object with exact `action = record | list | delete`. `record` requires only a nonblank title of at most 256 UTF-8 bytes; `scheduled_for` is absent from this slice and any supplied field is rejected. `list` accepts no other field and remains read-only. `delete` requires one stable `calendar:item:N` ID. Rust revalidates the complete action-specific shape before execution.
+Input is a closed object with exact `action = record | list | delete | propose`. `record` requires only a nonblank title of at most 256 UTF-8 bytes; top-level `scheduled_for` remains rejected for legacy record. `propose` requires only a nested closed `mutation` object as specified by [Calendar proposals](calendar-proposals.md), which can carry an explicit-offset scheduled time and cannot execute an effect. `list` accepts no other field and remains read-only. `delete` requires one stable `calendar:item:N` ID. Rust revalidates the complete action-specific shape before execution.
 
 The `list` tool result projects every item as its exact `id`, `title` and optional
 non-null `scheduled_for`. It omits creation timestamps and null scheduling fields,
@@ -280,3 +280,11 @@ unchanged. A partial resource read must be described honestly, including its
 next_offset for deliberate continuation; unread content must not be claimed as
 read. This does not add a turn, a tool call, an automatic continuation or a grant.
 Unexpected tool calls beyond the budget still reject under the existing error codes.
+
+## Calendar proposal extension
+
+[CALENDAR-PROPOSAL-001](calendar-proposals.md) adds `action=propose` with a closed
+mutation object to the existing Calendar tool; it does not add model-confirm authority.
+Legacy exact record/delete intents and the four-tool baseline retain their meaning.
+Calendar list supplies a server clock and explicit campus timezone. The proposal result
+is labelled pending, distinct from item execution and reminder delivery.

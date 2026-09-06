@@ -11,6 +11,13 @@ pub(super) struct Disk {
     path: PathBuf,
     _lock: File,
 }
+impl Drop for Disk {
+    fn drop(&mut self) {
+        // Release at the owner's lifetime boundary: an unrelated fork may still
+        // hold this open file description until exec closes inherited handles.
+        let _ = self._lock.unlock();
+    }
+}
 impl Disk {
     pub(super) fn open(path: PathBuf) -> Result<(Self, State), ConversationError> {
         crate::durable_path::ensure_secure_parent(&path, true)
@@ -170,6 +177,43 @@ fn check_capacity(bytes: usize, running: usize) -> Result<(), ConversationError>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn dropped_owner_releases_lock_even_with_an_inherited_descriptor() {
+        let directory = std::env::temp_dir().join(format!(
+            "uca-conversation-lock-{}",
+            random_id().expect("random directory")
+        ));
+        fs::create_dir(&directory).expect("create directory");
+        fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))
+            .expect("private directory");
+        let path = directory.join("conversations.json");
+        let (disk, _) = Disk::open(path.clone()).expect("first writer");
+        // dup and fork retain the same open file description. Holding this clone
+        // models the window before an unrelated child closes its inherited fd.
+        let inherited = disk._lock.try_clone().expect("inherited descriptor");
+        assert!(matches!(
+            Disk::open(path.clone()),
+            Err(ConversationError::Unavailable)
+        ));
+        drop(disk);
+        let replacement = Disk::open(path.clone());
+        let reopened = replacement.is_ok();
+        drop(inherited);
+        let competitor = Disk::open(path);
+        let exclusive = matches!(&competitor, Err(ConversationError::Unavailable));
+        drop(competitor);
+        drop(replacement);
+        fs::remove_dir_all(directory).expect("cleanup");
+        assert!(
+            reopened,
+            "a dropped owner must not leave its lock in a child"
+        );
+        assert!(
+            exclusive,
+            "the replacement must remain the exclusive writer"
+        );
+    }
+
     #[test]
     fn running_reservations_leave_room_for_terminal_response() {
         assert_eq!(

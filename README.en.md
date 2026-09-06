@@ -17,7 +17,7 @@ A student competition project, not an official USTC service. The current runnabl
 | Transcript-certificate procedure | Conditions, steps, official links and an exportable personal checklist | Fixed reviewed procedure data |
 | Academic-calendar changes | Revision differences, sources and a change board | Fixed reviewed calendar examples |
 | Course comparison | Candidate plans and reasons from a demo profile | Explicit consent for the current request; data limits below |
-| Personal items | Record, list and delete by ID; retain committed items after restart | Local items; no dated planning or reminders |
+| Personal items | Record and list; preview/confirm dated additions, edits and deletion; retain after restart | Campus time shown explicitly; no reminder delivery |
 | Agent extensions | Install, configure, probe, grant, enable, disable and revoke packages | Reviewed single-component, public-read MCP or Skill packages |
 
 Chat supports saved history, follow-up questions, rename/delete and automatic `YYMMDD|topic` titles.
@@ -94,7 +94,7 @@ Planned RAG, multi-agent workflows and production features are not presented as 
 ## Data and current limits
 
 - Procedures and calendar changes use fixed reviewed data, not live campus retrieval. The course catalog mixes synthetic course facts with an iCourse aggregate-rating snapshot; permission for the latter remains unresolved.
-- Profile use requires request-specific consent. Item writes require explicit intent. Dated proposals, batch-write confirmation, reminders and streaming remain unimplemented.
+- Profile use requires request-specific consent. Item writes require explicit intent or confirmation of a stored proposal. Dated proposals and edits are supported; batch writes, reminder delivery and streaming remain unimplemented.
 - The server binds to loopback. Model credentials come from private server files and never enter the page, repository or tool receipts.
 - Planned user entry is SSO or administrator-configured accounts, without self-registration. Production authentication, multi-user hosting and real university identity integration remain unfinished.
 

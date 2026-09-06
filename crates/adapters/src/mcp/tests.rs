@@ -1,4 +1,5 @@
 use super::*;
+mod scalar_constraints;
 use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},

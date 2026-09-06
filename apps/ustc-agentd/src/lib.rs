@@ -13,6 +13,7 @@ mod affairs_invocation;
 mod affairs_persistence;
 mod affairs_publication;
 mod agent_chat;
+mod calendar_application;
 mod change_fixture;
 mod change_invocation;
 mod change_persistence;

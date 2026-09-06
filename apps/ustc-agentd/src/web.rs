@@ -38,6 +38,7 @@ use super::chat_provider::ChatProvider;
 use super::conversation_application::ConversationApplication;
 use super::model_catalog::ModelCatalog;
 
+mod calendar_routes;
 mod conversation_routes;
 use super::chat_tools::{CalendarAction, ChatToolExecution, ChatToolRequest};
 use super::market_catalog::{MarketCatalogError, MarketCatalogQuery};
@@ -50,6 +51,8 @@ mod plugin_routes;
 
 const INDEX_HTML: &str = include_str!("web/index.html");
 const APP_JS: &str = concat!(
+    include_str!("web/calendar-proposals.js"),
+    "\n;window.UcaCalendarProposals.mount(document.querySelector(\"#calendar-proposals\"));\n",
     include_str!("web/chat-markdown.js"),
     "\n;\n",
     include_str!("web/admin-controls.js"),
@@ -80,6 +83,8 @@ const APP_JS: &str = concat!(
     "\n;window.UcaPluginManagement.mount(document.querySelector(\"#plugin-management\"));\n",
 );
 const STYLES_CSS: &str = concat!(
+    include_str!("web/calendar-proposals.css"),
+    "\n",
     include_str!("web/styles.css"),
     "\n",
     include_str!("web/course-editor.css"),
@@ -747,6 +752,18 @@ fn web_router_with_models(
         .route("/api/v1/agent/status", get(agent_provider_status))
         .route("/api/v1/agent/models", get(agent_models))
         .route(
+            "/api/v1/calendar/proposals",
+            get(calendar_routes::list).post(calendar_routes::propose),
+        )
+        .route(
+            "/api/v1/calendar/proposals/{id}/confirm",
+            post(calendar_routes::confirm),
+        )
+        .route(
+            "/api/v1/calendar/proposals/{id}/cancel",
+            post(calendar_routes::cancel),
+        )
+        .route(
             "/api/v1/agent/conversations/{id}/activity",
             get(conversation_routes::activity),
         )
@@ -1059,6 +1076,18 @@ fn change_chat_outcome_succeeded(outcome: &M70ChangeFeedOutcomeDto) -> bool {
 
 fn execute_chat_tool(state: &WebState, request: ChatToolRequest) -> ChatToolExecution {
     match request {
+        ChatToolRequest::CalendarPropose { mutation } => {
+            let Ok(mut application) = state.lock() else {
+                return ChatToolExecution::failed(json!({"code":"calendar_store_unavailable"}));
+            };
+            match application.propose_calendar_from_agent(mutation) {
+                Ok(proposal) => ChatToolExecution::succeeded(json!({
+                    "schema":"calendar-proposal-result/v1", "proposal":proposal,
+                    "message":"Proposal saved for explicit user confirmation in the Calendar panel. No item has been changed. This is not a reminder."
+                })),
+                Err(error) => calendar_error_execution(error),
+            }
+        }
         ChatToolRequest::Plugin { .. } => {
             ChatToolExecution::denied(json!({"code":"plugin_runtime_unavailable"}))
         }
@@ -1178,7 +1207,21 @@ fn execute_calendar_chat_tool(
 
 fn calendar_error_execution(error: CalendarError) -> ChatToolExecution {
     match error {
-        CalendarError::InvalidTitle | CalendarError::InvalidScheduledFor => {
+        CalendarError::ProposalConflict => {
+            ChatToolExecution::denied(json!({"code":"calendar_proposal_conflict"}))
+        }
+        CalendarError::ProposalExpired => {
+            ChatToolExecution::denied(json!({"code":"calendar_proposal_expired"}))
+        }
+        CalendarError::ProposalNotFound => {
+            ChatToolExecution::denied(json!({"code":"calendar_proposal_not_found"}))
+        }
+        CalendarError::ProposalLimitExceeded => {
+            ChatToolExecution::denied(json!({"code":"calendar_proposal_capacity_exceeded"}))
+        }
+        CalendarError::InvalidTitle
+        | CalendarError::InvalidScheduledFor
+        | CalendarError::InvalidProposal => {
             ChatToolExecution::denied(json!({"code": "invalid_calendar_item"}))
         }
         CalendarError::ItemLimitExceeded => {
@@ -1961,3 +2004,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(all(test, unix))]
+mod calendar_proposal_route_tests;

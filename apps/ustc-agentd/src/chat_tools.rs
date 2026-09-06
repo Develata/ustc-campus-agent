@@ -80,6 +80,46 @@ fn schema_json(schema: &ValidatedSchemaNodeV0) -> Value {
             enum_values: Some(values),
         } => json!({"type":"string", "enum":values}),
         ValidatedSchemaNodeV0::String { enum_values: None } => json!({"type":"string"}),
+        ValidatedSchemaNodeV0::BoundedString {
+            enum_values,
+            min_length,
+            max_length,
+        } => {
+            let mut value = json!({"type":"string"});
+            if let Some(values) = enum_values {
+                value["enum"] = json!(values);
+            }
+            if let Some(min) = min_length {
+                value["minLength"] = json!(min);
+            }
+            if let Some(max) = max_length {
+                value["maxLength"] = json!(max);
+            }
+            value
+        }
+        ValidatedSchemaNodeV0::BoundedInteger { minimum, maximum } => {
+            let mut value = json!({"type":"integer"});
+            if let Some(min) = minimum {
+                value["minimum"] = json!(min);
+            }
+            if let Some(max) = maximum {
+                value["maximum"] = json!(max);
+            }
+            value
+        }
+        ValidatedSchemaNodeV0::BoundedNumber {
+            minimum_bits,
+            maximum_bits,
+        } => {
+            let mut value = json!({"type":"number"});
+            if let Some(min) = minimum_bits {
+                value["minimum"] = json!(f64::from_bits(*min));
+            }
+            if let Some(max) = maximum_bits {
+                value["maximum"] = json!(f64::from_bits(*max));
+            }
+            value
+        }
         ValidatedSchemaNodeV0::Integer => json!({"type":"integer"}),
         ValidatedSchemaNodeV0::Number => json!({"type":"number"}),
         ValidatedSchemaNodeV0::Boolean => json!({"type":"boolean"}),
@@ -202,7 +242,7 @@ impl ChatToolCatalog {
         let mut definitions = vec![
             ChatToolDefinition {
                 name: AFFAIRS_TOOL_NAME.to_owned(),
-                description: "Read the reviewed public transcript-certificate procedure.".to_owned(),
+                description: "Read the reviewed historical official procedure covering transcripts, academic ranking certificates, enrollment certificates and overseas-document sealing. This is one reviewed source, not a live campus search.".to_owned(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
@@ -232,11 +272,19 @@ impl ChatToolCatalog {
             },
             ChatToolDefinition {
                 name: CALENDAR_TOOL_NAME.to_owned(),
-                description: "Record, list, or delete bounded owner-local calendar items. Recording accepts a title only; reminders and scheduled times are outside this tool.".to_owned(),
+                description: "List Calendar items (including server clock). For natural-language dates or edits use action=propose with a mutation object; record/update requires complete title and optional scheduled_for in RFC3339 with explicit offset. Read the clock first for relative dates, default campus UTC+08:00, clarify ambiguous dates. Proposals DO NOT change items: users must explicitly confirm the exact preview in the Calendar panel. No reminders are scheduled. Legacy action=record/delete is only for exact explicit commands.".to_owned(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {
-                        "action": {"type": "string", "enum": ["record", "list", "delete"]},
+                        "action": {"type": "string", "enum": ["record", "list", "delete", "propose"]},
+                        "mutation": {
+                            "type":"object", "properties": {
+                                "action":{"type":"string","enum":["record","update","delete"]},
+                                "title":{"type":"string","minLength":1,"maxLength":256},
+                                "scheduled_for":{"type":["string","null"],"description":"Full RFC3339 date/time with explicit offset; null means undated. Never claim this schedules a reminder."},
+                                "item_id":{"type":"string","pattern":"^calendar:item:[1-9][0-9]*$"}
+                            }, "required":["action"], "additionalProperties":false
+                        },
                         "title": {"type": "string", "minLength": 1, "maxLength": MAX_CALENDAR_TITLE_BYTES},
                         "item_id": {"type": "string", "pattern": "^calendar:item:[1-9][0-9]*$"}
                     },
@@ -374,6 +422,21 @@ fn validate_calendar_arguments(
     let object = value
         .as_object()
         .ok_or(ChatToolValidationError::InvalidArguments)?;
+    if object.get("action").and_then(Value::as_str) == Some("propose") {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct ProposalArguments {
+            action: String,
+            mutation: ustc_campus_agent_simple_calendar::CalendarMutation,
+        }
+        let arguments: ProposalArguments = parse_exact_arguments(raw_arguments)?;
+        if arguments.action != "propose" {
+            return Err(ChatToolValidationError::InvalidArguments);
+        }
+        return Ok(ChatToolRequest::CalendarPropose {
+            mutation: arguments.mutation,
+        });
+    }
     let expected_keys: &[&str] = match object.get("action").and_then(Value::as_str) {
         Some("record") => &["action", "title"],
         Some("list") => &["action"],
@@ -494,6 +557,9 @@ pub(crate) enum ChatToolRequest {
         profile_snapshot_id: String,
         max_results: u8,
         beam_width: u16,
+    },
+    CalendarPropose {
+        mutation: ustc_campus_agent_simple_calendar::CalendarMutation,
     },
     CalendarItems {
         action: CalendarAction,
@@ -641,10 +707,8 @@ mod tests {
             assert_eq!(definition.input_schema["additionalProperties"], false);
         }
         assert_eq!(
-            definitions[2].input_schema["properties"]["action"]["enum"]
-                .as_array()
-                .map(Vec::len),
-            Some(3)
+            definitions[2].input_schema["properties"]["action"]["enum"],
+            json!(["record", "list", "delete", "propose"])
         );
     }
 

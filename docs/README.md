@@ -27,6 +27,7 @@
 |---|---|
 | 调用关系、模块与状态归属 | [架构](overview/architecture.md) · [模块边界](contracts/module-boundaries.md) |
 | 模型调用、工具校验与执行预算 | [Agent Chat](contracts/agent-chat.md) · [权限](contracts/permissions.md) |
+| 日历日期与确认 | [操作指南](guides/calendar-proposals.md) · [提案契约](contracts/calendar-proposals.md) |
 | 插件安装与执行 | [应用配置](contracts/plugin-management.md) · [MCP](contracts/mcp-execution.md) · [Skill](contracts/skill-context.md) |
 | 保存对话与操作 | [对话存储](contracts/chat-conversations.md) · [重命名/删除](contracts/conversation-management.md) |
 | 验证命令与状态 | [开发指南](guides/development.md) · [验收矩阵](acceptance/matrix.tsv) |

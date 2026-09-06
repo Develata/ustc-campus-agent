@@ -1344,6 +1344,10 @@ fn deterministic_turn(request: &ProviderRequest) -> Result<ProviderTurn, Provide
         && user.is_some_and(|user| {
             user.contains("成绩单")
                 || user.contains("成绩证明")
+                || user.contains("成绩排名证明")
+                || user.contains("在读证明")
+                || user.contains("出国材料封装")
+                || user.contains("出国封装")
                 || contains_ascii_term(user, "transcript")
                 || contains_ascii_term(user, "affairs navigator")
         });
@@ -1656,6 +1660,73 @@ mod tests {
                 .unwrap();
             assert_eq!(turn.tool_calls.len(), 1, "prompt={prompt}");
             assert_eq!(turn.tool_calls[0].name, expected, "prompt={prompt}");
+        }
+    }
+
+    #[test]
+    fn deterministic_reviewed_affairs_intents_share_one_source_and_preserve_calendar_priority() {
+        let provider = ChatProvider::deterministic_mock();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let tools = [AFFAIRS_TOOL, CHANGE_TOOL, OPPORTUNITY_TOOL, CALENDAR_TOOL];
+        for prompt in [
+            "在读证明怎么办？",
+            "成绩排名证明怎么办？",
+            "如何下载成绩单？",
+            "出国成绩单封装怎么办理？",
+            "出国材料封装怎么办？",
+            "出国封装在哪里办理？",
+        ] {
+            let turn = runtime
+                .block_on(provider.complete(&request(prompt, &tools)))
+                .unwrap();
+            assert_eq!(turn.tool_calls.len(), 1, "prompt={prompt}");
+            assert_eq!(turn.tool_calls[0].name, AFFAIRS_TOOL, "prompt={prompt}");
+            assert_eq!(
+                serde_json::from_str::<Value>(&turn.tool_calls[0].arguments).unwrap(),
+                json!({"procedure_id": "proc:ustc:undergraduate:transcript-certificate"}),
+                "prompt={prompt}"
+            );
+            assert!(
+                turn.content.is_none(),
+                "no answer before evidence: {prompt}"
+            );
+        }
+        for prompt in [
+            "校园卡丢了怎么办？",
+            "休学手续怎么办理？",
+            "芯片封装怎么办？",
+            "快递包裹封装怎么办？",
+        ] {
+            let turn = runtime
+                .block_on(provider.complete(&request(prompt, &tools)))
+                .unwrap();
+            assert!(
+                turn.tool_calls.is_empty(),
+                "unsupported procedure: {prompt}"
+            );
+            assert!(
+                turn.content
+                    .expect("bounded capability explanation")
+                    .starts_with("这是离线 deterministic mock 回答。"),
+                "no invented procedure: {prompt}"
+            );
+        }
+        for title in ["办理在读证明", "申请成绩排名证明", "办理出国材料封装"]
+        {
+            let prompt = format!("记录事项：{title}");
+            let turn = runtime
+                .block_on(provider.complete(&request(&prompt, &tools)))
+                .unwrap();
+            assert_eq!(turn.tool_calls.len(), 1, "prompt={prompt}");
+            assert_eq!(turn.tool_calls[0].name, CALENDAR_TOOL, "prompt={prompt}");
+            assert_eq!(
+                serde_json::from_str::<Value>(&turn.tool_calls[0].arguments).unwrap(),
+                json!({"action": "record", "title": title}),
+                "prompt={prompt}"
+            );
         }
     }
 
@@ -2506,8 +2577,28 @@ mod tests {
                     break;
                 }
                 request.extend_from_slice(&buffer[..read]);
-                if request.windows(4).any(|window| window == b"\r\n\r\n") {
-                    break;
+                if let Some(header_end) =
+                    request.windows(4).position(|window| window == b"\r\n\r\n")
+                {
+                    let headers = String::from_utf8_lossy(&request[..header_end]);
+                    let content_length: usize = headers
+                        .lines()
+                        .filter_map(|line| line.split_once(':'))
+                        .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+                        .expect("fixture request has Content-Length")
+                        .1
+                        .trim()
+                        .parse()
+                        .expect("valid Content-Length");
+                    // Consume the full request before closing, or unread body bytes can reset TCP.
+                    if request.len() >= header_end + 4 + content_length {
+                        let body: serde_json::Value = serde_json::from_slice(
+                            &request[header_end + 4..header_end + 4 + content_length],
+                        )
+                        .expect("complete JSON request body");
+                        assert_eq!(body["model"], "fixed-model");
+                        break;
+                    }
                 }
             }
             let request_text = String::from_utf8_lossy(&request);

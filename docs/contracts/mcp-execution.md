@@ -75,3 +75,20 @@ argument or grant semantics. MCP output validation uses the same admitted schema
 structure and value bounds but JSON Schema numeric membership: numbers include
 integers, and integer outputs may use an integral decimal representation. Invalid
 outputs still fail closed and quarantine the binding.
+
+The scalar constraint extension additionally admits inclusive `minimum`/`maximum`
+on integer/number and `minLength`/`maxLength` on strings. These enter the shared
+checked AST, canonical schema digest, gateway membership check and model-visible
+schema; no keyword is accepted merely as an ignored annotation. String length counts
+Unicode scalar values and intersects enums; the existing UTF-8 byte cap remains.
+Length bounds must be nonnegative u64 JSON integer tokens. Integer numeric bounds
+must be i64 JSON integer tokens; decimal integer thresholds are explicitly unsupported.
+Number bounds use finite binary64 within [-2^53, 2^53], including existing decimal
+rounding semantics. The magnitude limit also rejects oversized raw integer tokens
+that serde_json may have converted to floating point before schema compilation;
+integer-token thresholds that cannot be represented exactly as binary64 reject.
+Negative zero normalizes, contradictory ranges reject, and output range checks use
+exact integer-versus-binary64 comparisons. Bounds changing on rediscovery require
+review. Existing unconstrained schema encodings/digests remain unchanged. This is
+still a bounded numeric/schema profile, not arbitrary-precision JSON Schema support;
+exclusive bounds, pattern, multipleOf, references and unions remain unsupported.
