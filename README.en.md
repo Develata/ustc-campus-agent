@@ -21,6 +21,8 @@ A student competition project, not an official USTC service. The current runnabl
 | Agent extensions | Install, configure, probe, grant, enable, disable and revoke packages | Reviewed single-component, public-read MCP or Skill packages |
 
 Chat supports saved history, follow-up questions, rename/delete and automatic `YYMMDD|topic` titles.
+Personal Agent instructions can be saved in Settings and apply from the next message
+across saved conversations. See the [root prompt contract](docs/contracts/agent-root-prompt.md).
 The model selector sits beside the composer. Tool progress reflects actual execution, and administrator demo controls are secondary.
 
 <a id="quick-start"></a>

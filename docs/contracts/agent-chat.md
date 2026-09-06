@@ -288,3 +288,12 @@ mutation object to the existing Calendar tool; it does not add model-confirm aut
 Legacy exact record/delete intents and the four-tool baseline retain their meaning.
 Calendar list supplies a server clock and explicit campus timezone. The proposal result
 is labelled pending, distinct from item execution and reminder delivery.
+
+
+### Personal root prompt extension
+
+[ROOT-PROMPT-001](agent-root-prompt.md) adds a separate server-persisted personal
+instruction for new saved-conversation turns. The request-only preference described
+above stays request-only. Personal instructions precede it and do not replace platform
+system policy, tool admission or explicit effect confirmation. This supersedes the
+historical “no persisted prompt profiles” exclusion only for this bounded setting.

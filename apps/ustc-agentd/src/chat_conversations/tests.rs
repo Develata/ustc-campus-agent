@@ -572,3 +572,6 @@ fn saved_plugin_trace_and_real_model_identity_finish_and_reopen() {
 
 #[path = "automatic_title_tests.rs"]
 mod automatic_title_tests;
+
+#[path = "root_prompt_tests.rs"]
+mod root_prompt_tests;

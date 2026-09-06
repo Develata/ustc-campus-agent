@@ -38,6 +38,23 @@ impl ConversationApplication {
         })
     }
 
+    pub(crate) fn root_prompt(
+        &self,
+        tenant: &TenantId,
+        user: &UserId,
+    ) -> Result<crate::chat_conversations::RootPromptDto, ConversationError> {
+        self.store.root_prompt(tenant, user)
+    }
+
+    pub(crate) fn update_root_prompt(
+        &self,
+        tenant: &TenantId,
+        user: &UserId,
+        intent: crate::chat_conversations::RootPromptUpdateDto,
+    ) -> Result<crate::chat_conversations::RootPromptDto, ConversationError> {
+        self.store.update_root_prompt(tenant, user, intent)
+    }
+
     pub(crate) fn list(
         &self,
         tenant: &TenantId,
@@ -417,6 +434,91 @@ mod automatic_title_tests {
             ModelCatalog::from_file(ChatProvider::deterministic_mock(), &file).expect("catalog");
         ConversationApplication::open(peer.root.join("conversations.json"), models)
             .expect("application")
+    }
+
+    #[tokio::test]
+    async fn root_prompt_reaches_controlled_provider_frozen_and_never_title_or_replay() {
+        use crate::chat_conversations::RootPromptUpdateDto;
+        let peer = Peer::start(vec![
+            Some((200, answer("first reply"))),
+            Some((200, answer("Test title"))),
+            Some((200, answer("second reply"))),
+        ]);
+        let app = application(&peer);
+        let owner = owner();
+        let conversation = app.create(&owner.0, &owner.1, "create").expect("create");
+        app.update_root_prompt(
+            &owner.0,
+            &owner.1,
+            RootPromptUpdateDto {
+                schema: "agent-root-prompt-update/v1".to_owned(),
+                expected_revision: 0,
+                text: "saved-root-old-marker".to_owned(),
+            },
+        )
+        .expect("save original");
+        let first = intent("first", 0, "hello");
+        let changing_app = app.clone();
+        let changing_owner = owner.clone();
+        let result = app
+            .submit_with_executor_factory(
+                owner.clone(),
+                conversation.id.clone(),
+                first.clone(),
+                false,
+                move |_| async move {
+                    changing_app
+                        .update_root_prompt(
+                            &changing_owner.0,
+                            &changing_owner.1,
+                            RootPromptUpdateDto {
+                                schema: "agent-root-prompt-update/v1".to_owned(),
+                                expected_revision: 1,
+                                text: "saved-root-new-marker".to_owned(),
+                            },
+                        )
+                        .expect("change after reservation");
+                    Ok(no_tools as fn(ChatToolRequest) -> ChatToolExecution)
+                },
+            )
+            .await
+            .expect("first result");
+        assert_eq!(result.turn.phase, TurnPhase::Completed);
+        {
+            let wire = peer.requests.lock().expect("requests");
+            assert!(wire[0].to_string().contains("saved-root-old-marker"));
+            assert!(!wire[0].to_string().contains("saved-root-new-marker"));
+            assert!(
+                !wire[1].to_string().contains("saved-root-"),
+                "title excludes private instruction"
+            );
+        }
+        app.submit(
+            owner.clone(),
+            conversation.id.clone(),
+            intent("second", result.revision, "next"),
+            false,
+            no_tools,
+        )
+        .await
+        .expect("second");
+        {
+            let wire = peer.requests.lock().expect("requests");
+            assert!(wire[2].to_string().contains("saved-root-new-marker"));
+            assert!(!wire[2].to_string().contains("saved-root-old-marker"));
+        }
+        assert!(
+            !serde_json::to_string(
+                &app.get(&owner.0, &owner.1, &conversation.id)
+                    .expect("public")
+            )
+            .expect("json")
+            .contains("saved-root-")
+        );
+        app.submit(owner, conversation.id, first, false, no_tools)
+            .await
+            .expect("replay");
+        assert_eq!(peer.count(), 3);
     }
 
     #[tokio::test]

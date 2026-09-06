@@ -80,6 +80,7 @@ impl Disk {
                 let state = State {
                     version: 1,
                     conversations: Vec::new(),
+                    root_prompts: None,
                 };
                 disk.save(&state)?;
                 state

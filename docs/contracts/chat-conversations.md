@@ -124,3 +124,13 @@ Local smoke with the configured `hy-mt2-7b` generated the synthetic title
 and exact HTTP retry returned the original result. The browser rendered that
 server title. Eight existing conversation browser journeys passed with the dated
 title assertion, including stale reads, reload and uncertain-request recovery.
+
+
+## Personal Agent instructions
+
+[ROOT-PROMPT-001](agent-root-prompt.md) adds an owner-scoped root-prompt setting to
+this store. New turn reservation snapshots the setting atomically; changing settings
+does not change in-flight requests or terminal replays. No prompt text is exposed in
+conversation DTOs. Existing v1 stores read without rewriting; first settings update
+writes v2, which old binaries must reject. Settings use the existing capacity and
+private-file failure rules, with a separate revision for stale-update protection.

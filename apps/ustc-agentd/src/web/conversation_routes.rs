@@ -188,3 +188,37 @@ pub(super) async fn manage(
             .and_then(|(tenant, user)| application(&state)?.manage(&tenant, &user, &id, intent)),
     )
 }
+
+pub(super) async fn root_prompt(State(state): State<WebState>, headers: HeaderMap) -> Response {
+    if let Err(compatibility) =
+        dispatch_with_protocol_major(presented_protocol_major(&headers), || ())
+    {
+        return compatibility_response(compatibility);
+    }
+    respond(
+        owner(&state).and_then(|(tenant, user)| application(&state)?.root_prompt(&tenant, &user)),
+    )
+}
+
+pub(super) async fn update_root_prompt(
+    State(state): State<WebState>,
+    headers: HeaderMap,
+    body: Result<Json<crate::chat_conversations::RootPromptUpdateDto>, JsonRejection>,
+) -> Response {
+    if let Err(compatibility) =
+        dispatch_with_protocol_major(presented_protocol_major(&headers), || ())
+    {
+        return compatibility_response(compatibility);
+    }
+    let Ok(Json(intent)) = body else {
+        return failure(ConversationError::InvalidIntent);
+    };
+    if !has_application_json_content_type(&headers) {
+        return failure(ConversationError::InvalidIntent);
+    }
+    respond(
+        owner(&state).and_then(|(tenant, user)| {
+            application(&state)?.update_root_prompt(&tenant, &user, intent)
+        }),
+    )
+}

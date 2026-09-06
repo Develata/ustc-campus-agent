@@ -2,7 +2,9 @@
 mod automatic_title;
 mod management;
 mod persistence;
+mod root_prompt;
 pub(crate) use management::{ConversationManageIntentDto, ConversationManageResultDto};
+pub(crate) use root_prompt::{RootPromptDto, RootPromptUpdateDto};
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -173,6 +175,8 @@ impl StoredConversation {
 struct State {
     version: u32,
     conversations: Vec<StoredConversation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    root_prompts: Option<Vec<root_prompt::StoredRootPrompt>>,
 }
 struct Inner {
     state: State,
@@ -372,6 +376,7 @@ impl ConversationStore {
             return Err(ConversationError::InvalidIntent);
         }
         let mut request = ChatRequestDto {
+            saved_root_prompt: None,
             schema: if explicit_model {
                 CHAT_REQUEST_SCHEMA_V3
             } else {
@@ -459,6 +464,9 @@ impl ConversationStore {
             return Err(ConversationError::Capacity);
         }
         request.messages = history(current, &intent.message, profile.as_deref());
+        request.saved_root_prompt = root_prompt::find(&inner.state, tenant, user)
+            .filter(|prompt| !prompt.text.is_empty())
+            .map(|prompt| prompt.text.clone());
         validate_chat_request(request.clone(), confirmed)
             .map_err(ConversationError::InvalidChat)?;
         // Exact terminal replay has already returned; model availability gates only new effects.
@@ -655,7 +663,8 @@ fn history(
 }
 fn validate_state(state: &State) -> Result<(), ConversationError> {
     use std::collections::{BTreeMap, BTreeSet};
-    if state.version != 1
+    root_prompt::validate(state)?;
+    if !matches!(state.version, 1 | 2)
         || state.conversations.len() > 1000
         || state
             .conversations

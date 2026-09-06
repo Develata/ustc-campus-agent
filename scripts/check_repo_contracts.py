@@ -306,6 +306,7 @@ KEY_FILES = [
     "docs/contracts/conversation-management.md",
     "docs/contracts/chat-activity.md",
     "docs/contracts/calendar-proposals.md",
+    "docs/contracts/agent-root-prompt.md",
     "docs/contracts/platform-session-port.md",
     "docs/contracts/plugin-package.md",
     "docs/contracts/source-import.md",

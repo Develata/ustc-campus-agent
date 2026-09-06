@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {checkRootPromptSettings} from "./tests/root_prompt_browser_cases.mjs";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { access, mkdtemp, rm } from "node:fs/promises";
@@ -261,7 +262,7 @@ try {
       return response;
     };
   })()`);
-  if (!["market", "plugins", "models", "management", "conversations", "shell", "activity", "calendar"].includes(process.env.UCA_BROWSER_SUITE)) {
+  if (!["market", "plugins", "models", "management", "conversations", "shell", "activity", "calendar", "root-prompt"].includes(process.env.UCA_BROWSER_SUITE)) {
   for (const scene of ['affairs','radar','planning','calendar']) {
     await navigate(`plugins/${scene}`);
     await field('#chat-input','');
@@ -399,11 +400,12 @@ try {
   await checkAdminControls({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   }
   if (process.env.UCA_BROWSER_SUITE === "shell") await checkChatShell({ evaluate, waitFor, cdp, sessionId, navigate, click, field, pass });
-  if (!["plugins", "models", "management", "conversations", "shell", "activity", "calendar"].includes(process.env.UCA_BROWSER_SUITE)) await checkMarketCatalog({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  if (!["plugins", "models", "management", "conversations", "shell", "activity", "calendar", "root-prompt"].includes(process.env.UCA_BROWSER_SUITE)) await checkMarketCatalog({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   if (process.env.UCA_BROWSER_SUITE === "management") await checkConversationManagement({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   if (process.env.UCA_BROWSER_SUITE === "models") await checkModelSelection({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   if (process.env.UCA_BROWSER_SUITE === "plugins") await checkPluginManagement({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   if (process.env.UCA_BROWSER_SUITE === "conversations") await checkConversations({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  if (!process.env.UCA_BROWSER_SUITE || process.env.UCA_BROWSER_SUITE === "root-prompt") await checkRootPromptSettings({evaluate, waitFor, navigate, click, field, pass, cdp, sessionId});
   if (!process.env.UCA_BROWSER_SUITE || process.env.UCA_BROWSER_SUITE === "calendar") await checkCalendarProposals({ evaluate, waitFor, navigate, click, field, pass, cdp, sessionId });
   if (process.env.UCA_BROWSER_SUITE === "activity") await checkChatActivity({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   assert.deepEqual(cdp.events.filter(e=>e.method==='Runtime.exceptionThrown'),[]);

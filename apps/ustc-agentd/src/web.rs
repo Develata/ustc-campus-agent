@@ -51,6 +51,8 @@ mod plugin_routes;
 
 const INDEX_HTML: &str = include_str!("web/index.html");
 const APP_JS: &str = concat!(
+    include_str!("web/root-prompt-settings.js"),
+    "\n;window.UcaRootPromptSettings.mount(document.querySelector(\"#root-prompt-settings\"));\n",
     include_str!("web/calendar-proposals.js"),
     "\n;window.UcaCalendarProposals.mount(document.querySelector(\"#calendar-proposals\"));\n",
     include_str!("web/chat-markdown.js"),
@@ -83,6 +85,8 @@ const APP_JS: &str = concat!(
     "\n;window.UcaPluginManagement.mount(document.querySelector(\"#plugin-management\"));\n",
 );
 const STYLES_CSS: &str = concat!(
+    include_str!("web/root-prompt-settings.css"),
+    "\n",
     include_str!("web/calendar-proposals.css"),
     "\n",
     include_str!("web/styles.css"),
@@ -751,6 +755,10 @@ fn web_router_with_models(
         .route("/api/v1/agent/chat", post(agent_chat))
         .route("/api/v1/agent/status", get(agent_provider_status))
         .route("/api/v1/agent/models", get(agent_models))
+        .route(
+            "/api/v1/agent/root-prompt",
+            get(conversation_routes::root_prompt).put(conversation_routes::update_root_prompt),
+        )
         .route(
             "/api/v1/calendar/proposals",
             get(calendar_routes::list).post(calendar_routes::propose),
@@ -2007,3 +2015,6 @@ mod tests {
 
 #[cfg(all(test, unix))]
 mod calendar_proposal_route_tests;
+
+#[cfg(all(test, unix))]
+mod root_prompt_route_tests;
