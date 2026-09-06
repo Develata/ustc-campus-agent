@@ -1,6 +1,8 @@
 //! Owner-scoped durable transcripts around the bounded Chat application loop.
 mod automatic_title;
 mod management;
+mod organization;
+use organization::ConversationOrganizationDto;
 mod persistence;
 mod root_prompt;
 pub(crate) use management::{ConversationManageIntentDto, ConversationManageResultDto};
@@ -72,6 +74,7 @@ pub(crate) struct ConversationSummaryDto {
     pub(crate) title: String,
     pub(crate) revision: u64,
     pub(crate) turn_count: usize,
+    pub(crate) organization: ConversationOrganizationDto,
 }
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct ConversationListDto {
@@ -85,6 +88,7 @@ pub(crate) struct ConversationDto {
     pub(crate) title: String,
     pub(crate) revision: u64,
     pub(crate) turns: Vec<ConversationTurnDto>,
+    pub(crate) organization: ConversationOrganizationDto,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -144,6 +148,10 @@ struct StoredConversation {
     deleted: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     explicit_title: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    created_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    organization: Option<ConversationOrganizationDto>,
 }
 fn is_false(value: &bool) -> bool {
     !value
@@ -159,6 +167,7 @@ impl StoredConversation {
             title: self.title.clone(),
             revision: self.revision,
             turns: self.turns.iter().map(|turn| turn.view.clone()).collect(),
+            organization: self.organization_view(),
         }
     }
     fn result(&self, turn: &StoredTurn) -> ConversationTurnResultDto {
@@ -228,23 +237,33 @@ impl ConversationStore {
         if inner.poisoned {
             return Err(ConversationError::Unavailable);
         }
+        let mut conversations: Vec<_> = inner
+            .state
+            .conversations
+            .iter()
+            .filter(|c| c.owned_by(tenant, user) && !c.deleted)
+            .rev()
+            .map(|c| ConversationSummaryDto {
+                id: c.id.clone(),
+                title: c.title.clone(),
+                revision: c.revision,
+                turn_count: c.turns.len(),
+                organization: c.organization_view(),
+            })
+            .collect();
+        // Stable sort retains the original reverse creation order for same-day ties.
+        conversations.sort_by(|a, b| {
+            b.organization
+                .pinned
+                .cmp(&a.organization.pinned)
+                .then_with(|| b.organization.date.cmp(&a.organization.date))
+        });
         Ok(ConversationListDto {
             schema: "chat-conversation-list/v1",
-            conversations: inner
-                .state
-                .conversations
-                .iter()
-                .filter(|c| c.owned_by(tenant, user) && !c.deleted)
-                .rev()
-                .map(|c| ConversationSummaryDto {
-                    id: c.id.clone(),
-                    title: c.title.clone(),
-                    revision: c.revision,
-                    turn_count: c.turns.len(),
-                })
-                .collect(),
+            conversations,
         })
     }
+
     pub(crate) fn get(
         &self,
         tenant: &TenantId,
@@ -338,6 +357,8 @@ impl ConversationStore {
             management: Vec::new(),
             deleted: false,
             explicit_title: false,
+            created_date: Some(crate::conversation_title::current_date()),
+            organization: None,
         };
         let view = conversation.view();
         let mut next = inner.state.clone();
@@ -480,9 +501,12 @@ impl ConversationStore {
             .ok_or(ConversationError::Capacity)?;
         let title_request = (conversation.turns.is_empty() && !conversation.explicit_title)
             .then(|| intent.message.clone());
-        let automatic_title = title_request
-            .as_deref()
-            .map(automatic_title::AutomaticTitle::first_message);
+        let automatic_title = title_request.as_deref().map(|message| {
+            automatic_title::AutomaticTitle::first_message(
+                message,
+                conversation.organization_view().date,
+            )
+        });
         if let Some(title) = &automatic_title {
             conversation.title = title.title().to_owned();
         }
@@ -687,7 +711,10 @@ fn validate_state(state: &State) -> Result<(), ConversationError> {
             || !ids.insert(&c.id)
             || !valid_request_id(&c.create_request)
             || !creates.insert((&c.tenant, &c.user, &c.create_request))
-            || c.title.len() > 192
+            || c.title.len() > 199
+            || c.created_date
+                .as_deref()
+                .is_some_and(|d| !crate::conversation_title::valid_date(d))
             || c.turns.len() > MAX_TURNS
         {
             return Err(ConversationError::Unavailable);

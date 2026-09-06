@@ -304,6 +304,7 @@ KEY_FILES = [
     "docs/contracts/platform-account.md",
     "docs/contracts/chat-conversations.md",
     "docs/contracts/conversation-management.md",
+    "docs/contracts/conversation-organization.md",
     "docs/contracts/chat-activity.md",
     "docs/contracts/calendar-proposals.md",
     "docs/contracts/agent-root-prompt.md",

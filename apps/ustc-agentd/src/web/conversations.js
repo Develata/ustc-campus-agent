@@ -7,6 +7,20 @@ window.UcaConversations = (() => {
   const fail = code => Object.assign(new Error(code), { code });
   const identifier = value => typeof value === "string" && value.length > 0 && textBytes(value) <= 256;
   const revision = value => Number.isSafeInteger(value) && value >= 0;
+  function dateKey(value) {
+    if(typeof value!=="string"||!/^\d{6}$/.test(value))return false;
+    const year=2000+Number(value.slice(0,2)),month=Number(value.slice(2,4)),day=Number(value.slice(4,6));
+    const parsed=new Date(Date.UTC(year,month-1,day));
+    return parsed.getUTCFullYear()===year&&parsed.getUTCMonth()===month-1&&parsed.getUTCDate()===day;
+  }
+  function organization(value,title,required=false) {
+    if(value===undefined&&!required){const date=title.slice(0,6);return {date:title[6]==="|"&&dateKey(date)?date:null,pinned:false,group:null};}
+    if(!value||typeof value!=="object"||Array.isArray(value)||Object.keys(value).sort().join(",")!=="date,group,pinned"||
+       (value.date!==null&&!dateKey(value.date))||typeof value.pinned!=="boolean"||
+       (value.group!==null&&(typeof value.group!=="string"||!value.group.trim()||value.group!==value.group.trim()||textBytes(value.group)>64||/[\p{Cc}\p{Cf}]/u.test(value.group))))throw fail("invalid_response");
+    return {...value};
+  }
+  const compareDate=(left,right)=>(right.organization.date??"").localeCompare(left.organization.date??"");
   function validateTurn(turn) {
     if (!turn || !identifier(turn.request_id) || textBytes(turn.user) > 4096 ||
         !["running", "completed", "failed", "interrupted"].includes(turn.phase) ||
@@ -26,7 +40,7 @@ window.UcaConversations = (() => {
         ids.add(turn.request_id);
         if (turn.response) callbacks.validateResponse(turn.response);
       }
-      return value;
+      return {...value,organization:organization(value.organization,value.title)};
     }
     let entries = [], current = null, busy = false, available = false, pending = null, sequence = 0;
     let createRequest = null, management = null;
@@ -41,7 +55,7 @@ window.UcaConversations = (() => {
     status.id = "conversation-history-status"; status.setAttribute("role", "status");
     const list = document.createElement("ol"); list.className = "conversation-history-list";
     root.replaceChildren(heading, status, list);
-    const menu = window.UcaConversationMenu.mount({canManage:()=>available && !busy && !pending && !management,onAction:manage});
+    const menu = window.UcaConversationMenu.mount({canManage:()=>available && !busy && !pending && !management,onAction:manage,getGroups:()=>[...new Set(entries.map(entry=>entry.organization.group).filter(value=>value!==null))].sort((a,b)=>a<b?-1:a>b?1:0)});
 
     async function request(url, options = {}) {
       const controller = new AbortController(); let timer;
@@ -75,15 +89,33 @@ window.UcaConversations = (() => {
     }
     function renderList() {
       list.replaceChildren();
-      for (const entry of entries) {
-        const li = document.createElement("li"), button = document.createElement("button");
-        button.type = "button"; button.className = "conversation-open"; button.dataset.conversationId = entry.id;
-        button.textContent = entry.title || "新对话"; button.title = entry.title || "新对话";
-        if (entry.id === current?.id) button.setAttribute("aria-current", "true");
-        button.addEventListener("click", () => { void select(entry.id); });
-        li.append(button); menu.attach(li,entry); list.append(li);
+      const pinned=entries.filter(entry=>entry.organization.pinned).sort(compareDate);
+      const ordinary=entries.filter(entry=>!entry.organization.pinned);
+      const groups=[...new Set(ordinary.map(entry=>entry.organization.group).filter(value=>value!==null))].sort((a,b)=>a<b?-1:a>b?1:0);
+      const sections=[{name:"置顶",kind:"pinned",entries:pinned},...groups.map(name=>({name,kind:"group",entries:ordinary.filter(entry=>entry.organization.group===name).sort(compareDate)})),{name:groups.length||pinned.length?"未分组":"对话",kind:"ungrouped",entries:ordinary.filter(entry=>entry.organization.group===null).sort(compareDate)}];
+      for(const section of sections){
+        if(!section.entries.length)continue;
+        const wrapper=document.createElement("li");wrapper.className="conversation-section";wrapper.dataset.conversationSection=section.kind;
+        if(section.kind==="group")wrapper.dataset.conversationGroup=section.name;
+        const heading=document.createElement("h3");heading.textContent=section.name;
+        const rows=document.createElement("ol");rows.className="conversation-section-list";rows.setAttribute("aria-label",section.name);
+        wrapper.append(heading,rows);list.append(wrapper);
+        for(const entry of section.entries){
+          const li=document.createElement("li"),button=document.createElement("button");li.className="conversation-row";
+          button.type="button";button.className="conversation-open";button.dataset.conversationId=entry.id;
+          button.textContent=entry.title||"新对话";button.title=entry.title||"新对话";
+          if(entry.id===current?.id)button.setAttribute("aria-current","true");
+          button.addEventListener("click",()=>{void select(entry.id);});
+          li.append(button);menu.attach(li,entry);rows.append(li);
+        }
       }
       updateControls();
+    }
+    function mergeSummary(summary) {
+      const index=entries.findIndex(entry=>entry.id===summary.id);
+      if(index<0)entries.unshift(summary); // Only a newly created conversation precedes same-day peers.
+      else if(summary.revision>=entries[index].revision)entries[index]=summary;
+      entries=entries.slice(0,50);
     }
     function showRecovery(message, retry = false, cancel = false) {
       recovery.replaceChildren(); recovery.hidden = !message;
@@ -118,8 +150,8 @@ window.UcaConversations = (() => {
       current = validateDetail(detail);
       ++sequence;
       status.textContent = "";
-      const summary = { id: current.id, title: current.title, revision: current.revision, turn_count: current.turns.length };
-      entries = [summary, ...entries.filter(entry => entry.id !== current.id)].slice(0, 50);
+      const summary = { id: current.id, title: current.title, revision: current.revision, turn_count: current.turns.length, organization: current.organization };
+      mergeSummary(summary);
       renderList();
     }
     function observe(detail) {
@@ -143,6 +175,7 @@ window.UcaConversations = (() => {
           if (!identifier(entry.id) || textBytes(entry.title) > 512 || !revision(entry.revision) ||
               !Number.isInteger(entry.turn_count) || entry.turn_count < 0 || entry.turn_count > 100 || ids.has(entry.id)) throw fail("invalid_response");
           ids.add(entry.id);
+          entry.organization=organization(entry.organization,entry.title);
         }
         // A server snapshot cannot roll back a detail/result already accepted locally.
         const accepted = new Map(entries.map(entry => [entry.id, entry]));
@@ -151,7 +184,7 @@ window.UcaConversations = (() => {
           return previous?.revision > entry.revision ? previous : entry;
         });
         const summary = entries.find(entry => entry.id === current?.id);
-        if (summary && summary.revision >= current.revision) current = { ...current, title: summary.title };
+        if (summary && summary.revision >= current.revision) current = { ...current, title: summary.title, organization: summary.organization };
         available = true;
         status.textContent = entries.length ? "" : "发送第一条消息，开始一段对话。";
         renderList();
@@ -280,7 +313,7 @@ window.UcaConversations = (() => {
     async function manage(entry, action) {
       if (!available || busy || pending || management) return;
       const requestId=crypto.randomUUID();
-      management={id:entry.id,requestId,body:JSON.stringify({schema:"chat-conversation-manage/v1",request_id:requestId,expected_revision:entry.revision,action}),receipt:null};
+      management={id:entry.id,requestId,before:{title:entry.title,organization:{...entry.organization}},body:JSON.stringify({schema:"chat-conversation-manage/v2",request_id:requestId,expected_revision:entry.revision,action}),receipt:null};
       await retryManagement();
     }
     async function reconcileManagement() {
@@ -288,7 +321,10 @@ window.UcaConversations = (() => {
       let detail=null;
       try {
         detail=validateDetail(await request(`${BASE}/${encodeURIComponent(target)}`));
-        if(detail.id!==target || management.receipt.deleted)throw fail("invalid_response");
+        if(detail.id!==target||management.receipt.deleted||detail.revision<management.receipt.revision||
+           (management.receipt.organization.date!==null&&detail.organization.date!==management.receipt.organization.date)||
+           (detail.revision===management.receipt.revision&&(detail.title!==management.receipt.title||
+             detail.organization.pinned!==management.receipt.organization.pinned||detail.organization.group!==management.receipt.organization.group)))throw fail("invalid_response");
       } catch(error) {if(error.status!==404 || !error.confirmed)throw error;}
       ++sequence;
       management=null;showManagementRecovery();
@@ -298,13 +334,13 @@ window.UcaConversations = (() => {
       } else if (!deleted.has(target)) {
         if(current?.id===target){if(detail.revision>=current.revision)observe(detail);}
         else {
-          const summary={id:detail.id,title:detail.title,revision:detail.revision,turn_count:detail.turns.length};
-          const previous=entries.find(entry=>entry.id===target);
-          if(!previous||summary.revision>=previous.revision)entries=[summary,...entries.filter(entry=>entry.id!==target)].slice(0,50);
+          const summary={id:detail.id,title:detail.title,revision:detail.revision,turn_count:detail.turns.length,organization:detail.organization};
+          mergeSummary(summary);
         }
       }
       renderList();status.textContent="对话状态已更新。";
-      void refreshList(true);
+      // The list owns creation-order ties, including after a pin changes sections.
+      await refreshList(true);
     }
     async function retryManagement() {
       if(busy || !management)return;
@@ -313,9 +349,13 @@ window.UcaConversations = (() => {
         if(!management.receipt){
           const intent=JSON.parse(management.body);
           const receipt=await request(`${BASE}/${encodeURIComponent(management.id)}/manage`,{method:"POST",body:management.body});
-          if(receipt?.schema!=="chat-conversation-manage-result/v1"||receipt.conversation_id!==management.id||receipt.request_id!==management.requestId||
-             !revision(receipt.revision)||receipt.revision!==intent.expected_revision+1||typeof receipt.deleted!=="boolean"||receipt.deleted!==(intent.action.kind==="delete")||
-             textBytes(receipt.title)>512||(intent.action.kind==="rename"&&receipt.title!==intent.action.title.trim()))throw fail("invalid_response");
+          if(receipt?.schema!=="chat-conversation-manage-result/v2"||receipt.conversation_id!==management.id||receipt.request_id!==management.requestId||
+             !revision(receipt.revision)||receipt.revision!==intent.expected_revision+1||typeof receipt.deleted!=="boolean"||receipt.deleted!==(intent.action.kind==="delete")||textBytes(receipt.title)>512)throw fail("invalid_response");
+          const actual=organization(receipt.organization,receipt.title,true),before=management.before.organization,action=intent.action;
+          if((before.date!==null&&actual.date!==before.date)||
+             actual.pinned!==(action.kind==="pin"?action.pinned:before.pinned)||
+             actual.group!==(action.kind==="group"?action.group:before.group)||
+             (action.kind==="rename"?actual.date===null||receipt.title!==`${actual.date}|${action.title.trim()}`:receipt.title!==management.before.title))throw fail("invalid_response");
           management.receipt=receipt;
         }
         // Receipts may be historical: only a fresh authoritative read can project the current view.

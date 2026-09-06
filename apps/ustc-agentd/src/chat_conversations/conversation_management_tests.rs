@@ -2,12 +2,12 @@ use super::*;
 use serde_json::{Value, json};
 use std::{fs, os::unix::fs::PermissionsExt};
 
-struct Fixture {
+pub(super) struct Fixture {
     root: PathBuf,
-    owner: (TenantId, UserId),
+    pub(super) owner: (TenantId, UserId),
 }
 impl Fixture {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let root = std::env::temp_dir().join(format!(
             "uca-conversation-management-{}",
             persistence::random_id().expect("nonce")
@@ -22,18 +22,18 @@ impl Fixture {
             ),
         }
     }
-    fn path(&self) -> PathBuf {
+    pub(super) fn path(&self) -> PathBuf {
         self.root.join("conversations.json")
     }
-    fn store(&self) -> ConversationStore {
+    pub(super) fn store(&self) -> ConversationStore {
         ConversationStore::open(self.path()).expect("store")
     }
-    fn create(&self, store: &ConversationStore) -> ConversationDto {
+    pub(super) fn create(&self, store: &ConversationStore) -> ConversationDto {
         store
             .create(&self.owner.0, &self.owner.1, "create")
             .expect("create")
     }
-    fn manage(
+    pub(super) fn manage(
         &self,
         store: &ConversationStore,
         id: &str,
@@ -65,10 +65,10 @@ fn delete(id: &str, revision: u64) -> ConversationManageIntentDto {
         action: ConversationManageActionDto::Delete {},
     }
 }
-fn turn(id: &str, revision: u64) -> ConversationTurnIntentDto {
+pub(super) fn turn(id: &str, revision: u64) -> ConversationTurnIntentDto {
     serde_json::from_value(json!({"schema":"chat-conversation-turn/v1","request_id":id,"expected_revision":revision,"message":"Original automatic title"})).expect("turn intent")
 }
-fn finish(
+pub(super) fn finish(
     f: &Fixture,
     store: &ConversationStore,
     id: &str,
@@ -522,6 +522,7 @@ fn physical_capacity_counts_tombstones_and_running_management_overlap_is_invalid
             revision: 3,
             title: "Before".into(),
             deleted: true,
+            organization: None,
         },
     });
     row.revision = 3;

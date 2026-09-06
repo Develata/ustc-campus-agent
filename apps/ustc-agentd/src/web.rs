@@ -2018,3 +2018,6 @@ mod calendar_proposal_route_tests;
 
 #[cfg(all(test, unix))]
 mod root_prompt_route_tests;
+
+#[cfg(all(test, unix))]
+mod conversation_organization_route_tests;

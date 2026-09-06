@@ -29,3 +29,12 @@ Menus and new mutations are unavailable during a busy or unresolved Chat/managem
 ## Verification
 
 Targeted store/restart and real HTTP checks for owner isolation, validation, optimistic conflicts, exact retry, cross-action ID conflicts, explicit-title preservation, running rejection, tombstone visibility/resurrection denial and malformed persistence. Browser exercises right-click/menu button/keyboard, dialog cancel/rename/delete, current versus other conversation, reload, stale and unknown responses, mobile placement/focus and existing conversations/models regression.
+
+
+## Organization extension
+
+[CONVERSATION-ORGANIZE-001](conversation-organization.md) adds the v2 management
+command used by the current UI: rename only the topic, retain the server date,
+set pin/group and sort by date. Existing v1 command/receipt validation above remains
+for compatibility. Pin/group commands share the same revision and exact-retry owner;
+all non-delete commands count against the reserved final-delete receipt slot.
