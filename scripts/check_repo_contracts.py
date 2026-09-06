@@ -3076,10 +3076,7 @@ PLATFORM_IDENTITY_ADMITTED_CROSS_FILE_BINDINGS = (('crates/platform-core/src/mar
  ('crates/platform-core/src/control_evidence.rs',
   'use crate::identity::{CommandId, CorrelationId, RequestId, SessionId, TenantId, UserId};'),
  ('crates/platform-core/src/source_retrieval.rs', 'use crate::identity::CommandId;'),
- ('crates/platform-core/src/market/admission.rs',
-  'use crate::{ identity::{TenantId, UserId}, invocation::{ CapabilityId, CatalogToolDefinition, '
-  'ComponentKind, ConfirmationPolicy, GrantSnapshotId, GrantState, InstallationId, InstallationRevision, '
-  'Sha256Digest, }, };'))
+ ('crates/platform-core/src/market/admission.rs', 'use crate::identity::{TenantId, UserId};'))
 # Which files Cargo compiles into the crate is decided by non-inline `mod` declarations, not by
 # a file extension. Pinning the declarations pins the compiled set semantically, so no
 # attribute spelling — `#[path]`, `#[cfg_attr(all(), path = "x.txt")]`, or a future one — can
@@ -3119,7 +3116,7 @@ PLATFORM_CORE_ADMITTED_MODULE_DECLARATIONS = {'market/admission.rs': ('tests',),
 # rejected; removing an admitted item fails too. The cost is real: an M20 change to the
 # protocol import list below must be mirrored here and in the Rust guard. That is the intended
 # price of a frozen v0 surface, and the failure message names the drift.
-PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'market/admission.rs': ('use super::{ ValidatedPackageManifest, capability::{CapabilityRegistry, CapabilityStatus, ScopeKind}, configuration_binding::ComponentConfigurationBinding, configuration_catalog::ValidatedPackageConfiguration, grant::*, installation::*, };', 'use crate::{ identity::{TenantId, UserId}, invocation::{ CapabilityId, CatalogToolDefinition, ComponentKind, ConfirmationPolicy, GrantSnapshotId, GrantState, InstallationId, InstallationRevision, Sha256Digest, }, };', 'use std::{collections::BTreeSet, fmt};', '#[cfg(test)] mod tests;'),
+PLATFORM_CORE_ADMITTED_ITEM_DECLARATIONS = {'market/admission.rs': ('use super::{ ValidatedPackageManifest, capability::{CapabilityRegistry, CapabilityStatus, ScopeKind}, configuration_binding::ComponentConfigurationBinding, configuration_catalog::ValidatedPackageConfiguration, grant::*, installation::*, };', 'use crate::identity::{TenantId, UserId};', 'use crate::invocation::{ CapabilityId, CatalogToolDefinition, ComponentKind, ConfirmationPolicy, GrantSnapshotId, GrantState, InstallationId, InstallationRevision, Sha256Digest, };', 'use std::{collections::BTreeSet, fmt};', '#[cfg(test)] mod tests;'),
  'market/admission/tests.rs': ('use super::*;', 'use crate::{ invocation::{ CatalogRevision, ToolId, UnvalidatedSchemaNodeV0, UnvalidatedToolInputSchemaV0, ValidatedToolInputSchemaV0, }, market::{ capability::load_capability_registry, configuration_catalog::load_package_configuration, configuration_schema::{ConfigurationFieldSchema, ConfigurationSchema}, load_package_manifest, }, };', 'use serde_json::{Value, json};'),
  'market/installation/persistence.rs': ('use super::*;', 'use serde::{Deserialize, Serialize};'),
  'market/grant/persistence.rs': ('use super::*;', 'use serde::{Deserialize, Serialize};', 'use crate::market::capability::load_capability_registry;'),

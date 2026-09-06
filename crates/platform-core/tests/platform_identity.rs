@@ -4623,7 +4623,7 @@ fn manifest_keys(entries: &[(String, String)], table: &str) -> Vec<String> {
 const ADMITTED_CROSS_FILE_IDENTITY_BINDINGS: [(&str, &str); 7] = [
     (
         "market/admission.rs",
-        "use crate::{ identity::{TenantId, UserId}, invocation::{ CapabilityId, CatalogToolDefinition, ComponentKind, ConfirmationPolicy, GrantSnapshotId, GrantState, InstallationId, InstallationRevision, Sha256Digest, }, };",
+        "use crate::identity::{TenantId, UserId};",
     ),
     (
         "control_evidence.rs",
@@ -5110,9 +5110,10 @@ const ADMITTED_CONFIGURATION_CATALOG_MACRO_INVOCATIONS: [&str; 8] = [
 
 const ADMISSION_SOURCE: &str = include_str!("../src/market/admission.rs");
 
-const ADMITTED_ADMISSION_ITEMS: [&str; 4] = [
+const ADMITTED_ADMISSION_ITEMS: [&str; 5] = [
     "use super::{ ValidatedPackageManifest, capability::{CapabilityRegistry, CapabilityStatus, ScopeKind}, configuration_binding::ComponentConfigurationBinding, configuration_catalog::ValidatedPackageConfiguration, grant::*, installation::*, };",
-    "use crate::{ identity::{TenantId, UserId}, invocation::{ CapabilityId, CatalogToolDefinition, ComponentKind, ConfirmationPolicy, GrantSnapshotId, GrantState, InstallationId, InstallationRevision, Sha256Digest, }, };",
+    "use crate::identity::{TenantId, UserId};",
+    "use crate::invocation::{ CapabilityId, CatalogToolDefinition, ComponentKind, ConfirmationPolicy, GrantSnapshotId, GrantState, InstallationId, InstallationRevision, Sha256Digest, };",
     "use std::{collections::BTreeSet, fmt};",
     "#[cfg(test)] mod tests;",
 ];

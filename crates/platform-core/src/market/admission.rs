@@ -13,12 +13,10 @@ use super::{
     grant::*,
     installation::*,
 };
-use crate::{
-    identity::{TenantId, UserId},
-    invocation::{
-        CapabilityId, CatalogToolDefinition, ComponentKind, ConfirmationPolicy, GrantSnapshotId,
-        GrantState, InstallationId, InstallationRevision, Sha256Digest,
-    },
+use crate::identity::{TenantId, UserId};
+use crate::invocation::{
+    CapabilityId, CatalogToolDefinition, ComponentKind, ConfirmationPolicy, GrantSnapshotId,
+    GrantState, InstallationId, InstallationRevision, Sha256Digest,
 };
 use std::{collections::BTreeSet, fmt};
 
