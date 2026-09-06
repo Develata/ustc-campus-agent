@@ -17,3 +17,7 @@ Develata closed the repository-visibility owner gate on 2026-09-04 and selected 
 - [ ] required release/public acceptance cases pass with no unresolved blocker review.
 
 PR-gate success alone does not satisfy this checklist.
+
+## Recorded data-use gap (2026-09-06)
+
+The [MVP feature](../features/06-mvp-core-capabilities.md) records iCourse aggregate-rating snapshots mapped to synthetic course codes. This differs from pure link-outs: stored aggregate values, copied review text and live collection are separate data-use questions. The owning [security plan](../plan/08-security-and-delivery.md) requires an explicit data-use contract beyond link-outs; the documented permission item above is still unchecked. No such exception is established by this reconciliation. Before stronger publication/reuse claims, an owner-approved resolution must bind permitted data, source, storage/reuse scope and evidence, or select synthetic-only replacement; this page neither grants permission nor changes the already delivered fixture/archive bytes.

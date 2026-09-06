@@ -6,7 +6,7 @@
 - `Version`: `application-interface-registry/v2.1`
 - `Last Review`: `2026-09-01`
 - `Owning plan`: [`M10 Application Ingress Host`](../plan/modules/20-application-api-host.md)
-- `Client counterpart`: [`client-shell/v2.1`](client-shell.md)
+- `Client counterpart`: [`client-shell/v2.3`](client-shell.md)
 - `Permission counterpart`: [`permissions.md`](permissions.md)
 
 This registry owns the concrete application-operation, HTTP and inbound-MCP projections. [`module-boundaries.md`](module-boundaries.md) owns large-module crossing rules. An adapter registry is an allowlisted projection of this operation registry; no CLI command, MCP tool, Dioxus server function or HTTP route creates a parallel application authority.

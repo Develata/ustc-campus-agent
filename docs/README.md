@@ -9,6 +9,8 @@
 | 从源码运行 | [项目 README](../README.md#quick-start) |
 | Windows / Linux Docker 演示包 | [Compose 指南](../deploy/mvp-compose/README.md) |
 | Android 安装、连接和验证状态 | [Android 指南](guides/android-demo.md) |
+| 历史讨论与设计落点 | [讨论决策与文档落点](guides/discussion-to-docs.md) |
+| 冻结 R3.1 包身份与复验 | [R3.1 交付身份与复验](guides/r31-delivery-and-verification.md) |
 
 ## 使用与配置
 

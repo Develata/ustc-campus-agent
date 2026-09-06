@@ -17,7 +17,7 @@ The headless surface is a first-class client, not a debug wrapper around backend
 ```text
 user configures an admitted server and least-privilege profile
 → runs one ustc-agent read-only command
-→ client verifies server/protocol compatibility
+→ client performs compatibility preflight and preserves M10's typed compatibility decision
 → M10 admits identity, bounds and authorization
 → owning application module returns a typed projection
 → CLI emits deterministic human text or versioned JSON
@@ -57,6 +57,7 @@ Ready
 Authentication required
 Forbidden / capability unavailable
 Upgrade required
+Incompatible protocol
 Offline / transport unavailable
 Pending
 Conflict / stale precondition
@@ -81,7 +82,8 @@ The paired Skill is documentation only: it may explain operation choice, typed i
 
 ## Failure and recovery copy
 
-- Incompatible client: “The server requires a newer client protocol; no operation was submitted.”
+- Server-typed `upgrade_required`: “The server requires a newer client protocol; no operation was submitted.”
+- Server-typed `incompatible_protocol`: “The client protocol is unsupported, missing or malformed; no operation was submitted.”
 - Authentication required: “Choose or refresh a user profile; operator credentials are not used automatically.”
 - Policy denial: report the stable capability/policy class without suggesting a same-name fallback.
 - Timeout after possible acceptance: report the correlation identity and require reconciliation before retry.
@@ -102,6 +104,8 @@ The paired Skill is documentation only: it may explain operation choice, typed i
 - arbitrary shell, URL, filesystem, database, container or third-party MCP access.
 
 ## Delivery sequence
+
+The retained Affairs-first protocol/compatibility prerequisite and fixture-loopback CLI above precede the following still-planned production access lane. Its Market-first public-read order remains the accepted target; listing it does not deny the already retained Affairs evidence or promote later routes:
 
 ```text
 M10 operation/schema/permission registry

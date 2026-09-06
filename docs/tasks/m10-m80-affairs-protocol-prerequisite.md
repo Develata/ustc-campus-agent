@@ -2,7 +2,7 @@
 
 ## Task authority
 
-- `Status`: bounded implementation candidate; parent review and fan-in pending
+- `Status`: retained bounded implementation prerequisite; supporting partial evidence only, with no production or acceptance-status promotion
 - `Owning modules`: `M10 Application Ingress Host` (`B1 ingress-registry`, `B7 client-contract`) and consuming `M80 Client Core and Interaction Shells`
 - `Source commit`: `ac9a38f6a979f03d88676cdb512e1103519b7bd4`
 - `Source tree`: `d28ebfc3dbfb843f987fdeab6c3ba1f673e8b84e`
