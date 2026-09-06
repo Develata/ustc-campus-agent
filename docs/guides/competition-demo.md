@@ -1,13 +1,42 @@
 # 一〇七杯：演示与提交指南
 
-使用当前源码构建、独立状态目录和同一份配置完成排练、录像与打包。
+本页区分本次固定提交包与从源码启动的排练环境；两者不能直接互换。
 [功能与评分证据](../features/06-mvp-core-capabilities.md#一〇七杯评分与证据)说明可展示范围；
 本页列出五分钟录像顺序和四项提交材料。本次补充通知要求 **9 月 6 日 23:59 前**完成提交；
 报名背景见[学校通知](https://www.ustc.edu.cn/info/1360/25272.htm)，实际提交步骤和接收状态以比赛附件及入口为准。
 
-## 启动独立演示
+## 本次固定提交包
 
-在 Linux/WSL 的仓库根目录执行：
+设计文档与作品简介描述的是单独组装的比赛交付包，其身份如下：
+
+| 对象 | 固定来源与差异 |
+|---|---|
+| 程序二进制 | `a1988e892a6bad42a56032dd9de96701d64fbcf1`，release 构建；后续文档提交不会改变这个已构建程序 |
+| 课程目录 | 包内 `market/fixtures/course-planning/minimal-v0.json` 清空全部 10 条 `community_signals`，删除 `icourse-public-aggregate-2026-09-03` 与 `icourse-linkout` 来源，保留 21 门合成课程及其约束 |
+| 课程观察 | 包内 `fixtures/opportunity-graph/course-planning-demo-reviewed.json` 同步更新目录摘要、snapshot/evidence 标识及 `synthetic-course-planning-competition-20260906` 版本标记 |
+| 启动与证据 | 随包 `START-HERE.md`、`BUILD-INFO.txt`、`FIXTURE-NOTICE.md` 和 `SMOKE-RESULTS.json`；执行随包 `bash start-local.sh` |
+
+这两份资料的修改仅在交付 artifact 中，**本仓库历史 fixture 没有随文档提交被改写**。
+比赛包已从解压目录验证四工具调用与三个可行课程方案，且没有社区评分信号；
+这项排除声明不适用于原样运行源码 fixture 或原有 Compose 打包脚本生成的包。
+
+如需从源码重建该二进制，应先创建固定版本的独立工作树：
+
+```bash
+git worktree add --detach ../uca-competition-runtime a1988e892a6bad42a56032dd9de96701d64fbcf1
+cd ../uca-competition-runtime
+cargo build --release --locked -p ustc-agentd --bin ustc-agentd
+```
+
+原有 `scripts/package_three_plugin_mvp_compose.sh` 只打包它所在检出的 HEAD，
+不会自动生成上述资料变体。重建提交 artifact 还必须在独立输出目录应用表中两份资料变更、
+更新包内说明与文件清单并重新启动复验；仅在当前 `main` 执行原脚本，不能复现本次交付包。
+
+## 从源码启动独立排练
+
+下面命令使用当前检出的源码及**原始历史资料**，含数据许可尚未闭环的 iCourse 聚合评分快照。
+它用于开发排练，不是上述无聚合评分比赛包的启动或重建步骤。比赛接收者请直接使用随包
+`START-HERE.md`。开发者在 Linux/WSL 的仓库根目录执行：
 
 ```bash
 cargo build --locked -p ustc-agentd

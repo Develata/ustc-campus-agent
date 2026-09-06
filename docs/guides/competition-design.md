@@ -95,6 +95,6 @@ DSH 使用 [MIT 许可证](https://github.com/deepseek-ai/deepseek-harness/blob/
 
 ## 9. 交付与未完成范围
 
-本次程序候选为 `a1988e892a6bad42a56032dd9de96701d64fbcf1`，交付 Web 界面、Linux/WSL Rust 程序与 Compose 启动入口。历史 R3.1 冻结包与当前源码功能不同。Android 有开发与历史构建证据，小米真机安装曾受系统限制，本轮真机交互尚未完成验收；本次不附带与候选不一致的旧 APK。公网多用户、学校 SSO、获许可的真实校园来源运行、完整 RAG／机会图谱及手机系统推送均不作为已完成能力。
+本次程序候选为 `a1988e892a6bad42a56032dd9de96701d64fbcf1`，交付 Web 界面、Linux/WSL Rust 程序及可离线导入的 Docker 镜像；Docker load、Compose 启动、健康检查和查询通过。历史 R3.1 冻结包与当前源码功能不同。本次附同源新构建的 Android 调试 APK，端点测试、lint 与签名检查通过；小米真机安装、Chat 首页启动和 WebView 日历查询通过，未执行全面手机回归。公网多用户、学校 SSO、获许可的真实校园来源运行、完整 RAG／机会图谱及手机系统推送均不作为已完成能力。
 
 复验命令和证据入口见[功能与评分证据](../features/06-mvp-core-capabilities.md)、[验收矩阵](../acceptance/matrix.tsv)和[演示与提交指南](competition-demo.md)。最终包需对应同一运行候选，视频只展示实际成功路径，提交接收状态由队长在比赛入口确认。
