@@ -26,7 +26,7 @@ export async function checkChatActivity({evaluate, waitFor, cdp, sessionId, navi
   await evaluate("__activityNext=__activityBody('r1',2,[{id:'m1',kind:'model',tool:null,status:'running'}])");
   await waitFor("__activityRoot.textContent.includes('正在处理模型请求')", 'real model request status');
   assert.equal(await evaluate("__activityRoot.querySelector('details').open"),false);
-  await evaluate("__activityRoot.querySelector('details').open=true;__activityNext=__activityBody('r1',3,[{id:'m1',kind:'model',tool:null,status:'succeeded'},{id:'t1',kind:'tool',tool:'affairs_navigator_get',status:'running'}])");
+  await evaluate("__activityNext=__activityBody('r1',3,[{id:'m1',kind:'model',tool:null,status:'succeeded'},{id:'t1',kind:'tool',tool:'affairs_navigator_get',status:'running'}])");
   await waitFor("__activityRoot.querySelector('[role=status]').textContent==='查询办理流程'", 'admitted tool status');
   assert.equal(await evaluate("__activityRoot.querySelectorAll('li').length"),2);
   assert.equal(await evaluate("__activityRoot.querySelector('details').open"),true);
@@ -64,6 +64,7 @@ export async function checkChatActivity({evaluate, waitFor, cdp, sessionId, navi
   await evaluate("__activityNext=__activityBody('r1',15,[{id:'t1',kind:'tool',tool:'affairs_navigator_get',status:'succeeded'}],'completed')");
   await waitFor("__activityRoot.dataset.state==='completed'", 'canonical terminal replaces model steps');
   assert.equal(await evaluate("__activityRoot.querySelectorAll('li').length"),1);
+  assert.equal(await evaluate("__activityRoot.querySelector('details').open"),false,'automatic disclosure folds after terminal observation');
   await evaluate("window.__activityTerminalReads=__activityCalls.length");
   await new Promise(resolve=>setTimeout(resolve,1100));
   assert.equal(await evaluate('__activityCalls.length'),await evaluate('__activityTerminalReads'),'terminal stops polling');
@@ -75,6 +76,40 @@ export async function checkChatActivity({evaluate, waitFor, cdp, sessionId, navi
     assert.equal(await evaluate("__activityRoot.querySelectorAll('li').length"),0);
   }
   pass('CHAT-activity-closed-bounds-failure-recovery');
+
+
+  // Real summary clicks express a user preference; later observations must respect it.
+  async function clickActivitySummary() {
+    const point = await evaluate(`(() => {
+      const summary=__activityRoot.querySelector('summary');
+      summary.scrollIntoView({block:'center'});
+      const box=summary.getBoundingClientRect();
+      return {x:box.x+box.width/2,y:box.y+box.height/2};
+    })()`);
+    await cdp.send('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',clickCount:1},sessionId);
+    await cdp.send('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',clickCount:1},sessionId);
+  }
+  for (const keepOpen of [true,false]) {
+    await evaluate(`__activityNext=__activityBody('r-disclosure',1,[{id:'m1',kind:'model',tool:null,status:'running'}]);__activity.start('c1','r-disclosure')`);
+    await waitFor("__activityRoot.dataset.state==='running' && __activityRoot.querySelectorAll('li').length===1",'fresh request clears previous disclosure preference');
+    assert.equal(await evaluate("__activityRoot.querySelector('details').open"),false,'each request starts compact');
+    if (keepOpen) await clickActivitySummary();
+    await evaluate(`__activityNext=__activityBody('r-disclosure',2,[{id:'m1',kind:'model',tool:null,status:'succeeded'},{id:'t1',kind:'tool',tool:'affairs_navigator_get',status:'running'}])`);
+    await waitFor("__activityRoot.querySelectorAll('li').length===2",'observed tool opens untouched disclosure');
+    assert.equal(await evaluate("__activityRoot.querySelector('details').open"),true);
+    if (!keepOpen) await clickActivitySummary();
+    assert.equal(await evaluate("__activityRoot.querySelector('details').open"),keepOpen,'summary click changes disclosure');
+    await evaluate(`__activityNext=__activityBody('r-disclosure',3,[{id:'m1',kind:'model',tool:null,status:'succeeded'},{id:'t1',kind:'tool',tool:'affairs_navigator_get',status:'succeeded'},{id:'m2',kind:'model',tool:null,status:'running'}])`);
+    await waitFor("__activityRoot.querySelectorAll('li').length===3",'next model observation accepted');
+    assert.equal(await evaluate("__activityRoot.querySelector('details').open"),keepOpen,'model transition preserves user choice');
+    await evaluate(`__activityNext=__activityBody('r-disclosure',4,[{id:'m1',kind:'model',tool:null,status:'succeeded'},{id:'t1',kind:'tool',tool:'affairs_navigator_get',status:'succeeded'},{id:'m2',kind:'model',tool:null,status:'succeeded'},{id:'t2',kind:'tool',tool:'change_radar_get',status:'running'}])`);
+    await waitFor("__activityRoot.querySelectorAll('li').length===4",'next tool observation accepted');
+    assert.equal(await evaluate("__activityRoot.querySelector('details').open"),keepOpen,'new running tool preserves user choice');
+    await evaluate(`__activityNext=__activityBody('r-disclosure',15,[{id:'t1',kind:'tool',tool:'affairs_navigator_get',status:'succeeded'},{id:'t2',kind:'tool',tool:'change_radar_get',status:'succeeded'}],'completed')`);
+    await waitFor("__activityRoot.dataset.state==='completed'",'terminal observation accepted');
+    assert.equal(await evaluate("__activityRoot.querySelector('details').open"),keepOpen,'terminal projection preserves user choice');
+  }
+  pass('CHAT-activity-manual-disclosure-survives-model-tool-terminal');
 
   // Start another request while an old read ignores abort; generation prevents cross-talk.
   await evaluate(`window.fetch=(url,options={})=>String(url).endsWith('/activity')?new Promise(resolve=>{window.__releaseActivity=resolve;}):__activityFetch(url,options);__activity.start('c-old','r-old')`);

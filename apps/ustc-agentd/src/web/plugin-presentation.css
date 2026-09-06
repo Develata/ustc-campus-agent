@@ -1,0 +1,102 @@
+/* M80 presentation only: capability discovery, package management and operator controls.
+   Server status, consent, source detail and all existing actions remain visible. */
+#plugins-title:focus { outline: none; } /* Route focus announces a heading, not an interactive control. */
+#plugins-view .page-heading { margin-bottom: 24px; }
+#plugins-view .page-heading h1 { font-size: clamp(26px, 3vw, 34px); letter-spacing: -.9px; }
+#plugins-view > p { margin: 0 0 28px; }
+#plugins-view > p > .market-button { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; background: var(--surface); font-size: 13px; border-radius: 11px; }
+#plugins-view .plugin-page-tabs { gap: 28px; margin: 0 0 24px; }
+#plugins-view .plugin-page-tabs [role="tab"] { font-weight: 550; }
+#plugins-view .capability-scope { max-width: 670px; margin-bottom: 20px; font-size: 12px; }
+#plugin-directory { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; border: 0; }
+#plugin-directory .plugin-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: 1fr auto; align-items: start; gap: 16px 14px; min-width: 0; padding: 22px 20px 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface-strong); }
+#plugin-directory .plugin-row:hover { border-color: color-mix(in srgb, var(--muted) 35%, var(--line)); background: var(--surface-strong); }
+#plugin-directory .plugin-icon { width: 44px; height: 44px; border-radius: 13px; background: var(--accent-soft); }
+#plugin-directory .plugin-icon .icon { width: 23px; height: 23px; }
+#plugin-directory .plugin-icon[data-kind="radar"] { background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface)); }
+#plugin-directory .plugin-icon[data-kind="planning"] { background: var(--surface); color: var(--ink); }
+#plugin-directory .plugin-icon[data-kind="calendar"] { background: var(--surface); color: var(--ink); }
+#plugin-directory .plugin-copy { gap: 8px; min-width: 0; }
+#plugin-directory .plugin-copy h2 { font-size: 17px; font-weight: 620; letter-spacing: -.2px; }
+#plugin-directory .plugin-copy p { font-size: 13px; line-height: 1.75; }
+#plugin-directory .plugin-copy small { font-size: 10px; letter-spacing: .025em; }
+#plugin-directory .plugin-copy .capability-condition { padding-top: 5px; margin-top: 0; font-size: 11px; line-height: 1.7; }
+#plugin-directory .capability-actions { grid-column: 1 / -1; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-width: 0; margin: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+#plugin-directory .capability-actions button { border-color: transparent; border-radius: 10px; background: var(--surface); padding-inline: 14px; font-weight: 550; }
+#plugin-directory .capability-actions button:hover { color: var(--accent-strong); background: var(--accent-soft); }
+#plugin-directory .capability-actions a { min-height: 44px; padding-inline: 2px; }
+#plugins-view .directory-note { max-width: 700px; margin: 22px 0 0; font-size: 11px; }
+
+/* The catalog lists reviewed packages; condition and provenance text is never clipped. */
+#market-catalog .market-toolbar { align-items: flex-end; }
+#market-catalog .market-search input { background: var(--surface); border-radius: 12px; }
+#market-catalog .market-packages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
+#market-catalog .market-package { min-width: 0; border: 1px solid var(--line); border-radius: 15px; }
+#market-catalog .market-package-open { height: 100%; padding: 20px; border-radius: 15px; }
+#market-catalog .market-package-heading { align-items: flex-start; }
+#market-catalog .market-package-heading strong { font-size: 15px; }
+#market-catalog .market-version { padding: 3px 7px; background: var(--surface); border-radius: 5px; font-size: 10px; }
+#market-catalog .market-package-description { min-height: 44px; }
+#market-catalog .market-package-meta { gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); line-height: 1.6; font-size: 11px; }
+#market-catalog .market-detail-section { padding: 20px 0; margin: 0; border-bottom: 1px solid var(--line); }
+#market-catalog .market-detail-section h4 { color: var(--ink); }
+#market-catalog .market-fields { gap: 12px 24px; }
+#market-catalog .market-provenance { border: 0; padding-top: 0; }
+
+/* Configuration keeps one card per independently installed package. */
+#plugin-management-view .back-link { margin-bottom: 20px; }
+#plugin-management { margin: 0; padding: 0; border: 0; }
+#plugin-management > h2 { font-size: 29px; font-weight: 600; letter-spacing: -.7px; }
+#plugin-management > .plugin-manage-intro { margin-top: 12px; margin-bottom: 20px; }
+#plugin-management .plugin-manage-cards { gap: 20px; }
+#plugin-management .plugin-manage-card { padding: 24px; background: var(--surface-strong); border-radius: 17px; }
+#plugin-management .plugin-manage-heading { gap: 10px 16px; }
+#plugin-management .plugin-manage-heading h3 { font-size: 17px; line-height: 1.5; }
+#plugin-management .plugin-manage-state { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border-radius: 20px; background: var(--surface); line-height: 1.5; font-size: 11px; }
+#plugin-management .plugin-manage-description { margin: 12px 0; }
+#plugin-management .plugin-manage-meta { font-size: 11px; }
+#plugin-management .plugin-manage-button { border-radius: 10px; }
+#plugin-management .plugin-manage-button[data-plugin-action="enable"] { background: var(--ink); color: var(--bg); }
+#plugin-management .plugin-manage-configuration, #plugin-management .plugin-manage-advanced, #plugin-management .plugin-manage-versions { margin: 16px 0 0; border-top: 1px solid var(--line); }
+#plugin-management :is(.plugin-manage-configuration, .plugin-manage-advanced, .plugin-manage-versions) > summary { padding: 15px 0; color: var(--ink); }
+#plugin-management .plugin-manage-form { gap: 14px; margin-top: 8px; }
+#plugin-management .plugin-manage-field :is(input, select) { background: var(--surface); border-radius: 10px; }
+#plugin-management .plugin-manage-confirm { padding: 13px 14px; border-radius: 10px; background: var(--surface); }
+#plugin-management .plugin-manage-pending { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 32%, var(--line)); }
+#plugin-management .plugin-manage-model-note { border-radius: 10px; border-left-width: 3px; }
+#plugin-management .plugin-import-review { padding: 6px 20px; margin-top: 28px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+#plugin-management .plugin-import-review > summary { color: var(--ink); padding-block: 14px; }
+#plugin-management .plugin-import-review > p { color: var(--muted); font-size: 12px; line-height: 1.8; }
+#plugin-management .plugin-import-input { min-height: 220px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-strong); color: var(--ink); resize: vertical; tab-size: 2; }
+#plugin-management .plugin-import-output pre { padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-strong); color: var(--ink); font: 12px/1.75 ui-monospace, Consolas, monospace; }
+#plugin-management .plugin-import-review > button { margin-bottom: 14px; }
+
+/* Operator controls stay explicitly separated and collapsed until requested. */
+#settings-view .operator-settings { margin-top: 24px; padding: 6px 20px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); }
+#settings-view .operator-settings > summary { padding: 14px 0; color: var(--ink); font-weight: 550; }
+#settings-view .operator-settings .operator-intro { margin: 5px 0 22px; max-width: 640px; font-size: 12px; }
+#settings-view .publication-section { padding: 24px 0; }
+#settings-view .publication-heading { gap: 16px; }
+#settings-view .publication-heading h2 { font-size: 16px; letter-spacing: -.2px; }
+#settings-view .publication-section > p { font-size: 12px; }
+#settings-view .publication-section .publication-state { margin: 16px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-strong); padding: 12px 14px; font-size: 12px; }
+#settings-view .publication-confirmation .consent-check { align-items: flex-start; padding-block: 10px; }
+#settings-view .publication-confirmation .consent-check input { margin-top: 3px; }
+#settings-view .publication-confirmation .publication-retry-note { font-size: 11px; }
+#settings-view .publication-receipts { margin-top: 16px; }
+#settings-view .publication-receipts .radar-evidence { background: var(--surface-strong); }
+
+@media (max-width: 1000px) and (min-width: 761px) {
+  #plugin-directory .plugin-row { grid-template-columns: 38px minmax(0, 1fr); gap: 14px 10px; padding: 18px 16px 12px; }
+  #plugin-directory .plugin-icon { width: 38px; height: 38px; border-radius: 11px; }
+  #plugin-directory .plugin-copy h2 { font-size: 16px; }
+}
+@media (max-width: 640px) {
+  #plugin-directory, #market-catalog .market-packages { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  #plugin-directory .plugin-row { padding: 20px 18px 12px; }
+  #plugin-management .plugin-manage-card { padding: 20px 16px; }
+  #plugin-management .plugin-import-review, #settings-view .operator-settings { padding-inline: 14px; }
+  #settings-view .publication-heading { align-items: flex-start; }
+  #settings-view .publication-heading .secondary-action { padding-inline: 10px; font-size: 11px; }
+  #market-catalog .market-package-open { padding: 18px; }
+}

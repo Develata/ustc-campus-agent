@@ -107,6 +107,59 @@ export async function checkChatShell({ evaluate, waitFor, cdp, sessionId, naviga
   assert.equal(await evaluate('window.__copied'), answer, 'copy preserves original Markdown and source URL');
   pass('SHELL-Markdown-safe-links-and-exact-copy');
 
+
+  // DOM-only transcript growth exercises the real shell without adding server turns.
+  const scrollPosts = await evaluate('window.__posts.length');
+  await evaluate(`(() => {
+    const messages=document.querySelector('#chat-messages'), scroll=document.querySelector('#chat-scroll');
+    window.__shellScrollFixture={nodes:[...messages.childNodes],top:scroll.scrollTop};
+    messages.replaceChildren(); window.dispatchEvent(new Event('uca:chat-state'));
+    const add=(label,count) => {
+      const item=document.createElement('li'); item.className='chat-message'; item.dataset.role='assistant';
+      const body=document.createElement('div'); body.className='chat-message-body';
+      for(let i=0;i<count;i++) { const line=document.createElement('p'); line.textContent=label+' '+i; body.append(line); }
+      item.append(body); messages.append(item);
+    };
+    window.__shellAddScrollFixture=add; add('滚动回归的长回答',60);
+    window.dispatchEvent(new Event('uca:chat-state'));
+  })()`);
+  const atTail = "(() => {const s=document.querySelector('#chat-scroll');return s.scrollHeight-s.scrollTop-s.clientHeight<80})()";
+  try {
+    await waitFor(atTail, 'long answer initially follows tail');
+    await evaluate("document.querySelector('#chat-scroll').scrollTop=0");
+    await waitFor("!document.querySelector('#chat-latest').hidden", 'manual scroll exposes latest message action');
+    const readingTop = await evaluate("document.querySelector('#chat-scroll').scrollTop");
+    await evaluate("window.__shellAddScrollFixture('阅读历史期间新增内容',6);window.dispatchEvent(new Event('uca:chat-state'))");
+    assert.equal(await evaluate("document.querySelector('#chat-scroll').scrollTop"), readingTop, 'state updates preserve the historical reading position');
+    assert.equal(await evaluate("document.querySelector('#chat-latest').hidden"), false);
+    await pointer('#chat-latest');
+    await waitFor(atTail, 'latest message action returns to tail');
+    assert.equal(await evaluate("document.querySelector('#chat-latest').hidden"), true);
+
+    await navigate('plugins');
+    await waitFor("document.querySelector('#chat-view').hidden", 'chat hidden during background response');
+    await evaluate("window.__shellAddScrollFixture('离开聊天页面后新增内容',30);window.dispatchEvent(new Event('uca:chat-state'))");
+    await navigate('chat');
+    await waitFor("!document.querySelector('#chat-view').hidden", 'return to background answer');
+    await waitFor(`${atTail} || !document.querySelector('#chat-latest').hidden`, 'background answer remains reachable on return');
+    if (!(await evaluate(atTail))) {
+      await pointer('#chat-latest');
+      await waitFor(atTail, 'background answer reached using latest message action');
+    }
+    assert.equal(await evaluate('window.__posts.length'), scrollPosts, 'scrolling and local response fixtures do not submit requests');
+    pass('SHELL-scroll-history-latest-and-background-return');
+  } finally {
+    await navigate('chat');
+    await evaluate(`(() => {
+      const saved=window.__shellScrollFixture;
+      document.querySelector('#chat-messages').replaceChildren(...saved.nodes);
+      window.dispatchEvent(new Event('uca:chat-state'));
+      document.querySelector('#chat-scroll').scrollTop=saved.top;
+      document.querySelector('#chat-scroll').dispatchEvent(new Event('scroll'));
+      delete window.__shellScrollFixture; delete window.__shellAddScrollFixture;
+    })()`);
+  }
+
   await pointer('#chat-clear');
   // Delay only delivery of a real response; the original endpoint still executes.
   await evaluate(`(() => {const original=window.fetch.bind(window);window.__releaseChat=null;

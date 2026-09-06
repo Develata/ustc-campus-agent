@@ -58,12 +58,13 @@ window.UcaChatActivity = (() => {
     });
   }
   function mount(root) {
-    let generation = 0, timer = null, controller = null, latest = null, bound = null;
+    let generation = 0, timer = null, controller = null, latest = null, bound = null, renderedSteps = null, disclosureChosen = false;
     const status = document.createElement("p"); status.className = "chat-activity-status";
     status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); status.setAttribute("aria-atomic", "true");
     const details = document.createElement("details"); details.className = "chat-activity-details";
     const summary = document.createElement("summary"); summary.textContent = "查看执行步骤";
     const list = document.createElement("ol"); details.append(summary, list);
+    summary.addEventListener("click", () => { disclosureChosen = true; });
     const partial = document.createElement("div"); partial.className = "chat-activity-answer";
     const stopButton = document.createElement("button"); stopButton.type = "button";
     stopButton.className = "chat-activity-stop"; stopButton.textContent = "停止";
@@ -86,9 +87,11 @@ window.UcaChatActivity = (() => {
         if (bound === frozen) { stopButton.disabled = false; stopButton.textContent = "重试停止"; status.textContent = "尚未确认停止，执行可能仍在继续。"; }
       }
     });
-    root.replaceChildren(status, partial, stopButton, details); root.hidden = true;
+    const header = document.createElement("div"); header.className = "chat-activity-header";
+    header.append(status, stopButton);
+    root.replaceChildren(header, details, partial); root.hidden = true;
     function cancel() { generation++; clearTimeout(timer); timer = null; controller?.abort(); controller = null; }
-    function clear() { cancel(); bound = null; partial.textContent = ""; stopButton.hidden = true; latest = null; root.hidden = true; root.removeAttribute("data-state"); list.replaceChildren(); }
+    function clear() { cancel(); bound = null; partial.textContent = ""; stopButton.hidden = true; latest = null; renderedSteps = null; disclosureChosen = false; root.hidden = true; root.removeAttribute("data-state"); list.replaceChildren(); }
     function unavailable() {
       root.hidden = false; root.dataset.state = "unknown";
       status.textContent = "暂时无法读取执行状态；最终结果仍以服务器回复为准。";
@@ -103,7 +106,7 @@ window.UcaChatActivity = (() => {
       const scroll = root.parentElement;
       const follow = scroll && scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
       root.hidden = false; root.dataset.state = value.phase;
-      partial.textContent = value.partial_answer;
+      if (partial.textContent !== value.partial_answer) partial.textContent = value.partial_answer;
       partial.hidden = !value.partial_answer;
       stopButton.hidden = value.phase !== "running";
       const active = value.steps.findLast(step => step.status === "running");
@@ -111,13 +114,27 @@ window.UcaChatActivity = (() => {
       status.textContent = value.phase === "running" && active ?
         (active.kind === "model" ? "正在处理模型请求" : tools[active.tool]) : phaseLabels[value.phase];
       details.hidden = !value.steps.length;
-      summary.textContent = `执行步骤 · ${value.steps.length}`;
-      list.replaceChildren();
-      for (const step of value.steps) {
-        const item = document.createElement("li"); item.dataset.status = step.status;
-        const label = document.createElement("span"); label.textContent = step.kind === "model" ? "模型请求" : tools[step.tool];
-        const state = document.createElement("span"); state.className = "chat-activity-step-status"; state.textContent = states[step.status];
-        item.append(label, state); list.append(item);
+      const toolSteps = value.steps.filter(step => step.kind === "tool");
+      const finishedTools = toolSteps.filter(step => step.status === "succeeded").length;
+      if (!disclosureChosen) {
+        if (value.phase === "running" && toolSteps.some(step => step.status === "running")) details.open = true;
+        else if (["completed", "failed", "interrupted"].includes(value.phase)) details.open = false;
+      }
+      summary.textContent = `执行步骤 · ${value.steps.length}` +
+        (toolSteps.length ? ` · ${finishedTools} 项工具完成` : "");
+      // Unchanged observations must not disturb focus or selected text in an open trace.
+      const stepSignature = JSON.stringify(value.steps);
+      if (stepSignature !== renderedSteps) {
+        renderedSteps = stepSignature;
+        list.replaceChildren();
+        for (const step of value.steps) {
+          const item = document.createElement("li"); item.dataset.status = step.status;
+          item.dataset.kind = step.kind;
+          const label = document.createElement("span"); label.className = "chat-activity-step-label";
+          label.textContent = step.kind === "model" ? "模型请求" : tools[step.tool];
+          const state = document.createElement("span"); state.className = "chat-activity-step-status"; state.textContent = states[step.status];
+          item.append(label, state); list.append(item);
+        }
       }
       if (follow) scroll.scrollTop = scroll.scrollHeight;
     }
