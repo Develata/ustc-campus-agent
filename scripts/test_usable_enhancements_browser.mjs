@@ -413,7 +413,7 @@ try {
   }
   if (!process.env.UCA_BROWSER_SUITE || process.env.UCA_BROWSER_SUITE === "root-prompt") await checkRootPromptSettings({evaluate, waitFor, navigate, click, field, pass, cdp, sessionId});
   if (!process.env.UCA_BROWSER_SUITE || ["calendar", "conversations"].includes(process.env.UCA_BROWSER_SUITE)) await checkCalendarProposals({ evaluate, waitFor, navigate, click, field, pass, cdp, sessionId });
-  if (process.env.UCA_BROWSER_SUITE === "activity") await checkChatActivity({ evaluate, waitFor, cdp, sessionId, navigate, pass });
+  if (!process.env.UCA_BROWSER_SUITE || process.env.UCA_BROWSER_SUITE === "activity") await checkChatActivity({ evaluate, waitFor, cdp, sessionId, navigate, pass });
   assert.deepEqual(cdp.events.filter(e=>e.method==='Runtime.exceptionThrown'),[]);
   if (process.env.UCA_TEST_SCREENSHOT) {
     await navigate('plugins/planning');

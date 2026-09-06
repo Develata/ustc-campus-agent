@@ -17,6 +17,7 @@ window.UcaShell = (() => {
   let followTail = true;
   const latestButton = document.querySelector("#chat-latest");
   function syncFollow() {
+    if (current !== "chat" || !scroll.getClientRects().length) return;
     followTail = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
     latestButton.hidden = followTail || !chatMessages.querySelector(".chat-message");
   }
@@ -68,6 +69,10 @@ window.UcaShell = (() => {
     }
     setDrawer(false, false);
     syncChat();
+    if (current === "chat") {
+      if (followTail) scroll.scrollTo({top:scroll.scrollHeight,behavior:"instant"});
+      syncFollow();
+    }
     if (focus) {
       const target = current === "chat" ? chatInput : views.get(current).querySelector("h1,h2");
       if (target) { if (target !== chatInput) target.tabIndex = -1; target.focus({ preventScroll: true }); }
