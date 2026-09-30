@@ -54,6 +54,10 @@ Cleartext traffic is admitted only for `127.0.0.1` and `localhost`, enabling the
 
 The delivered candidate is bound to source commit `ee8cbc2138184651e32f955efbfec7462a3270e2`. Its APK SHA-256 is `83df5784e05bfefd9e16d8b41b05c9ba0f1ba29b589111869fa16475557baf31` and its size is 886296 bytes. Source-bound Android build/emulator [run 33850505578](https://github.com/Develata/ustc-campus-agent/actions/runs/33850505578) and product-branch exact-source CI [run 33851287216](https://github.com/Develata/ustc-campus-agent/actions/runs/33851287216) both completed successfully. The emulator evidence records successful installation, Activity launch and `android-webview-smoke: PASS` for an Affairs Chat journey at `http://127.0.0.1:8787`.
 
+## September 6 competition device check
+
+A fresh debug APK from `a1988e8` passed local build, four endpoint tests, lint and signature verification. After the owner enabled installation, an API 35 Xiaomi device installed it, rendered Chat and completed a read-only calendar request from the actual WebView origin (HTTP 200). No fatal entry appeared in the application crash buffer. See the [bounded check record](../guides/android-demo.md#当前验证结果). This adds device evidence for that candidate; it does not replace the historical emulator journey above or close `CLIENT-002`, a full model round or lifecycle coverage.
+
 ## Deferred
 
 This bounded bridge does not complete long-horizon `CLIENT-002`. The following remain separate work:

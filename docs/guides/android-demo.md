@@ -47,7 +47,7 @@ adb shell am start -n \
 列出我的待办事项
 ```
 
-应看到回答和工具状态。官方信息来自受审阅演示资料；日历记录在主机持久化，没有提醒推送。模型能力见[模型指南](model-selection.md)。
+应看到回答和工具状态。官方信息来自受审阅演示资料；日历记录在主机持久化，新确认的定时事项支持站内提醒，尚无手机系统推送。模型能力见[模型指南](model-selection.md)。
 
 ## 从源码构建
 
@@ -73,10 +73,10 @@ cd apps/ustc-android-demo
 | 检查 | 结果 |
 | --- | --- |
 | 本机 JDK 21 / SDK 36 | 4 项单元测试、lint、APK 构建和签名校验通过 |
-| 小米 API 35 真机安装 | `INSTALL_FAILED_USER_RESTRICTED`，被设备安装限制阻断 |
-| 当前真机功能 | 尚未完成安装，无真机功能通过证据 |
+| 小米 API 35 真机安装 | 机主调整安装许可后，同源调试 APK 安装成功 |
+| 当前真机检查 | Activity 启动、Chat 首页和 WebView 日历查询通过，应用崩溃缓冲未见 fatal |
 
-安装限制解除后仍需验证启动、连接和实际 Chat 操作。本轮本地结果不是带公开来源身份的新 APK 发布。
+本次候选来自 `a1988e8`，独立导出 Android 源码新构建；APK 为 886356 字节，debug 签名，DEX 内来源标识已核对。手机端日历请求返回 HTTP 200 与 `calendar-proposals/v1`，临时 ADB/CDP 转发在检查后移除。原始记录随提交包 `Android/android-check.json` 与 `webview-query.json` 保留。未执行完整模型回合、键盘／返回键／旋转／进程重建回归；本地提交包不等于公开 APK Release。
 
 <details>
 <summary>历史来源绑定候选与模拟器证据</summary>

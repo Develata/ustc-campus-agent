@@ -107,7 +107,7 @@ flowchart LR
 
 Android 调试 APK 通过 `adb reverse` 连接同一 Rust 后端，在手机 WebView 中使用 Chat 和插件界面。
 安装、指定设备连接、排错及实际验证范围见 [Android 指南](docs/guides/android-demo.md)。
-当前本机构建通过；小米真机安装被系统权限阻断，尚未完成真机功能验收。
+同源调试 APK 已完成小米真机安装、Chat 首页启动和日历查询；尚未覆盖完整模型回合与手机生命周期回归。见[本次检查记录](docs/guides/android-demo.md#当前验证结果)。
 
 <a id="development"></a>
 

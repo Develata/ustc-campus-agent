@@ -122,9 +122,10 @@ python3 scripts/smoke_model_plugins.py \
 失败镜头不能伪装成成功，排练与正式录像分别保存。可补字幕或讲解说明等待和操作目的，
 但不得编造回答、工具结果或与录像候选不一致的成功状态。
 
-Android 如需补拍，按[Android 指南](android-demo.md)操作。本轮仅本地构建、
-4 项端点测试、lint 与签名检查通过；小米安装返回 `INSTALL_FAILED_USER_RESTRICTED`，
-尚无本轮真机功能视频或键盘、返回键、旋转、离线恢复的通过证据。
+Android 如需补拍，按[Android 指南](android-demo.md)操作。本次同源 APK 构建、
+4 项端点测试、lint 与签名检查通过；机主解除安装限制后，小米安装、Chat 首页启动
+和 WebView 日历查询通过，见[检查记录](../guides/android-demo.md#当前验证结果)。
+尚无本轮真机功能视频、完整模型回合或键盘、返回键、旋转、离线恢复的通过证据。
 
 ## 四项提交材料
 
