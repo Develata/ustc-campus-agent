@@ -47,6 +47,33 @@ fn crlf_literal_and_quoted_yaml_values_are_supported() {
 }
 
 #[test]
+fn tagged_scalar_identity_regressions_are_pinned() {
+    let skill = parse(
+        "name: campus-help\n\
+         description: help\n\
+         license: !!str null",
+    )
+    .expect("explicit string tag must remain a string");
+    assert_eq!(skill.license(), Some("null"));
+
+    for header in [
+        "name: campus-help\n\
+         description: help\n\
+         metadata:\n\
+           !!str null: first\n\
+           'null': second",
+        "name: campus-help\n\
+         description: help\n\
+         metadata: {author: !!int 42}",
+    ] {
+        assert_eq!(
+            parse(header).expect_err("hostile fixture must reject"),
+            SkillError::InvalidFrontmatter
+        );
+    }
+}
+
+#[test]
 fn invalid_names_and_directory_mismatch_reject() {
     for name in [
         "",
